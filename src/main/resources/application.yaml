@@ -5,6 +5,28 @@ spring:
   application:
     name: learning-service
 
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/learning_service}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+
+  flyway:
+    locations: classpath:db/migration
+    default-schema: learning_service
+    schemas:
+      - learning_service
+    create-schemas: true
+    clean-disabled: true
+    validate-on-migrate: true
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: learning_service
+
 eureka:
   client:
     enabled: ${EUREKA_ENABLED:true}

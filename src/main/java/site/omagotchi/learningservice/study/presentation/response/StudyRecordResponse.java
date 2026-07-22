@@ -1,9 +1,10 @@
 package site.omagotchi.learningservice.study.presentation.response;
 
+import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
-import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 
 public record StudyRecordResponse(
         UUID id,

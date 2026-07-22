@@ -1,9 +1,10 @@
 package site.omagotchi.learningservice.study.application.result;
 
+import site.omagotchi.learningservice.study.infrastructure.persistence.entity.StudyRecordEntity;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
-import site.omagotchi.learningservice.study.infrastructure.persistence.entity.StudyRecordEntity;
 
 public record StudyRecordResult(
         UUID id,

@@ -58,3 +58,19 @@ hs_err_pid*
 replay_pid*
 .mise.local.toml
 mise.local.toml
+
+### AI agents ###
+# OpenAI Codex / Agents
+AGENTS.md
+AGENTS.override.md
+.agents/
+.codex/
+
+# Anthropic Claude Code
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+
+# Google Gemini CLI
+GEMINI.md
+.gemini/

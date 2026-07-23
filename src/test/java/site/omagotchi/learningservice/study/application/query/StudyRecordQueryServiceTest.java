@@ -48,7 +48,7 @@ class StudyRecordQueryServiceTest {
                 .endTime(END_TIME)
                 .studySeconds(3_600L)
                 .build();
-        given(studyRecordRepository.findByIdAndCohortMembershipIdAndDeletedAtIsNull(studyRecordId, 1L))
+        given(studyRecordRepository.findActiveByIdAndCohortMembershipId(studyRecordId, 1L))
                 .willReturn(Optional.of(entity));
 
         StudyRecordResult result = studyRecordQueryService.getRecord(1L, studyRecordId);
@@ -61,7 +61,7 @@ class StudyRecordQueryServiceTest {
                 () -> assertEquals(3_600L, result.studySeconds())
         );
         verify(studyRecordRepository)
-                .findByIdAndCohortMembershipIdAndDeletedAtIsNull(studyRecordId, 1L);
+                .findActiveByIdAndCohortMembershipId(studyRecordId, 1L);
         verifyNoMoreInteractions(studyRecordRepository);
     }
 
@@ -69,7 +69,7 @@ class StudyRecordQueryServiceTest {
     @DisplayName("대상 없음 예외")
     void throwsNotFoundWhenRecordDoesNotExist() {
         UUID studyRecordId = UUID.randomUUID();
-        given(studyRecordRepository.findByIdAndCohortMembershipIdAndDeletedAtIsNull(studyRecordId, 1L))
+        given(studyRecordRepository.findActiveByIdAndCohortMembershipId(studyRecordId, 1L))
                 .willReturn(Optional.empty());
 
         BusinessException exception = assertThrows(
@@ -79,7 +79,7 @@ class StudyRecordQueryServiceTest {
 
         assertSame(StudyRecordErrorCode.NOT_FOUND, exception.getErrorCode());
         verify(studyRecordRepository)
-                .findByIdAndCohortMembershipIdAndDeletedAtIsNull(studyRecordId, 1L);
+                .findActiveByIdAndCohortMembershipId(studyRecordId, 1L);
         verifyNoMoreInteractions(studyRecordRepository);
     }
 }

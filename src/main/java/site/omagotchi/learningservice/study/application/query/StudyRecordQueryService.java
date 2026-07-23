@@ -22,8 +22,8 @@ public class StudyRecordQueryService {
             Long cohortMembershipId,
             UUID studyRecordId
     ) {
-        // TODO: studyRecordId가 cohortMembershipId에 기록인지 체크해야 한다.
-        StudyRecordEntity entity = studyRecordRepository.findById(studyRecordId)
+        StudyRecordEntity entity = studyRecordRepository
+                .findActiveByIdAndCohortMembershipId(studyRecordId, cohortMembershipId)
                 .orElseThrow(() -> new BusinessException(StudyRecordErrorCode.NOT_FOUND));
 
         return StudyRecordResult.from(entity);

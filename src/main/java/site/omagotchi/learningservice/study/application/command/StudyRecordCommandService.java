@@ -67,7 +67,8 @@ public class StudyRecordCommandService {
         // TODO(DAT-001~004): 04:00 경계 분할 결과를 모두 검증한 뒤 하나의 트랜잭션으로 반영한다.
         // TODO(SYN-002): commandId 영수증으로 같은 수정 요청의 중복 반영을 방지한다.
 
-        StudyRecordEntity entity = studyRecordRepository.findById(studyRecordId)
+        StudyRecordEntity entity = studyRecordRepository
+                .findActiveByIdAndCohortMembershipId(studyRecordId, cohortMembershipId)
                 .orElseThrow(() -> new BusinessException(StudyRecordErrorCode.NOT_FOUND));
 
         // 공부 시간 (초) 계산
@@ -92,7 +93,8 @@ public class StudyRecordCommandService {
         // TODO(REC-009, OVL-002): 삭제 버전과 동시 변경 충돌을 검증한다.
         // TODO(SYN-002): commandId 영수증으로 같은 삭제 요청의 중복 반영을 방지한다.
 
-        StudyRecordEntity entity = studyRecordRepository.findById(studyRecordId)
+        StudyRecordEntity entity = studyRecordRepository
+                .findActiveByIdAndCohortMembershipId(studyRecordId, cohortMembershipId)
                 .orElseThrow(() -> new BusinessException(StudyRecordErrorCode.NOT_FOUND));
 
         entity.applySoftDelete(dateTimeProvider.currentInstant());

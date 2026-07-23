@@ -8,7 +8,6 @@ import java.util.UUID;
 
 public record StudyRecordResponse(
         UUID id,
-        Long cohortMembershipId,
         LocalDate aggregationDate,
         Instant startTime,
         Instant endTime,
@@ -21,7 +20,6 @@ public record StudyRecordResponse(
     public static StudyRecordResponse from(StudyRecordResult result) {
         return new StudyRecordResponse(
                 result.id(),
-                result.cohortMembershipId(),
                 result.aggregationDate(),
                 result.startTime(),
                 result.endTime(),

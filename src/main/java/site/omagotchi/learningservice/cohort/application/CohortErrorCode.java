@@ -23,22 +23,22 @@ public enum CohortErrorCode implements ErrorCode {
     ),
     INVALID_MEMBERSHIP_STATUS_TRANSITION(
             ErrorType.INVALID_INPUT,
-            "COHORT_INVALID_MEMBERSHIP_STATUS_TRANSITION",
+            "MEMBERSHIP_INVALID_STATUS_TRANSITION",
             "허용되지 않은 기수 소속 상태 변경입니다."
     ),
     REJECTION_REASON_REQUIRED(
             ErrorType.INVALID_INPUT,
-            "COHORT_REJECTION_REASON_REQUIRED",
+            "MEMBERSHIP_REJECTION_REASON_REQUIRED",
             "거절 사유는 필수입니다."
     ),
     JOIN_CODE_REQUIRED(
             ErrorType.INVALID_INPUT,
-            "COHORT_JOIN_CODE_REQUIRED",
+            "JOIN_CODE_REQUIRED",
             "가입 코드가 필요합니다."
     ),
     JOIN_CODE_EXPIRES_AT_INVALID(
             ErrorType.INVALID_INPUT,
-            "COHORT_JOIN_CODE_EXPIRES_AT_INVALID",
+            "JOIN_CODE_EXPIRES_AT_INVALID",
             "가입 코드 만료 시각은 현재보다 이후여야 합니다."
     ),
 
@@ -53,6 +53,11 @@ public enum CohortErrorCode implements ErrorCode {
             "COHORT_MANAGER_REQUIRED",
             "기수 관리자 권한이 필요합니다."
     ),
+    SYSTEM_ADMIN_REQUIRED(
+            ErrorType.AUTHORIZATION,
+            "SYSTEM_ADMIN_REQUIRED",
+            "시스템 관리자 권한이 필요합니다."
+    ),
 
     // 404 Not Found
     COHORT_NOT_FOUND(
@@ -62,12 +67,12 @@ public enum CohortErrorCode implements ErrorCode {
     ),
     COHORT_MEMBERSHIP_NOT_FOUND(
             ErrorType.NOT_FOUND,
-            "COHORT_MEMBERSHIP_NOT_FOUND",
+            "MEMBERSHIP_NOT_FOUND",
             "기수 소속을 찾을 수 없습니다."
     ),
     JOIN_CODE_NOT_FOUND(
             ErrorType.NOT_FOUND,
-            "COHORT_JOIN_CODE_NOT_FOUND",
+            "JOIN_CODE_NOT_FOUND",
             "가입 코드를 찾을 수 없습니다."
     ),
 
@@ -84,22 +89,22 @@ public enum CohortErrorCode implements ErrorCode {
     ),
     COHORT_MEMBERSHIP_DUPLICATED(
             ErrorType.CONFLICT,
-            "COHORT_MEMBERSHIP_DUPLICATED",
+            "MEMBERSHIP_DUPLICATED",
             "이미 대기 중이거나 활성 상태인 기수 소속이 있습니다."
     ),
     JOIN_CODE_EXPIRED(
             ErrorType.CONFLICT,
-            "COHORT_JOIN_CODE_EXPIRED",
+            "JOIN_CODE_EXPIRED",
             "만료된 가입 코드입니다."
     ),
     JOIN_CODE_REVOKED(
             ErrorType.CONFLICT,
-            "COHORT_JOIN_CODE_REVOKED",
+            "JOIN_CODE_REVOKED",
             "폐기된 가입 코드입니다."
     ),
     JOIN_CODE_ALREADY_EXISTS(
             ErrorType.CONFLICT,
-            "COHORT_JOIN_CODE_ALREADY_EXISTS",
+            "JOIN_CODE_ALREADY_EXISTS",
             "이미 유효한 가입 코드가 있습니다."
     );
 

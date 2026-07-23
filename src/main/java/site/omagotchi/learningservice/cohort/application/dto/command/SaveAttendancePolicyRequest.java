@@ -7,9 +7,9 @@ import jakarta.validation.constraints.NotNull;
 import java.time.LocalTime;
 
 /**
- * 기수별 출결 정책 생성 또는 수정 요청
+ * 기수별 출결 정책 저장 요청
  */
-public record UpsertAttendancePolicyRequest(
+public record SaveAttendancePolicyRequest(
         @NotBlank String timezone,
         @NotNull LocalTime scheduledStartTime,
         @NotNull LocalTime scheduledEndTime,

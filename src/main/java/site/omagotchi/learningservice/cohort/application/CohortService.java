@@ -21,13 +21,16 @@ import java.util.List;
 public class CohortService {
     private final CohortRepository repository;
     private final CohortMembershipRepository membershipRepository;
+    private final CohortAccessService accessService;
 
     /**
      * 새 기수를 PREPARING 상태로 생성한다.
      * 생성자는 JWT 연동 전까지 임시 userId를 전달받아 createdByUserId에 저장한다.
      */
     @Transactional
-    public CohortResponse create(CreateCohortRequest request, Long userId) {
+    public CohortResponse create(CreateCohortRequest request, Long userId, String globalRole) {
+        accessService.requireSystemAdmin(globalRole);
+
         Cohort cohort = Cohort.create(
                 request.name(),
                 request.description(),
@@ -63,7 +66,9 @@ public class CohortService {
      * 종료된 기수는 도메인 규칙에 따라 수정할 수 없다.
      */
     @Transactional
-    public CohortResponse update(Long cohortId, UpdateCohortRequest request) {
+    public CohortResponse update(Long cohortId, UpdateCohortRequest request, Long actorUserId) {
+        accessService.requireManager(cohortId, actorUserId);
+
         Cohort cohort = getCohortOrThrow(cohortId);
 
         cohort.updateBasicInfo(
@@ -80,7 +85,9 @@ public class CohortService {
      * ACTIVE 전환 시 활성 MANAGER 소속이 최소 1명 있어야 한다.
      */
     @Transactional
-    public CohortResponse changeStatus(Long cohortId, ChangeCohortStatusRequest request) {
+    public CohortResponse changeStatus(Long cohortId, ChangeCohortStatusRequest request, String globalRole) {
+        accessService.requireSystemAdmin(globalRole);
+
         Cohort cohort = getCohortOrThrow(cohortId);
 
         if (request.status() == CohortStatus.ACTIVE) {

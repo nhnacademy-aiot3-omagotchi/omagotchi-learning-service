@@ -37,6 +37,8 @@ public interface CohortMembershipRepository extends JpaRepository<CohortMembersh
             Collection<CohortMembershipStatus> statuses
     );
 
+    Optional<CohortMembership> findByCohortIdAndUserId(Long cohortId, Long userId);
+
     List<CohortMembership> findByUserIdOrderByRequestedAtDesc(Long userId);
 
     List<CohortMembership> findByCohortIdAndStatusOrderByRequestedAtAsc(
@@ -61,6 +63,12 @@ public interface CohortMembershipRepository extends JpaRepository<CohortMembersh
 
     boolean existsByUserIdAndRoleAndStatusAndEndedAtIsNull(
             Long userId,
+            CohortMembershipRole role,
+            CohortMembershipStatus status
+    );
+
+    long countByCohortIdAndRoleAndStatus(
+            Long cohortId,
             CohortMembershipRole role,
             CohortMembershipStatus status
     );
@@ -94,6 +102,22 @@ public interface CohortMembershipRepository extends JpaRepository<CohortMembersh
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update CohortMembership membership
+               set membership.role = :role,
+                   membership.processedAt = :processedAt,
+                   membership.processedByUserId = :processedByUserId
+             where membership.id = :membershipId
+               and membership.status = site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus.ACTIVE
+            """)
+    int changeActiveRole(
+            @Param("membershipId") Long membershipId,
+            @Param("role") CohortMembershipRole role,
+            @Param("processedAt") OffsetDateTime processedAt,
+            @Param("processedByUserId") Long processedByUserId
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update CohortMembership membership
                set membership.status = :status,
                    membership.rejectionReason = :rejectionReason,
                    membership.processedAt = :processedAt,
@@ -107,5 +131,23 @@ public interface CohortMembershipRepository extends JpaRepository<CohortMembersh
             @Param("rejectionReason") String rejectionReason,
             @Param("processedAt") OffsetDateTime processedAt,
             @Param("processedByUserId") Long processedByUserId
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update CohortMembership membership
+               set membership.status = site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus.PENDING,
+                   membership.role = site.omagotchi.learningservice.cohort.domain.CohortMembershipRole.STUDENT,
+                   membership.requestedAt = :requestedAt,
+                   membership.processedAt = null,
+                   membership.processedByUserId = null,
+                   membership.rejectionReason = null,
+                   membership.endedAt = null
+             where membership.id = :membershipId
+               and membership.status = site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus.REJECTED
+            """)
+    int requestAgainRejected(
+            @Param("membershipId") Long membershipId,
+            @Param("requestedAt") OffsetDateTime requestedAt
     );
 }

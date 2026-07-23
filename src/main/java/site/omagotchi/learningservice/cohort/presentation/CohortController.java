@@ -3,11 +3,14 @@ package site.omagotchi.learningservice.cohort.presentation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import site.omagotchi.learningservice.cohort.application.CohortManagerService;
 import site.omagotchi.learningservice.cohort.application.dto.command.ChangeCohortStatusRequest;
+import site.omagotchi.learningservice.cohort.application.dto.command.ChangeCohortMemberRoleRequest;
 import site.omagotchi.learningservice.cohort.application.dto.result.CohortMembershipResponse;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
 import site.omagotchi.learningservice.cohort.application.dto.result.CohortResponse;
 import site.omagotchi.learningservice.cohort.application.CohortService;
+import site.omagotchi.learningservice.cohort.application.dto.command.AssignCohortManagerRequest;
 import site.omagotchi.learningservice.cohort.application.dto.command.CreateCohortRequest;
 import site.omagotchi.learningservice.cohort.application.dto.command.CreateJoinRequest;
 import site.omagotchi.learningservice.cohort.application.dto.command.IssueJoinCodeRequest;
@@ -29,13 +32,15 @@ public class CohortController {
     private final CohortService cohortService;
     private final JoinCodeService joinCodeService;
     private final CohortMembershipService membershipService;
+    private final CohortManagerService managerService;
 
     @PostMapping
     public CohortResponse create(
             @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader(value = "X-Global-Role", defaultValue = "USER") String globalRole,
             @Valid @RequestBody CreateCohortRequest request
     ) {
-        return cohortService.create(request, userId);
+        return cohortService.create(request, userId, globalRole);
     }
 
     @GetMapping
@@ -51,22 +56,27 @@ public class CohortController {
     @PatchMapping("/{cohortId}")
     public CohortResponse update(
             @PathVariable Long cohortId,
+            @RequestHeader("X-User-Id") Long userId,
             @Valid @RequestBody UpdateCohortRequest request
     ) {
-        return cohortService.update(cohortId, request);
+        return cohortService.update(cohortId, request, userId);
     }
 
     @PatchMapping("/{cohortId}/status")
     public CohortResponse changeStatus(
             @PathVariable Long cohortId,
+            @RequestHeader(value = "X-Global-Role", defaultValue = "USER") String globalRole,
             @Valid @RequestBody ChangeCohortStatusRequest request
     ) {
-        return cohortService.changeStatus(cohortId, request);
+        return cohortService.changeStatus(cohortId, request, globalRole);
     }
 
     @GetMapping("/{cohortId}/join-code")
-    public JoinCodeResponse getJoinCode(@PathVariable Long cohortId) {
-        return joinCodeService.getActiveJoinCode(cohortId);
+    public JoinCodeResponse getJoinCode(
+            @PathVariable Long cohortId,
+            @RequestHeader("X-User-Id") Long userId
+    ) {
+        return joinCodeService.getActiveJoinCode(cohortId, userId);
     }
 
     @PostMapping("/{cohortId}/join-code")
@@ -79,8 +89,11 @@ public class CohortController {
     }
 
     @PatchMapping("/{cohortId}/join-code/revoke")
-    public JoinCodeResponse revokeJoinCode(@PathVariable Long cohortId) {
-        return joinCodeService.revoke(cohortId);
+    public JoinCodeResponse revokeJoinCode(
+            @PathVariable Long cohortId,
+            @RequestHeader("X-User-Id") Long userId
+    ) {
+        return joinCodeService.revoke(cohortId, userId);
     }
 
     @PostMapping("/join-requests")
@@ -99,12 +112,39 @@ public class CohortController {
     }
 
     @GetMapping("/{cohortId}/join-requests")
-    public List<CohortMembershipResponse> getJoinRequests(@PathVariable Long cohortId) {
-        return membershipService.getPendingJoinRequests(cohortId);
+    public List<CohortMembershipResponse> getJoinRequests(
+            @PathVariable Long cohortId,
+            @RequestHeader("X-User-Id") Long userId
+    ) {
+        return membershipService.getPendingJoinRequests(cohortId, userId);
     }
 
     @GetMapping("/{cohortId}/members")
-    public List<CohortMembershipResponse> getMembers(@PathVariable Long cohortId) {
-        return membershipService.getMembers(cohortId);
+    public List<CohortMembershipResponse> getMembers(
+            @PathVariable Long cohortId,
+            @RequestHeader("X-User-Id") Long userId
+    ) {
+        return membershipService.getMembers(cohortId, userId);
+    }
+
+    @PostMapping("/{cohortId}/managers")
+    public CohortMembershipResponse assignManager(
+            @PathVariable Long cohortId,
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader(value = "X-Global-Role", defaultValue = "USER") String globalRole,
+            @Valid @RequestBody AssignCohortManagerRequest request
+    ) {
+        return managerService.assignManager(cohortId, request, userId, globalRole);
+    }
+
+    @PatchMapping("/{cohortId}/members/{memberUserId}/role")
+    public CohortMembershipResponse changeMemberRole(
+            @PathVariable Long cohortId,
+            @PathVariable Long memberUserId,
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader(value = "X-Global-Role", defaultValue = "USER") String globalRole,
+            @Valid @RequestBody ChangeCohortMemberRoleRequest request
+    ) {
+        return managerService.changeMemberRole(cohortId, memberUserId, request, userId, globalRole);
     }
 }

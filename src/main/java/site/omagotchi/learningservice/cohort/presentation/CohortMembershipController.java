@@ -24,9 +24,10 @@ public class CohortMembershipController {
     public CohortMembershipResponse approve(
             @PathVariable Long membershipId,
             @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader(value = "X-Global-Role", defaultValue = "USER") String globalRole,
             @Valid @RequestBody ApproveMembershipRequest request
     ) {
-        return membershipService.approve(membershipId, request, userId);
+        return membershipService.approve(membershipId, request, userId, globalRole);
     }
 
     @PatchMapping("/{membershipId}/reject")

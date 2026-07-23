@@ -3,7 +3,7 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.cohort.application.dto.command.UpsertAttendancePolicyRequest;
+import site.omagotchi.learningservice.cohort.application.dto.command.SaveAttendancePolicyRequest;
 import site.omagotchi.learningservice.cohort.application.dto.result.CohortAttendancePolicyResponse;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
@@ -33,9 +33,9 @@ public class CohortAttendancePolicyService {
      * 정책은 cohort_id를 PK로 사용하므로 한 기수에 하나만 존재
      */
     @Transactional
-    public CohortAttendancePolicyResponse upsertPolicy(
+    public CohortAttendancePolicyResponse savePolicy(
             Long cohortId,
-            UpsertAttendancePolicyRequest request,
+            SaveAttendancePolicyRequest request,
             Long updatedByUserId
     ) {
         if (!cohortRepository.existsById(cohortId)) {
@@ -51,7 +51,7 @@ public class CohortAttendancePolicyService {
 
     private CohortAttendancePolicy updateExistingPolicy(
             CohortAttendancePolicy policy,
-            UpsertAttendancePolicyRequest request,
+            SaveAttendancePolicyRequest request,
             Long updatedByUserId
     ) {
         policy.update(
@@ -67,7 +67,7 @@ public class CohortAttendancePolicyService {
 
     private CohortAttendancePolicy createPolicy(
             Long cohortId,
-            UpsertAttendancePolicyRequest request,
+            SaveAttendancePolicyRequest request,
             Long updatedByUserId
     ) {
         return CohortAttendancePolicy.create(

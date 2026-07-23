@@ -21,6 +21,7 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -36,6 +37,7 @@ public class CohortMembershipService {
     private final CohortRepository cohortRepository;
     private final CohortJoinCodeRepository joinCodeRepository;
     private final CohortMembershipRepository membershipRepository;
+    private final CohortAccessService accessService;
 
     /**
      * 가입 코드로 기수 참가 신청을 생성
@@ -66,6 +68,7 @@ public class CohortMembershipService {
                         DUPLICATE_TARGET_STATUSES
                 )
                 .map(CohortMembershipResponse::from)
+                .or(() -> requestAgainRejectedMembership(joinCode.getCohortId(), userId))
                 .orElseGet(() -> createPendingMembership(joinCode.getCohortId(), userId));
     }
 
@@ -83,7 +86,9 @@ public class CohortMembershipService {
      * 특정 기수의 PENDING 참가 신청 목록을 신청순으로 조회
      * 기수 관리자의 승인/거절 대기 목록에서 사용
      */
-    public List<CohortMembershipResponse> getPendingJoinRequests(Long cohortId) {
+    public List<CohortMembershipResponse> getPendingJoinRequests(Long cohortId, Long actorUserId) {
+        accessService.requireManager(cohortId, actorUserId);
+
         return membershipRepository
                 .findByCohortIdAndStatusOrderByRequestedAtAsc(cohortId, CohortMembershipStatus.PENDING)
                 .stream()
@@ -95,7 +100,9 @@ public class CohortMembershipService {
      * 특정 기수에 생성된 모든 소속 row를 신청순으로 조회
      * 관리자 화면의 소속/역할 관리 목록에서 사용
      */
-    public List<CohortMembershipResponse> getMembers(Long cohortId) {
+    public List<CohortMembershipResponse> getMembers(Long cohortId, Long actorUserId) {
+        accessService.requireManager(cohortId, actorUserId);
+
         return membershipRepository.findByCohortIdOrderByRequestedAtAsc(cohortId).stream()
                 .map(CohortMembershipResponse::from)
                 .toList();
@@ -106,11 +113,22 @@ public class CohortMembershipService {
      * 상태 조건부 업데이트를 사용해 이미 처리된 신청의 중복 승인을 방어
      */
     @Transactional
-    public CohortMembershipResponse approve(Long membershipId, ApproveMembershipRequest request, Long processedByUserId) {
+    public CohortMembershipResponse approve(
+            Long membershipId,
+            ApproveMembershipRequest request,
+            Long processedByUserId,
+            String globalRole
+    ) {
         CohortMembership pendingMembership = membershipRepository.findByIdAndStatus(
                 membershipId,
                 CohortMembershipStatus.PENDING
         ).orElseThrow(() -> new BusinessException(CohortErrorCode.INVALID_MEMBERSHIP_STATUS_TRANSITION));
+        validateCohortNotClosed(pendingMembership.getCohortId());
+        if (request.role() == CohortMembershipRole.MANAGER) {
+            accessService.requireSystemAdmin(globalRole);
+        } else {
+            accessService.requireManager(pendingMembership.getCohortId(), processedByUserId);
+        }
 
         if (request.role() == CohortMembershipRole.STUDENT
                 && membershipRepository.existsByUserIdAndRoleAndStatusAndEndedAtIsNull(
@@ -147,6 +165,13 @@ public class CohortMembershipService {
             throw new BusinessException(CohortErrorCode.REJECTION_REASON_REQUIRED);
         }
 
+        CohortMembership pendingMembership = membershipRepository.findByIdAndStatus(
+                membershipId,
+                CohortMembershipStatus.PENDING
+        ).orElseThrow(() -> new BusinessException(CohortErrorCode.INVALID_MEMBERSHIP_STATUS_TRANSITION));
+        validateCohortNotClosed(pendingMembership.getCohortId());
+        accessService.requireManager(pendingMembership.getCohortId(), processedByUserId);
+
         int updatedCount = membershipRepository.rejectPending(
                 membershipId,
                 CohortMembershipStatus.REJECTED,
@@ -170,6 +195,31 @@ public class CohortMembershipService {
                 CohortMembershipRole.STUDENT
         );
         return CohortMembershipResponse.from(membershipRepository.save(membership));
+    }
+
+    private Optional<CohortMembershipResponse> requestAgainRejectedMembership(Long cohortId, Long userId) {
+        return membershipRepository.findByCohortIdAndUserId(cohortId, userId)
+                .filter(membership -> membership.getStatus() == CohortMembershipStatus.REJECTED)
+                .map(membership -> {
+                    int updatedCount = membershipRepository.requestAgainRejected(
+                            membership.getId(),
+                            OffsetDateTime.now()
+                    );
+                    if (updatedCount == 0) {
+                        throw new BusinessException(CohortErrorCode.INVALID_MEMBERSHIP_STATUS_TRANSITION);
+                    }
+                    return membershipRepository.findById(membership.getId())
+                            .map(CohortMembershipResponse::from)
+                            .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_MEMBERSHIP_NOT_FOUND));
+                });
+    }
+
+    private void validateCohortNotClosed(Long cohortId) {
+        Cohort cohort = cohortRepository.findById(cohortId)
+                .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
+        if (cohort.getStatus() == CohortStatus.CLOSED) {
+            throw new BusinessException(CohortErrorCode.COHORT_ALREADY_CLOSED);
+        }
     }
 
     private void validateJoinCode(CohortJoinCode joinCode) {

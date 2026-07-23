@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.global.util.DateTimeProvider;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
 import site.omagotchi.learningservice.study.infrastructure.persistence.entity.StudyRecordEntity;
@@ -12,9 +13,7 @@ import site.omagotchi.learningservice.study.presentation.request.CreateStudyReco
 import site.omagotchi.learningservice.study.presentation.request.UpdateStudyRecordRequest;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.UUID;
 
 @Service
@@ -23,6 +22,7 @@ import java.util.UUID;
 public class StudyRecordCommandService {
 
     private final StudyRecordRepository studyRecordRepository;
+    private final DateTimeProvider dateTimeProvider;
 
     public StudyRecordResult create(
             UUID commandId,
@@ -37,9 +37,7 @@ public class StudyRecordCommandService {
 
         // 현재 단계에서는 전달받은 구간 전체를 하나의 기록으로 저장한다.
         long studySeconds = Duration.between(request.startTime(), request.endTime()).getSeconds();
-        LocalDate aggregationDate = request.startTime()
-                .atZone(ZoneId.of("Asia/Seoul"))
-                .toLocalDate();
+        LocalDate aggregationDate = dateTimeProvider.calculateAggregationDate(request.startTime());
 
         StudyRecordEntity entity = StudyRecordEntity.builder()
                 .cohortMembershipId(cohortMembershipId)
@@ -72,10 +70,10 @@ public class StudyRecordCommandService {
         StudyRecordEntity entity = studyRecordRepository.findById(studyRecordId)
                 .orElseThrow(() -> new BusinessException(StudyRecordErrorCode.NOT_FOUND));
 
+        // 공부 시간 (초) 계산
         long studySeconds = Duration.between(request.startTime(), request.endTime()).getSeconds();
-        LocalDate aggregationDate = request.startTime()
-                .atZone(ZoneId.of("Asia/Seoul"))
-                .toLocalDate();
+        // 기준 시간 계산
+        LocalDate aggregationDate = dateTimeProvider.calculateAggregationDate(request.startTime());
 
         entity.applyUpdate(aggregationDate, request.startTime(), request.endTime(), studySeconds);
         StudyRecordEntity saved = studyRecordRepository.save(entity);
@@ -97,7 +95,7 @@ public class StudyRecordCommandService {
         StudyRecordEntity entity = studyRecordRepository.findById(studyRecordId)
                 .orElseThrow(() -> new BusinessException(StudyRecordErrorCode.NOT_FOUND));
 
-        entity.applySoftDelete(Instant.now());
+        entity.applySoftDelete(dateTimeProvider.currentInstant());
         // TODO: 삭제 시, 삭제한 유저에 대한 정보를 log에 남겨야 한다.
 
         studyRecordRepository.save(entity);

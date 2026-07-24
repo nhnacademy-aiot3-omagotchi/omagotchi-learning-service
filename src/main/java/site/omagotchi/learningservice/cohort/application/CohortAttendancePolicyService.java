@@ -10,6 +10,8 @@ import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePoli
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -36,7 +38,7 @@ public class CohortAttendancePolicyService {
     public CohortAttendancePolicyResponse savePolicy(
             Long cohortId,
             SaveAttendancePolicyRequest request,
-            Long updatedByUserId
+            UUID updatedByUserId
     ) {
         if (!cohortRepository.existsById(cohortId)) {
             throw new BusinessException(CohortErrorCode.COHORT_NOT_FOUND);
@@ -52,7 +54,7 @@ public class CohortAttendancePolicyService {
     private CohortAttendancePolicy updateExistingPolicy(
             CohortAttendancePolicy policy,
             SaveAttendancePolicyRequest request,
-            Long updatedByUserId
+            UUID updatedByUserId
     ) {
         policy.update(
                 request.timezone(),
@@ -68,7 +70,7 @@ public class CohortAttendancePolicyService {
     private CohortAttendancePolicy createPolicy(
             Long cohortId,
             SaveAttendancePolicyRequest request,
-            Long updatedByUserId
+            UUID updatedByUserId
     ) {
         return CohortAttendancePolicy.create(
                 cohortId,

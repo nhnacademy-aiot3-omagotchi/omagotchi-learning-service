@@ -13,13 +13,14 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 기수 참가 신청에 사용하는 가입 코드를 관리
  */
-@Getter
 @Entity
 @Table(name = "cohort_join_codes", schema = "learning_service")
+@Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CohortJoinCode {
 
@@ -41,7 +42,7 @@ public class CohortJoinCode {
     private OffsetDateTime expiresAt;
 
     @Column(name = "issued_by_user_id", nullable = false)
-    private Long issuedByUserId;
+    private UUID issuedByUserId;
 
     @Column(name = "issued_at", nullable = false)
     private OffsetDateTime issuedAt;
@@ -53,7 +54,7 @@ public class CohortJoinCode {
             Long cohortId,
             String codeHash,
             OffsetDateTime expiresAt,
-            Long issuedByUserId
+            UUID issuedByUserId
     ) {
         if (expiresAt == null || !expiresAt.isAfter(OffsetDateTime.now())) {
             throw new IllegalArgumentException("가입 코드 만료 시각은 현재보다 이후여야 합니다.");

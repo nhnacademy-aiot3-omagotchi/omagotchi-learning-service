@@ -10,6 +10,8 @@ import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepo
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -31,7 +33,7 @@ public class CohortAccessService {
      * 사용자가 해당 기수의 ACTIVE 소속인지 확인하고, 활성 소속 정보를 반환
      * ACTIVE 소속이 없으면 기수 존재를 숨기기 위해 404로 처리
      */
-    public CohortMembership requireActiveMembership(Long cohortId, Long userId) {
+    public CohortMembership requireActiveMembership(Long cohortId, UUID userId) {
         return membershipRepository
                 .findFirstByCohortIdAndUserIdAndStatusOrderByRequestedAtDesc(
                         cohortId,
@@ -45,7 +47,7 @@ public class CohortAccessService {
      * 사용자가 해당 기수에서 MANAGER 역할의 ACTIVE 소속인지 확인
      * 소속은 있지만 관리자 역할이 아니면 403으로 처리
      */
-    public void requireManager(Long cohortId, Long userId) {
+    public void requireManager(Long cohortId, UUID userId) {
         requireActiveMembership(cohortId, userId);
 
         boolean isManager = membershipRepository.existsByCohortIdAndUserIdAndRoleAndStatus(
@@ -63,7 +65,7 @@ public class CohortAccessService {
      * 사용자가 해당 기수의 ACTIVE 소속인지 boolean으로 확인
      * 예외를 던지지 않는 단순 조건 분기용
      */
-    public boolean isActiveMember(Long cohortId, Long userId) {
+    public boolean isActiveMember(Long cohortId, UUID userId) {
         return membershipRepository
                 .findFirstByCohortIdAndUserIdAndStatusOrderByRequestedAtDesc(
                         cohortId,

@@ -7,6 +7,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 @Import(TestcontainersConfiguration.class)
@@ -40,12 +42,22 @@ class LearningServiceApplicationTests {
 		Integer appliedMigrationCount = jdbcTemplate.queryForObject("""
 				SELECT COUNT(*)
 				FROM learning_service.flyway_schema_history
-				WHERE version = '1'
+				WHERE version IN ('1', '2')
 				  AND success
 				""", Integer.class);
+		List<String> userIdColumnTypes = jdbcTemplate.queryForList("""
+				SELECT data_type
+				FROM information_schema.columns
+				WHERE table_schema = 'learning_service'
+				  AND (column_name = 'user_id' OR column_name LIKE '%_by_user_id')
+				ORDER BY table_name, column_name
+				""", String.class);
 
 		assertThat(cohortsTable).isEqualTo("learning_service.cohorts");
-		assertThat(appliedMigrationCount).isOne();
+		assertThat(appliedMigrationCount).isEqualTo(2);
+		assertThat(userIdColumnTypes)
+				.isNotEmpty()
+				.allMatch("uuid"::equals);
 	}
 
 }

@@ -13,14 +13,15 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 사용자가 특정 기수에 어떤 역할과 상태로 소속되어 있는지 관리한다.
  * 승인, 거절, 종료 같은 상태 전이는 version 없이 status 조건부 업데이트로 처리한다.
  */
-@Getter
 @Entity
 @Table(name = "cohort_memberships", schema = "learning_service")
+@Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CohortMembership {
 
@@ -32,7 +33,7 @@ public class CohortMembership {
     private Long cohortId;
 
     @Column(name = "user_id", nullable = false)
-    private Long userId;
+    private UUID userId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -49,7 +50,7 @@ public class CohortMembership {
     private OffsetDateTime processedAt;
 
     @Column(name = "processed_by_user_id")
-    private Long processedByUserId;
+    private UUID processedByUserId;
 
     @Column(name = "rejection_reason", length = 500)
     private String rejectionReason;
@@ -60,7 +61,7 @@ public class CohortMembership {
     /**
      * pending: 보류중
      */
-    public static CohortMembership pending(Long cohortId, Long userId, CohortMembershipRole role) {
+    public static CohortMembership pending(Long cohortId, UUID userId, CohortMembershipRole role) {
         CohortMembership membership = new CohortMembership();
         membership.cohortId = cohortId;
         membership.userId = userId;
@@ -73,8 +74,7 @@ public class CohortMembership {
     /**
      * 활성화 매니저
      */
-    public static CohortMembership activeManager(Long cohortId, Long userId, Long
-            processedByUserId) {
+    public static CohortMembership activeManager(Long cohortId, UUID userId, UUID processedByUserId) {
         CohortMembership membership = new CohortMembership();
         membership.cohortId = cohortId;
         membership.userId = userId;

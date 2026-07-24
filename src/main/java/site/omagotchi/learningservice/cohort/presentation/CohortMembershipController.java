@@ -13,6 +13,8 @@ import site.omagotchi.learningservice.cohort.application.dto.result.CohortMember
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
 import site.omagotchi.learningservice.cohort.application.dto.command.RejectMembershipRequest;
 
+import java.util.UUID;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/cohort-memberships")
@@ -23,7 +25,7 @@ public class CohortMembershipController {
     @PatchMapping("/{membershipId}/approve")
     public CohortMembershipResponse approve(
             @PathVariable Long membershipId,
-            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-User-Id") UUID userId,
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER") String globalRole,
             @Valid @RequestBody ApproveMembershipRequest request
     ) {
@@ -33,7 +35,7 @@ public class CohortMembershipController {
     @PatchMapping("/{membershipId}/reject")
     public CohortMembershipResponse reject(
             @PathVariable Long membershipId,
-            @RequestHeader("X-User-Id") Long userId,
+            @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody RejectMembershipRequest request
     ) {
         return membershipService.reject(membershipId, request, userId);

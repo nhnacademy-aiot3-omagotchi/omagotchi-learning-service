@@ -17,6 +17,7 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.HexFormat;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -35,7 +36,7 @@ public class JoinCodeService {
      * 특정 기수의 현재 ACTIVE 가입 코드 메타데이터를 조회한다.
      * 원문 코드는 저장하지 않으므로 응답에도 포함하지 않는다.
      */
-    public JoinCodeResponse getActiveJoinCode(Long cohortId, Long actorUserId) {
+    public JoinCodeResponse getActiveJoinCode(Long cohortId, UUID actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
         CohortJoinCode joinCode = joinCodeRepository
@@ -50,7 +51,7 @@ public class JoinCodeService {
      * 기존 ACTIVE 코드는 폐기하고, 새 원문 코드는 이 응답에서만 1회 반환한다.
      */
     @Transactional
-    public IssuedJoinCodeResponse issue(Long cohortId, IssueJoinCodeRequest request, Long issuedByUserId) {
+    public IssuedJoinCodeResponse issue(Long cohortId, IssueJoinCodeRequest request, UUID issuedByUserId) {
         accessService.requireManager(cohortId, issuedByUserId);
 
         Cohort cohort = getCohortOrThrow(cohortId);
@@ -78,7 +79,7 @@ public class JoinCodeService {
      * 폐기 이후 해당 코드는 참가 신청에 사용할 수 없다.
      */
     @Transactional
-    public JoinCodeResponse revoke(Long cohortId, Long actorUserId) {
+    public JoinCodeResponse revoke(Long cohortId, UUID actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
         CohortJoinCode joinCode = joinCodeRepository

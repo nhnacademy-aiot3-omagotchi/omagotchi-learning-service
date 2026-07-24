@@ -18,6 +18,7 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -27,6 +28,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class CohortManagerServiceTest {
+
+    private static final UUID MANAGER_USER_ID = UUID.fromString("019d2a48-80c0-4d6a-9a15-0b16d2dd74f1");
+    private static final UUID PROCESSOR_USER_ID = UUID.fromString("019d2a48-80c0-4eb7-a51d-8a427525a7d3");
 
     @Mock
     private CohortRepository cohortRepository;
@@ -43,7 +47,7 @@ class CohortManagerServiceTest {
     @Test
     void cannotChangeLastActiveManagerToMentor() {
         Long cohortId = 1L;
-        Long managerUserId = 10L;
+        UUID managerUserId = MANAGER_USER_ID;
         CohortMembership manager = activeMembership(100L, cohortId, managerUserId, CohortMembershipRole.MANAGER);
 
         when(cohortRepository.findById(cohortId)).thenReturn(Optional.of(preparingCohort(cohortId)));
@@ -62,7 +66,7 @@ class CohortManagerServiceTest {
                 cohortId,
                 managerUserId,
                 new ChangeCohortMemberRoleRequest(CohortMembershipRole.MENTOR),
-                999L,
+                PROCESSOR_USER_ID,
                 "SYSTEM_ADMIN"
         )).isInstanceOf(BusinessException.class);
 
@@ -75,7 +79,7 @@ class CohortManagerServiceTest {
                 "test cohort",
                 LocalDate.now(),
                 LocalDate.now().plusDays(30),
-                999L
+                PROCESSOR_USER_ID
         );
         ReflectionTestUtils.setField(cohort, "id", cohortId);
         return cohort;
@@ -84,14 +88,14 @@ class CohortManagerServiceTest {
     private CohortMembership activeMembership(
             Long membershipId,
             Long cohortId,
-            Long userId,
+            UUID userId,
             CohortMembershipRole role
     ) {
         CohortMembership membership = CohortMembership.pending(cohortId, userId, role);
         ReflectionTestUtils.setField(membership, "id", membershipId);
         ReflectionTestUtils.setField(membership, "status", CohortMembershipStatus.ACTIVE);
         ReflectionTestUtils.setField(membership, "processedAt", OffsetDateTime.now());
-        ReflectionTestUtils.setField(membership, "processedByUserId", 999L);
+        ReflectionTestUtils.setField(membership, "processedByUserId", PROCESSOR_USER_ID);
         return membership;
     }
 }

@@ -14,6 +14,7 @@ import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -25,10 +26,10 @@ public class CohortService {
 
     /**
      * 새 기수를 PREPARING 상태로 생성한다.
-     * 생성자는 JWT 연동 전까지 임시 userId를 전달받아 createdByUserId에 저장한다.
+     * 생성자는 검증된 JWT sub와 같은 UUID userId를 createdByUserId에 저장한다.
      */
     @Transactional
-    public CohortResponse create(CreateCohortRequest request, Long userId, String globalRole) {
+    public CohortResponse create(CreateCohortRequest request, UUID userId, String globalRole) {
         accessService.requireSystemAdmin(globalRole);
 
         Cohort cohort = Cohort.create(
@@ -66,7 +67,7 @@ public class CohortService {
      * 종료된 기수는 도메인 규칙에 따라 수정할 수 없다.
      */
     @Transactional
-    public CohortResponse update(Long cohortId, UpdateCohortRequest request, Long actorUserId) {
+    public CohortResponse update(Long cohortId, UpdateCohortRequest request, UUID actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
         Cohort cohort = getCohortOrThrow(cohortId);

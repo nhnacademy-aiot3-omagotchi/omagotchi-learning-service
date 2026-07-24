@@ -5,6 +5,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 기수 기본 정보 조회 결과
@@ -16,7 +17,7 @@ public record CohortResponse(
         LocalDate startDate,
         LocalDate endDate,
         CohortStatus status,
-        Long createdByUserId,
+        UUID createdByUserId,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {

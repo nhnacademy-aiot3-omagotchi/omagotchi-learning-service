@@ -12,12 +12,13 @@ import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface CohortMembershipRepository extends JpaRepository<CohortMembership, Long> {
 
     boolean existsByCohortIdAndUserIdAndStatusIn(
             Long cohortId,
-            Long userId,
+            UUID userId,
             Collection<CohortMembershipStatus> statuses
     );
 
@@ -27,19 +28,19 @@ public interface CohortMembershipRepository extends JpaRepository<CohortMembersh
 
     Optional<CohortMembership> findFirstByCohortIdAndUserIdAndStatusOrderByRequestedAtDesc(
             Long cohortId,
-            Long userId,
+            UUID userId,
             CohortMembershipStatus status
     );
 
     Optional<CohortMembership> findFirstByCohortIdAndUserIdAndStatusInOrderByRequestedAtDesc(
             Long cohortId,
-            Long userId,
+            UUID userId,
             Collection<CohortMembershipStatus> statuses
     );
 
-    Optional<CohortMembership> findByCohortIdAndUserId(Long cohortId, Long userId);
+    Optional<CohortMembership> findByCohortIdAndUserId(Long cohortId, UUID userId);
 
-    List<CohortMembership> findByUserIdOrderByRequestedAtDesc(Long userId);
+    List<CohortMembership> findByUserIdOrderByRequestedAtDesc(UUID userId);
 
     List<CohortMembership> findByCohortIdAndStatusOrderByRequestedAtAsc(
             Long cohortId,
@@ -56,13 +57,13 @@ public interface CohortMembershipRepository extends JpaRepository<CohortMembersh
 
     boolean existsByCohortIdAndUserIdAndRoleAndStatus(
             Long cohortId,
-            Long userId,
+            UUID userId,
             CohortMembershipRole role,
             CohortMembershipStatus status
     );
 
     boolean existsByUserIdAndRoleAndStatusAndEndedAtIsNull(
-            Long userId,
+            UUID userId,
             CohortMembershipRole role,
             CohortMembershipStatus status
     );
@@ -96,7 +97,7 @@ public interface CohortMembershipRepository extends JpaRepository<CohortMembersh
             @Param("status") CohortMembershipStatus status,
             @Param("role") CohortMembershipRole role,
             @Param("processedAt") OffsetDateTime processedAt,
-            @Param("processedByUserId") Long processedByUserId
+            @Param("processedByUserId") UUID processedByUserId
     );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -112,7 +113,7 @@ public interface CohortMembershipRepository extends JpaRepository<CohortMembersh
             @Param("membershipId") Long membershipId,
             @Param("role") CohortMembershipRole role,
             @Param("processedAt") OffsetDateTime processedAt,
-            @Param("processedByUserId") Long processedByUserId
+            @Param("processedByUserId") UUID processedByUserId
     );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -130,7 +131,7 @@ public interface CohortMembershipRepository extends JpaRepository<CohortMembersh
             @Param("status") CohortMembershipStatus status,
             @Param("rejectionReason") String rejectionReason,
             @Param("processedAt") OffsetDateTime processedAt,
-            @Param("processedByUserId") Long processedByUserId
+            @Param("processedByUserId") UUID processedByUserId
     );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)

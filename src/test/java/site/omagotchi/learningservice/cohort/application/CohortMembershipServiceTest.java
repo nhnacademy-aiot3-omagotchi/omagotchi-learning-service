@@ -17,6 +17,7 @@ import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 
 import java.time.LocalDate;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -24,6 +25,9 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class CohortMembershipServiceTest {
+
+    private static final UUID MANAGER_USER_ID = UUID.fromString("019d2a48-80c0-4d6a-9a15-0b16d2dd74f1");
+    private static final UUID MEMBER_USER_ID = UUID.fromString("019d2a48-80c0-4eb7-a51d-8a427525a7d3");
 
     @Mock
     private CohortRepository cohortRepository;
@@ -44,8 +48,12 @@ class CohortMembershipServiceTest {
     void approveMentorRequiresCohortManagerNotSystemAdmin() {
         Long cohortId = 1L;
         Long membershipId = 100L;
-        Long managerUserId = 10L;
-        CohortMembership pending = CohortMembership.pending(cohortId, 20L, CohortMembershipRole.STUDENT);
+        UUID managerUserId = MANAGER_USER_ID;
+        CohortMembership pending = CohortMembership.pending(
+                cohortId,
+                MEMBER_USER_ID,
+                CohortMembershipRole.STUDENT
+        );
         ReflectionTestUtils.setField(pending, "id", membershipId);
 
         when(membershipRepository.findByIdAndStatus(membershipId, CohortMembershipStatus.PENDING))
@@ -77,7 +85,7 @@ class CohortMembershipServiceTest {
                 "test cohort",
                 LocalDate.now(),
                 LocalDate.now().plusDays(30),
-                999L
+                MANAGER_USER_ID
         );
         ReflectionTestUtils.setField(cohort, "id", cohortId);
         return cohort;

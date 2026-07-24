@@ -91,7 +91,7 @@ class StudyTimeParserTest {
     class IsMinuteAligned {
 
         @Test
-        @DisplayName("분 단위 시각은 참 반환")
+        @DisplayName("참 반환")
         void returnsTrueForMinuteAlignedTime() {
             Instant instant = Instant.parse("2000-01-01T01:30:00Z");
 
@@ -101,7 +101,7 @@ class StudyTimeParserTest {
         }
 
         @Test
-        @DisplayName("초가 남은 시각은 거짓 반환")
+        @DisplayName("분 단위 기록이 아닌 값 거짓 반환")
         void returnsFalseForTimeWithSeconds() {
             Instant instant = Instant.parse("2000-01-01T01:30:15Z");
 
@@ -111,7 +111,7 @@ class StudyTimeParserTest {
         }
 
         @Test
-        @DisplayName("나노초가 남은 시각은 거짓 반환")
+        @DisplayName("나노초가 남은 시각 거짓 반환")
         void returnsFalseForTimeWithNanoseconds() {
             Instant instant = Instant.ofEpochSecond(1000L, 123456L);
 
@@ -121,7 +121,7 @@ class StudyTimeParserTest {
         }
 
         @Test
-        @DisplayName("시각 누락은 거짓 반환")
+        @DisplayName("null 입력 시 거짓 반환")
         void returnsFalseForMissingTime() {
             boolean minuteAligned = StudyTimeParser.isMinuteAligned(null);
 

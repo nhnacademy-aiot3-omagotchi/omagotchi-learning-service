@@ -9,9 +9,12 @@ import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
 import java.util.Locale;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class StudyTimeParser {
 
     // ResolverStyle.STRICT로 실제로 존재하는 날짜인지 엄격하게 검사 (예: 2월 30일, 25시 60분 등)
@@ -21,9 +24,6 @@ public final class StudyTimeParser {
     private static final DateTimeFormatter COMPACT_TIME_FORMATTER = DateTimeFormatter
             .ofPattern("HHmm", Locale.ROOT)
             .withResolverStyle(ResolverStyle.STRICT);
-
-    private StudyTimeParser() {
-    }
 
     /**
      * 날짜 문자열(yyyyMMdd 또는 yyyy-MM-dd)과 시간 문자열(HHmm 또는 HH:mm)을 받아

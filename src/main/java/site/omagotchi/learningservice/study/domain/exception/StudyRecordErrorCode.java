@@ -16,6 +16,11 @@ public enum StudyRecordErrorCode implements ErrorCode {
             ErrorType.CONFLICT,
             "STUDY_RECORD_OVERLAP",
             "기존 공부 기록과 시간이 겹칩니다."
+    ),
+    VERSION_CONFLICT(
+            ErrorType.CONFLICT,
+            "STUDY_RECORD_VERSION_CONFLICT",
+            "다른 사용자가 먼저 데이터를 수정했습니다. 최신 데이터를 조회한 후 다시 요청해 주세요."
     );
 
     private final ErrorType type;

@@ -8,6 +8,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.util.DateTimeProvider;
@@ -33,6 +35,9 @@ import static org.mockito.Mockito.verify;
 class StudyRecordCommandServiceTest {
 
     private static final Long COHORT_MEMBERSHIP_ID = 1L;
+    private static final UUID STUDY_RECORD_ID = UUID.fromString(
+            "00000000-0000-0000-0000-000000000001"
+    );
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);
     private static final String DATE = "20000101";
     private static final String START_TIME_TEXT = "1000";
@@ -290,7 +295,7 @@ class StudyRecordCommandServiceTest {
             given(studyRecordRepository.findActiveByIdAndCohortMembershipId(studyRecordId, COHORT_MEMBERSHIP_ID)).willReturn(Optional.of(entity));
             given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
             given(dateTimeProvider.calculateAggregationDate(updatedStartTime)).willReturn(BASE_DATE);
-            given(studyRecordRepository.save(entity)).willReturn(entity);
+            given(studyRecordRepository.saveAndFlush(entity)).willReturn(entity);
 
             StudyRecordResult result = studyRecordCommandService.update(
                     UUID.randomUUID(),
@@ -306,7 +311,7 @@ class StudyRecordCommandServiceTest {
                     () -> assertEquals(BASE_DATE, entity.getAggregationDate()),
                     () -> assertEquals(entity.getStudySeconds(), result.studySeconds())
             );
-            verify(studyRecordRepository).save(entity);
+            verify(studyRecordRepository).saveAndFlush(entity);
         }
 
         @Test
@@ -336,7 +341,7 @@ class StudyRecordCommandServiceTest {
             );
 
             assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
-            verify(studyRecordRepository, never()).save(any(StudyRecordEntity.class));
+            verify(studyRecordRepository, never()).saveAndFlush(any(StudyRecordEntity.class));
         }
 
         @Test
@@ -379,7 +384,120 @@ class StudyRecordCommandServiceTest {
                     () -> assertEquals(START_TIME, entity.getStartTime()),
                     () -> assertEquals(END_TIME, entity.getEndTime())
             );
-            verify(studyRecordRepository, never()).save(any(StudyRecordEntity.class));
+            verify(studyRecordRepository, never()).saveAndFlush(any(StudyRecordEntity.class));
+        }
+
+        @Test
+        @DisplayName("기대 버전 불일치 예외")
+        void throwsVersionConflictWhenExpectedVersionDoesNotMatch() {
+            UUID studyRecordId = UUID.randomUUID();
+            StudyRecordEntity entity = createEntity(START_TIME, END_TIME);
+            UpdateStudyRecordCommand command = new UpdateStudyRecordCommand(
+                    DATE,
+                    "1200",
+                    "1400",
+                    1L
+            );
+            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(
+                    studyRecordId,
+                    COHORT_MEMBERSHIP_ID
+            )).willReturn(Optional.of(entity));
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> studyRecordCommandService.update(
+                            UUID.randomUUID(),
+                            COHORT_MEMBERSHIP_ID,
+                            studyRecordId,
+                            command
+                    )
+            );
+
+            assertAll(
+                    () -> assertSame(StudyRecordErrorCode.VERSION_CONFLICT, exception.getErrorCode()),
+                    () -> assertEquals(START_TIME, entity.getStartTime()),
+                    () -> assertEquals(END_TIME, entity.getEndTime())
+            );
+            verify(studyRecordRepository, never()).saveAndFlush(any(StudyRecordEntity.class));
+        }
+
+        @Test
+        @DisplayName("04시 집계 경계 교차 예외")
+        void rejectsAggregationBoundaryCrossing() {
+            UUID studyRecordId = UUID.randomUUID();
+            StudyRecordEntity entity = createEntity(START_TIME, END_TIME);
+            Instant updatedStartTime = Instant.parse("1999-12-31T18:59:00Z");
+            Instant updatedEndTime = Instant.parse("1999-12-31T19:01:00Z");
+            UpdateStudyRecordCommand command = new UpdateStudyRecordCommand(
+                    DATE,
+                    "0359",
+                    "0401",
+                    0L
+            );
+            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(
+                    studyRecordId,
+                    COHORT_MEMBERSHIP_ID
+            )).willReturn(Optional.of(entity));
+            given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
+            given(dateTimeProvider.crossesAggregationBoundary(
+                    updatedStartTime,
+                    updatedEndTime
+            )).willReturn(true);
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> studyRecordCommandService.update(
+                            UUID.randomUUID(),
+                            COHORT_MEMBERSHIP_ID,
+                            studyRecordId,
+                            command
+                    )
+            );
+
+            assertAll(
+                    () -> assertSame(
+                            StudyRecordErrorCode.AGGREGATION_BOUNDARY_CROSSED,
+                            exception.getErrorCode()
+                    ),
+                    () -> assertEquals(START_TIME, entity.getStartTime()),
+                    () -> assertEquals(END_TIME, entity.getEndTime())
+            );
+            verify(studyRecordRepository, never()).saveAndFlush(any(StudyRecordEntity.class));
+        }
+
+        @Test
+        @DisplayName("동시 변경 충돌 예외")
+        void translatesOptimisticLockingFailureToVersionConflict() {
+            UUID studyRecordId = UUID.randomUUID();
+            StudyRecordEntity entity = createEntity(START_TIME, END_TIME);
+            Instant updatedStartTime = Instant.parse("2000-01-01T03:00:00Z");
+            UpdateStudyRecordCommand command = new UpdateStudyRecordCommand(
+                    DATE,
+                    "1200",
+                    "1400",
+                    0L
+            );
+            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(
+                    studyRecordId,
+                    COHORT_MEMBERSHIP_ID
+            )).willReturn(Optional.of(entity));
+            given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
+            given(dateTimeProvider.calculateAggregationDate(updatedStartTime)).willReturn(BASE_DATE);
+            given(studyRecordRepository.saveAndFlush(entity)).willThrow(
+                    new ObjectOptimisticLockingFailureException(StudyRecordEntity.class, studyRecordId)
+            );
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> studyRecordCommandService.update(
+                            UUID.randomUUID(),
+                            COHORT_MEMBERSHIP_ID,
+                            studyRecordId,
+                            command
+                    )
+            );
+
+            assertSame(StudyRecordErrorCode.VERSION_CONFLICT, exception.getErrorCode());
         }
 
         @Test
@@ -405,7 +523,7 @@ class StudyRecordCommandServiceTest {
             );
 
             assertSame(StudyRecordErrorCode.NOT_FOUND, exception.getErrorCode());
-            verify(studyRecordRepository, never()).save(any(StudyRecordEntity.class));
+            verify(studyRecordRepository, never()).saveAndFlush(any(StudyRecordEntity.class));
         }
     }
 
@@ -425,11 +543,39 @@ class StudyRecordCommandServiceTest {
             studyRecordCommandService.delete(
                     UUID.randomUUID(),
                     COHORT_MEMBERSHIP_ID,
-                    studyRecordId
+                    studyRecordId,
+                    0L
             );
 
             assertEquals(deletedAt, entity.getDeletedAt());
-            verify(studyRecordRepository).save(entity);
+            verify(studyRecordRepository).saveAndFlush(entity);
+        }
+
+        @Test
+        @DisplayName("기대 버전 불일치 예외")
+        void throwsVersionConflictWhenDeletingWithStaleVersion() {
+            UUID studyRecordId = UUID.randomUUID();
+            StudyRecordEntity entity = createEntity(START_TIME, END_TIME);
+            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(
+                    studyRecordId,
+                    COHORT_MEMBERSHIP_ID
+            )).willReturn(Optional.of(entity));
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> studyRecordCommandService.delete(
+                            UUID.randomUUID(),
+                            COHORT_MEMBERSHIP_ID,
+                            studyRecordId,
+                            1L
+                    )
+            );
+
+            assertAll(
+                    () -> assertSame(StudyRecordErrorCode.VERSION_CONFLICT, exception.getErrorCode()),
+                    () -> assertNull(entity.getDeletedAt())
+            );
+            verify(studyRecordRepository, never()).saveAndFlush(any(StudyRecordEntity.class));
         }
 
         @Test
@@ -443,22 +589,27 @@ class StudyRecordCommandServiceTest {
                     () -> studyRecordCommandService.delete(
                             UUID.randomUUID(),
                             COHORT_MEMBERSHIP_ID,
-                            studyRecordId
+                            studyRecordId,
+                            0L
                     )
             );
 
             assertSame(StudyRecordErrorCode.NOT_FOUND, exception.getErrorCode());
-            verify(studyRecordRepository, never()).save(any(StudyRecordEntity.class));
+            verify(studyRecordRepository, never()).saveAndFlush(any(StudyRecordEntity.class));
         }
     }
 
     private StudyRecordEntity createEntity(Instant startTime, Instant endTime) {
-        return StudyRecordEntity.builder()
+        StudyRecordEntity entity = StudyRecordEntity.builder()
                 .cohortMembershipId(COHORT_MEMBERSHIP_ID)
                 .aggregationDate(BASE_DATE)
                 .startTime(startTime)
                 .endTime(endTime)
                 .studySeconds(endTime.getEpochSecond() - startTime.getEpochSecond())
                 .build();
+
+        ReflectionTestUtils.setField(entity, "id", STUDY_RECORD_ID);
+        ReflectionTestUtils.setField(entity, "version", 0L);
+        return entity;
     }
 }

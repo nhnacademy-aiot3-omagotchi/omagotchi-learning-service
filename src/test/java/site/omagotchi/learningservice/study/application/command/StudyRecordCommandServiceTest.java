@@ -259,6 +259,29 @@ class StudyRecordCommandServiceTest {
                 assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
             }
 
+            @Test
+            @DisplayName("04시 집계 경계 교차 예외")
+            void rejectsAggregationBoundaryCrossing() {
+                Instant startTime = Instant.parse("1999-12-31T18:59:00Z");
+                Instant endTime = Instant.parse("1999-12-31T19:01:00Z");
+                CreateStudyRecordCommand command = new CreateStudyRecordCommand(
+                        10L,
+                        DATE,
+                        "0359",
+                        "0401"
+                );
+                given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
+                given(dateTimeProvider.crossesAggregationBoundary(startTime, endTime))
+                        .willReturn(true);
+
+                BusinessException exception = assertInvalidCreate(command);
+
+                assertSame(
+                        StudyRecordErrorCode.AGGREGATION_BOUNDARY_CROSSED,
+                        exception.getErrorCode()
+                );
+            }
+
             private BusinessException assertInvalidCreate(CreateStudyRecordCommand command) {
                 BusinessException exception = assertThrows(
                         BusinessException.class,

@@ -17,6 +17,11 @@ public enum StudyRecordErrorCode implements ErrorCode {
             "STUDY_RECORD_OVERLAP",
             "기존 공부 기록과 시간이 겹칩니다."
     ),
+    AGGREGATION_BOUNDARY_CROSSED(
+            ErrorType.INVALID_INPUT,
+            "STUDY_RECORD_AGGREGATION_BOUNDARY_CROSSED",
+            "공부 기록이 날짜 경계와 겹칩니다."
+    ),
     VERSION_CONFLICT(
             ErrorType.CONFLICT,
             "STUDY_RECORD_VERSION_CONFLICT",

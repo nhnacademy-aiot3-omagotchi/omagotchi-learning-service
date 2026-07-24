@@ -40,6 +40,7 @@ public class StudyRecordCommandService {
 
         // 기록 시간 범위 검증
         validateTimeRange(startInstant, endInstant);
+        validateSingleAggregationDate(startInstant, endInstant);
 
         // TODO: 검증된 cohortMembershipId 단위 transaction-scoped advisory lock을 획득한다.
 
@@ -91,6 +92,7 @@ public class StudyRecordCommandService {
 
         // 기록 시간 범위 검증
         validateTimeRange(startInstant, endInstant);
+        validateSingleAggregationDate(startInstant, endInstant);
 
         // 오버랩 검증 (자신 제외)
         validateNoExistingRecordOverlap(
@@ -173,6 +175,15 @@ public class StudyRecordCommandService {
     ) {
         if (!Objects.equals(entity.getVersion(), expectedVersion)) {
             throw new BusinessException(StudyRecordErrorCode.VERSION_CONFLICT);
+        }
+    }
+
+    private void validateSingleAggregationDate(
+            Instant startInstant,
+            Instant endInstant
+    ) {
+        if (dateTimeProvider.crossesAggregationBoundary(startInstant, endInstant)) {
+            throw new BusinessException(StudyRecordErrorCode.AGGREGATION_BOUNDARY_CROSSED);
         }
     }
 

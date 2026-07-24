@@ -10,6 +10,8 @@ import java.time.*;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Slf4j
 @DisplayName("날짜 및 시간")
@@ -123,6 +125,33 @@ class DateTimeProviderTest {
                             endExclusive
                     )
             );
+        }
+    }
+
+    @Nested
+    @DisplayName("집계 경계 교차 판정")
+    class AggregationBoundaryCrossing {
+
+        @Test
+        @DisplayName("종료 시각이 04시 경계와 같으면 미교차")
+        void doesNotCrossWhenEndTimeEqualsBoundary() {
+            Instant startTime = Instant.parse("2000-01-01T18:59:00Z");
+            Instant endTime = Instant.parse("2000-01-01T19:00:00Z");
+
+            boolean crosses = dateTimeProvider.crossesAggregationBoundary(startTime, endTime);
+
+            assertFalse(crosses);
+        }
+
+        @Test
+        @DisplayName("04시 경계를 넘으면 교차")
+        void crossesWhenIntervalContinuesAfterBoundary() {
+            Instant startTime = Instant.parse("2000-01-01T18:59:00Z");
+            Instant endTime = Instant.parse("2000-01-01T19:01:00Z");
+
+            boolean crosses = dateTimeProvider.crossesAggregationBoundary(startTime, endTime);
+
+            assertTrue(crosses);
         }
     }
 }

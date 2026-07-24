@@ -56,4 +56,18 @@ public class DateTimeProvider {
                 ? localDate.minusDays(1)
                 : localDate;
     }
+
+    /**
+     * 반개구간 {@code [startTime, endTime)}이 KST 04:00 집계 경계를 넘는지 확인한다.
+     * 종료 시각이 경계와 정확히 같으면 해당 경계를 점유하지 않으므로 교차하지 않는다.
+     */
+    public boolean crossesAggregationBoundary(
+            Instant startTime,
+            Instant endTime
+    ) {
+        LocalDate startAggregationDate = calculateAggregationDate(startTime);
+        LocalDate endAggregationDate = calculateAggregationDate(endTime.minusNanos(1));
+        // 시작과 종료의 기준일이 다른지 체크
+        return !startAggregationDate.equals(endAggregationDate);
+    }
 }

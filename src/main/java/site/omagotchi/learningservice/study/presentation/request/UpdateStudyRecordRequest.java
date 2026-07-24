@@ -1,12 +1,16 @@
 package site.omagotchi.learningservice.study.presentation.request;
 
 import jakarta.validation.constraints.NotNull;
-
-import java.time.Instant;
+import site.omagotchi.learningservice.study.application.command.UpdateStudyRecordCommand;
 
 public record UpdateStudyRecordRequest(
-        @NotNull Instant startTime,
-        @NotNull Instant endTime,
+        @NotNull String date,
+        @NotNull String startTime,
+        @NotNull String endTime,
         @NotNull Long expectedVersion
 ) {
+
+    public UpdateStudyRecordCommand toCommand() {
+        return new UpdateStudyRecordCommand(date, startTime, endTime, expectedVersion);
+    }
 }

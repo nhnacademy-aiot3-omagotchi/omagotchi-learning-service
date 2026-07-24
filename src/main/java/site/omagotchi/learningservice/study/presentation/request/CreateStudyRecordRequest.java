@@ -1,12 +1,16 @@
 package site.omagotchi.learningservice.study.presentation.request;
 
 import jakarta.validation.constraints.NotNull;
-
-import java.time.Instant;
+import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
 
 public record CreateStudyRecordRequest(
         @NotNull Long cohortId,
-        @NotNull Instant startTime,
-        @NotNull Instant endTime
+        @NotNull String date,
+        @NotNull String startTime,
+        @NotNull String endTime
 ) {
+
+    public CreateStudyRecordCommand toCommand() {
+        return new CreateStudyRecordCommand(cohortId, date, startTime, endTime);
+    }
 }

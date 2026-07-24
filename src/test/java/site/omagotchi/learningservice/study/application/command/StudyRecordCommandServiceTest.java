@@ -9,13 +9,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.util.DateTimeProvider;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
 import site.omagotchi.learningservice.study.infrastructure.persistence.entity.StudyRecordEntity;
 import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
-import site.omagotchi.learningservice.study.presentation.request.CreateStudyRecordRequest;
-import site.omagotchi.learningservice.study.presentation.request.UpdateStudyRecordRequest;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -35,8 +34,12 @@ class StudyRecordCommandServiceTest {
 
     private static final Long COHORT_MEMBERSHIP_ID = 1L;
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);
+    private static final String DATE = "20000101";
+    private static final String START_TIME_TEXT = "1000";
+    private static final String END_TIME_TEXT = "1100";
     private static final Instant START_TIME = Instant.parse("2000-01-01T01:00:00Z");
     private static final Instant END_TIME = Instant.parse("2000-01-01T02:00:00Z");
+    private static final Instant CURRENT_TIME = Instant.parse("2000-01-02T00:00:00Z");
 
     @Mock
     private StudyRecordRepository studyRecordRepository;
@@ -54,7 +57,13 @@ class StudyRecordCommandServiceTest {
         @Test
         @DisplayName("정상 처리")
         void savesStudyRecord() {
-            CreateStudyRecordRequest request = new CreateStudyRecordRequest(10L, START_TIME, END_TIME);
+            CreateStudyRecordCommand request = new CreateStudyRecordCommand(
+                    10L,
+                    DATE,
+                    START_TIME_TEXT,
+                    END_TIME_TEXT
+            );
+            given(dateTimeProvider.currentInstant()).willReturn(END_TIME);
             given(dateTimeProvider.calculateAggregationDate(START_TIME)).willReturn(BASE_DATE);
             given(studyRecordRepository.save(any(StudyRecordEntity.class)))
                     .willAnswer(invocation -> invocation.getArgument(0));
@@ -84,7 +93,13 @@ class StudyRecordCommandServiceTest {
         void savesAggregationDateCalculatedByDateTimeProvider() {
             Instant startTime = Instant.parse("2000-01-01T16:30:00Z");
             Instant endTime = Instant.parse("2000-01-01T17:30:00Z");
-            CreateStudyRecordRequest request = new CreateStudyRecordRequest(10L, startTime, endTime);
+            CreateStudyRecordCommand request = new CreateStudyRecordCommand(
+                    10L,
+                    "20000102",
+                    "0130",
+                    "0230"
+            );
+            given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
             given(dateTimeProvider.calculateAggregationDate(startTime)).willReturn(BASE_DATE);
             given(studyRecordRepository.save(any(StudyRecordEntity.class)))
                     .willAnswer(invocation -> invocation.getArgument(0));
@@ -96,6 +111,132 @@ class StudyRecordCommandServiceTest {
             );
 
             assertEquals(BASE_DATE, result.aggregationDate());
+        }
+
+        @Nested
+        @DisplayName("시간 및 구간 검증")
+        class TimeRangeValidation {
+
+            @Test
+            @DisplayName("날짜 형식 예외")
+            void rejectsInvalidDateFormat() {
+                CreateStudyRecordCommand command = new CreateStudyRecordCommand(
+                        10L,
+                        "invalidDate",
+                        START_TIME_TEXT,
+                        END_TIME_TEXT
+                );
+
+                BusinessException exception = assertInvalidCreate(command);
+
+                assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
+            }
+
+            @Test
+            @DisplayName("존재하지 않는 날짜 예외")
+            void rejectsInvalidDateValue() {
+                CreateStudyRecordCommand command = new CreateStudyRecordCommand(
+                        10L,
+                        "20000230",
+                        START_TIME_TEXT,
+                        END_TIME_TEXT
+                );
+
+                BusinessException exception = assertInvalidCreate(command);
+
+                assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
+            }
+
+            @Test
+            @DisplayName("시간 형식 예외")
+            void rejectsInvalidTimeFormat() {
+                CreateStudyRecordCommand command = new CreateStudyRecordCommand(
+                        10L,
+                        DATE,
+                        "invalid",
+                        END_TIME_TEXT
+                );
+
+                BusinessException exception = assertInvalidCreate(command);
+
+                assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
+            }
+
+            @Test
+            @DisplayName("존재하지 않는 시간 예외")
+            void rejectsInvalidTimeValue() {
+                CreateStudyRecordCommand command = new CreateStudyRecordCommand(
+                        10L,
+                        DATE,
+                        START_TIME_TEXT,
+                        "2400"
+                );
+
+                BusinessException exception = assertInvalidCreate(command);
+
+                assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
+            }
+
+            @Test
+            @DisplayName("동일한 시작 및 종료 시각 예외")
+            void rejectsEqualStartAndEndTime() {
+                CreateStudyRecordCommand command = new CreateStudyRecordCommand(
+                        10L,
+                        DATE,
+                        START_TIME_TEXT,
+                        START_TIME_TEXT
+                );
+
+                BusinessException exception = assertInvalidCreate(command);
+
+                assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
+            }
+
+            @Test
+            @DisplayName("시작 시각이 종료 시각 이후인 경우 예외")
+            void rejectsStartTimeAfterEndTime() {
+                CreateStudyRecordCommand command = new CreateStudyRecordCommand(
+                        10L,
+                        DATE,
+                        END_TIME_TEXT,
+                        START_TIME_TEXT
+                );
+
+                BusinessException exception = assertInvalidCreate(command);
+
+                assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
+            }
+
+            @Test
+            @DisplayName("미래 종료 시각 예외")
+            void rejectsFutureEndTime() {
+                Instant currentTime = Instant.parse("2000-01-01T02:00:00Z");
+                CreateStudyRecordCommand command = new CreateStudyRecordCommand(
+                        10L,
+                        DATE,
+                        START_TIME_TEXT,
+                        "1101"
+                );
+                given(dateTimeProvider.currentInstant()).willReturn(currentTime);
+
+                BusinessException exception = assertInvalidCreate(command);
+
+                assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
+            }
+
+            private BusinessException assertInvalidCreate(CreateStudyRecordCommand command) {
+                BusinessException exception = assertThrows(
+                        BusinessException.class,
+                        () -> studyRecordCommandService.create(
+                                UUID.randomUUID(),
+                                COHORT_MEMBERSHIP_ID,
+                                command
+                        )
+                );
+
+                verify(studyRecordRepository, never()).save(any(StudyRecordEntity.class));
+                return exception;
+            }
         }
     }
 
@@ -110,12 +251,14 @@ class StudyRecordCommandServiceTest {
             StudyRecordEntity entity = createEntity(START_TIME, END_TIME);
             Instant updatedStartTime = Instant.parse("2000-01-01T03:00:00Z");
             Instant updatedEndTime = Instant.parse("2000-01-01T05:00:00Z");
-            UpdateStudyRecordRequest request = new UpdateStudyRecordRequest(
-                    updatedStartTime,
-                    updatedEndTime,
+            UpdateStudyRecordCommand request = new UpdateStudyRecordCommand(
+                    DATE,
+                    "1200",
+                    "1400",
                     0L
             );
-            given(studyRecordRepository.findById(studyRecordId)).willReturn(Optional.of(entity));
+            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(studyRecordId, COHORT_MEMBERSHIP_ID)).willReturn(Optional.of(entity));
+            given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
             given(dateTimeProvider.calculateAggregationDate(updatedStartTime)).willReturn(BASE_DATE);
             given(studyRecordRepository.save(entity)).willReturn(entity);
 
@@ -137,15 +280,46 @@ class StudyRecordCommandServiceTest {
         }
 
         @Test
+        @DisplayName("잘못된 시간 입력 예외")
+        void rejectsInvalidTimeRange() {
+            UUID studyRecordId = UUID.randomUUID();
+            StudyRecordEntity entity = createEntity(START_TIME, END_TIME);
+            UpdateStudyRecordCommand command = new UpdateStudyRecordCommand(
+                    DATE,
+                    END_TIME_TEXT,
+                    START_TIME_TEXT,
+                    0L
+            );
+            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(
+                    studyRecordId,
+                    COHORT_MEMBERSHIP_ID
+            )).willReturn(Optional.of(entity));
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> studyRecordCommandService.update(
+                            UUID.randomUUID(),
+                            COHORT_MEMBERSHIP_ID,
+                            studyRecordId,
+                            command
+                    )
+            );
+
+            assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
+            verify(studyRecordRepository, never()).save(any(StudyRecordEntity.class));
+        }
+
+        @Test
         @DisplayName("대상 없음 예외")
         void throwsNotFoundWhenUpdatingNonExistentRecord() {
             UUID studyRecordId = UUID.randomUUID();
-            UpdateStudyRecordRequest request = new UpdateStudyRecordRequest(
-                    START_TIME,
-                    END_TIME,
+            UpdateStudyRecordCommand request = new UpdateStudyRecordCommand(
+                    DATE,
+                    START_TIME_TEXT,
+                    END_TIME_TEXT,
                     0L
             );
-            given(studyRecordRepository.findById(studyRecordId)).willReturn(Optional.empty());
+            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(studyRecordId, COHORT_MEMBERSHIP_ID)).willReturn(Optional.empty());
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
@@ -172,7 +346,7 @@ class StudyRecordCommandServiceTest {
             UUID studyRecordId = UUID.randomUUID();
             StudyRecordEntity entity = createEntity(START_TIME, END_TIME);
             Instant deletedAt = Instant.parse("2000-01-02T01:30:00Z");
-            given(studyRecordRepository.findById(studyRecordId)).willReturn(Optional.of(entity));
+            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(studyRecordId, COHORT_MEMBERSHIP_ID)).willReturn(Optional.of(entity));
             given(dateTimeProvider.currentInstant()).willReturn(deletedAt);
 
             studyRecordCommandService.delete(
@@ -189,7 +363,7 @@ class StudyRecordCommandServiceTest {
         @DisplayName("대상 없음 예외")
         void throwsNotFoundWhenDeletingNonExistentRecord() {
             UUID studyRecordId = UUID.randomUUID();
-            given(studyRecordRepository.findById(studyRecordId)).willReturn(Optional.empty());
+            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(studyRecordId, COHORT_MEMBERSHIP_ID)).willReturn(Optional.empty());
 
             BusinessException exception = assertThrows(
                     BusinessException.class,

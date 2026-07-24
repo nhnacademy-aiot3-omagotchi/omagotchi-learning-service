@@ -30,15 +30,23 @@ public class StudyRecordCommandService {
             Long cohortMembershipId,
             CreateStudyRecordCommand command
     ) {
-        // TODO(TBD-002): 과거 입력 허용 범위가 확정되면 이 검증에 추가한다.
-        // TODO(OVL-001): 기존 공부 기록과 활성 타이머의 겹침 여부를 검증한다.
         // TODO(DAT-001~003): KST 04:00 경계별로 분할하고 분할 전후 공부 시간을 보존한다.
         // TODO(REC-009, SYN-002): commandId 영수증으로 같은 요청의 중복 저장을 방지한다.
 
+        // Instance로 날짜 파싱
         Instant startInstant = StudyTimeParser.parseToInstant(command.date(), command.startTime());
         Instant endInstant = StudyTimeParser.parseToInstant(command.date(), command.endTime());
 
+        // 기록 시간 범위 검증
         validateTimeRange(startInstant, endInstant);
+
+        // 오버랩 검증
+        validateNoExistingRecordOverlap(
+                cohortMembershipId,
+                startInstant,
+                endInstant,
+                null
+        );
 
         // 현재 단계에서는 전달받은 구간 전체를 하나의 기록으로 저장한다.
         long studySeconds = Duration.between(startInstant, endInstant).getSeconds();
@@ -64,20 +72,28 @@ public class StudyRecordCommandService {
             UpdateStudyRecordCommand command
     ) {
         // TODO(REC-009, OVL-002): expectedVersion과 동시 변경 충돌을 검증한다.
-        // TODO(TBD-002): 과거 입력 허용 범위가 확정되면 이 검증에 추가한다.
-        // TODO(OVL-001): 자기 자신을 제외한 기존 기록과 활성 타이머의 겹침을 검증한다.
         // TODO(DAT-001~004): 04:00 경계 분할 결과를 모두 검증한 뒤 하나의 트랜잭션으로 반영한다.
         // TODO(SYN-002): commandId 영수증으로 같은 수정 요청의 중복 반영을 방지한다.
 
-        // (REC-005, SEC-001): 인증된 소속이 소유한 활성 기록만 수정 대상으로 조회한다.
+        // 인증된 소속이 소유한 활성 기록만 수정 대상으로 조회
         StudyRecordEntity entity = studyRecordRepository
                 .findActiveByIdAndCohortMembershipId(studyRecordId, cohortMembershipId)
                 .orElseThrow(() -> new BusinessException(StudyRecordErrorCode.NOT_FOUND));
 
+        // Instance로 날짜 파싱
         Instant startInstant = StudyTimeParser.parseToInstant(command.date(), command.startTime());
         Instant endInstant = StudyTimeParser.parseToInstant(command.date(), command.endTime());
 
+        // 기록 시간 범위 검증
         validateTimeRange(startInstant, endInstant);
+
+        // 오버랩 검증 (자신 제외)
+        validateNoExistingRecordOverlap(
+                cohortMembershipId,
+                startInstant,
+                endInstant,
+                studyRecordId
+        );
 
         // (REC-007): 수정 구간 전체의 초로 studySeconds를 다시 계산한다.
         long studySeconds = Duration.between(startInstant, endInstant).getSeconds();
@@ -111,12 +127,32 @@ public class StudyRecordCommandService {
     }
 
     private void validateTimeRange(Instant startInstant, Instant endInstant) {
+        // startTime < endTime 검증
         if (!startInstant.isBefore(endInstant)) {
             throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
         }
-
+        // 미래 시간 저장 예외 검증
         if (endInstant.isAfter(dateTimeProvider.currentInstant())) {
             throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
+        }
+        // TODO: KDT 학습 기간 범위 검증 + 과거 기록 범위 검증(Optional)
+    }
+
+    private void validateNoExistingRecordOverlap(
+            Long cohortMembershipId,
+            Instant startInstant,
+            Instant endInstant,
+            UUID excludedStudyRecordId
+    ) {
+        boolean overlaps = studyRecordRepository.existsActiveOverlap(
+                cohortMembershipId,
+                startInstant,
+                endInstant,
+                excludedStudyRecordId
+        );
+
+        if (overlaps) {
+            throw new BusinessException(StudyRecordErrorCode.OVERLAP);
         }
     }
 }

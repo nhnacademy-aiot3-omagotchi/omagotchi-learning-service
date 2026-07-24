@@ -11,6 +11,11 @@ public enum StudyRecordErrorCode implements ErrorCode {
             ErrorType.NOT_FOUND,
             "STUDY_RECORD_NOT_FOUND",
             "공부 기록을 찾을 수 없습니다."
+    ),
+    OVERLAP(
+            ErrorType.CONFLICT,
+            "STUDY_RECORD_OVERLAP",
+            "기존 공부 기록과 시간이 겹칩니다."
     );
 
     private final ErrorType type;

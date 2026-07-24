@@ -113,6 +113,36 @@ class StudyRecordCommandServiceTest {
             assertEquals(BASE_DATE, result.aggregationDate());
         }
 
+        @Test
+        @DisplayName("기존 기록 겹침 예외")
+        void throwsOverlapWhenCreatingOverlappingRecord() {
+            CreateStudyRecordCommand command = new CreateStudyRecordCommand(
+                    10L,
+                    DATE,
+                    START_TIME_TEXT,
+                    END_TIME_TEXT
+            );
+            given(dateTimeProvider.currentInstant()).willReturn(END_TIME);
+            given(studyRecordRepository.existsActiveOverlap(
+                    COHORT_MEMBERSHIP_ID,
+                    START_TIME,
+                    END_TIME,
+                    null
+            )).willReturn(true);
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> studyRecordCommandService.create(
+                            UUID.randomUUID(),
+                            COHORT_MEMBERSHIP_ID,
+                            command
+                    )
+            );
+
+            assertSame(StudyRecordErrorCode.OVERLAP, exception.getErrorCode());
+            verify(studyRecordRepository, never()).save(any(StudyRecordEntity.class));
+        }
+
         @Nested
         @DisplayName("시간 및 구간 검증")
         class TimeRangeValidation {
@@ -306,6 +336,49 @@ class StudyRecordCommandServiceTest {
             );
 
             assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
+            verify(studyRecordRepository, never()).save(any(StudyRecordEntity.class));
+        }
+
+        @Test
+        @DisplayName("기존 기록 겹침 예외")
+        void throwsOverlapWhenUpdatingToOverlappingRecord() {
+            UUID studyRecordId = UUID.randomUUID();
+            StudyRecordEntity entity = createEntity(START_TIME, END_TIME);
+            Instant updatedStartTime = Instant.parse("2000-01-01T03:00:00Z");
+            Instant updatedEndTime = Instant.parse("2000-01-01T05:00:00Z");
+            UpdateStudyRecordCommand command = new UpdateStudyRecordCommand(
+                    DATE,
+                    "1200",
+                    "1400",
+                    0L
+            );
+            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(
+                    studyRecordId,
+                    COHORT_MEMBERSHIP_ID
+            )).willReturn(Optional.of(entity));
+            given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
+            given(studyRecordRepository.existsActiveOverlap(
+                    COHORT_MEMBERSHIP_ID,
+                    updatedStartTime,
+                    updatedEndTime,
+                    studyRecordId
+            )).willReturn(true);
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> studyRecordCommandService.update(
+                            UUID.randomUUID(),
+                            COHORT_MEMBERSHIP_ID,
+                            studyRecordId,
+                            command
+                    )
+            );
+
+            assertAll(
+                    () -> assertSame(StudyRecordErrorCode.OVERLAP, exception.getErrorCode()),
+                    () -> assertEquals(START_TIME, entity.getStartTime()),
+                    () -> assertEquals(END_TIME, entity.getEndTime())
+            );
             verify(studyRecordRepository, never()).save(any(StudyRecordEntity.class));
         }
 

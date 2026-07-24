@@ -26,6 +26,8 @@ spring:
     properties:
       hibernate:
         default_schema: learning_service
+        jdbc:
+          time_zone: UTC
 
 eureka:
   client:

@@ -18,12 +18,7 @@ CREATE TABLE learning_service.study_records
     CONSTRAINT ck_study_records_time
         CHECK (start_time < end_time),
 
-    -- 분 단위로 저장되었는지 검증 (선택 고려)
-    CONSTRAINT ck_study_records_minute_precision
-        CHECK (
-            start_time = date_trunc('minute', start_time)
-            AND end_time = date_trunc('minute', end_time)
-        ),
+    -- 분 단위로 저장되었는지 검증 (삭제됨)
 
     -- study_seconds 범위 검증
     CONSTRAINT ck_study_records_seconds

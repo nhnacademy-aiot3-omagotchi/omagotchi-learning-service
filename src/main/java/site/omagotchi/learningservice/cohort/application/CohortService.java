@@ -3,11 +3,12 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.cohort.application.dto.command.ChangeCohortStatusRequest;
-import site.omagotchi.learningservice.cohort.application.dto.command.CreateCohortRequest;
-import site.omagotchi.learningservice.cohort.application.dto.command.UpdateCohortRequest;
+import site.omagotchi.learningservice.cohort.application.dto.command.ChangeCohortStatusCommand;
+import site.omagotchi.learningservice.cohort.application.dto.command.CreateCohortCommand;
+import site.omagotchi.learningservice.cohort.application.dto.command.UpdateCohortCommand;
 import site.omagotchi.learningservice.cohort.application.dto.result.CohortResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
+import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
@@ -28,14 +29,14 @@ public class CohortService {
      * 생성자는 JWT 연동 전까지 임시 userId를 전달받아 createdByUserId에 저장한다.
      */
     @Transactional
-    public CohortResponse create(CreateCohortRequest request, Long userId, String globalRole) {
+    public CohortResponse create(CreateCohortCommand command, Long userId, String globalRole) {
         accessService.requireSystemAdmin(globalRole);
 
         Cohort cohort = Cohort.create(
-                request.name(),
-                request.description(),
-                request.startDate(),
-                request.endDate(),
+                command.name(),
+                command.description(),
+                command.startDate(),
+                command.endDate(),
                 userId
         );
         Cohort savedCohort = repository.save(cohort);
@@ -66,16 +67,16 @@ public class CohortService {
      * 종료된 기수는 도메인 규칙에 따라 수정할 수 없다.
      */
     @Transactional
-    public CohortResponse update(Long cohortId, UpdateCohortRequest request, Long actorUserId) {
+    public CohortResponse update(Long cohortId, UpdateCohortCommand command, Long actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
         Cohort cohort = getCohortOrThrow(cohortId);
 
         cohort.updateBasicInfo(
-                request.name(),
-                request.description(),
-                request.startDate(),
-                request.endDate()
+                command.name(),
+                command.description(),
+                command.startDate(),
+                command.endDate()
         );
         return CohortResponse.from(cohort);
     }
@@ -85,12 +86,12 @@ public class CohortService {
      * ACTIVE 전환 시 활성 MANAGER 소속이 최소 1명 있어야 한다.
      */
     @Transactional
-    public CohortResponse changeStatus(Long cohortId, ChangeCohortStatusRequest request, String globalRole) {
+    public CohortResponse changeStatus(Long cohortId, ChangeCohortStatusCommand command, String globalRole) {
         accessService.requireSystemAdmin(globalRole);
 
         Cohort cohort = getCohortOrThrow(cohortId);
 
-        if (request.status() == CohortStatus.ACTIVE) {
+        if (command.status() == CohortStatus.ACTIVE) {
             if (cohort.getStatus() != CohortStatus.PREPARING) {
                 throw new BusinessException(CohortErrorCode.INVALID_COHORT_STATUS_TRANSITION);
             }
@@ -102,7 +103,7 @@ public class CohortService {
             return CohortResponse.from(cohort);
         }
 
-        if (request.status() == CohortStatus.CLOSED) {
+        if (command.status() == CohortStatus.CLOSED) {
             if (cohort.getStatus() != CohortStatus.ACTIVE) {
                 throw new BusinessException(CohortErrorCode.INVALID_COHORT_STATUS_TRANSITION);
             }

@@ -6,7 +6,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import site.omagotchi.learningservice.cohort.application.dto.command.ApproveMembershipRequest;
+import site.omagotchi.learningservice.cohort.application.dto.command.ApproveMembershipCommand;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
@@ -62,7 +62,7 @@ class CohortMembershipServiceTest {
 
         membershipService.approve(
                 membershipId,
-                new ApproveMembershipRequest(CohortMembershipRole.MENTOR),
+                new ApproveMembershipCommand(CohortMembershipRole.MENTOR),
                 managerUserId,
                 "USER"
         );

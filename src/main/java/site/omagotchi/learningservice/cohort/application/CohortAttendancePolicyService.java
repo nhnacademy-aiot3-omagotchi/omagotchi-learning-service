@@ -3,9 +3,10 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.cohort.application.dto.command.SaveAttendancePolicyRequest;
+import site.omagotchi.learningservice.cohort.application.dto.command.SaveAttendancePolicyCommand;
 import site.omagotchi.learningservice.cohort.application.dto.result.CohortAttendancePolicyResponse;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
+import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
@@ -35,7 +36,7 @@ public class CohortAttendancePolicyService {
     @Transactional
     public CohortAttendancePolicyResponse savePolicy(
             Long cohortId,
-            SaveAttendancePolicyRequest request,
+            SaveAttendancePolicyCommand command,
             Long updatedByUserId
     ) {
         if (!cohortRepository.existsById(cohortId)) {
@@ -43,23 +44,23 @@ public class CohortAttendancePolicyService {
         }
 
         CohortAttendancePolicy policy = attendancePolicyRepository.findById(cohortId)
-                .map(existingPolicy -> updateExistingPolicy(existingPolicy, request, updatedByUserId))
-                .orElseGet(() -> createPolicy(cohortId, request, updatedByUserId));
+                .map(existingPolicy -> updateExistingPolicy(existingPolicy, command, updatedByUserId))
+                .orElseGet(() -> createPolicy(cohortId, command, updatedByUserId));
 
         return CohortAttendancePolicyResponse.from(attendancePolicyRepository.save(policy));
     }
 
     private CohortAttendancePolicy updateExistingPolicy(
             CohortAttendancePolicy policy,
-            SaveAttendancePolicyRequest request,
+            SaveAttendancePolicyCommand command,
             Long updatedByUserId
     ) {
         policy.update(
-                request.timezone(),
-                request.scheduledStartTime(),
-                request.scheduledEndTime(),
-                request.absenceCutoffTime(),
-                request.allowedAwayMinutes(),
+                command.timezone(),
+                command.scheduledStartTime(),
+                command.scheduledEndTime(),
+                command.absenceCutoffTime(),
+                command.allowedAwayMinutes(),
                 updatedByUserId
         );
         return policy;
@@ -67,16 +68,16 @@ public class CohortAttendancePolicyService {
 
     private CohortAttendancePolicy createPolicy(
             Long cohortId,
-            SaveAttendancePolicyRequest request,
+            SaveAttendancePolicyCommand command,
             Long updatedByUserId
     ) {
         return CohortAttendancePolicy.create(
                 cohortId,
-                request.timezone(),
-                request.scheduledStartTime(),
-                request.scheduledEndTime(),
-                request.absenceCutoffTime(),
-                request.allowedAwayMinutes(),
+                command.timezone(),
+                command.scheduledStartTime(),
+                command.scheduledEndTime(),
+                command.absenceCutoffTime(),
+                command.allowedAwayMinutes(),
                 updatedByUserId
         );
     }

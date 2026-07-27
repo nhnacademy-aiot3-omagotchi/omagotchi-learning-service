@@ -50,3 +50,10 @@ management:
   endpoint:
     health:
       show-details: never
+
+telegram:
+  bot:
+    username: ${TELEGRAM_BOT_USERNAME:omagotchi_bot}
+    token: ${TELEGRAM_BOT_TOKEN:}
+  link-token:
+    ttl: ${TELEGRAM_LINK_TOKEN_TTL:PT10M}

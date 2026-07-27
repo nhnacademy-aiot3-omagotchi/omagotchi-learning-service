@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.util.DateTimeProvider;
@@ -24,15 +25,20 @@ import java.util.UUID;
 @Transactional
 public class StudyRecordCommandService {
 
+    private final CohortAccessService cohortAccessService;
     private final StudyRecordRepository studyRecordRepository;
     private final DateTimeProvider dateTimeProvider;
 
     public StudyRecordResult create(
             UUID commandId,
-            Long cohortMembershipId,
+            UUID userId,
+            Long cohortId,
             CreateStudyRecordCommand command
     ) {
         // TODO(REC-009, SYN-002): commandId 영수증으로 같은 요청의 중복 저장을 방지한다.
+
+        // membershipId 검증 및 변환
+        Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
 
         // Instance로 날짜 파싱
         Instant startInstant = StudyTimeParser.parseToInstant(command.date(), command.startTime());
@@ -71,11 +77,15 @@ public class StudyRecordCommandService {
 
     public StudyRecordResult update(
             UUID commandId,
-            Long cohortMembershipId,
+            UUID userId,
+            Long cohortId,
             UUID studyRecordId,
             UpdateStudyRecordCommand command
     ) {
         // TODO(SYN-002): commandId 영수증으로 같은 수정 요청의 중복 반영을 방지한다.
+
+        // membershipId 검증 및 변환
+        Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
 
         // TODO: 검증된 cohortMembershipId 단위 transaction-scoped advisory lock을 획득한다.
 
@@ -115,11 +125,15 @@ public class StudyRecordCommandService {
 
     public void delete(
             UUID commandId,
-            Long cohortMembershipId,
+            UUID userId,
+            Long cohortId,
             UUID studyRecordId,
             Long expectedVersion
     ) {
         // TODO(SYN-002): commandId 영수증으로 같은 삭제 요청의 중복 반영을 방지한다.
+
+        // membershipId 검증 및 변환
+        Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
 
         // TODO(OVL-002): 검증된 cohortMembershipId 단위 transaction-scoped advisory lock을 획득한다.
 

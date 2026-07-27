@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.study.application.command;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,6 +11,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.util.DateTimeProvider;
@@ -29,12 +32,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @DisplayName("학습 기록")
 @ExtendWith(MockitoExtension.class)
 class StudyRecordCommandServiceTest {
 
+    private static final Long COHORT_ID = 10L;
     private static final Long COHORT_MEMBERSHIP_ID = 1L;
+    private static final UUID USER_ID = UUID.fromString(
+            "00000000-0000-0000-0000-000000000002"
+    );
     private static final UUID STUDY_RECORD_ID = UUID.fromString(
             "00000000-0000-0000-0000-000000000001"
     );
@@ -50,20 +58,53 @@ class StudyRecordCommandServiceTest {
     private StudyRecordRepository studyRecordRepository;
 
     @Mock
+    private CohortAccessService cohortAccessService;
+
+    @Mock
     private DateTimeProvider dateTimeProvider;
 
     @InjectMocks
     private StudyRecordCommandService studyRecordCommandService;
+
+    @BeforeEach
+    void setUpActiveMembership() {
+        given(cohortAccessService.requireActiveMembershipId(COHORT_ID, USER_ID))
+                .willReturn(COHORT_MEMBERSHIP_ID);
+    }
 
     @Nested
     @DisplayName("생성")
     class Create {
 
         @Test
+        @DisplayName("활성 소속 없음 예외")
+        void doesNotCreateRecordWhenActiveMembershipDoesNotExist() {
+            CreateStudyRecordCommand command = new CreateStudyRecordCommand(
+                    DATE,
+                    START_TIME_TEXT,
+                    END_TIME_TEXT
+            );
+            given(cohortAccessService.requireActiveMembershipId(COHORT_ID, USER_ID))
+                    .willThrow(new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> studyRecordCommandService.create(
+                            UUID.randomUUID(),
+                            USER_ID,
+                            COHORT_ID,
+                            command
+                    )
+            );
+
+            assertSame(CohortErrorCode.COHORT_NOT_FOUND, exception.getErrorCode());
+            verifyNoInteractions(studyRecordRepository);
+        }
+
+        @Test
         @DisplayName("정상 처리")
         void savesStudyRecord() {
             CreateStudyRecordCommand request = new CreateStudyRecordCommand(
-                    10L,
                     DATE,
                     START_TIME_TEXT,
                     END_TIME_TEXT
@@ -75,7 +116,8 @@ class StudyRecordCommandServiceTest {
 
             StudyRecordResult result = studyRecordCommandService.create(
                     UUID.randomUUID(),
-                    COHORT_MEMBERSHIP_ID,
+                    USER_ID,
+                    COHORT_ID,
                     request
             );
 
@@ -99,7 +141,6 @@ class StudyRecordCommandServiceTest {
             Instant startTime = Instant.parse("2000-01-01T16:30:00Z");
             Instant endTime = Instant.parse("2000-01-01T17:30:00Z");
             CreateStudyRecordCommand request = new CreateStudyRecordCommand(
-                    10L,
                     "20000102",
                     "0130",
                     "0230"
@@ -111,7 +152,8 @@ class StudyRecordCommandServiceTest {
 
             StudyRecordResult result = studyRecordCommandService.create(
                     UUID.randomUUID(),
-                    COHORT_MEMBERSHIP_ID,
+                    USER_ID,
+                    COHORT_ID,
                     request
             );
 
@@ -122,7 +164,6 @@ class StudyRecordCommandServiceTest {
         @DisplayName("기존 기록 겹침 예외")
         void throwsOverlapWhenCreatingOverlappingRecord() {
             CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                    10L,
                     DATE,
                     START_TIME_TEXT,
                     END_TIME_TEXT
@@ -139,7 +180,8 @@ class StudyRecordCommandServiceTest {
                     BusinessException.class,
                     () -> studyRecordCommandService.create(
                             UUID.randomUUID(),
-                            COHORT_MEMBERSHIP_ID,
+                            USER_ID,
+                            COHORT_ID,
                             command
                     )
             );
@@ -156,7 +198,6 @@ class StudyRecordCommandServiceTest {
             @DisplayName("날짜 형식 예외")
             void rejectsInvalidDateFormat() {
                 CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        10L,
                         "invalidDate",
                         START_TIME_TEXT,
                         END_TIME_TEXT
@@ -171,7 +212,6 @@ class StudyRecordCommandServiceTest {
             @DisplayName("존재하지 않는 날짜 예외")
             void rejectsInvalidDateValue() {
                 CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        10L,
                         "20000230",
                         START_TIME_TEXT,
                         END_TIME_TEXT
@@ -186,7 +226,6 @@ class StudyRecordCommandServiceTest {
             @DisplayName("시간 형식 예외")
             void rejectsInvalidTimeFormat() {
                 CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        10L,
                         DATE,
                         "invalid",
                         END_TIME_TEXT
@@ -201,7 +240,6 @@ class StudyRecordCommandServiceTest {
             @DisplayName("존재하지 않는 시간 예외")
             void rejectsInvalidTimeValue() {
                 CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        10L,
                         DATE,
                         START_TIME_TEXT,
                         "2400"
@@ -216,7 +254,6 @@ class StudyRecordCommandServiceTest {
             @DisplayName("동일한 시작 및 종료 시각 예외")
             void rejectsEqualStartAndEndTime() {
                 CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        10L,
                         DATE,
                         START_TIME_TEXT,
                         START_TIME_TEXT
@@ -231,7 +268,6 @@ class StudyRecordCommandServiceTest {
             @DisplayName("시작 시각이 종료 시각 이후인 경우 예외")
             void rejectsStartTimeAfterEndTime() {
                 CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        10L,
                         DATE,
                         END_TIME_TEXT,
                         START_TIME_TEXT
@@ -247,7 +283,6 @@ class StudyRecordCommandServiceTest {
             void rejectsFutureEndTime() {
                 Instant currentTime = Instant.parse("2000-01-01T02:00:00Z");
                 CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        10L,
                         DATE,
                         START_TIME_TEXT,
                         "1101"
@@ -265,7 +300,6 @@ class StudyRecordCommandServiceTest {
                 Instant startTime = Instant.parse("1999-12-31T18:59:00Z");
                 Instant endTime = Instant.parse("1999-12-31T19:01:00Z");
                 CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        10L,
                         DATE,
                         "0359",
                         "0401"
@@ -287,7 +321,8 @@ class StudyRecordCommandServiceTest {
                         BusinessException.class,
                         () -> studyRecordCommandService.create(
                                 UUID.randomUUID(),
-                                COHORT_MEMBERSHIP_ID,
+                                USER_ID,
+                                COHORT_ID,
                                 command
                         )
                 );
@@ -322,7 +357,8 @@ class StudyRecordCommandServiceTest {
 
             StudyRecordResult result = studyRecordCommandService.update(
                     UUID.randomUUID(),
-                    COHORT_MEMBERSHIP_ID,
+                    USER_ID,
+                    COHORT_ID,
                     studyRecordId,
                     request
             );
@@ -357,7 +393,8 @@ class StudyRecordCommandServiceTest {
                     BusinessException.class,
                     () -> studyRecordCommandService.update(
                             UUID.randomUUID(),
-                            COHORT_MEMBERSHIP_ID,
+                            USER_ID,
+                            COHORT_ID,
                             studyRecordId,
                             command
                     )
@@ -396,7 +433,8 @@ class StudyRecordCommandServiceTest {
                     BusinessException.class,
                     () -> studyRecordCommandService.update(
                             UUID.randomUUID(),
-                            COHORT_MEMBERSHIP_ID,
+                            USER_ID,
+                            COHORT_ID,
                             studyRecordId,
                             command
                     )
@@ -430,7 +468,8 @@ class StudyRecordCommandServiceTest {
                     BusinessException.class,
                     () -> studyRecordCommandService.update(
                             UUID.randomUUID(),
-                            COHORT_MEMBERSHIP_ID,
+                            USER_ID,
+                            COHORT_ID,
                             studyRecordId,
                             command
                     )
@@ -471,7 +510,8 @@ class StudyRecordCommandServiceTest {
                     BusinessException.class,
                     () -> studyRecordCommandService.update(
                             UUID.randomUUID(),
-                            COHORT_MEMBERSHIP_ID,
+                            USER_ID,
+                            COHORT_ID,
                             studyRecordId,
                             command
                     )
@@ -514,7 +554,8 @@ class StudyRecordCommandServiceTest {
                     BusinessException.class,
                     () -> studyRecordCommandService.update(
                             UUID.randomUUID(),
-                            COHORT_MEMBERSHIP_ID,
+                            USER_ID,
+                            COHORT_ID,
                             studyRecordId,
                             command
                     )
@@ -539,7 +580,8 @@ class StudyRecordCommandServiceTest {
                     BusinessException.class,
                     () -> studyRecordCommandService.update(
                             UUID.randomUUID(),
-                            COHORT_MEMBERSHIP_ID,
+                            USER_ID,
+                            COHORT_ID,
                             studyRecordId,
                             request
                     )
@@ -565,7 +607,8 @@ class StudyRecordCommandServiceTest {
 
             studyRecordCommandService.delete(
                     UUID.randomUUID(),
-                    COHORT_MEMBERSHIP_ID,
+                    USER_ID,
+                    COHORT_ID,
                     studyRecordId,
                     0L
             );
@@ -588,7 +631,8 @@ class StudyRecordCommandServiceTest {
                     BusinessException.class,
                     () -> studyRecordCommandService.delete(
                             UUID.randomUUID(),
-                            COHORT_MEMBERSHIP_ID,
+                            USER_ID,
+                            COHORT_ID,
                             studyRecordId,
                             1L
                     )
@@ -611,7 +655,8 @@ class StudyRecordCommandServiceTest {
                     BusinessException.class,
                     () -> studyRecordCommandService.delete(
                             UUID.randomUUID(),
-                            COHORT_MEMBERSHIP_ID,
+                            USER_ID,
+                            COHORT_ID,
                             studyRecordId,
                             0L
                     )

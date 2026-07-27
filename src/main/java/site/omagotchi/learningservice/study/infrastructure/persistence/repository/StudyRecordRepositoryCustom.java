@@ -53,15 +53,6 @@ public interface StudyRecordRepositoryCustom {
     );
 
     /**
-     * 지정한 소속의 활성 기록 중 요청 구간과 겹치는 기록이 있는지 확인한다.
-     *
-     * @param cohortMembershipId 기수 소속 식별자
-     * @param startTime 요청 구간의 포함 시작 시각
-     * @param endTime 요청 구간의 미포함 종료 시각
-     * @return 겹치는 활성 기록이 있으면 {@code true}
-     */
-
-    /**
      * 선택적으로 특정 기록을 제외하고 요청 구간과 겹치는 활성 기록이 있는지 확인한다.
      *
      * @param cohortMembershipId    기수 소속 식별자

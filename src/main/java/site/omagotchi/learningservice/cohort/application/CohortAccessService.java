@@ -57,7 +57,7 @@ public class CohortAccessService {
      * 소속은 있지만 관리자 역할이 아니면 403으로 처리
      */
     public void requireManager(Long cohortId, UUID userId) {
-        requireActiveMembership(cohortId, userId);
+        requireActiveMembershipId(cohortId, userId);
 
         boolean isManager = membershipRepository.existsByCohortIdAndUserIdAndRoleAndStatus(
                 cohortId,

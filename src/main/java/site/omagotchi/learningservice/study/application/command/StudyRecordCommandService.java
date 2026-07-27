@@ -9,6 +9,7 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.util.DateTimeProvider;
 import site.omagotchi.learningservice.global.util.StudyTimeParser;
+import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
 import site.omagotchi.learningservice.study.infrastructure.persistence.entity.StudyRecordEntity;
@@ -28,6 +29,7 @@ public class StudyRecordCommandService {
     private final CohortAccessService cohortAccessService;
     private final StudyRecordRepository studyRecordRepository;
     private final DateTimeProvider dateTimeProvider;
+    private final StudyWriteLock studyWriteLock;
 
     public StudyRecordResult create(
             UUID commandId,
@@ -44,11 +46,12 @@ public class StudyRecordCommandService {
         Instant startInstant = StudyTimeParser.parseToInstant(command.date(), command.startTime());
         Instant endInstant = StudyTimeParser.parseToInstant(command.date(), command.endTime());
 
-        // 기록 시간 범위 검증
+        // 기록 시간 범위, 집계 경계 겹침 검증
         validateTimeRange(startInstant, endInstant);
         validateSingleAggregationDate(startInstant, endInstant);
 
-        // TODO: 검증된 cohortMembershipId 단위 transaction-scoped advisory lock을 획득한다.
+        // cohortMembershipId 단위 transaction-scoped advisory lock 획득
+        studyWriteLock.acquire(cohortMembershipId);
 
         // 오버랩 검증
         validateNoExistingRecordOverlap(
@@ -87,7 +90,8 @@ public class StudyRecordCommandService {
         // membershipId 검증 및 변환
         Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
 
-        // TODO: 검증된 cohortMembershipId 단위 transaction-scoped advisory lock을 획득한다.
+        // cohortMembershipId 단위 transaction-scoped advisory lock 획득
+        studyWriteLock.acquire(cohortMembershipId);
 
         // 인증된 소속이 소유한 활성 기록만 수정 대상으로 조회
         StudyRecordEntity entity = studyRecordRepository
@@ -100,7 +104,7 @@ public class StudyRecordCommandService {
         Instant startInstant = StudyTimeParser.parseToInstant(command.date(), command.startTime());
         Instant endInstant = StudyTimeParser.parseToInstant(command.date(), command.endTime());
 
-        // 기록 시간 범위 검증
+        // 기록 시간 범위, 집계 경계 겹침 검증
         validateTimeRange(startInstant, endInstant);
         validateSingleAggregationDate(startInstant, endInstant);
 
@@ -135,7 +139,8 @@ public class StudyRecordCommandService {
         // membershipId 검증 및 변환
         Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
 
-        // TODO(OVL-002): 검증된 cohortMembershipId 단위 transaction-scoped advisory lock을 획득한다.
+        // cohortMembershipId 단위 transaction-scoped advisory lock 획득
+        studyWriteLock.acquire(cohortMembershipId);
 
         // 인증된 소속이 소유한 활성 기록만 삭제 대상으로 조회
         StudyRecordEntity entity = studyRecordRepository
@@ -192,6 +197,7 @@ public class StudyRecordCommandService {
         }
     }
 
+    // 반개구간 [startInstant, endInstant)이 KST 04:00 집계 경계를 넘는지 검증한다.
     private void validateSingleAggregationDate(
             Instant startInstant,
             Instant endInstant

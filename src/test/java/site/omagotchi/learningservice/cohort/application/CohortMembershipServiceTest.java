@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.cohort.application;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -45,6 +46,7 @@ class CohortMembershipServiceTest {
     private CohortMembershipService membershipService;
 
     @Test
+    @DisplayName("멘토 승인 시 시스템 관리자가 아닌 기수 관리자 권한 확인")
     void approveMentorRequiresCohortManagerNotSystemAdmin() {
         Long cohortId = 1L;
         Long membershipId = 100L;

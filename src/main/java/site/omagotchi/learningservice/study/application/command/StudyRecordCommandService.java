@@ -4,10 +4,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.util.DateTimeProvider;
 import site.omagotchi.learningservice.global.util.StudyTimeParser;
+import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
 import site.omagotchi.learningservice.study.infrastructure.persistence.entity.StudyRecordEntity;
@@ -24,25 +26,32 @@ import java.util.UUID;
 @Transactional
 public class StudyRecordCommandService {
 
+    private final CohortAccessService cohortAccessService;
     private final StudyRecordRepository studyRecordRepository;
     private final DateTimeProvider dateTimeProvider;
+    private final StudyWriteLock studyWriteLock;
 
     public StudyRecordResult create(
             UUID commandId,
-            Long cohortMembershipId,
+            UUID userId,
+            Long cohortId,
             CreateStudyRecordCommand command
     ) {
         // TODO(REC-009, SYN-002): commandId 영수증으로 같은 요청의 중복 저장을 방지한다.
+
+        // membershipId 검증 및 변환
+        Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
 
         // Instance로 날짜 파싱
         Instant startInstant = StudyTimeParser.parseToInstant(command.date(), command.startTime());
         Instant endInstant = StudyTimeParser.parseToInstant(command.date(), command.endTime());
 
-        // 기록 시간 범위 검증
+        // 기록 시간 범위, 집계 경계 겹침 검증
         validateTimeRange(startInstant, endInstant);
         validateSingleAggregationDate(startInstant, endInstant);
 
-        // TODO: 검증된 cohortMembershipId 단위 transaction-scoped advisory lock을 획득한다.
+        // cohortMembershipId 단위 transaction-scoped advisory lock 획득
+        studyWriteLock.acquire(cohortMembershipId);
 
         // 오버랩 검증
         validateNoExistingRecordOverlap(
@@ -71,13 +80,18 @@ public class StudyRecordCommandService {
 
     public StudyRecordResult update(
             UUID commandId,
-            Long cohortMembershipId,
+            UUID userId,
+            Long cohortId,
             UUID studyRecordId,
             UpdateStudyRecordCommand command
     ) {
         // TODO(SYN-002): commandId 영수증으로 같은 수정 요청의 중복 반영을 방지한다.
 
-        // TODO: 검증된 cohortMembershipId 단위 transaction-scoped advisory lock을 획득한다.
+        // membershipId 검증 및 변환
+        Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
+
+        // cohortMembershipId 단위 transaction-scoped advisory lock 획득
+        studyWriteLock.acquire(cohortMembershipId);
 
         // 인증된 소속이 소유한 활성 기록만 수정 대상으로 조회
         StudyRecordEntity entity = studyRecordRepository
@@ -90,7 +104,7 @@ public class StudyRecordCommandService {
         Instant startInstant = StudyTimeParser.parseToInstant(command.date(), command.startTime());
         Instant endInstant = StudyTimeParser.parseToInstant(command.date(), command.endTime());
 
-        // 기록 시간 범위 검증
+        // 기록 시간 범위, 집계 경계 겹침 검증
         validateTimeRange(startInstant, endInstant);
         validateSingleAggregationDate(startInstant, endInstant);
 
@@ -115,13 +129,18 @@ public class StudyRecordCommandService {
 
     public void delete(
             UUID commandId,
-            Long cohortMembershipId,
+            UUID userId,
+            Long cohortId,
             UUID studyRecordId,
             Long expectedVersion
     ) {
         // TODO(SYN-002): commandId 영수증으로 같은 삭제 요청의 중복 반영을 방지한다.
 
-        // TODO(OVL-002): 검증된 cohortMembershipId 단위 transaction-scoped advisory lock을 획득한다.
+        // membershipId 검증 및 변환
+        Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
+
+        // cohortMembershipId 단위 transaction-scoped advisory lock 획득
+        studyWriteLock.acquire(cohortMembershipId);
 
         // 인증된 소속이 소유한 활성 기록만 삭제 대상으로 조회
         StudyRecordEntity entity = studyRecordRepository
@@ -178,6 +197,7 @@ public class StudyRecordCommandService {
         }
     }
 
+    // 반개구간 [startInstant, endInstant)이 KST 04:00 집계 경계를 넘는지 검증한다.
     private void validateSingleAggregationDate(
             Instant startInstant,
             Instant endInstant

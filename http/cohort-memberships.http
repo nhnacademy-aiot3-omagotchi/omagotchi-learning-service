@@ -1,0 +1,81 @@
+# 로컬 DB의 테이블이 모두 비어 있는 상태에서 위에서 아래 순서대로 실행합니다.
+# 완료 후 study-records.http에서 저장된 cohortId와 ACTIVE 학생 membership을 사용합니다.
+
+@baseUrl = http://localhost:8084
+@systemAdminUserId = 00000000-0000-0000-0000-000000000001
+@managerUserId = 00000000-0000-0000-0000-000000000002
+@userId = 00000000-0000-0000-0000-000000000003
+
+### 기수 생성
+# @name createCohort
+POST {{baseUrl}}/api/cohorts
+X-User-Id: {{systemAdminUserId}}
+X-Global-Role: SYSTEM_ADMIN
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "로컬 공부 기록 테스트 기수",
+  "description": "HTTP 요청 확인용 기수",
+  "startDate": "2000-01-01",
+  "endDate": "2099-12-31"
+}
+
+> {%
+    if (response.status === 200) {
+        client.global.set("cohortId", response.body.id);
+    }
+%}
+
+### 기수 관리자 membership 생성
+POST {{baseUrl}}/api/cohorts/{{cohortId}}/managers
+X-User-Id: {{systemAdminUserId}}
+X-Global-Role: SYSTEM_ADMIN
+Content-Type: application/json
+Accept: application/json
+
+{
+  "userId": "{{managerUserId}}"
+}
+
+### 가입 코드 발급
+POST {{baseUrl}}/api/cohorts/{{cohortId}}/join-code
+X-User-Id: {{managerUserId}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "expiresAt": "2099-12-31T23:59:59+09:00"
+}
+
+> {%
+    if (response.status === 200) {
+        client.global.set("joinCode", response.body.code);
+    }
+%}
+
+### 학생 membership 참가 신청
+POST {{baseUrl}}/api/cohorts/join-requests
+X-User-Id: {{userId}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "joinCode": "{{joinCode}}"
+}
+
+> {%
+    if (response.status === 200) {
+        client.global.set("membershipId", response.body.id);
+    }
+%}
+
+### 학생 membership 승인
+PATCH {{baseUrl}}/api/cohort-memberships/{{membershipId}}/approve
+X-User-Id: {{managerUserId}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "role": "STUDENT"
+}

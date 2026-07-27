@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.study.infrastructure.persistence.entity.StudyRecordEntity;
@@ -17,6 +18,7 @@ import java.time.Month;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Import(TestcontainersConfiguration.class)
@@ -155,6 +157,30 @@ class StudyRecordRepositoryIT {
             );
 
             assertTrue(overlaps);
+        }
+    }
+
+    @Nested
+    @DisplayName("활성 기록 겹침 제약")
+    class ActiveOverlapConstraint {
+
+        @Test
+        @DisplayName("같은 소속의 겹친 기록 저장 거절")
+        void rejectsOverlappingRecordsForSameCohortMembership() {
+            saveRecord(
+                    COHORT_MEMBERSHIP_ID,
+                    "2000-01-01T01:00:00Z",
+                    "2000-01-01T02:00:00Z"
+            );
+
+            assertThrows(
+                    DataIntegrityViolationException.class,
+                    () -> saveRecord(
+                            COHORT_MEMBERSHIP_ID,
+                            "2000-01-01T01:30:00Z",
+                            "2000-01-01T02:30:00Z"
+                    )
+            );
         }
     }
 

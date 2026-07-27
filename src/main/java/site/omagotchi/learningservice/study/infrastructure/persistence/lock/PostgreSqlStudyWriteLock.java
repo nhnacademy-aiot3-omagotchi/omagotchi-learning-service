@@ -8,9 +8,14 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
 
+import java.sql.SQLException;
+
 @Repository
 @RequiredArgsConstructor
 public class PostgreSqlStudyWriteLock implements StudyWriteLock {
+
+    private static final String LOCK_TIMEOUT = "1000ms";
+    private static final String LOCK_TIMEOUT_SQL_STATE = "55P03";
 
     private final EntityManager entityManager;
 
@@ -20,12 +25,36 @@ public class PostgreSqlStudyWriteLock implements StudyWriteLock {
             throw new BusinessException(StudyRecordErrorCode.WRITE_LOCK_TRANSACTION_REQUIRED);
         }
 
-        // PostgreSQL 함수를 즉시 실행하여 먼저 락을 획득
-        // 추후 다른 호출 방법이 있는지 조사 및 공부 필요
-        entityManager.createNativeQuery("""
-                        SELECT pg_advisory_xact_lock(CAST(:lockKey AS BIGINT))
-                        """)
-                .setParameter("lockKey", cohortMembershipId)
-                .getSingleResult();
+        try {
+            entityManager.createNativeQuery("""
+                            WITH lock_timeout_config AS MATERIALIZED (
+                                SELECT set_config('lock_timeout', :lockTimeout, true)
+                            )
+                            SELECT pg_advisory_xact_lock(
+                                CAST(:cohortMembershipId AS BIGINT)
+                            )
+                            FROM lock_timeout_config
+                            """)
+                    .setParameter("lockTimeout", LOCK_TIMEOUT)
+                    .setParameter("cohortMembershipId", cohortMembershipId)
+                    .getSingleResult();
+        } catch (RuntimeException exception) {
+            if (isLockTimeout(exception)) {
+                throw new BusinessException(StudyRecordErrorCode.WRITE_LOCK_TIMEOUT);
+            }
+            throw exception;
+        }
+    }
+
+    private boolean isLockTimeout(Throwable throwable) {
+        Throwable cause = throwable;
+        while (cause != null) {
+            if (cause instanceof SQLException sqlException
+                    && LOCK_TIMEOUT_SQL_STATE.equals(sqlException.getSQLState())) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 }

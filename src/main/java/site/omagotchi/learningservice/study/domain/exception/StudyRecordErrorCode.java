@@ -31,6 +31,11 @@ public enum StudyRecordErrorCode implements ErrorCode {
             ErrorType.INTERNAL,
             "STUDY_RECORD_WRITE_LOCK_TRANSACTION_REQUIRED",
             "공부 쓰기 잠금을 획득하려면 활성 트랜잭션이 필요합니다."
+    ),
+    WRITE_LOCK_TIMEOUT(
+            ErrorType.CONFLICT,
+            "STUDY_RECORD_WRITE_LOCK_TIMEOUT",
+            "공부 기록 요청 타임아웃"
     );
 
     private final ErrorType type;

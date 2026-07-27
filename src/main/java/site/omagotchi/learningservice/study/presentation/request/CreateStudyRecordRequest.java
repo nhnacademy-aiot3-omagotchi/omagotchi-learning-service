@@ -1,7 +1,7 @@
 package site.omagotchi.learningservice.study.presentation.request;
 
 import jakarta.validation.constraints.NotNull;
-import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
+import site.omagotchi.learningservice.study.application.dto.CreateStudyRecordCommand;
 
 public record CreateStudyRecordRequest(
         @NotNull String date,

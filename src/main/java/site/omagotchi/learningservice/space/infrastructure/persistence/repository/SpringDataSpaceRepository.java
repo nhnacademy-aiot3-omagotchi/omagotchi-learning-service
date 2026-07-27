@@ -1,6 +1,8 @@
 package site.omagotchi.learningservice.space.infrastructure.persistence.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import site.omagotchi.learningservice.space.infrastructure.persistence.entity.SpaceJpaEntity;
 
 import java.util.List;
@@ -12,13 +14,36 @@ public interface SpringDataSpaceRepository
     List<SpaceJpaEntity>
     findAllByDeletedAtIsNullOrderByIdAsc();
 
-    boolean existsByNameAndDeletedAtIsNull(
-            String name
+    @Query(
+            value = """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM learning_service.spaces s
+                        WHERE LOWER(BTRIM(s.name)) = LOWER(BTRIM(:name))
+                          AND s.deleted_at IS NULL
+                    )
+                    """,
+            nativeQuery = true
+    )
+    boolean existsActiveByNormalizedName(
+            @Param("name") String name
     );
 
-    boolean existsByNameAndDeletedAtIsNullAndIdNot(
-            String name,
-            Long spaceId
+    @Query(
+            value = """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM learning_service.spaces s
+                        WHERE LOWER(BTRIM(s.name)) = LOWER(BTRIM(:name))
+                          AND s.deleted_at IS NULL
+                          AND s.id <> :spaceId
+                    )
+                    """,
+            nativeQuery = true
+    )
+    boolean existsActiveByNormalizedNameAndIdNot(
+            @Param("name") String name,
+            @Param("spaceId") Long spaceId
     );
 
     Optional<SpaceJpaEntity>

@@ -18,7 +18,7 @@ public class Space {
     private final Long id;
     private final Long cohortId;
     private final String name;
-    private final SpaceType type;
+    private final SpaceType spaceType;
     private final Integer capacity;
 
     /**
@@ -48,7 +48,7 @@ public class Space {
             Long id,
             Long cohortId,
             String name,
-            SpaceType type,
+            SpaceType spaceType,
             Integer capacity,
             SpaceOperationalStatus operationalStatus,
             String inactiveReason,
@@ -60,8 +60,8 @@ public class Space {
         this.cohortId = cohortId;
         this.name = validateName(name);
 
-        this.type = Objects.requireNonNull(
-                type,
+        this.spaceType = Objects.requireNonNull(
+                spaceType,
                 "공간 유형은 필수입니다."
         );
 
@@ -97,7 +97,7 @@ public class Space {
      */
     public static Space create(
             String name,
-            SpaceType type,
+            SpaceType spaceType,
             Integer capacity,
             ZonedDateTime now
     ) {
@@ -110,7 +110,7 @@ public class Space {
                 null,
                 null,
                 name,
-                type,
+                spaceType,
                 capacity,
                 SpaceOperationalStatus.INACTIVE,
                 null,
@@ -128,7 +128,7 @@ public class Space {
             Long id,
             Long cohortId,
             String name,
-            SpaceType type,
+            SpaceType spaceType,
             Integer capacity,
             SpaceOperationalStatus operationalStatus,
             String inactiveReason,
@@ -143,7 +143,7 @@ public class Space {
                 ),
                 cohortId,
                 name,
-                type,
+                spaceType,
                 capacity,
                 operationalStatus,
                 inactiveReason,
@@ -166,7 +166,7 @@ public class Space {
                 id,
                 cohortId,
                 newName,
-                type,
+                spaceType,
                 capacity,
                 operationalStatus,
                 inactiveReason,
@@ -214,7 +214,7 @@ public class Space {
                 id,
                 cohortId,
                 name,
-                type,
+                spaceType,
                 newCapacity,
                 operationalStatus,
                 inactiveReason,
@@ -238,7 +238,7 @@ public class Space {
                 id,
                 cohortId,
                 name,
-                type,
+                spaceType,
                 capacity,
                 SpaceOperationalStatus.ACTIVE,
                 null,
@@ -262,7 +262,7 @@ public class Space {
                 id,
                 cohortId,
                 name,
-                type,
+                spaceType,
                 capacity,
                 SpaceOperationalStatus.INACTIVE,
                 reason,
@@ -293,7 +293,7 @@ public class Space {
                 id,
                 cohortId,
                 name,
-                type,
+                spaceType,
                 capacity,
                 operationalStatus,
                 inactiveReason,
@@ -330,7 +330,7 @@ public class Space {
      * 공간이 회의실 유형인지 확인한다.
      */
     public boolean isMeetingRoom() {
-        return type == SpaceType.MEETING;
+        return spaceType == SpaceType.MEETING;
     }
 
     private static String validateName(String name) {

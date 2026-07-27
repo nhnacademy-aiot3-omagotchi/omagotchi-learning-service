@@ -17,7 +17,7 @@ public record CreateSpaceResponse(
         return new CreateSpaceResponse(
                 space.getId(),
                 space.getName(),
-                space.getType(),
+                space.getSpaceType(),
                 space.getCapacity(),
                 space.getCreatedAt()
         );

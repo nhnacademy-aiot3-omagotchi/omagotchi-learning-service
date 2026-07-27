@@ -43,10 +43,11 @@ public class SpaceJpaEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(
-            name = "type",
-            nullable = false
+            name = "space_type",
+            nullable = false,
+            length = 20
     )
-    private SpaceType type;
+    private SpaceType spaceType;
 
     @Column(
             name = "capacity",
@@ -56,14 +57,15 @@ public class SpaceJpaEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(
-            name = "operational_status",
-            nullable = false
+            name = "status",
+            nullable = false,
+            length = 20
     )
     private SpaceOperationalStatus operationalStatus;
 
     @Column(
             name = "inactive_reason",
-            length = 255
+            length = 200
     )
     private String inactiveReason;
 
@@ -86,7 +88,7 @@ public class SpaceJpaEntity {
             Long id,
             Long cohortId,
             String name,
-            SpaceType type,
+            SpaceType spaceType,
             Integer capacity,
             SpaceOperationalStatus operationalStatus,
             String inactiveReason,
@@ -98,7 +100,7 @@ public class SpaceJpaEntity {
                 id,
                 cohortId,
                 name,
-                type,
+                spaceType,
                 capacity,
                 operationalStatus,
                 inactiveReason,

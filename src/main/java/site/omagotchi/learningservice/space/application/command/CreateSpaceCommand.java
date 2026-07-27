@@ -4,7 +4,7 @@ import site.omagotchi.learningservice.space.domain.SpaceType;
 
 public record CreateSpaceCommand(
         String name,
-        SpaceType type,
+        SpaceType spaceType,
         Integer capacity
 ) {
 }

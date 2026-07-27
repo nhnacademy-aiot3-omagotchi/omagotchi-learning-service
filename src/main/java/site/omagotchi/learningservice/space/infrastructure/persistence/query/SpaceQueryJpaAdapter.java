@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.space.application.port.out.SpaceQueryPort;
 import site.omagotchi.learningservice.space.application.query.SpaceListItem;
+import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
 import site.omagotchi.learningservice.space.domain.SpaceType;
 import site.omagotchi.learningservice.space.domain.SpaceUsageStatus;
 import site.omagotchi.learningservice.space.infrastructure.persistence.entity.RoomOccupancyJpaEntity;
@@ -90,14 +91,13 @@ public class SpaceQueryJpaAdapter implements SpaceQueryPort {
             RoomOccupancyJpaEntity occupancy,
             ZonedDateTime now
     ) {
-        boolean occupied = occupancy != null;
-
-        SpaceUsageStatus status = occupied
-                ? SpaceUsageStatus.IN_USE
-                : SpaceUsageStatus.AVAILABLE;
+        SpaceUsageStatus status = determineUsageStatus(
+                space,
+                occupancy
+        );
 
         ZonedDateTime occupancyExpiresAt =
-                occupancy == null
+                status != SpaceUsageStatus.OCCUPIED
                         ? null
                         : occupancy.getExpiresAt()
                         .atZoneSameInstant(
@@ -106,7 +106,7 @@ public class SpaceQueryJpaAdapter implements SpaceQueryPort {
 
         Long remainingTimeSeconds =
                 calculateRemainingTimeSeconds(
-                        space.getType(),
+                        space.getSpaceType(),
                         occupancyExpiresAt,
                         now
                 );
@@ -114,20 +114,41 @@ public class SpaceQueryJpaAdapter implements SpaceQueryPort {
         return new SpaceListItem(
                 space.getId(),
                 space.getName(),
-                space.getType(),
+                space.getSpaceType(),
                 space.getCapacity(),
+                space.getOperationalStatus(),
+                space.getInactiveReason(),
+                space.getCohortId(),
                 status,
                 occupancyExpiresAt,
                 remainingTimeSeconds
         );
     }
 
+    private SpaceUsageStatus determineUsageStatus(
+            SpaceJpaEntity space,
+            RoomOccupancyJpaEntity occupancy
+    ) {
+        if (space.getSpaceType() != SpaceType.MEETING) {
+            return SpaceUsageStatus.NOT_APPLICABLE;
+        }
+
+        if (space.getOperationalStatus()
+                == SpaceOperationalStatus.INACTIVE) {
+            return SpaceUsageStatus.UNAVAILABLE;
+        }
+
+        return occupancy == null
+                ? SpaceUsageStatus.AVAILABLE
+                : SpaceUsageStatus.OCCUPIED;
+    }
+
     private Long calculateRemainingTimeSeconds(
-            SpaceType type,
+            SpaceType spaceType,
             ZonedDateTime expiresAt,
             ZonedDateTime now
     ) {
-        if (type != SpaceType.MEETING) {
+        if (spaceType != SpaceType.MEETING) {
             return null;
         }
 

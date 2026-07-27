@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.space.application.query;
 
+import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
 import site.omagotchi.learningservice.space.domain.SpaceType;
 import site.omagotchi.learningservice.space.domain.SpaceUsageStatus;
 
@@ -13,10 +14,36 @@ import java.time.ZonedDateTime;
 public record SpaceListItem(
         Long spaceId,
         String name,
-        SpaceType type,
+        SpaceType spaceType,
         Integer capacity,
+        SpaceOperationalStatus operationalStatus,
+        String inactiveReason,
+        Long cohortId,
         SpaceUsageStatus status,
         ZonedDateTime occupancyExpiresAt,
         Long remainingTimeSeconds
 ) {
+
+    public SpaceListItem(
+            Long spaceId,
+            String name,
+            SpaceType spaceType,
+            Integer capacity,
+            SpaceUsageStatus status,
+            ZonedDateTime occupancyExpiresAt,
+            Long remainingTimeSeconds
+    ) {
+        this(
+                spaceId,
+                name,
+                spaceType,
+                capacity,
+                null,
+                null,
+                null,
+                status,
+                occupancyExpiresAt,
+                remainingTimeSeconds
+        );
+    }
 }

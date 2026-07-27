@@ -19,7 +19,7 @@ public class SpaceRepositoryJpaAdapter
         implements SpaceRepository {
 
     private static final String ACTIVE_SPACE_NAME_UNIQUE_INDEX =
-            "uq_spaces_name_active";
+            "uq_spaces_active_name";
 
     private final SpringDataSpaceRepository
             springDataSpaceRepository;
@@ -30,7 +30,7 @@ public class SpaceRepositoryJpaAdapter
     @Override
     public boolean existsActiveByName(String name) {
         return springDataSpaceRepository
-                .existsByNameAndDeletedAtIsNull(name);
+                .existsActiveByNormalizedName(name);
     }
 
     @Override
@@ -39,7 +39,7 @@ public class SpaceRepositoryJpaAdapter
             Long spaceId
     ) {
         return springDataSpaceRepository
-                .existsByNameAndDeletedAtIsNullAndIdNot(
+                .existsActiveByNormalizedNameAndIdNot(
                         name,
                         spaceId
                 );

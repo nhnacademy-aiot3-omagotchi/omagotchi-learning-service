@@ -43,7 +43,7 @@ public class SpaceCommandService
 
         Space space = Space.create(
                 normalizedName,
-                command.type(),
+                command.spaceType(),
                 command.capacity(),
                 ZonedDateTime.now(clock)
         );
@@ -83,7 +83,7 @@ public class SpaceCommandService
                         now
                 )
                 .changeType(
-                        command.type(),
+                        command.spaceType(),
                         now
                 )
                 .changeCapacity(

@@ -19,7 +19,7 @@ public record UpdateSpaceResponse(
         return new UpdateSpaceResponse(
                 space.getId(),
                 space.getName(),
-                space.getType(),
+                space.getSpaceType(),
                 space.getCapacity(),
                 space.getUpdatedAt()
         );

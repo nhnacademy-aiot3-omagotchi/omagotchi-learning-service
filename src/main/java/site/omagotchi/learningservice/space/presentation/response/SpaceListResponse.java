@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.space.presentation.response;
 
 import site.omagotchi.learningservice.space.application.query.SpaceListItem;
+import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
 import site.omagotchi.learningservice.space.domain.SpaceType;
 import site.omagotchi.learningservice.space.domain.SpaceUsageStatus;
 
@@ -14,6 +15,9 @@ public record SpaceListResponse(
         String name,
         SpaceType type,
         Integer capacity,
+        SpaceOperationalStatus operationalStatus,
+        String inactiveReason,
+        Long cohortId,
         SpaceUsageStatus status,
         ZonedDateTime occupancyExpiresAt,
         Long remainingTimeSeconds
@@ -28,8 +32,11 @@ public record SpaceListResponse(
         return new SpaceListResponse(
                 item.spaceId(),
                 item.name(),
-                item.type(),
+                item.spaceType(),
                 item.capacity(),
+                item.operationalStatus(),
+                item.inactiveReason(),
+                item.cohortId(),
                 item.status(),
                 item.occupancyExpiresAt(),
                 item.remainingTimeSeconds()

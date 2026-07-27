@@ -92,7 +92,7 @@ class LearningServiceApplicationTests {
 	}
 
 	@Test
-	void appliesSpaceCohortMigration() {
+	void appliesSpaceTeamMigrations() {
 		Map<String, Object> column = jdbcTemplate.queryForMap("""
 				SELECT data_type, is_nullable
 				FROM information_schema.columns
@@ -116,12 +116,12 @@ class LearningServiceApplicationTests {
 				 AND ccu.constraint_name = rc.unique_constraint_name
 				WHERE tc.constraint_schema = 'learning_service'
 				  AND tc.table_name = 'spaces'
-				  AND tc.constraint_name = 'fk_spaces_cohort_id'
+				  AND tc.constraint_name = 'fk_spaces_cohort'
 				""");
 		Integer migrationCount = jdbcTemplate.queryForObject("""
 				SELECT COUNT(*)
 				FROM learning_service.flyway_schema_history
-				WHERE version = '4'
+				WHERE version = '5'
 				  AND success
 				""", Integer.class);
 		Integer indexCount = jdbcTemplate.queryForObject("""
@@ -129,7 +129,7 @@ class LearningServiceApplicationTests {
 				FROM pg_indexes
 				WHERE schemaname = 'learning_service'
 				  AND tablename = 'spaces'
-				  AND indexname = 'idx_spaces_cohort_id'
+				  AND indexname = 'ix_spaces_lab_cohort'
 				""", Integer.class);
 
 		assertThat(column)
@@ -139,7 +139,7 @@ class LearningServiceApplicationTests {
 				.containsEntry("referenced_schema", "learning_service")
 				.containsEntry("referenced_table", "cohorts")
 				.containsEntry("referenced_column", "id")
-				.containsEntry("delete_rule", "RESTRICT");
+				.containsEntry("delete_rule", "SET NULL");
 		assertThat(migrationCount).isOne();
 		assertThat(indexCount).isOne();
 	}
@@ -148,26 +148,32 @@ class LearningServiceApplicationTests {
 	void rejectsUnknownCohortId() {
 		assertThatThrownBy(() -> jdbcTemplate.update("""
 				INSERT INTO learning_service.spaces (
-				    name, type, capacity, cohort_id
+				    name, space_type, capacity, cohort_id
 				) VALUES (?, 'LAB', 20, ?)
 				""", "존재하지 않는 기수 FK 테스트 공간", Long.MAX_VALUE))
 				.isInstanceOf(DataIntegrityViolationException.class);
 	}
 
 	@Test
-	void restrictsDeletingReferencedCohort() {
-		Long cohortId = insertCohort("FK 삭제 제한 테스트 기수");
+	void clearsManagementCohortWhenReferencedCohortIsDeleted() {
+		Long cohortId = insertCohort("FK SET NULL 테스트 기수");
 		jdbcTemplate.update("""
 				INSERT INTO learning_service.spaces (
-				    name, type, capacity, cohort_id
+				    name, space_type, capacity, cohort_id
 				) VALUES (?, 'LAB', 20, ?)
-				""", "FK 삭제 제한 테스트 공간", cohortId);
+				""", "FK SET NULL 테스트 공간", cohortId);
 
-		assertThatThrownBy(() -> jdbcTemplate.update(
+		jdbcTemplate.update(
 				"DELETE FROM learning_service.cohorts WHERE id = ?",
 				cohortId
-		))
-				.isInstanceOf(DataIntegrityViolationException.class);
+		);
+
+		Long storedCohortId = jdbcTemplate.queryForObject("""
+				SELECT cohort_id
+				FROM learning_service.spaces
+				WHERE name = 'FK SET NULL 테스트 공간'
+				""", Long.class);
+		assertThat(storedCohortId).isNull();
 	}
 
 	@Test
@@ -180,7 +186,7 @@ class LearningServiceApplicationTests {
 				)
 		);
 		Map<String, Object> stored = jdbcTemplate.queryForMap("""
-				SELECT cohort_id, operational_status
+				SELECT cohort_id, status
 				FROM learning_service.spaces
 				WHERE id = ?
 				""", created.getId());
@@ -189,7 +195,7 @@ class LearningServiceApplicationTests {
 		assertThat(created.getOperationalStatus())
 				.isEqualTo(SpaceOperationalStatus.INACTIVE);
 		assertThat(stored.get("cohort_id")).isNull();
-		assertThat(stored.get("operational_status")).isEqualTo("INACTIVE");
+		assertThat(stored.get("status")).isEqualTo("INACTIVE");
 	}
 
 	@Test
@@ -197,7 +203,7 @@ class LearningServiceApplicationTests {
 		Long cohortId = insertCohort("기존 기능 회귀 테스트 기수");
 		Long spaceId = jdbcTemplate.queryForObject("""
 				INSERT INTO learning_service.spaces (
-				    name, type, capacity, cohort_id
+				    name, space_type, capacity, cohort_id
 				) VALUES (?, 'LAB', 20, ?)
 				RETURNING id
 				""", Long.class, "기존 기능 회귀 테스트 공간", cohortId);
@@ -210,7 +216,7 @@ class LearningServiceApplicationTests {
 				spaceId,
 				new UpdateSpaceCommand(
 						"기존 기능 회귀 테스트 공간 수정",
-						SpaceType.STUDY_ROOM,
+						SpaceType.STUDY,
 						24
 				)
 		);
@@ -235,7 +241,7 @@ class LearningServiceApplicationTests {
 				java.time.ZonedDateTime.now()
 		);
 		Space duplicate = Space.create(
-				"DB 유니크 충돌 테스트 공간",
+				"db 유니크 충돌 테스트 공간",
 				SpaceType.MEETING,
 				8,
 				java.time.ZonedDateTime.now()
@@ -250,6 +256,31 @@ class LearningServiceApplicationTests {
 				).isEqualTo(SpaceErrorCode.DUPLICATE_NAME));
 	}
 
+	@Test
+	void allowsReusingNameOfSoftDeletedSpace() {
+		Space first = Space.create(
+				"삭제 후 재사용 테스트 공간",
+				SpaceType.MEETING,
+				8,
+				java.time.ZonedDateTime.now()
+		);
+		Space saved = spaceRepository.save(first);
+		spaceRepository.save(saved.delete(
+				java.time.ZonedDateTime.now()
+		));
+
+		Space recreated = spaceRepository.save(Space.create(
+				" 삭제 후 재사용 테스트 공간 ",
+				SpaceType.MEETING,
+				8,
+				java.time.ZonedDateTime.now()
+		));
+
+		assertThat(recreated.getId()).isNotEqualTo(saved.getId());
+		assertThat(recreated.getName())
+				.isEqualTo("삭제 후 재사용 테스트 공간");
+	}
+
 	private Long insertCohort(String name) {
 		return jdbcTemplate.queryForObject("""
 				INSERT INTO learning_service.cohorts (
@@ -257,7 +288,12 @@ class LearningServiceApplicationTests {
 				    start_date,
 				    end_date,
 				    created_by_user_id
-				) VALUES (?, DATE '2026-01-01', DATE '2026-12-31', 1)
+				) VALUES (
+				    ?,
+				    DATE '2026-01-01',
+				    DATE '2026-12-31',
+				    UUID '00000000-0000-0000-0000-000000000001'
+				)
 				RETURNING id
 				""", Long.class, name);
 	}

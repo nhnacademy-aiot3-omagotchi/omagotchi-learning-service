@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.study.application.query;
+package site.omagotchi.learningservice.study.application;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -7,7 +7,7 @@ import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
-import site.omagotchi.learningservice.study.infrastructure.persistence.entity.StudyRecordEntity;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecordEntity;
 import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
 
 import java.util.UUID;

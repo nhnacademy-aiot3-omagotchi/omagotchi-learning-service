@@ -3,7 +3,7 @@ package site.omagotchi.learningservice.study.infrastructure.persistence.reposito
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
-import site.omagotchi.learningservice.study.infrastructure.persistence.entity.StudyRecordEntity;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecordEntity;
 
 import java.time.Instant;
 import java.time.LocalDate;

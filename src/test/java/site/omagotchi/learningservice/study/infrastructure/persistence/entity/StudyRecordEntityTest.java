@@ -2,6 +2,7 @@ package site.omagotchi.learningservice.study.infrastructure.persistence.entity;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecordEntity;
 
 import java.time.Instant;
 import java.time.LocalDate;

@@ -19,6 +19,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.HexFormat;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -42,7 +43,7 @@ public class TelegramUserLinkService {
      * 서비스 사용자가 Telegram Bot과 개인 대화를 시작할 수 있는 일회용 딥링크를 발급한다.
      */
     @Transactional
-    public TelegramLinkTokenResponse issueLinkToken(Long userId) {
+    public TelegramLinkTokenResponse issueLinkToken(UUID userId) {
         String rawToken = generateRawToken();
         OffsetDateTime expiresAt = OffsetDateTime.now().plus(linkTokenTtl);
 
@@ -90,14 +91,14 @@ public class TelegramUserLinkService {
         return TelegramUserLinkResponse.from(userLinkRepository.save(link));
     }
 
-    public TelegramUserLinkResponse getMyLink(Long userId) {
+    public TelegramUserLinkResponse getMyLink(UUID userId) {
         return userLinkRepository.findByUserId(userId)
                 .map(TelegramUserLinkResponse::from)
                 .orElseThrow(() -> new BusinessException(TelegramErrorCode.TELEGRAM_USER_LINK_NOT_FOUND));
     }
 
     @Transactional
-    public TelegramUserLinkResponse updateNotification(Long userId, UpdateTelegramNotificationCommand command) {
+    public TelegramUserLinkResponse updateNotification(UUID userId, UpdateTelegramNotificationCommand command) {
         TelegramUserLink link = userLinkRepository.findByUserId(userId)
                 .orElseThrow(() -> new BusinessException(TelegramErrorCode.TELEGRAM_USER_LINK_NOT_FOUND));
 
@@ -106,7 +107,7 @@ public class TelegramUserLinkService {
     }
 
     @Transactional
-    public TelegramUserLinkResponse disconnect(Long userId) {
+    public TelegramUserLinkResponse disconnect(UUID userId) {
         TelegramUserLink link = userLinkRepository.findByUserId(userId)
                 .orElseThrow(() -> new BusinessException(TelegramErrorCode.TELEGRAM_USER_LINK_NOT_FOUND));
 
@@ -114,7 +115,7 @@ public class TelegramUserLinkService {
         return TelegramUserLinkResponse.from(link);
     }
 
-    private void validateTelegramChatOwnership(Long userId, Long telegramChatId, Long telegramUserId) {
+    private void validateTelegramChatOwnership(UUID userId, Long telegramChatId, Long telegramUserId) {
         userLinkRepository.findByTelegramChatId(telegramChatId)
                 .filter(link -> !link.getUserId().equals(userId))
                 .ifPresent(link -> {

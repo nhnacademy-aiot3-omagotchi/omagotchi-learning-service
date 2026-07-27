@@ -3,9 +3,10 @@ package site.omagotchi.learningservice.telegram.application.dto.result;
 import site.omagotchi.learningservice.telegram.domain.TelegramUserLink;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 public record TelegramUserLinkResponse(
-        Long userId,
+        UUID userId,
         Long telegramUserId,
         Long telegramChatId,
         Boolean notificationEnabled, // 알림 수신 여부

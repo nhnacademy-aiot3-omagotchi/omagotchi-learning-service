@@ -11,6 +11,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Getter
 @Entity
@@ -23,7 +24,7 @@ public class TelegramLinkToken {
     private Long id;
 
     @Column(name = "user_id", nullable = false)
-    private Long userId;
+    private UUID userId;
 
     @Column(name = "token_hash", nullable = false, length = 64)
     private String tokenHash;
@@ -37,7 +38,7 @@ public class TelegramLinkToken {
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
-    public static TelegramLinkToken issue(Long userId, String tokenHash, OffsetDateTime expiresAt) {
+    public static TelegramLinkToken issue(UUID userId, String tokenHash, OffsetDateTime expiresAt) {
         OffsetDateTime now = OffsetDateTime.now();
         if (expiresAt == null || !expiresAt.isAfter(now)) {
             throw new IllegalArgumentException("Telegram 연결 토큰 만료 시각은 현재보다 이후여야 합니다.");

@@ -11,6 +11,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Getter
 @Entity
@@ -23,7 +24,7 @@ public class TelegramUserLink {
     private Long id;
 
     @Column(name = "user_id", nullable = false)
-    private Long userId;
+    private UUID userId;
 
     @Column(name = "telegram_user_id", nullable = false)
     private Long telegramUserId;
@@ -46,7 +47,7 @@ public class TelegramUserLink {
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
-    public static TelegramUserLink link(Long userId, Long telegramUserId, Long telegramChatId) {
+    public static TelegramUserLink link(UUID userId, Long telegramUserId, Long telegramChatId) {
         OffsetDateTime now = OffsetDateTime.now();
 
         TelegramUserLink link = new TelegramUserLink();

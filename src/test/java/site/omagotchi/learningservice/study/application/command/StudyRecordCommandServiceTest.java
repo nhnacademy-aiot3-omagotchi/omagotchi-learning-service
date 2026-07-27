@@ -16,6 +16,7 @@ import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.util.DateTimeProvider;
+import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
 import site.omagotchi.learningservice.study.infrastructure.persistence.entity.StudyRecordEntity;
@@ -62,6 +63,9 @@ class StudyRecordCommandServiceTest {
 
     @Mock
     private DateTimeProvider dateTimeProvider;
+
+    @Mock
+    private StudyWriteLock studyWriteLock;
 
     @InjectMocks
     private StudyRecordCommandService studyRecordCommandService;
@@ -123,6 +127,7 @@ class StudyRecordCommandServiceTest {
 
             ArgumentCaptor<StudyRecordEntity> captor = ArgumentCaptor.forClass(StudyRecordEntity.class);
             verify(studyRecordRepository).save(captor.capture());
+            verify(studyWriteLock).acquire(COHORT_MEMBERSHIP_ID);
             StudyRecordEntity saved = captor.getValue();
 
             assertAll(
@@ -363,6 +368,7 @@ class StudyRecordCommandServiceTest {
                     request
             );
 
+            verify(studyWriteLock).acquire(COHORT_MEMBERSHIP_ID);
             assertAll(
                     () -> assertEquals(updatedStartTime, entity.getStartTime()),
                     () -> assertEquals(updatedEndTime, entity.getEndTime()),
@@ -614,6 +620,7 @@ class StudyRecordCommandServiceTest {
             );
 
             assertEquals(deletedAt, entity.getDeletedAt());
+            verify(studyWriteLock).acquire(COHORT_MEMBERSHIP_ID);
             verify(studyRecordRepository).saveAndFlush(entity);
         }
 

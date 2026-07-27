@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import site.omagotchi.learningservice.cohort.domain.CohortAuditLog;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 기수 관리 감사 로그 조회 결과
@@ -11,7 +12,7 @@ import java.time.OffsetDateTime;
 public record CohortAuditLogResponse(
         Long id,
         Long cohortId,
-        Long actorUserId,
+        UUID actorUserId,
         String targetType,
         Long targetId,
         String action,

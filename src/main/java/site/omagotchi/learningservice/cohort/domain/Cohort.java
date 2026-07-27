@@ -17,13 +17,14 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 교육 기수의 기본 정보와 운영 상태를 관리
  */
-@Getter
 @Entity
 @Table(name = "cohorts", schema = "learning_service")
+@Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Cohort {
 
@@ -48,7 +49,7 @@ public class Cohort {
     private CohortStatus status;
 
     @Column(name = "created_by_user_id", nullable = false)
-    private Long createdByUserId;
+    private UUID createdByUserId;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -66,7 +67,7 @@ public class Cohort {
             String description,
             LocalDate startDate,
             LocalDate endDate,
-            Long createdByUserId
+            UUID createdByUserId
     ) {
         validatePeriod(startDate, endDate);
 

@@ -17,6 +17,7 @@ import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -35,7 +36,7 @@ public class CohortManagerService {
     public CohortMembershipResponse assignManager(
             Long cohortId,
             AssignCohortManagerCommand command,
-            Long processedByUserId,
+            UUID processedByUserId,
             String globalRole
     ) {
         accessService.requireSystemAdmin(globalRole);
@@ -53,9 +54,9 @@ public class CohortManagerService {
     @Transactional
     public CohortMembershipResponse changeMemberRole(
             Long cohortId,
-            Long userId,
+            UUID userId,
             ChangeCohortMemberRoleCommand command,
-            Long processedByUserId,
+            UUID processedByUserId,
             String globalRole
     ) {
         validateCohortCanChangeManager(cohortId);
@@ -101,7 +102,7 @@ public class CohortManagerService {
      */
     private CohortMembershipResponse assignExistingMembershipAsManager(
             CohortMembership membership,
-            Long processedByUserId
+            UUID processedByUserId
     ) {
         if (membership.getStatus() == CohortMembershipStatus.ACTIVE) {
             int updatedCount = membershipRepository.changeActiveRole(
@@ -136,7 +137,7 @@ public class CohortManagerService {
     /**
      * 기존 소속 row가 없는 사용자를 현재 기수의 ACTIVE MANAGER로 새로 등록하고 생성 결과를 반환한다.
      */
-    private CohortMembershipResponse createActiveManager(Long cohortId, Long userId, Long processedByUserId) {
+    private CohortMembershipResponse createActiveManager(Long cohortId, UUID userId, UUID processedByUserId) {
         CohortMembership membership = CohortMembership.activeManager(cohortId, userId, processedByUserId);
         return CohortMembershipResponse.from(membershipRepository.save(membership));
     }

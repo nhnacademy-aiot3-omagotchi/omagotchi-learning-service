@@ -24,10 +24,11 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class CohortMembershipService {
 
     private static final Set<CohortMembershipStatus> DUPLICATE_TARGET_STATUSES = Set.of(
@@ -46,7 +47,7 @@ public class CohortMembershipService {
      * 멱등성: 엘리베이터 5번 누르면 1번 눌러짐 처리
      */
     @Transactional
-    public CohortMembershipResponse join(CreateJoinCommand command, Long userId) {
+    public CohortMembershipResponse join(CreateJoinCommand command, UUID userId) {
         String rawJoinCode = command.joinCode();
         if (rawJoinCode == null || rawJoinCode.isBlank()) {
             throw new BusinessException(CohortErrorCode.JOIN_CODE_REQUIRED);
@@ -77,7 +78,7 @@ public class CohortMembershipService {
      * 사용자의 모든 기수 소속과 참가 신청 상태를 최신 신청순으로 조회
      * 사용자 화면의 내 신청 상태 확인에 사용
      */
-    public List<CohortMembershipResponse> getMyMemberships(Long userId) {
+    public List<CohortMembershipResponse> getMyMemberships(UUID userId) {
         return membershipRepository.findByUserIdOrderByRequestedAtDesc(userId).stream()
                 .map(CohortMembershipResponse::from)
                 .toList();
@@ -87,7 +88,7 @@ public class CohortMembershipService {
      * 특정 기수의 PENDING 참가 신청 목록을 신청순으로 조회
      * 기수 관리자의 승인/거절 대기 목록에서 사용
      */
-    public List<CohortMembershipResponse> getPendingJoinRequests(Long cohortId, Long actorUserId) {
+    public List<CohortMembershipResponse> getPendingJoinRequests(Long cohortId, UUID actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
         return membershipRepository
@@ -101,7 +102,7 @@ public class CohortMembershipService {
      * 특정 기수에 생성된 모든 소속 row를 신청순으로 조회
      * 관리자 화면의 소속/역할 관리 목록에서 사용
      */
-    public List<CohortMembershipResponse> getMembers(Long cohortId, Long actorUserId) {
+    public List<CohortMembershipResponse> getMembers(Long cohortId, UUID actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
         return membershipRepository.findByCohortIdOrderByRequestedAtAsc(cohortId).stream()
@@ -117,7 +118,7 @@ public class CohortMembershipService {
     public CohortMembershipResponse approve(
             Long membershipId,
             ApproveMembershipCommand command,
-            Long processedByUserId,
+            UUID processedByUserId,
             String globalRole
     ) {
         CohortMembership pendingMembership = membershipRepository.findByIdAndStatus(
@@ -161,7 +162,11 @@ public class CohortMembershipService {
      * 거절 사유를 필수로 저장하고, 이미 처리된 신청은 상태 전이 오류로 처리
      */
     @Transactional
-    public CohortMembershipResponse reject(Long membershipId, RejectMembershipCommand command, Long processedByUserId) {
+    public CohortMembershipResponse reject(
+            Long membershipId,
+            RejectMembershipCommand command,
+            UUID processedByUserId
+    ) {
         if (command.reason() == null || command.reason().isBlank()) {
             throw new BusinessException(CohortErrorCode.REJECTION_REASON_REQUIRED);
         }
@@ -189,7 +194,7 @@ public class CohortMembershipService {
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_MEMBERSHIP_NOT_FOUND));
     }
 
-    private CohortMembershipResponse createPendingMembership(Long cohortId, Long userId) {
+    private CohortMembershipResponse createPendingMembership(Long cohortId, UUID userId) {
         CohortMembership membership = CohortMembership.pending(
                 cohortId,
                 userId,
@@ -198,7 +203,7 @@ public class CohortMembershipService {
         return CohortMembershipResponse.from(membershipRepository.save(membership));
     }
 
-    private Optional<CohortMembershipResponse> requestAgainRejectedMembership(Long cohortId, Long userId) {
+    private Optional<CohortMembershipResponse> requestAgainRejectedMembership(Long cohortId, UUID userId) {
         return membershipRepository.findByCohortIdAndUserId(cohortId, userId)
                 .filter(membership -> membership.getStatus() == CohortMembershipStatus.REJECTED)
                 .map(membership -> {

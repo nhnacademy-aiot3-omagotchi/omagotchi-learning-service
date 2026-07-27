@@ -11,14 +11,15 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * 기수별 출결 판정 기준 시간을 관리
  * 시작, 종료, 결석 처리 기준 시각과 허용 자리비움 시간을 기수 단위로 분리
  */
-@Getter
 @Entity
 @Table(name = "cohort_attendance_policies", schema = "learning_service")
+@Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CohortAttendancePolicy {
 
@@ -42,7 +43,7 @@ public class CohortAttendancePolicy {
     private Integer allowedAwayMinutes;
 
     @Column(name = "updated_by_user_id", nullable = false)
-    private Long updatedByUserId;
+    private UUID updatedByUserId;
 
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
@@ -55,7 +56,7 @@ public class CohortAttendancePolicy {
             LocalTime scheduledEndTime,
             LocalTime absenceCutoffTime,
             Integer allowedAwayMinutes,
-            Long updatedByUserId
+            UUID updatedByUserId
     ) {
         validateTimes(scheduledStartTime, scheduledEndTime, absenceCutoffTime);
         validateAllowedAwayMinutes(allowedAwayMinutes);
@@ -77,7 +78,7 @@ public class CohortAttendancePolicy {
             LocalTime scheduledEndTime,
             LocalTime absenceCutoffTime,
             Integer allowedAwayMinutes,
-            Long updatedByUserId
+            UUID updatedByUserId
     ) {
         validateTimes(scheduledStartTime, scheduledEndTime, absenceCutoffTime);
         validateAllowedAwayMinutes(allowedAwayMinutes);

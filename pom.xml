@@ -30,6 +30,7 @@
 		<java.version>21</java.version>
 		<spring-cloud.version>2025.1.2</spring-cloud.version>
 		<telegrambots.version>6.9.7.1</telegrambots.version>
+		<openfeign-querydsl.version>7.4.0</openfeign-querydsl.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -132,6 +133,12 @@
 			<artifactId>testcontainers-postgresql</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<dependency>
+			<groupId>io.github.openfeign.querydsl</groupId>
+			<artifactId>querydsl-jpa</artifactId>
+			<version>${openfeign-querydsl.version}</version>
+		</dependency>
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>
@@ -147,6 +154,18 @@
 
 	<build>
 		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.asciidoctor</groupId>
 				<artifactId>asciidoctor-maven-plugin</artifactId>
@@ -203,6 +222,20 @@
 								<path>
 									<groupId>org.springframework.boot</groupId>
 									<artifactId>spring-boot-configuration-processor</artifactId>
+								</path>
+
+								<!-- QueryDSL Q 클래스 생성 컴파일러 -->
+								<path>
+									<groupId>io.github.openfeign.querydsl</groupId>
+									<artifactId>querydsl-apt</artifactId>
+									<version>${openfeign-querydsl.version}</version>
+									<classifier>jpa</classifier>
+								</path>
+
+								<!-- @Entity 등 Jakarta JPA 어노테이션 인식 -->
+								<path>
+									<groupId>jakarta.persistence</groupId>
+									<artifactId>jakarta.persistence-api</artifactId>
 								</path>
 							</annotationProcessorPaths>
 						</configuration>

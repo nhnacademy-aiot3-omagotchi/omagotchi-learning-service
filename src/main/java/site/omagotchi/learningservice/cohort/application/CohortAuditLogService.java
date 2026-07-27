@@ -9,6 +9,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortAuditLog;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAuditLogRepository;
 
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -24,7 +25,7 @@ public class CohortAuditLogService {
     @Transactional
     public CohortAuditLogResponse createAuditLog(
             Long cohortId,
-            Long actorUserId,
+            UUID actorUserId,
             String targetType,
             Long targetId,
             String action,

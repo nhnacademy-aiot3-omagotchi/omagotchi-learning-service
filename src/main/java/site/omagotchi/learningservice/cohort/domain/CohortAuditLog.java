@@ -14,14 +14,15 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 /**
  * cohort 도메인에서 발생한 주요 변경 이력을 저장
  * 승인, 거절, 역할 변경처럼 추적이 필요한 작업의 변경 전후 값과 요청 식별자 남김
  */
-@Getter
 @Entity
 @Table(name = "cohort_audit_logs", schema = "learning_service")
+@Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CohortAuditLog {
 
@@ -33,7 +34,7 @@ public class CohortAuditLog {
     private Long cohortId;
 
     @Column(name = "actor_user_id", nullable = false)
-    private Long actorUserId;
+    private UUID actorUserId;
 
     @Column(name = "target_type", nullable = false, length = 30)
     private String targetType;
@@ -63,7 +64,7 @@ public class CohortAuditLog {
 
     public static CohortAuditLog create(
             Long cohortId,
-            Long actorUserId,
+            UUID actorUserId,
             String targetType,
             Long targetId,
             String action,

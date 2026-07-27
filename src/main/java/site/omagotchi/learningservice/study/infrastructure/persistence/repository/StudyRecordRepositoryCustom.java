@@ -1,6 +1,6 @@
 package site.omagotchi.learningservice.study.infrastructure.persistence.repository;
 
-import site.omagotchi.learningservice.study.infrastructure.persistence.entity.StudyRecordEntity;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecordEntity;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -25,18 +25,6 @@ public interface StudyRecordRepositoryCustom {
             UUID studyRecordId,
             Long cohortMembershipId
     );
-
-    /**
-     * 지정한 소속의 활성 공부 기록을 집계 기준일의 양 끝을 포함하는 범위로 조회한다.
-     *
-     * @param cohortMembershipId 기수 소속 식별자
-     * @param fromAggregationDate 조회 시작 집계일
-     * @param toAggregationDate 조회 종료 집계일
-     * @param pageable 페이지 요청
-     * @return 집계일, 시작 시각, 식별자 순으로 정렬된 활성 기록 페이지
-     */
-
-    // TODO: 일간 조회는 구간별로 반환(pageable 필요없음), 주간 및 월간 데이터 조회는 총 시간으로만 계산한다. 이에 관한 명세는 추후 작성 예정
 
     /**
      * 지정한 소속과 집계일 범위에 포함된 활성 기록의 공부 시간을 합산한다.

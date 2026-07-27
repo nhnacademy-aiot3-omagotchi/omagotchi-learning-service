@@ -10,9 +10,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.study.application.StudyRecordQueryService;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
-import site.omagotchi.learningservice.study.infrastructure.persistence.entity.StudyRecordEntity;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecordEntity;
 import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
 
 import java.time.Instant;

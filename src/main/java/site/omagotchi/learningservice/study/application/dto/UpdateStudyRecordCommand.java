@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.study.application.command;
+package site.omagotchi.learningservice.study.application.dto;
 
 public record UpdateStudyRecordCommand(
         String date,

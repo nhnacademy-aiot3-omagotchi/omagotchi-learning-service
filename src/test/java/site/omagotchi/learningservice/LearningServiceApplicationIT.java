@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Import(TestcontainersConfiguration.class)
 @ActiveProfiles("test")
 @SpringBootTest
-class LearningServiceApplicationTests {
+class LearningServiceApplicationIT {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;

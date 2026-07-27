@@ -84,13 +84,6 @@ public class CohortMembershipService {
     }
 
     /**
-     * 사용자가 특정 기수에 ACTIVE 상태로 소속되어 있으면 소속 식별자를 반환
-     */
-    public Optional<Long> findActiveMembershipId(UUID userId, Long cohortId) {
-        return membershipRepository.findActiveMembershipId(userId, cohortId);
-    }
-
-    /**
      * 특정 기수의 PENDING 참가 신청 목록을 신청순으로 조회
      * 기수 관리자의 승인/거절 대기 목록에서 사용
      */

@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.study.infrastructure.persistence.entity;
+package site.omagotchi.learningservice.study.domain.entity;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;

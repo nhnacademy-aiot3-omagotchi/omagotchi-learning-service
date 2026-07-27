@@ -3,14 +3,14 @@ package site.omagotchi.learningservice.study.infrastructure.persistence.reposito
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
-import site.omagotchi.learningservice.study.infrastructure.persistence.entity.StudyRecordEntity;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecordEntity;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
-import static site.omagotchi.learningservice.study.infrastructure.persistence.entity.QStudyRecordEntity.studyRecordEntity;
+import static site.omagotchi.learningservice.study.domain.entity.QStudyRecordEntity.studyRecordEntity;
 
 // Spring Data가 fragment 인터페이스 이름 뒤의 Impl 접미사를 인식하여 repository에 조합
 @RequiredArgsConstructor

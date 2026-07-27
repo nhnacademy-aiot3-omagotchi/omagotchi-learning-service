@@ -2,7 +2,7 @@ package site.omagotchi.learningservice.study.presentation.request;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
-import site.omagotchi.learningservice.study.application.command.UpdateStudyRecordCommand;
+import site.omagotchi.learningservice.study.application.dto.UpdateStudyRecordCommand;
 
 public record UpdateStudyRecordRequest(
         @NotNull String date,

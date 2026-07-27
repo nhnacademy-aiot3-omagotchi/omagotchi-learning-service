@@ -1,6 +1,8 @@
 package site.omagotchi.learningservice.cohort.application;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -19,6 +21,7 @@ import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,7 +47,38 @@ class CohortMembershipServiceTest {
     @InjectMocks
     private CohortMembershipService membershipService;
 
+    @Nested
+    @DisplayName("활성 기수 소속 식별자 조회")
+    class FindActiveMembershipId {
+
+        @Test
+        @DisplayName("일치하는 소속 식별자 반환")
+        void returnsMembershipIdWhenActiveMembershipExists() {
+            Long cohortId = 1L;
+            Long membershipId = 100L;
+            when(membershipRepository.findActiveMembershipId(MEMBER_USER_ID, cohortId))
+                    .thenReturn(Optional.of(membershipId));
+
+            Optional<Long> result = membershipService.findActiveMembershipId(MEMBER_USER_ID, cohortId);
+
+            assertEquals(Optional.of(membershipId), result);
+        }
+
+        @Test
+        @DisplayName("활성 소속 없음")
+        void returnsEmptyWhenActiveMembershipDoesNotExist() {
+            Long cohortId = 1L;
+            when(membershipRepository.findActiveMembershipId(MEMBER_USER_ID, cohortId))
+                    .thenReturn(Optional.empty());
+
+            Optional<Long> result = membershipService.findActiveMembershipId(MEMBER_USER_ID, cohortId);
+
+            assertEquals(Optional.empty(), result);
+        }
+    }
+
     @Test
+    @DisplayName("멘토 승인 시 시스템 관리자가 아닌 기수 관리자 권한 확인")
     void approveMentorRequiresCohortManagerNotSystemAdmin() {
         Long cohortId = 1L;
         Long membershipId = 100L;

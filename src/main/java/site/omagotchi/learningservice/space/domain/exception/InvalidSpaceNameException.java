@@ -1,8 +1,10 @@
 package site.omagotchi.learningservice.space.domain.exception;
 
-// 이름 오류
-public class InvalidSpaceNameException extends RuntimeException {
-    public InvalidSpaceNameException(String message) {
-        super(message);
+import site.omagotchi.learningservice.global.exception.BusinessException;
+
+public class InvalidSpaceNameException extends BusinessException {
+
+    public InvalidSpaceNameException() {
+        super(SpaceErrorCode.INVALID_NAME);
     }
 }

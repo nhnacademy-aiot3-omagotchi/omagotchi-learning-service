@@ -1,8 +1,10 @@
 package site.omagotchi.learningservice.space.domain.exception;
 
-public class SpaceNotFoundException extends RuntimeException {
+import site.omagotchi.learningservice.global.exception.BusinessException;
 
-    public SpaceNotFoundException(String message) {
-        super(message);
+public class SpaceNotFoundException extends BusinessException {
+
+    public SpaceNotFoundException() {
+        super(SpaceErrorCode.NOT_FOUND);
     }
 }

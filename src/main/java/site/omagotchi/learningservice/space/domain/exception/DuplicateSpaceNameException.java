@@ -1,7 +1,10 @@
 package site.omagotchi.learningservice.space.domain.exception;
 
-public class DuplicateSpaceNameException extends RuntimeException {
-    public DuplicateSpaceNameException(String message) {
-        super(message);
+import site.omagotchi.learningservice.global.exception.BusinessException;
+
+public class DuplicateSpaceNameException extends BusinessException {
+
+    public DuplicateSpaceNameException() {
+        super(SpaceErrorCode.DUPLICATE_NAME);
     }
 }

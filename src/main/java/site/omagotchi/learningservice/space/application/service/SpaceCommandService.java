@@ -38,9 +38,7 @@ public class SpaceCommandService
                 && spaceRepository.existsActiveByName(
                 normalizedName
         )) {
-            throw new DuplicateSpaceNameException(
-                    normalizedName
-            );
+            throw new DuplicateSpaceNameException();
         }
 
         Space space = Space.create(
@@ -73,9 +71,7 @@ public class SpaceCommandService
                         );
 
         if (duplicateName) {
-            throw new DuplicateSpaceNameException(
-                    normalizedName
-            );
+            throw new DuplicateSpaceNameException();
         }
 
         ZonedDateTime now =
@@ -120,10 +116,7 @@ public class SpaceCommandService
         return spaceRepository
                 .findActiveById(spaceId)
                 .orElseThrow(
-                        () -> new SpaceNotFoundException(
-                                "공간을 찾을 수 없습니다. spaceId=" + spaceId
-
-                        )
+                        SpaceNotFoundException::new
                 );
     }
 

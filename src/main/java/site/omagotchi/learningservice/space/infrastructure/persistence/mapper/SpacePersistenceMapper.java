@@ -16,6 +16,7 @@ public class SpacePersistenceMapper {
     public SpaceJpaEntity toEntity(Space space) {
         return SpaceJpaEntity.from(
                 space.getId(),
+                space.getCohortId(),
                 space.getName(),
                 space.getType(),
                 space.getCapacity(),
@@ -33,6 +34,7 @@ public class SpacePersistenceMapper {
     public Space toDomain(SpaceJpaEntity entity) {
         return Space.restore(
                 entity.getId(),
+                entity.getCohortId(),
                 entity.getName(),
                 entity.getType(),
                 entity.getCapacity(),

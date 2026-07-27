@@ -31,6 +31,9 @@ public class SpaceJpaEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "cohort_id")
+    private Long cohortId;
+
     @Column(
             name = "name",
             nullable = false,
@@ -81,6 +84,7 @@ public class SpaceJpaEntity {
 
     public static SpaceJpaEntity from(
             Long id,
+            Long cohortId,
             String name,
             SpaceType type,
             Integer capacity,
@@ -92,6 +96,7 @@ public class SpaceJpaEntity {
     ) {
         return new SpaceJpaEntity(
                 id,
+                cohortId,
                 name,
                 type,
                 capacity,

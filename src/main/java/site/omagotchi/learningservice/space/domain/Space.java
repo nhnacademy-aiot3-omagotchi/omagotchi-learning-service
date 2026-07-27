@@ -16,6 +16,7 @@ public class Space {
     private static final int MAX_NAME_LENGTH = 50;
 
     private final Long id;
+    private final Long cohortId;
     private final String name;
     private final SpaceType type;
     private final Integer capacity;
@@ -45,6 +46,7 @@ public class Space {
 
     private Space(
             Long id,
+            Long cohortId,
             String name,
             SpaceType type,
             Integer capacity,
@@ -55,6 +57,7 @@ public class Space {
             ZonedDateTime deletedAt
     ) {
         this.id = id;
+        this.cohortId = cohortId;
         this.name = validateName(name);
 
         this.type = Objects.requireNonNull(
@@ -105,6 +108,7 @@ public class Space {
 
         return new Space(
                 null,
+                null,
                 name,
                 type,
                 capacity,
@@ -122,6 +126,7 @@ public class Space {
      */
     public static Space restore(
             Long id,
+            Long cohortId,
             String name,
             SpaceType type,
             Integer capacity,
@@ -136,6 +141,7 @@ public class Space {
                         id,
                         "공간 ID는 필수입니다."
                 ),
+                cohortId,
                 name,
                 type,
                 capacity,
@@ -158,6 +164,7 @@ public class Space {
     ) {
         return new Space(
                 id,
+                cohortId,
                 newName,
                 type,
                 capacity,
@@ -181,6 +188,7 @@ public class Space {
     ) {
         return new Space(
                 id,
+                cohortId,
                 name,
                 newType,
                 capacity,
@@ -204,6 +212,7 @@ public class Space {
     ) {
         return new Space(
                 id,
+                cohortId,
                 name,
                 type,
                 newCapacity,
@@ -227,6 +236,7 @@ public class Space {
 
         return new Space(
                 id,
+                cohortId,
                 name,
                 type,
                 capacity,
@@ -250,6 +260,7 @@ public class Space {
     ) {
         return new Space(
                 id,
+                cohortId,
                 name,
                 type,
                 capacity,
@@ -280,6 +291,7 @@ public class Space {
 
         return new Space(
                 id,
+                cohortId,
                 name,
                 type,
                 capacity,
@@ -323,17 +335,13 @@ public class Space {
 
     private static String validateName(String name) {
         if (name == null || name.isBlank()) {
-            throw new InvalidSpaceNameException(
-                    "공간 이름은 비어 있을 수 없습니다."
-            );
+            throw new InvalidSpaceNameException();
         }
 
         String normalizedName = name.trim();
 
         if (normalizedName.length() > MAX_NAME_LENGTH) {
-            throw new InvalidSpaceNameException(
-                    "공간 이름은 50자를 초과할 수 없습니다."
-            );
+            throw new InvalidSpaceNameException();
         }
 
         return normalizedName;
@@ -341,9 +349,7 @@ public class Space {
 
     private static Integer validateCapacity(Integer capacity) {
         if (capacity == null || capacity <= 0) {
-            throw new InvalidSpaceCapacityException(
-                    "공간 최대 인원은 1명 이상이어야 합니다."
-            );
+            throw new InvalidSpaceCapacityException();
         }
 
         return capacity;

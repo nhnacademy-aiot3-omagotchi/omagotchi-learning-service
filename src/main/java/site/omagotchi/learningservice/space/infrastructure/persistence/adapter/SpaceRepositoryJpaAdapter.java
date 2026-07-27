@@ -1,9 +1,12 @@
 package site.omagotchi.learningservice.space.infrastructure.persistence.adapter;
 
 import lombok.RequiredArgsConstructor;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.space.application.port.out.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
+import site.omagotchi.learningservice.space.domain.exception.DuplicateSpaceNameException;
 import site.omagotchi.learningservice.space.infrastructure.persistence.entity.SpaceJpaEntity;
 import site.omagotchi.learningservice.space.infrastructure.persistence.mapper.SpacePersistenceMapper;
 import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataSpaceRepository;
@@ -14,6 +17,9 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class SpaceRepositoryJpaAdapter
         implements SpaceRepository {
+
+    private static final String ACTIVE_SPACE_NAME_UNIQUE_INDEX =
+            "uq_spaces_name_active";
 
     private final SpringDataSpaceRepository
             springDataSpaceRepository;
@@ -53,11 +59,39 @@ public class SpaceRepositoryJpaAdapter
         SpaceJpaEntity entity =
                 spacePersistenceMapper.toEntity(space);
 
-        SpaceJpaEntity savedEntity =
-                springDataSpaceRepository.save(entity);
+        SpaceJpaEntity savedEntity;
+
+        try {
+            savedEntity = springDataSpaceRepository.saveAndFlush(entity);
+        } catch (DataIntegrityViolationException exception) {
+            if (isActiveSpaceNameUniqueViolation(exception)) {
+                throw new DuplicateSpaceNameException();
+            }
+
+            throw exception;
+        }
 
         return spacePersistenceMapper.toDomain(
                 savedEntity
         );
+    }
+
+    private boolean isActiveSpaceNameUniqueViolation(
+            DataIntegrityViolationException exception
+    ) {
+        Throwable cause = exception;
+
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException violation
+                    && ACTIVE_SPACE_NAME_UNIQUE_INDEX.equals(
+                    violation.getConstraintName()
+            )) {
+                return true;
+            }
+
+            cause = cause.getCause();
+        }
+
+        return false;
     }
 }

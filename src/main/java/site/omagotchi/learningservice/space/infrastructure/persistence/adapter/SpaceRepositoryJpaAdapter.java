@@ -4,9 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.port.out.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
-import site.omagotchi.learningservice.space.domain.exception.DuplicateSpaceNameException;
+import site.omagotchi.learningservice.space.domain.exception.SpaceErrorCode;
 import site.omagotchi.learningservice.space.infrastructure.persistence.entity.SpaceJpaEntity;
 import site.omagotchi.learningservice.space.infrastructure.persistence.mapper.SpacePersistenceMapper;
 import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataSpaceRepository;
@@ -65,7 +66,9 @@ public class SpaceRepositoryJpaAdapter
             savedEntity = springDataSpaceRepository.saveAndFlush(entity);
         } catch (DataIntegrityViolationException exception) {
             if (isActiveSpaceNameUniqueViolation(exception)) {
-                throw new DuplicateSpaceNameException();
+                throw new BusinessException(
+                        SpaceErrorCode.DUPLICATE_NAME
+                );
             }
 
             throw exception;

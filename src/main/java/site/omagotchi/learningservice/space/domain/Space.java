@@ -1,8 +1,8 @@
 package site.omagotchi.learningservice.space.domain;
 
 import lombok.Getter;
-import site.omagotchi.learningservice.space.domain.exception.InvalidSpaceCapacityException;
-import site.omagotchi.learningservice.space.domain.exception.InvalidSpaceNameException;
+import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.space.domain.exception.SpaceErrorCode;
 
 import java.time.ZonedDateTime;
 import java.util.Objects;
@@ -335,13 +335,13 @@ public class Space {
 
     private static String validateName(String name) {
         if (name == null || name.isBlank()) {
-            throw new InvalidSpaceNameException();
+            throw new BusinessException(SpaceErrorCode.INVALID_NAME);
         }
 
         String normalizedName = name.trim();
 
         if (normalizedName.length() > MAX_NAME_LENGTH) {
-            throw new InvalidSpaceNameException();
+            throw new BusinessException(SpaceErrorCode.INVALID_NAME);
         }
 
         return normalizedName;
@@ -349,7 +349,7 @@ public class Space {
 
     private static Integer validateCapacity(Integer capacity) {
         if (capacity == null || capacity <= 0) {
-            throw new InvalidSpaceCapacityException();
+            throw new BusinessException(SpaceErrorCode.INVALID_CAPACITY);
         }
 
         return capacity;

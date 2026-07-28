@@ -10,8 +10,8 @@ import site.omagotchi.learningservice.space.application.port.in.DeleteSpaceUseCa
 import site.omagotchi.learningservice.space.application.port.in.UpdateSpaceUseCase;
 import site.omagotchi.learningservice.space.application.port.out.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
-import site.omagotchi.learningservice.space.domain.exception.DuplicateSpaceNameException;
-import site.omagotchi.learningservice.space.domain.exception.SpaceNotFoundException;
+import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.space.domain.exception.SpaceErrorCode;
 
 import java.time.Clock;
 import java.time.ZonedDateTime;
@@ -38,7 +38,7 @@ public class SpaceCommandService
                 && spaceRepository.existsActiveByName(
                 normalizedName
         )) {
-            throw new DuplicateSpaceNameException();
+            throw new BusinessException(SpaceErrorCode.DUPLICATE_NAME);
         }
 
         Space space = Space.create(
@@ -71,7 +71,7 @@ public class SpaceCommandService
                         );
 
         if (duplicateName) {
-            throw new DuplicateSpaceNameException();
+            throw new BusinessException(SpaceErrorCode.DUPLICATE_NAME);
         }
 
         ZonedDateTime now =
@@ -116,7 +116,9 @@ public class SpaceCommandService
         return spaceRepository
                 .findActiveById(spaceId)
                 .orElseThrow(
-                        SpaceNotFoundException::new
+                        () -> new BusinessException(
+                                SpaceErrorCode.NOT_FOUND
+                        )
                 );
     }
 

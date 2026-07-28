@@ -54,7 +54,7 @@ secrets/
 *.log
 logs/
 tmp/
-out/
+/out/
 hs_err_pid*
 replay_pid*
 .mise.local.toml

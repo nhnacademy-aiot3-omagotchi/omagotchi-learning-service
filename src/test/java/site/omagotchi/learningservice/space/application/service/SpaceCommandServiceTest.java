@@ -1,19 +1,20 @@
 package site.omagotchi.learningservice.space.application.service;
 
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
 import site.omagotchi.learningservice.space.application.port.out.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
 import site.omagotchi.learningservice.space.domain.SpaceType;
-import site.omagotchi.learningservice.space.domain.exception.DuplicateSpaceNameException;
-import site.omagotchi.learningservice.space.domain.exception.SpaceNotFoundException;
+import site.omagotchi.learningservice.space.domain.exception.SpaceErrorCode;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -52,13 +53,51 @@ class SpaceCommandServiceTest {
         when(spaceRepository.existsActiveByName("회의실 A"))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> spaceCommandService.create(
+        assertBusinessError(
+                SpaceErrorCode.DUPLICATE_NAME,
+                () -> spaceCommandService.create(
+                        new CreateSpaceCommand(
+                                " 회의실 A ",
+                                SpaceType.MEETING,
+                                8
+                        )
+                )
+        );
+    }
+
+    @Test
+    void rejectsDuplicateNameDifferingOnlyByCase() {
+        when(spaceRepository.existsActiveByName("회의실 a"))
+                .thenReturn(true);
+
+        assertBusinessError(
+                SpaceErrorCode.DUPLICATE_NAME,
+                () -> spaceCommandService.create(
+                        new CreateSpaceCommand(
+                                "회의실 a",
+                                SpaceType.MEETING,
+                                8
+                        )
+                )
+        );
+    }
+
+    @Test
+    void allowsNameUsedOnlyBySoftDeletedSpace() {
+        when(spaceRepository.existsActiveByName("회의실 A"))
+                .thenReturn(false);
+        when(spaceRepository.save(any(Space.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Space created = spaceCommandService.create(
                 new CreateSpaceCommand(
                         " 회의실 A ",
                         SpaceType.MEETING,
                         8
                 )
-        )).isInstanceOf(DuplicateSpaceNameException.class);
+        );
+
+        assertThat(created.getName()).isEqualTo("회의실 A");
     }
 
     @Test
@@ -68,14 +107,17 @@ class SpaceCommandServiceTest {
         when(spaceRepository.existsActiveByNameAndIdNot("회의실 B", 1L))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> spaceCommandService.update(
-                1L,
-                new UpdateSpaceCommand(
-                        " 회의실 B ",
-                        SpaceType.MEETING,
-                        8
+        assertBusinessError(
+                SpaceErrorCode.DUPLICATE_NAME,
+                () -> spaceCommandService.update(
+                        1L,
+                        new UpdateSpaceCommand(
+                                " 회의실 B ",
+                                SpaceType.MEETING,
+                                8
+                        )
                 )
-        )).isInstanceOf(DuplicateSpaceNameException.class);
+        );
     }
 
     @Test
@@ -83,14 +125,17 @@ class SpaceCommandServiceTest {
         when(spaceRepository.findActiveById(999L))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> spaceCommandService.update(
-                999L,
-                new UpdateSpaceCommand(
-                        "회의실 B",
-                        SpaceType.MEETING,
-                        8
+        assertBusinessError(
+                SpaceErrorCode.NOT_FOUND,
+                () -> spaceCommandService.update(
+                        999L,
+                        new UpdateSpaceCommand(
+                                "회의실 B",
+                                SpaceType.MEETING,
+                                8
+                        )
                 )
-        )).isInstanceOf(SpaceNotFoundException.class);
+        );
     }
 
     @Test
@@ -98,8 +143,10 @@ class SpaceCommandServiceTest {
         when(spaceRepository.findActiveById(999L))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> spaceCommandService.delete(999L))
-                .isInstanceOf(SpaceNotFoundException.class);
+        assertBusinessError(
+                SpaceErrorCode.NOT_FOUND,
+                () -> spaceCommandService.delete(999L)
+        );
     }
 
     @Test
@@ -136,13 +183,13 @@ class SpaceCommandServiceTest {
                 1L,
                 new UpdateSpaceCommand(
                         "회의실 B",
-                        SpaceType.STUDY_ROOM,
+                        SpaceType.STUDY,
                         12
                 )
         );
 
         assertThat(updated.getName()).isEqualTo("회의실 B");
-        assertThat(updated.getType()).isEqualTo(SpaceType.STUDY_ROOM);
+        assertThat(updated.getSpaceType()).isEqualTo(SpaceType.STUDY);
         assertThat(updated.getCapacity()).isEqualTo(12);
         assertThat(updated.getCohortId()).isEqualTo(42L);
     }
@@ -177,5 +224,16 @@ class SpaceCommandServiceTest {
                 now,
                 null
         );
+    }
+
+    private void assertBusinessError(
+            SpaceErrorCode expectedErrorCode,
+            ThrowingCallable action
+    ) {
+        assertThatThrownBy(action)
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(
+                        ((BusinessException) exception).getErrorCode()
+                ).isEqualTo(expectedErrorCode));
     }
 }

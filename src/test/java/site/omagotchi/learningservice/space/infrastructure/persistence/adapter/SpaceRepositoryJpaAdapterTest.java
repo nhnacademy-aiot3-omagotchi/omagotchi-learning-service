@@ -7,8 +7,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.domain.Space;
-import site.omagotchi.learningservice.space.domain.exception.DuplicateSpaceNameException;
+import site.omagotchi.learningservice.space.domain.exception.SpaceErrorCode;
 import site.omagotchi.learningservice.space.infrastructure.persistence.entity.SpaceJpaEntity;
 import site.omagotchi.learningservice.space.infrastructure.persistence.mapper.SpacePersistenceMapper;
 import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataSpaceRepository;
@@ -73,6 +74,9 @@ class SpaceRepositoryJpaAdapterTest {
                 ));
 
         assertThatThrownBy(() -> adapter.save(space))
-                .isInstanceOf(DuplicateSpaceNameException.class);
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(
+                        ((BusinessException) exception).getErrorCode()
+                ).isEqualTo(SpaceErrorCode.DUPLICATE_NAME));
     }
 }

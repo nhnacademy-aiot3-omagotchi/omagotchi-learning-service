@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
 import site.omagotchi.learningservice.space.application.port.in.CreateSpaceUseCase;
@@ -17,7 +18,6 @@ import site.omagotchi.learningservice.space.application.query.SpaceQueryService;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
 import site.omagotchi.learningservice.space.domain.SpaceType;
-import site.omagotchi.learningservice.space.domain.exception.DuplicateSpaceNameException;
 import site.omagotchi.learningservice.space.domain.exception.SpaceErrorCode;
 
 import java.util.Map;
@@ -249,9 +249,9 @@ class LearningServiceApplicationTests {
 		spaceRepository.save(first);
 
 		assertThatThrownBy(() -> spaceRepository.save(duplicate))
-				.isInstanceOf(DuplicateSpaceNameException.class)
+				.isInstanceOf(BusinessException.class)
 				.satisfies(exception -> assertThat(
-						((DuplicateSpaceNameException) exception)
+						((BusinessException) exception)
 								.getErrorCode()
 				).isEqualTo(SpaceErrorCode.DUPLICATE_NAME));
 	}

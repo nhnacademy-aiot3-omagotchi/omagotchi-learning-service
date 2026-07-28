@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.study.application.command;
+package site.omagotchi.learningservice.study.application;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,7 +16,6 @@ import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.util.DateTimeProvider;
-import site.omagotchi.learningservice.study.application.StudyRecordCommandService;
 import site.omagotchi.learningservice.study.application.dto.CreateStudyRecordCommand;
 import site.omagotchi.learningservice.study.application.dto.UpdateStudyRecordCommand;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;

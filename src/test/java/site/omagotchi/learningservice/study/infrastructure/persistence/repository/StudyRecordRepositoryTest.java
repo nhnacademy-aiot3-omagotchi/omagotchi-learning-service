@@ -1,16 +1,18 @@
-package site.omagotchi.learningservice;
+package site.omagotchi.learningservice.study.infrastructure.persistence.repository;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.TestcontainersConfiguration;
+import site.omagotchi.learningservice.global.config.JpaAuditingConfig;
+import site.omagotchi.learningservice.global.config.QueryDslConfig;
 import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -21,12 +23,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, QueryDslConfig.class, JpaAuditingConfig.class})
 @ActiveProfiles("test")
-@SpringBootTest
-@Transactional
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @DisplayName("학습 기록 저장소")
-class StudyRecordRepositoryIT {
+class StudyRecordRepositoryTest {
 
     private static final Long COHORT_MEMBERSHIP_ID = 1L;
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);
@@ -161,30 +163,6 @@ class StudyRecordRepositoryIT {
     }
 
     @Nested
-    @DisplayName("활성 기록 겹침 제약")
-    class ActiveOverlapConstraint {
-
-        @Test
-        @DisplayName("같은 소속의 겹친 기록 저장 거절")
-        void rejectsOverlappingRecordsForSameCohortMembership() {
-            saveRecord(
-                    COHORT_MEMBERSHIP_ID,
-                    "2000-01-01T01:00:00Z",
-                    "2000-01-01T02:00:00Z"
-            );
-
-            assertThrows(
-                    DataIntegrityViolationException.class,
-                    () -> saveRecord(
-                            COHORT_MEMBERSHIP_ID,
-                            "2000-01-01T01:30:00Z",
-                            "2000-01-01T02:30:00Z"
-                    )
-            );
-        }
-    }
-
-    @Nested
     @DisplayName("낙관적 버전")
     class OptimisticVersion {
 
@@ -206,6 +184,30 @@ class StudyRecordRepositoryIT {
             StudyRecord updated = studyRecordRepository.saveAndFlush(studyRecord);
 
             assertEquals(1L, updated.getVersion());
+        }
+    }
+
+    @Nested
+    @DisplayName("활성 기록 겹침 제약")
+    class ActiveOverlapConstraint {
+
+        @Test
+        @DisplayName("같은 소속의 겹친 기록 저장 거절")
+        void rejectsOverlappingRecordsForSameCohortMembership() {
+            saveRecord(
+                    COHORT_MEMBERSHIP_ID,
+                    "2000-01-01T01:00:00Z",
+                    "2000-01-01T02:00:00Z"
+            );
+
+            assertThrows(
+                    DataIntegrityViolationException.class,
+                    () -> saveRecord(
+                            COHORT_MEMBERSHIP_ID,
+                            "2000-01-01T01:30:00Z",
+                            "2000-01-01T02:30:00Z"
+                    )
+            );
         }
     }
 

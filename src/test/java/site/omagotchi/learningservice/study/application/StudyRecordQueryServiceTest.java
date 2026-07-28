@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.study.application.query;
+package site.omagotchi.learningservice.study.application;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -10,7 +10,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.study.application.StudyRecordQueryService;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;

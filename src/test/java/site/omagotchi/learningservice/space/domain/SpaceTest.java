@@ -2,8 +2,6 @@ package site.omagotchi.learningservice.space.domain;
 
 import org.junit.jupiter.api.Test;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.space.domain.exception.InvalidSpaceCapacityException;
-import site.omagotchi.learningservice.space.domain.exception.InvalidSpaceNameException;
 import site.omagotchi.learningservice.space.domain.exception.SpaceErrorCode;
 
 import java.time.ZoneId;
@@ -19,6 +17,23 @@ class SpaceTest {
             ZonedDateTime.of(2026, 7, 24, 9, 0, 0, 0, SEOUL);
     private static final ZonedDateTime UPDATED_AT =
             CREATED_AT.plusHours(1);
+
+    @Test
+    void createsSpaceWithNormalizedNameAndRequestedAttributes() {
+        Space space = Space.create(
+                "  회의실 A  ",
+                SpaceType.MEETING,
+                8,
+                CREATED_AT
+        );
+
+        assertThat(space.getName()).isEqualTo("회의실 A");
+        assertThat(space.getSpaceType()).isEqualTo(SpaceType.MEETING);
+        assertThat(space.getCapacity()).isEqualTo(8);
+        assertThat(space.getCreatedAt()).isEqualTo(CREATED_AT);
+        assertThat(space.isMeetingRoom()).isTrue();
+        assertThat(space.isDeleted()).isFalse();
+    }
 
     @Test
     void createsInactiveSpaceWithoutCohort() {
@@ -60,103 +75,107 @@ class SpaceTest {
     }
 
     @Test
+    void marksSpaceAsDeleted() {
+        Space deleted = spaceWithCohort().delete(UPDATED_AT);
+
+        assertThat(deleted.isDeleted()).isTrue();
+        assertThat(deleted.getDeletedAt()).isEqualTo(UPDATED_AT);
+        assertThat(deleted.isActive()).isFalse();
+        assertThat(deleted.isInactive()).isFalse();
+    }
+
+    @Test
     void rejectsNullNameWithSpaceErrorCode() {
-        InvalidSpaceNameException exception = catchThrowableOfType(
+        BusinessException exception = catchThrowableOfType(
                 () -> Space.create(
                         null,
                         SpaceType.MEETING,
                         8,
                         CREATED_AT
                 ),
-                InvalidSpaceNameException.class
+                BusinessException.class
         );
 
-        assertThat(exception).isInstanceOf(BusinessException.class);
         assertThat(exception.getErrorCode())
                 .isEqualTo(SpaceErrorCode.INVALID_NAME);
     }
 
     @Test
     void rejectsBlankNameWithSpaceErrorCode() {
-        InvalidSpaceNameException exception = catchThrowableOfType(
+        BusinessException exception = catchThrowableOfType(
                 () -> Space.create(
                         "   ",
                         SpaceType.MEETING,
                         8,
                         CREATED_AT
                 ),
-                InvalidSpaceNameException.class
+                BusinessException.class
         );
 
-        assertThat(exception).isInstanceOf(BusinessException.class);
         assertThat(exception.getErrorCode())
                 .isEqualTo(SpaceErrorCode.INVALID_NAME);
     }
 
     @Test
     void rejectsTooLongNameWithSpaceErrorCode() {
-        InvalidSpaceNameException exception = catchThrowableOfType(
+        BusinessException exception = catchThrowableOfType(
                 () -> Space.create(
                         "가".repeat(51),
                         SpaceType.MEETING,
                         8,
                         CREATED_AT
                 ),
-                InvalidSpaceNameException.class
+                BusinessException.class
         );
 
-        assertThat(exception).isInstanceOf(BusinessException.class);
         assertThat(exception.getErrorCode())
                 .isEqualTo(SpaceErrorCode.INVALID_NAME);
     }
 
     @Test
     void rejectsNullCapacityWithSpaceErrorCode() {
-        InvalidSpaceCapacityException exception = catchThrowableOfType(
+        BusinessException exception = catchThrowableOfType(
                 () -> Space.create(
                         "회의실 A",
                         SpaceType.MEETING,
                         null,
                         CREATED_AT
                 ),
-                InvalidSpaceCapacityException.class
+                BusinessException.class
         );
 
-        assertThat(exception).isInstanceOf(BusinessException.class);
         assertThat(exception.getErrorCode())
                 .isEqualTo(SpaceErrorCode.INVALID_CAPACITY);
     }
 
     @Test
     void rejectsZeroCapacityWithSpaceErrorCode() {
-        InvalidSpaceCapacityException exception = catchThrowableOfType(
+        BusinessException exception = catchThrowableOfType(
                 () -> Space.create(
                         "회의실 A",
                         SpaceType.MEETING,
                         0,
                         CREATED_AT
                 ),
-                InvalidSpaceCapacityException.class
+                BusinessException.class
         );
 
-        assertThat(exception).isInstanceOf(BusinessException.class);
         assertThat(exception.getErrorCode())
                 .isEqualTo(SpaceErrorCode.INVALID_CAPACITY);
     }
 
     @Test
     void rejectsNegativeCapacityWithSpaceErrorCode() {
-        InvalidSpaceCapacityException exception = catchThrowableOfType(
+        BusinessException exception = catchThrowableOfType(
                 () -> Space.create(
                         "회의실 A",
                         SpaceType.MEETING,
                         -1,
                         CREATED_AT
                 ),
-                InvalidSpaceCapacityException.class
+                BusinessException.class
         );
 
-        assertThat(exception).isInstanceOf(BusinessException.class);
         assertThat(exception.getErrorCode())
                 .isEqualTo(SpaceErrorCode.INVALID_CAPACITY);
     }

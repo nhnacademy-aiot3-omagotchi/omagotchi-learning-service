@@ -4,15 +4,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.port.in.CreateSpaceUseCase;
 import site.omagotchi.learningservice.space.application.port.in.DeleteSpaceUseCase;
 import site.omagotchi.learningservice.space.application.port.in.UpdateSpaceUseCase;
-import site.omagotchi.learningservice.space.domain.exception.DuplicateSpaceNameException;
-import site.omagotchi.learningservice.space.domain.exception.InvalidSpaceCapacityException;
-import site.omagotchi.learningservice.space.domain.exception.InvalidSpaceNameException;
-import site.omagotchi.learningservice.space.domain.exception.SpaceNotFoundException;
+import site.omagotchi.learningservice.space.domain.exception.SpaceErrorCode;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -52,7 +50,9 @@ class SpaceAdminControllerTest {
     @Test
     void mapsDuplicateSpaceNameToConflictResponse() throws Exception {
         when(createSpaceUseCase.create(any(CreateSpaceCommand.class)))
-                .thenThrow(new DuplicateSpaceNameException());
+                .thenThrow(new BusinessException(
+                        SpaceErrorCode.DUPLICATE_NAME
+                ));
 
         mockMvc.perform(post("/api/admin/spaces")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -67,7 +67,7 @@ class SpaceAdminControllerTest {
 
     @Test
     void mapsSpaceNotFoundToNotFoundResponse() throws Exception {
-        doThrow(new SpaceNotFoundException())
+        doThrow(new BusinessException(SpaceErrorCode.NOT_FOUND))
                 .when(deleteSpaceUseCase)
                 .delete(999L);
 
@@ -84,7 +84,9 @@ class SpaceAdminControllerTest {
     @Test
     void mapsInvalidSpaceNameToBadRequestResponse() throws Exception {
         when(createSpaceUseCase.create(any(CreateSpaceCommand.class)))
-                .thenThrow(new InvalidSpaceNameException());
+                .thenThrow(new BusinessException(
+                        SpaceErrorCode.INVALID_NAME
+                ));
 
         mockMvc.perform(post("/api/admin/spaces")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -100,7 +102,9 @@ class SpaceAdminControllerTest {
     @Test
     void mapsInvalidSpaceCapacityToBadRequestResponse() throws Exception {
         when(createSpaceUseCase.create(any(CreateSpaceCommand.class)))
-                .thenThrow(new InvalidSpaceCapacityException());
+                .thenThrow(new BusinessException(
+                        SpaceErrorCode.INVALID_CAPACITY
+                ));
 
         mockMvc.perform(post("/api/admin/spaces")
                         .contentType(MediaType.APPLICATION_JSON)

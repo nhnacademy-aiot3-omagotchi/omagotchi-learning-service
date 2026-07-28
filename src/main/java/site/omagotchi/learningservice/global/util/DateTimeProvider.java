@@ -22,6 +22,13 @@ public class DateTimeProvider {
     }
 
     /**
+     * 현재 시각이 속한 KST 04:00 기준 집계일을 반환
+     */
+    public LocalDate currentAggregationDate() {
+        return calculateAggregationDate(currentInstant());
+    }
+
+    /**
      * Instant를 서비스 지역 시간으로 변환
      */
     public ZonedDateTime toZonedDateTime(Instant instant) {

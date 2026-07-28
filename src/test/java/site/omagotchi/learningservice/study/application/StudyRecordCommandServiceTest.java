@@ -22,6 +22,7 @@ import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
 
 import java.time.Instant;
@@ -59,6 +60,9 @@ class StudyRecordCommandServiceTest {
 
     @Mock
     private StudyRecordRepository studyRecordRepository;
+
+    @Mock
+    private StudyRecordQueryRepository studyRecordQueryRepository;
 
     @Mock
     private CohortAccessService cohortAccessService;
@@ -104,7 +108,11 @@ class StudyRecordCommandServiceTest {
             );
 
             assertSame(CohortErrorCode.COHORT_NOT_FOUND, exception.getErrorCode());
-            verifyNoInteractions(studyRecordRepository);
+            verifyNoInteractions(
+                    studyRecordRepository,
+                    studyRecordQueryRepository,
+                    studyWriteLock
+            );
         }
 
         @Test
@@ -176,7 +184,7 @@ class StudyRecordCommandServiceTest {
                     END_TIME_TEXT
             );
             given(dateTimeProvider.currentInstant()).willReturn(END_TIME);
-            given(studyRecordRepository.existsActiveOverlap(
+            given(studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     START_TIME,
                     END_TIME,
@@ -357,7 +365,10 @@ class StudyRecordCommandServiceTest {
                     "1400",
                     0L
             );
-            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(studyRecordId, COHORT_MEMBERSHIP_ID)).willReturn(Optional.of(entity));
+            given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
+                    studyRecordId,
+                    COHORT_MEMBERSHIP_ID
+            )).willReturn(Optional.of(entity));
             given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
             given(dateTimeProvider.calculateAggregationDate(updatedStartTime)).willReturn(BASE_DATE);
             given(studyRecordRepository.saveAndFlush(entity)).willReturn(entity);
@@ -392,7 +403,7 @@ class StudyRecordCommandServiceTest {
                     START_TIME_TEXT,
                     0L
             );
-            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(
+            given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
                     studyRecordId,
                     COHORT_MEMBERSHIP_ID
             )).willReturn(Optional.of(entity));
@@ -425,12 +436,12 @@ class StudyRecordCommandServiceTest {
                     "1400",
                     0L
             );
-            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(
+            given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
                     studyRecordId,
                     COHORT_MEMBERSHIP_ID
             )).willReturn(Optional.of(entity));
             given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
-            given(studyRecordRepository.existsActiveOverlap(
+            given(studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     updatedStartTime,
                     updatedEndTime,
@@ -467,7 +478,7 @@ class StudyRecordCommandServiceTest {
                     "1400",
                     1L
             );
-            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(
+            given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
                     studyRecordId,
                     COHORT_MEMBERSHIP_ID
             )).willReturn(Optional.of(entity));
@@ -504,7 +515,7 @@ class StudyRecordCommandServiceTest {
                     "0401",
                     0L
             );
-            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(
+            given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
                     studyRecordId,
                     COHORT_MEMBERSHIP_ID
             )).willReturn(Optional.of(entity));
@@ -548,7 +559,7 @@ class StudyRecordCommandServiceTest {
                     "1400",
                     0L
             );
-            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(
+            given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
                     studyRecordId,
                     COHORT_MEMBERSHIP_ID
             )).willReturn(Optional.of(entity));
@@ -582,7 +593,10 @@ class StudyRecordCommandServiceTest {
                     END_TIME_TEXT,
                     0L
             );
-            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(studyRecordId, COHORT_MEMBERSHIP_ID)).willReturn(Optional.empty());
+            given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
+                    studyRecordId,
+                    COHORT_MEMBERSHIP_ID
+            )).willReturn(Optional.empty());
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
@@ -610,7 +624,10 @@ class StudyRecordCommandServiceTest {
             UUID studyRecordId = UUID.randomUUID();
             StudyRecord entity = createEntity(START_TIME, END_TIME);
             Instant deletedAt = Instant.parse("2000-01-02T01:30:00Z");
-            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(studyRecordId, COHORT_MEMBERSHIP_ID)).willReturn(Optional.of(entity));
+            given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
+                    studyRecordId,
+                    COHORT_MEMBERSHIP_ID
+            )).willReturn(Optional.of(entity));
             given(dateTimeProvider.currentInstant()).willReturn(deletedAt);
 
             studyRecordCommandService.delete(
@@ -631,7 +648,7 @@ class StudyRecordCommandServiceTest {
         void throwsVersionConflictWhenDeletingWithStaleVersion() {
             UUID studyRecordId = UUID.randomUUID();
             StudyRecord entity = createEntity(START_TIME, END_TIME);
-            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(
+            given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
                     studyRecordId,
                     COHORT_MEMBERSHIP_ID
             )).willReturn(Optional.of(entity));
@@ -658,7 +675,10 @@ class StudyRecordCommandServiceTest {
         @DisplayName("대상 없음 예외")
         void throwsNotFoundWhenDeletingNonExistentRecord() {
             UUID studyRecordId = UUID.randomUUID();
-            given(studyRecordRepository.findActiveByIdAndCohortMembershipId(studyRecordId, COHORT_MEMBERSHIP_ID)).willReturn(Optional.empty());
+            given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
+                    studyRecordId,
+                    COHORT_MEMBERSHIP_ID
+            )).willReturn(Optional.empty());
 
             BusinessException exception = assertThrows(
                     BusinessException.class,

@@ -15,6 +15,7 @@ import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
 
 import java.time.Duration;
@@ -30,6 +31,7 @@ public class StudyRecordCommandService {
 
     private final CohortAccessService cohortAccessService;
     private final StudyRecordRepository studyRecordRepository;
+    private final StudyRecordQueryRepository studyRecordQueryRepository;
     private final DateTimeProvider dateTimeProvider;
     private final StudyWriteLock studyWriteLock;
 
@@ -96,7 +98,7 @@ public class StudyRecordCommandService {
         studyWriteLock.acquire(cohortMembershipId);
 
         // 인증된 소속이 소유한 활성 기록만 수정 대상으로 조회
-        StudyRecord entity = studyRecordRepository
+        StudyRecord entity = studyRecordQueryRepository
                 .findActiveByIdAndCohortMembershipId(studyRecordId, cohortMembershipId)
                 .orElseThrow(() -> new BusinessException(StudyRecordErrorCode.NOT_FOUND));
 
@@ -145,7 +147,7 @@ public class StudyRecordCommandService {
         studyWriteLock.acquire(cohortMembershipId);
 
         // 인증된 소속이 소유한 활성 기록만 삭제 대상으로 조회
-        StudyRecord entity = studyRecordRepository
+        StudyRecord entity = studyRecordQueryRepository
                 .findActiveByIdAndCohortMembershipId(studyRecordId, cohortMembershipId)
                 .orElseThrow(() -> new BusinessException(StudyRecordErrorCode.NOT_FOUND));
 
@@ -178,7 +180,7 @@ public class StudyRecordCommandService {
             Instant endInstant,
             UUID excludedStudyRecordId
     ) {
-        boolean overlaps = studyRecordRepository.existsActiveOverlap(
+        boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
                 cohortMembershipId,
                 startInstant,
                 endInstant,

@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.study.infrastructure.persistence.repository;
+package site.omagotchi.learningservice;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -9,10 +9,11 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
-import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.global.config.JpaAuditingConfig;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
 import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryRepository;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -23,18 +24,26 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Import({TestcontainersConfiguration.class, QueryDslConfig.class, JpaAuditingConfig.class})
+@Import({
+        TestcontainersConfiguration.class,
+        QueryDslConfig.class,
+        JpaAuditingConfig.class,
+        StudyRecordQueryRepository.class
+})
 @ActiveProfiles("test")
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @DisplayName("학습 기록 저장소")
-class StudyRecordRepositoryTest {
+class StudyRecordRepositoryIT {
 
     private static final Long COHORT_MEMBERSHIP_ID = 1L;
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);
 
     @Autowired
     private StudyRecordRepository studyRecordRepository;
+
+    @Autowired
+    private StudyRecordQueryRepository studyRecordQueryRepository;
 
     @Nested
     @DisplayName("활성 기록 겹침 조회")
@@ -49,7 +58,7 @@ class StudyRecordRepositoryTest {
                     "2000-01-01T02:00:00Z"
             );
 
-            boolean overlaps = studyRecordRepository.existsActiveOverlap(
+            boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     Instant.parse("2000-01-01T01:30:00Z"),
                     Instant.parse("2000-01-01T02:30:00Z"),
@@ -68,7 +77,7 @@ class StudyRecordRepositoryTest {
                     "2000-01-01T02:00:00Z"
             );
 
-            boolean overlaps = studyRecordRepository.existsActiveOverlap(
+            boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     Instant.parse("2000-01-01T02:00:00Z"),
                     Instant.parse("2000-01-01T03:00:00Z"),
@@ -89,7 +98,7 @@ class StudyRecordRepositoryTest {
             studyRecord.applySoftDelete(Instant.parse("2000-01-02T00:00:00Z"));
             studyRecordRepository.saveAndFlush(studyRecord);
 
-            boolean overlaps = studyRecordRepository.existsActiveOverlap(
+            boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     Instant.parse("2000-01-01T01:30:00Z"),
                     Instant.parse("2000-01-01T02:30:00Z"),
@@ -108,7 +117,7 @@ class StudyRecordRepositoryTest {
                     "2000-01-01T02:00:00Z"
             );
 
-            boolean overlaps = studyRecordRepository.existsActiveOverlap(
+            boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     Instant.parse("2000-01-01T01:30:00Z"),
                     Instant.parse("2000-01-01T02:30:00Z"),
@@ -127,7 +136,7 @@ class StudyRecordRepositoryTest {
                     "2000-01-01T02:00:00Z"
             );
 
-            boolean overlaps = studyRecordRepository.existsActiveOverlap(
+            boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     Instant.parse("2000-01-01T01:00:00Z"),
                     Instant.parse("2000-01-01T02:00:00Z"),
@@ -151,7 +160,7 @@ class StudyRecordRepositoryTest {
                     "2000-01-01T04:00:00Z"
             );
 
-            boolean overlaps = studyRecordRepository.existsActiveOverlap(
+            boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     Instant.parse("2000-01-01T03:30:00Z"),
                     Instant.parse("2000-01-01T04:30:00Z"),

@@ -1,6 +1,6 @@
 package site.omagotchi.learningservice.study.infrastructure.persistence.repository;
 
-import site.omagotchi.learningservice.study.domain.entity.StudyRecordEntity;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -21,7 +21,7 @@ public interface StudyRecordRepositoryCustom {
      * @param cohortMembershipId 기수 소속 식별자
      * @return 조건을 만족하는 활성 기록, 없으면 {@link Optional#empty()}
      */
-    Optional<StudyRecordEntity> findActiveByIdAndCohortMembershipId(
+    Optional<StudyRecord> findActiveByIdAndCohortMembershipId(
             UUID studyRecordId,
             Long cohortMembershipId
     );

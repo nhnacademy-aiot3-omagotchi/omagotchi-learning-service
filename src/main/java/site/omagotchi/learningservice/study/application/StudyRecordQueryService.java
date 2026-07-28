@@ -7,7 +7,7 @@ import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
-import site.omagotchi.learningservice.study.domain.entity.StudyRecordEntity;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
 
 import java.util.UUID;
@@ -27,7 +27,7 @@ public class StudyRecordQueryService {
     ) {
         Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
 
-        StudyRecordEntity entity = studyRecordRepository
+        StudyRecord entity = studyRecordRepository
                 .findActiveByIdAndCohortMembershipId(studyRecordId, cohortMembershipId)
                 .orElseThrow(() -> new BusinessException(StudyRecordErrorCode.NOT_FOUND));
 

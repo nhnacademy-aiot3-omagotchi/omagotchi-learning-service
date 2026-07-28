@@ -13,8 +13,8 @@ import site.omagotchi.learningservice.study.application.dto.CreateStudyRecordCom
 import site.omagotchi.learningservice.study.application.dto.UpdateStudyRecordCommand;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
-import site.omagotchi.learningservice.study.domain.entity.StudyRecordEntity;
 import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
 
 import java.time.Duration;
@@ -67,7 +67,7 @@ public class StudyRecordCommandService {
         long studySeconds = Duration.between(startInstant, endInstant).getSeconds();
         LocalDate aggregationDate = dateTimeProvider.calculateAggregationDate(startInstant);
 
-        StudyRecordEntity entity = StudyRecordEntity.builder()
+        StudyRecord entity = StudyRecord.builder()
                 .cohortMembershipId(cohortMembershipId)
                 .aggregationDate(aggregationDate)
                 .startTime(startInstant)
@@ -75,7 +75,7 @@ public class StudyRecordCommandService {
                 .studySeconds(studySeconds)
                 .build();
 
-        StudyRecordEntity saved = studyRecordRepository.save(entity);
+        StudyRecord saved = studyRecordRepository.save(entity);
 
         return StudyRecordResult.from(saved);
     }
@@ -96,7 +96,7 @@ public class StudyRecordCommandService {
         studyWriteLock.acquire(cohortMembershipId);
 
         // 인증된 소속이 소유한 활성 기록만 수정 대상으로 조회
-        StudyRecordEntity entity = studyRecordRepository
+        StudyRecord entity = studyRecordRepository
                 .findActiveByIdAndCohortMembershipId(studyRecordId, cohortMembershipId)
                 .orElseThrow(() -> new BusinessException(StudyRecordErrorCode.NOT_FOUND));
 
@@ -124,7 +124,7 @@ public class StudyRecordCommandService {
         LocalDate aggregationDate = dateTimeProvider.calculateAggregationDate(startInstant);
 
         entity.applyUpdate(aggregationDate, startInstant, endInstant, studySeconds);
-        StudyRecordEntity saved = saveWithOptimisticLock(entity);
+        StudyRecord saved = saveWithOptimisticLock(entity);
 
         return StudyRecordResult.from(saved);
     }
@@ -145,7 +145,7 @@ public class StudyRecordCommandService {
         studyWriteLock.acquire(cohortMembershipId);
 
         // 인증된 소속이 소유한 활성 기록만 삭제 대상으로 조회
-        StudyRecordEntity entity = studyRecordRepository
+        StudyRecord entity = studyRecordRepository
                 .findActiveByIdAndCohortMembershipId(studyRecordId, cohortMembershipId)
                 .orElseThrow(() -> new BusinessException(StudyRecordErrorCode.NOT_FOUND));
 
@@ -191,7 +191,7 @@ public class StudyRecordCommandService {
     }
 
     private void validateExpectedVersion(
-            StudyRecordEntity entity,
+            StudyRecord entity,
             Long expectedVersion
     ) {
         if (!Objects.equals(entity.getVersion(), expectedVersion)) {
@@ -209,7 +209,7 @@ public class StudyRecordCommandService {
         }
     }
 
-    private StudyRecordEntity saveWithOptimisticLock(StudyRecordEntity entity) {
+    private StudyRecord saveWithOptimisticLock(StudyRecord entity) {
         try {
             // flush 시점에 @Version을 WHERE 조건으로 검증하고 성공한 변경만 version을 증가시킨다.
             return studyRecordRepository.saveAndFlush(entity);

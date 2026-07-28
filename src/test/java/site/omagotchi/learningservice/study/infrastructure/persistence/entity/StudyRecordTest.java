@@ -2,7 +2,7 @@ package site.omagotchi.learningservice.study.infrastructure.persistence.entity;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import site.omagotchi.learningservice.study.domain.entity.StudyRecordEntity;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @DisplayName("study_records Entity")
-class StudyRecordEntityTest {
+class StudyRecordTest {
 
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);
     private static final Instant START_TIME = Instant.parse("2000-01-01T01:00:00Z");
@@ -21,7 +21,7 @@ class StudyRecordEntityTest {
     @Test
     @DisplayName("시간 및 집계일 갱신")
     void testApplyUpdate() {
-        StudyRecordEntity entity = createEntity();
+        StudyRecord entity = createEntity();
         LocalDate aggregationDate = LocalDate.of(2000, Month.JANUARY, 2);
         Instant startTime = Instant.parse("2000-01-02T01:00:00Z");
         Instant endTime = Instant.parse("2000-01-02T03:00:00Z");
@@ -39,7 +39,7 @@ class StudyRecordEntityTest {
     @Test
     @DisplayName("논리 삭제 처리")
     void testSoftDelete() {
-        StudyRecordEntity entity = createEntity();
+        StudyRecord entity = createEntity();
         Instant deletedAt = Instant.parse("2000-01-01T03:00:00Z");
 
         entity.applySoftDelete(deletedAt);
@@ -47,8 +47,8 @@ class StudyRecordEntityTest {
         assertEquals(deletedAt, entity.getDeletedAt());
     }
 
-    private StudyRecordEntity createEntity() {
-        return StudyRecordEntity.builder()
+    private StudyRecord createEntity() {
+        return StudyRecord.builder()
                 .cohortMembershipId(1L)
                 .aggregationDate(BASE_DATE)
                 .startTime(START_TIME)

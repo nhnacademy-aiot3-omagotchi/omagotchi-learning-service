@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.study.domain.entity.StudyRecordEntity;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
 
 import java.time.Instant;
@@ -79,7 +79,7 @@ class StudyRecordRepositoryIT {
         @Test
         @DisplayName("삭제 기록 제외")
         void excludesDeletedRecord() {
-            StudyRecordEntity studyRecord = saveRecord(
+            StudyRecord studyRecord = saveRecord(
                     COHORT_MEMBERSHIP_ID,
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
@@ -119,7 +119,7 @@ class StudyRecordRepositoryIT {
         @Test
         @DisplayName("수정 대상 자신 제외")
         void excludesUpdatedRecordItself() {
-            StudyRecordEntity studyRecord = saveRecord(
+            StudyRecord studyRecord = saveRecord(
                     COHORT_MEMBERSHIP_ID,
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
@@ -138,7 +138,7 @@ class StudyRecordRepositoryIT {
         @Test
         @DisplayName("수정 대상 외 다른 겹침 기록 조회")
         void findsOtherOverlappingRecordAfterExclusion() {
-            StudyRecordEntity updatedRecord = saveRecord(
+            StudyRecord updatedRecord = saveRecord(
                     COHORT_MEMBERSHIP_ID,
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
@@ -191,7 +191,7 @@ class StudyRecordRepositoryIT {
         @Test
         @DisplayName("변경 성공 시 버전 증가")
         void incrementsVersionAfterSuccessfulUpdate() {
-            StudyRecordEntity studyRecord = saveRecord(
+            StudyRecord studyRecord = saveRecord(
                     COHORT_MEMBERSHIP_ID,
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
@@ -203,20 +203,20 @@ class StudyRecordRepositoryIT {
                     3_600L
             );
 
-            StudyRecordEntity updated = studyRecordRepository.saveAndFlush(studyRecord);
+            StudyRecord updated = studyRecordRepository.saveAndFlush(studyRecord);
 
             assertEquals(1L, updated.getVersion());
         }
     }
 
-    private StudyRecordEntity saveRecord(
+    private StudyRecord saveRecord(
             Long cohortMembershipId,
             String startTime,
             String endTime
     ) {
         Instant startInstant = Instant.parse(startTime);
         Instant endInstant = Instant.parse(endTime);
-        StudyRecordEntity studyRecord = StudyRecordEntity.builder()
+        StudyRecord studyRecord = StudyRecord.builder()
                 .cohortMembershipId(cohortMembershipId)
                 .aggregationDate(BASE_DATE)
                 .startTime(startInstant)

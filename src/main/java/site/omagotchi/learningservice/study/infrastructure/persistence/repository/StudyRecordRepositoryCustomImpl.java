@@ -3,7 +3,7 @@ package site.omagotchi.learningservice.study.infrastructure.persistence.reposito
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
-import site.omagotchi.learningservice.study.domain.entity.StudyRecordEntity;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -26,11 +26,11 @@ public class StudyRecordRepositoryCustomImpl implements StudyRecordRepositoryCus
      *   AND sr.deleted_at IS NULL;
      */
     @Override
-    public Optional<StudyRecordEntity> findActiveByIdAndCohortMembershipId(
+    public Optional<StudyRecord> findActiveByIdAndCohortMembershipId(
             UUID studyRecordId,
             Long cohortMembershipId
     ) {
-        StudyRecordEntity studyRecord = queryFactory
+        StudyRecord studyRecord = queryFactory
                 .selectFrom(studyRecordEntity)
                 .where(
                         studyRecordEntity.id.eq(studyRecordId),
@@ -102,6 +102,8 @@ public class StudyRecordRepositoryCustomImpl implements StudyRecordRepositoryCus
 
         return result != null;
     }
+
+    // ===== Private Methods =====
 
     /**
      * 모든 복합 조회에 공통으로 적용하는 소속 및 활성 기록 조건이다.

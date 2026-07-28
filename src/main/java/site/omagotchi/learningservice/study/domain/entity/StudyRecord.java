@@ -18,7 +18,7 @@ import java.util.UUID;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)
-public class StudyRecordEntity {
+public class StudyRecord {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -55,7 +55,7 @@ public class StudyRecordEntity {
     private Instant updatedAt;
 
     @Builder
-    public StudyRecordEntity(
+    public StudyRecord(
             Long cohortMembershipId,
             LocalDate aggregationDate,
             Instant startTime,

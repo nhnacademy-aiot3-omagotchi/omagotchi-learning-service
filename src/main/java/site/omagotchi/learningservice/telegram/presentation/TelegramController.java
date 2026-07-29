@@ -2,7 +2,7 @@ package site.omagotchi.learningservice.telegram.presentation;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,34 +19,35 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/telegram")
+@RequestMapping("/api/v1/telegram-links")
 public class TelegramController {
 
     private final TelegramUserLinkService telegramUserLinkService;
 
-    @PostMapping("/link-token")
+    @PostMapping("/link-tokens")
     public TelegramLinkTokenResponse issueLinkToken(
             @RequestHeader("X-User-Id") UUID userId
     ) {
         return telegramUserLinkService.issueLinkToken(userId);
     }
 
-    @GetMapping("/link")
+    @GetMapping("/me")
     public TelegramUserLinkResponse getMyLink(
             @RequestHeader("X-User-Id") UUID userId
     ) {
         return telegramUserLinkService.getMyLink(userId);
     }
 
-    @PatchMapping("/link/notification")
-    public TelegramUserLinkResponse updateNotification(
+    @PatchMapping("/notifications")
+    public ResponseEntity<Void> updateNotification(
             @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody UpdateTelegramNotificationRequest request
     ) {
-        return telegramUserLinkService.updateNotification(userId, request.toCommand());
+        telegramUserLinkService.updateNotification(userId, request.toCommand());
+        return ResponseEntity.noContent().build();
     }
 
-    @DeleteMapping("/link")
+    @PostMapping("/disconnect")
     public TelegramUserLinkResponse disconnect(
             @RequestHeader("X-User-Id") UUID userId
     ) {

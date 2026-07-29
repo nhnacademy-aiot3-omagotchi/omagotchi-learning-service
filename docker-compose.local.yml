@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:18.1
+    container_name: learning-service-postgres
+    environment:
+      POSTGRES_DB: learning_service
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      TZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - learning-service-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d learning_service"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  learning-service-postgres-data:

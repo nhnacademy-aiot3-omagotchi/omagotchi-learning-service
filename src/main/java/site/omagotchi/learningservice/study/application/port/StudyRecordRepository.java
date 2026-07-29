@@ -4,5 +4,6 @@ import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 
 public interface StudyRecordRepository {
     StudyRecord save(StudyRecord studyRecord);
+
     StudyRecord saveWithVersionCheck(StudyRecord studyRecord);
 }

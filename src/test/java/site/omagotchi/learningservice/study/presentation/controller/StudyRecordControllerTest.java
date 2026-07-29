@@ -27,11 +27,7 @@ import site.omagotchi.learningservice.study.presentation.request.CreateStudyReco
 import site.omagotchi.learningservice.study.presentation.request.UpdateStudyRecordRequest;
 import site.omagotchi.learningservice.study.presentation.response.StudyRecordResponse;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.Month;
-import java.time.YearMonth;
+import java.time.*;
 import java.util.List;
 import java.util.UUID;
 

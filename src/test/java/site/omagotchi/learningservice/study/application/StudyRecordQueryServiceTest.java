@@ -19,20 +19,14 @@ import site.omagotchi.learningservice.study.application.result.StudyRecordResult
 import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.Month;
-import java.time.YearMonth;
+import java.time.*;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.*;
 
 @DisplayName("학습 기록 조회")
 @ExtendWith(MockitoExtension.class)

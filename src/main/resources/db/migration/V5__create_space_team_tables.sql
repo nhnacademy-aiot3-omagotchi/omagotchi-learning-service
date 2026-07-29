@@ -15,7 +15,7 @@ BEGIN
         WHERE c.conrelid = 'learning_service.cohort_memberships'::regclass
           AND c.contype IN ('p', 'u')
           AND (
-              SELECT array_agg(a.attname ORDER BY a.attname)
+              SELECT array_agg(a.attname::text ORDER BY a.attname)
               FROM unnest(c.conkey) AS k
               JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k
           ) = ARRAY['id', 'user_id']

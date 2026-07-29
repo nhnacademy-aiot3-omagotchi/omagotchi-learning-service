@@ -21,13 +21,30 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
             select count(t) > 0
               from Team t
              where t.cohortId = :cohortId
-               and lower(t.name) = lower(:name)
+               and lower(trim(t.name)) = lower(trim(:name))
                and t.deletedAt is null
             """)
     boolean existsActiveByCohortIdAndName(
             @Param("cohortId") Long cohortId,
             @Param("name") String name
     );
+
+    /**
+     * 팀의 기수만 스칼라로 읽는다.
+     *
+     * 엔티티가 아니라 값 하나만 뽑는 것이 이 쿼리의 존재 이유다.
+     * Team을 엔티티로 먼저 읽으면 1차 캐시에 올라가고, 뒤이은 findByIdForUpdate가
+     * SELECT ... FOR UPDATE를 실제로 실행해도 Hibernate는 캐시의 인스턴스를 그대로
+     * 돌려준다(재조회 결과로 필드를 덮어쓰지 않는다). 그러면 락 획득 후 deleted_at
+     * 재확인이 락 이전 스냅샷을 보게 되어 해체 레이스 방어가 무력화된다.
+     */
+    @Query("""
+            select t.cohortId
+              from Team t
+             where t.id = :id
+               and t.deletedAt is null
+            """)
+    Optional<Long> findActiveCohortId(@Param("id") Long id);
 
     /**
      * 팀 행 배타 락. 정원 카운트(GR-17)와 해체 레이스 방어의 유일한 수단이다.

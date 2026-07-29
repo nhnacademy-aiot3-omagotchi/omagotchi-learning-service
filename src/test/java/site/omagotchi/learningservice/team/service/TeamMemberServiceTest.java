@@ -100,7 +100,7 @@ class TeamMemberServiceTest {
         UUID targetUserId = UUID.randomUUID();
         TeamMembership targetMembership = new TeamMembership(20L, 1L, targetUserId);
 
-        given(accessSupport.loadActiveTeam(1L)).willReturn(team);
+        given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.ACTIVE);
@@ -121,7 +121,7 @@ class TeamMemberServiceTest {
     void test4() {
         UUID targetUserId = UUID.randomUUID();
 
-        given(accessSupport.loadActiveTeam(1L)).willReturn(team);
+        given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.ACTIVE);
@@ -138,7 +138,7 @@ class TeamMemberServiceTest {
     void test5() {
         UUID targetUserId = UUID.randomUUID();
 
-        given(accessSupport.loadActiveTeam(1L)).willReturn(team);
+        given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.WITHDRAWN);
@@ -154,7 +154,7 @@ class TeamMemberServiceTest {
     void test6() {
         UUID targetUserId = UUID.randomUUID();
 
-        given(accessSupport.loadActiveTeam(1L)).willReturn(team);
+        given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.NOT_FOUND);
@@ -171,7 +171,7 @@ class TeamMemberServiceTest {
         UUID targetUserId = UUID.randomUUID();
         TeamMembership targetMembership = new TeamMembership(20L, 1L, targetUserId);
 
-        given(accessSupport.loadActiveTeam(1L)).willReturn(team);
+        given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.ACTIVE);

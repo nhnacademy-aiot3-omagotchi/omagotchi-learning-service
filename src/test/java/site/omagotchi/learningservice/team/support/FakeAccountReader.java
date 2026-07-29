@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.team.infrastructure;
+package site.omagotchi.learningservice.team.support;
 
 import site.omagotchi.learningservice.team.application.AccountReader;
 

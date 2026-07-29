@@ -47,7 +47,14 @@ public class TeamTestFixture {
      * (명세 05 v3: 팀 생성·가입에 역할 제한 없음).
      */
     public Member createActiveMember(Long cohortId) {
-        UUID userId = UUID.randomUUID();
+        return createActiveMember(cohortId, UUID.randomUUID());
+    }
+
+    /**
+     * 같은 계정에 여러 기수의 멤버십을 붙일 때 쓴다.
+     * 다기수 담당 매니저·멘토가 기수별로 팀에 하나씩 소속되는 시나리오(GR-18)의 전제다.
+     */
+    public Member createActiveMember(Long cohortId, UUID userId) {
         CohortMembership membership = CohortMembership.activeManager(
                 cohortId, userId, UUID.randomUUID()
         );

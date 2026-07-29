@@ -35,8 +35,8 @@ public class Space {
     /**
      * 공간의 비활성 사유.
      *
-     * 비활성 사유 필수 여부가 아직 확정되지 않았으므로
-     * null을 허용한다.
+     * 생성 직후의 비활성 공간은 사유가 없을 수 있지만,
+     * 명시적인 비활성화 요청에는 사유가 필수다.
      */
     private final String inactiveReason;
 
@@ -60,10 +60,7 @@ public class Space {
         this.cohortId = cohortId;
         this.name = validateName(name);
 
-        this.spaceType = Objects.requireNonNull(
-                spaceType,
-                "공간 유형은 필수입니다."
-        );
+        this.spaceType = validateType(spaceType);
 
         this.capacity = validateCapacity(capacity);
 
@@ -162,6 +159,8 @@ public class Space {
             String newName,
             ZonedDateTime updatedAt
     ) {
+        ensureNotDeleted();
+
         return new Space(
                 id,
                 cohortId,
@@ -179,13 +178,27 @@ public class Space {
     /**
      * 공간 유형을 변경한 새로운 객체를 반환한다.
      *
-     * 비활성 상태 여부와 실습실 활성 배정 존재 여부는
-     * 추후 Application 계층에서 검증한다.
+     * 실제 유형 변경은 비활성 공간에서만 가능하며,
+     * 기수에 배정된 실습실은 유형을 변경할 수 없다.
      */
     public Space changeType(
             SpaceType newType,
             ZonedDateTime updatedAt
     ) {
+        ensureNotDeleted();
+
+        if (spaceType != newType && isActive()) {
+            throw new BusinessException(
+                    SpaceErrorCode.ACTIVE_TYPE_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        if (spaceType != newType && isAssignedLab()) {
+            throw new BusinessException(
+                    SpaceErrorCode.ASSIGNED_LAB_TYPE_CHANGE_NOT_ALLOWED
+            );
+        }
+
         return new Space(
                 id,
                 cohortId,
@@ -203,13 +216,23 @@ public class Space {
     /**
      * 공간 최대 인원을 변경한 새로운 객체를 반환한다.
      *
-     * 정원 축소 시 비활성 상태인지에 대한 검증은
-     * 추후 Application 계층에서 수행한다.
+     * 활성 공간은 정원을 늘리거나 유지할 수 있지만
+     * 축소할 수 없다.
      */
     public Space changeCapacity(
             Integer newCapacity,
             ZonedDateTime updatedAt
     ) {
+        ensureNotDeleted();
+
+        if (newCapacity != null
+                && newCapacity < capacity
+                && isActive()) {
+            throw new BusinessException(
+                    SpaceErrorCode.ACTIVE_CAPACITY_REDUCTION_NOT_ALLOWED
+            );
+        }
+
         return new Space(
                 id,
                 cohortId,
@@ -230,8 +253,10 @@ public class Space {
      * 활성화되면 기존 비활성 사유는 제거한다.
      */
     public Space activate(ZonedDateTime updatedAt) {
+        ensureNotDeleted();
+
         if (isActive()) {
-            return this;
+            throw new BusinessException(SpaceErrorCode.ALREADY_ACTIVE);
         }
 
         return new Space(
@@ -251,13 +276,25 @@ public class Space {
     /**
      * 공간을 비활성화한 새로운 객체를 반환한다.
      *
-     * 활성 점유 또는 재실자 존재 여부는
-     * 추후 Application 계층에서 검증한다.
+     * 활성 점유 여부처럼 외부 조회가 필요한 조건은
+     * Application 계층에서 검증한다.
      */
     public Space deactivate(
             String reason,
             ZonedDateTime updatedAt
     ) {
+        ensureNotDeleted();
+
+        if (isInactive()) {
+            throw new BusinessException(SpaceErrorCode.ALREADY_INACTIVE);
+        }
+
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException(
+                    SpaceErrorCode.INVALID_INACTIVE_REASON
+            );
+        }
+
         return new Space(
                 id,
                 cohortId,
@@ -275,13 +312,31 @@ public class Space {
     /**
      * 공간을 소프트 삭제한 새로운 객체를 반환한다.
      *
-     * 삭제는 비활성 상태에서만 가능하며,
-     * 비활성 상태 검증과 활성 실습실 배정 검증은
-     * 추후 Application 계층에서 수행한다.
+     * 삭제는 비활성 상태에서만 가능하며 기수에 배정된
+     * 실습실은 삭제할 수 없다. 활성 점유 여부는
+     * Application 계층에서 검증한다.
      */
     public Space delete(ZonedDateTime deletedAt) {
         if (isDeleted()) {
-            return this;
+            throw new BusinessException(SpaceErrorCode.DELETED_SPACE);
+        }
+
+        if (isActive()) {
+            throw new BusinessException(
+                    SpaceErrorCode.ACTIVE_SPACE_DELETE_NOT_ALLOWED
+            );
+        }
+
+        if (cohortId == null) {
+            throw new BusinessException(
+                    SpaceErrorCode.UNMANAGED_SPACE_DELETE_NOT_ALLOWED
+            );
+        }
+
+        if (isAssignedLab()) {
+            throw new BusinessException(
+                    SpaceErrorCode.ASSIGNED_LAB_DELETE_NOT_ALLOWED
+            );
         }
 
         ZonedDateTime deletionTime = Objects.requireNonNull(
@@ -333,6 +388,16 @@ public class Space {
         return spaceType == SpaceType.MEETING;
     }
 
+    public boolean isAssignedLab() {
+        return spaceType == SpaceType.LAB && cohortId != null;
+    }
+
+    private void ensureNotDeleted() {
+        if (isDeleted()) {
+            throw new BusinessException(SpaceErrorCode.DELETED_SPACE);
+        }
+    }
+
     private static String validateName(String name) {
         if (name == null || name.isBlank()) {
             throw new BusinessException(SpaceErrorCode.INVALID_NAME);
@@ -353,6 +418,14 @@ public class Space {
         }
 
         return capacity;
+    }
+
+    private static SpaceType validateType(SpaceType spaceType) {
+        if (spaceType == null) {
+            throw new BusinessException(SpaceErrorCode.INVALID_TYPE);
+        }
+
+        return spaceType;
     }
 
     /**

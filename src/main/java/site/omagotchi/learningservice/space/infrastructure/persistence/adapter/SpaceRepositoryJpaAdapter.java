@@ -47,11 +47,11 @@ public class SpaceRepositoryJpaAdapter
     }
 
     @Override
-    public Optional<Space> findActiveById(
+    public Optional<Space> findById(
             Long spaceId
     ) {
         return springDataSpaceRepository
-                .findByIdAndDeletedAtIsNull(spaceId)
+                .findById(spaceId)
                 .map(spacePersistenceMapper::toDomain);
     }
 

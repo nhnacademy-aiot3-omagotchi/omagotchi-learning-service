@@ -13,7 +13,7 @@ public interface SpaceRepository {
             Long spaceId
     );
 
-    Optional<Space> findActiveById(Long spaceId);
+    Optional<Space> findById(Long spaceId);
 
     Space save(Space space);
 }

@@ -8,8 +8,22 @@ import site.omagotchi.learningservice.team.domain.Team;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * {@code teams} 접근.
+ *
+ * <p>팀은 소프트 삭제이므로 "행이 있다"와 "살아 있다"가 다르다. 조회 메서드에
+ * {@code DeletedAtIsNull}이 붙어 있는지 항상 확인해야 하며, 해체된 팀이 목록이나
+ * 상세에 새어 나가면 안 된다. 예외는 {@link #findByIdForUpdate(Long)} 하나뿐이고
+ * 그건 의도적이다.</p>
+ */
 public interface TeamRepository extends JpaRepository<Team, Long> {
 
+    /**
+     * 단건 조회. 해체된 팀은 없는 것으로 취급한다.
+     *
+     * <p>락이 필요 없는 조회 경로에서만 쓴다. 락 구간과 섞으려면
+     * {@link #findActiveCohortId(Long)}로 먼저 훑고 락을 잡아야 한다.</p>
+     */
     Optional<Team> findByIdAndDeletedAtIsNull(Long id);
 
     /**
@@ -57,5 +71,15 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
     @Query("select t from Team t where t.id = :id")
     Optional<Team> findByIdForUpdate(@Param("id") Long id);
 
+    /**
+     * 내 팀 목록 조회의 마지막 단계 (GR-06).
+     *
+     * <p>{@code team_members}에서 뽑은 team_id 묶음을 팀 행으로 되돌리면서 해체된 팀을 걸러낸다.
+     * 해체 시 팀원 행을 물리 삭제하므로 보통은 남지 않지만, 기수 종료 정리(CE-01)나
+     * 회원 삭제 훅처럼 팀만 소프트 삭제되는 경로가 있어 이 필터가 필요하다.</p>
+     *
+     * <p>빈 리스트를 넘기면 {@code IN ()}이 되어 DB에 따라 문법 오류가 나므로,
+     * 호출부가 비어 있는지 먼저 확인한다.</p>
+     */
     List<Team> findByIdInAndDeletedAtIsNull(List<Long> ids);
 }

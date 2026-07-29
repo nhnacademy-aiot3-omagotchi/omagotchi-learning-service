@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.team.service;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -81,9 +82,16 @@ class TeamDisbandRaceTest {
      * 반환한다. 그래서 해체가 그 사이 커밋됐어도 isDisbanded()는 락 이전 스냅샷(false)을 보고,
      * 예외 없이 통과해버린다 — 이 테스트는 그 실패를 재현해 고정한 것이다 (thrown이 null이어야 통과).
      *
-     * test1과 이 테스트의 유일한 차이는 63번째 줄에 해당하는 사전 조회 방식뿐이다.
+     * test1과 이 테스트의 유일한 차이는 락을 잡기 전 사전 조회를 무엇으로 하느냐뿐이다.
+     *
+     * <p>상시 실행하지 않는 이유: 이 테스트의 기대값(thrown == null)은 "올바른 동작"이 아니라
+     * Hibernate의 1차 캐시 구현 세부사항이다. 버전이 올라가 재조회 시 필드를 갱신하도록
+     * 바뀌거나, loadActiveTeam 자체가 제거되면 이 테스트만 빨갛게 뜬다. 그때 진짜 회귀로
+     * 오인해 시간을 쓰는 것을 막으려고 꺼둔다. 실패 원인을 눈으로 확인하고 싶을 때만
+     * {@code @Disabled}를 떼고 단독으로 돌린다. 회귀 방어는 test1이 담당한다.</p>
      */
     @Test
+    @Disabled("Hibernate 1차 캐시 동작을 문서화한 재현 테스트. 회귀 방어는 test1이 담당한다.")
     @DisplayName("[대조군] 락 전에 loadActiveTeam으로 엔티티를 미리 읽으면, 해체가 커밋돼도 캐시된 인스턴스가 반환되어 재확인이 무력화된다")
     void test2() {
         Long cohortId = fixture.createCohort("1기");

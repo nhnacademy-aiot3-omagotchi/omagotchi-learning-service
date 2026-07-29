@@ -23,6 +23,11 @@ import java.time.OffsetDateTime;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Team {
 
+    /**
+     * 팀 이름 최대 길이 (GR-21). trim <b>후</b> 길이 기준이다.
+     * DB의 {@code ck_teams_name} CHECK(1~30)과 같은 값이어야 하며,
+     * 어긋나면 앱은 통과시킨 이름을 DB가 거부해 500이 난다.
+     */
     public static final int NAME_MAX_LENGTH = 30;
 
     @Id
@@ -41,6 +46,21 @@ public class Team {
     @Column(name = "deleted_at")
     private OffsetDateTime deletedAt;
 
+    /**
+     * 팀을 생성한다 (GR-01).
+     *
+     * <p>이름은 여기서 정규화하므로 호출부가 미리 trim할 필요가 없다.
+     * 다만 중복 검사는 정규화된 값으로 해야 하므로, 서비스는 보통
+     * {@link #normalizeName(String)}을 먼저 호출해 그 결과로 검사한 뒤 이 메서드를 부른다.</p>
+     *
+     * <p>이 메서드는 {@code teams} 행만 만든다. MASTER {@code team_members} 행 생성은
+     * 서비스가 같은 트랜잭션에서 이어서 해야 한다 — 끊기면 아무도 해체할 수 없는
+     * 마스터 없는 팀이 남는다.</p>
+     *
+     * @param cohortId 팀이 속할 기수. 요청자의 활성 기수임이 검증된 값이어야 한다 (RM-28)
+     * @param rawName  정규화 전 이름
+     * @throws site.omagotchi.learningservice.global.exception.BusinessException 이름이 trim 후 1~30자가 아니면
+     */
     public static Team create(Long cohortId, String rawName) {
         Team team = new Team();
         team.cohortId = cohortId;
@@ -67,6 +87,12 @@ public class Team {
         this.deletedAt = OffsetDateTime.now();
     }
 
+    /**
+     * 해체 여부. 해체된 팀은 조회·조작 모두 404다.
+     *
+     * <p>팀 행은 보존되므로 "존재한다"와 "살아 있다"가 다르다. 락을 잡은 뒤
+     * 이 값을 다시 봐야 해체 커밋 직후 도착한 요청을 잡아낼 수 있다.</p>
+     */
     public boolean isDisbanded() {
         return deletedAt != null;
     }

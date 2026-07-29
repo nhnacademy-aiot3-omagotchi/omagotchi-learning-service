@@ -58,6 +58,16 @@ public class TeamAccessSupport {
                 .orElseThrow(() -> new BusinessException(TeamErrorCode.COHORT_ACCESS_DENIED));
     }
 
+    /**
+     * 해체되지 않은 팀을 엔티티로 읽는다. 락은 잡지 않는다.
+     *
+     * <p>조회 전용 경로에서만 쓴다. 이후 같은 트랜잭션에서
+     * {@link #lockActiveTeam(Long)}을 부를 계획이라면 이 메서드를 쓰면 안 된다 —
+     * 여기서 올라간 1차 캐시 인스턴스가 락 이후 재확인을 무력화한다.
+     * 그 경우엔 {@link #requireActiveTeamCohortId(Long)}를 쓴다.</p>
+     *
+     * @throws site.omagotchi.learningservice.global.exception.BusinessException 없거나 해체된 팀이면 404
+     */
     public Team loadActiveTeam(Long teamId) {
         return teamRepository.findByIdAndDeletedAtIsNull(teamId)
                 .orElseThrow(() -> new BusinessException(TeamErrorCode.TEAM_NOT_FOUND));
@@ -92,11 +102,28 @@ public class TeamAccessSupport {
         return team;
     }
 
+    /**
+     * 해당 멤버십이 이 팀의 팀원인지 확인하고 그 행을 돌려준다.
+     *
+     * <p>실패가 404가 아니라 403인 것이 의도다. "그 팀에 당신 행이 없다"는 사실 자체가
+     * 남의 팀 구성에 대한 정보이므로, 존재 여부를 알려주지 않고 권한 없음으로 끊는다.</p>
+     *
+     * @param cohortMembershipId 계정 id가 아니라 멤버십 id다. 같은 사람이라도 기수가 다르면 다른 값이다
+     * @throws site.omagotchi.learningservice.global.exception.BusinessException 팀원이 아니면 403
+     */
     public TeamMember requireMembership(Long teamId, Long cohortMembershipId) {
         return teamMemberRepository.findByTeamIdAndCohortMembershipId(teamId, cohortMembershipId)
                 .orElseThrow(() -> new BusinessException(TeamErrorCode.NOT_A_MEMBER));
     }
 
+    /**
+     * 팀 관리 권한 검증. 팀원 추가·제외·위임·해체의 공통 관문이다.
+     *
+     * <p>반드시 {@code teams} 행 락을 잡은 뒤에 호출해야 의미가 있다. 락 밖에서 통과시키면
+     * 그 사이 위임이 커밋되어 이미 MEMBER가 된 사람이 관리 작업을 이어갈 수 있다.</p>
+     *
+     * @throws site.omagotchi.learningservice.global.exception.BusinessException 팀원이 아니거나 MASTER가 아니면 403
+     */
     public TeamMember requireMaster(Long teamId, Long cohortMembershipId) {
         TeamMember member = requireMembership(teamId, cohortMembershipId);
         if (!member.isMaster()) {

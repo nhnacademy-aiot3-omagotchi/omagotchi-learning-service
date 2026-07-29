@@ -24,6 +24,20 @@ public final class TeamConstraintTranslator {
     private static final String UQ_TEAM_MEMBERS_TEAM_MEMBERSHIP = "uq_team_members_team_membership";
     private static final String UQ_TEAM_MEMBERS_ONE_MASTER = "uq_team_members_one_master";
 
+    /**
+     * 유니크 위반 예외를 그에 대응하는 도메인 에러로 바꾼다.
+     *
+     * <p>던지지 않고 <b>반환</b>한다. 호출부에서 {@code throw translate(e)}로 쓰면
+     * 컴파일러가 그 지점에서 흐름이 끝난다는 것을 알기 때문에, catch 블록 뒤에
+     * 도달 불가능한 return을 넣지 않아도 된다.</p>
+     *
+     * <p>인덱스명을 못 읽으면 ALREADY_IN_TEAM으로 떨어진다. 팀 도메인에서 가장 흔한
+     * 위반이라 고른 기본값이며, 정확한 원인이 아닐 수 있다 — 새 유니크를 추가하면
+     * 여기 분기도 같이 늘려야 한다.</p>
+     *
+     * @param exception 원인이 Hibernate {@code ConstraintViolationException}이어야 인덱스명을 읽을 수 있다
+     * @return 던질 준비가 된 예외. 이 메서드는 예외를 던지지 않는다
+     */
     public static BusinessException translate(DataIntegrityViolationException exception) {
         String name = extractConstraintName(exception);
         if (name == null) {

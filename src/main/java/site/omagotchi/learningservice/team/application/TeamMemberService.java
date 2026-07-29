@@ -13,6 +13,20 @@ import site.omagotchi.learningservice.team.infrastructure.TeamMemberRepository;
 
 import java.util.UUID;
 
+/**
+ * 팀원 추가·제외·탈퇴 (GR-03, GR-05, GR-07, GR-08, GR-13).
+ *
+ * <p>세 연산 모두 {@code teams} 행 락을 먼저 잡는다. 락 순서를 teams → team_members로
+ * 고정하는 것이 데드락 방지 규칙이며, 위임(#8)도 같은 순서를 따라야 한다.</p>
+ *
+ * <p>이 도메인에서 DB가 막아주지 못하는 제약이 둘 있다. 정원 8명(GR-17)은 "최대 N행"이라
+ * 유니크로 표현할 수 없어 락 안 카운트가 유일한 방어선이고, 팀원의 기수 정합(GR-22)은
+ * ERD v3에서 {@code team_members.cohort_id}와 복합 FK가 사라져 애플리케이션 검증이
+ * 유일한 방어선이다. 둘 다 테스트로 고정되어 있어야 한다.</p>
+ *
+ * <p>탈퇴·제외는 전부 물리 삭제다. 소프트 삭제하면 옛 행이
+ * {@code uq_team_members_membership}을 계속 점유해 재가입이 영구히 불가능해진다.</p>
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -69,6 +83,22 @@ public class TeamMemberService {
         }
     }
 
+    /**
+     * 팀원 제외 (GR-05). MASTER만 수행할 수 있고, 대상 행은 물리 삭제된다.
+     *
+     * <p>대상을 {@code team_members.id}로 지정하는 것이 의도다. 계정 id나 멤버십 id를 받으면
+     * 팀 모듈이 소유하지 않은 식별자를 API 표면에 노출하게 되고(GR-15 위반),
+     * 조회 응답의 {@code memberId}를 그대로 되돌려주는 흐름도 깨진다.
+     * 대신 다른 팀의 memberId가 올 수 있으므로 팀 소속 여부를 반드시 재확인한다.</p>
+     *
+     * <p>MASTER 본인은 제외 대상이 될 수 없다 — 팀에 MASTER가 0명인 상태가 만들어지기 때문이다.
+     * 마스터가 팀을 떠나려면 {@link #leave(Long, UUID)}(단독일 때) 또는 위임(#8)을 거쳐야 한다.</p>
+     *
+     * @param targetMemberId 제외할 {@code team_members.id}. 계정 id가 아니다
+     * @param userId         요청자 계정 id. 이 팀의 MASTER여야 한다
+     * @throws site.omagotchi.learningservice.global.exception.BusinessException
+     *         마스터 자기 제외(400), 요청자가 MASTER 아님(403), 팀·팀원 없음(404)
+     */
     @Transactional
     public void kickMember(Long teamId, Long targetMemberId, UUID userId) {
         Team team = accessSupport.lockActiveTeam(teamId);
@@ -118,6 +148,17 @@ public class TeamMemberService {
 
 
 //---------------------------------내부 헬퍼---------------------------------------------------
+
+    /**
+     * 대상 계정의 존재·미탈퇴를 확인한다 (GR-11).
+     *
+     * <p>미존재(404)와 탈퇴(409)를 나누는 이유는 프런트가 다르게 안내해야 하기 때문이다 —
+     * 전자는 오타나 잘못된 대상, 후자는 실재했으나 지금은 초대할 수 없는 사람이다.
+     * 그래서 {@link AccountReader}가 boolean이 아니라 3-state를 돌려준다.</p>
+     *
+     * <p>계정은 Identity Service 소유라 서비스 간 DB 외래 키가 없다. 즉 이 확인을
+     * 건너뛰면 탈퇴 계정도 그대로 팀에 들어간다 — DB가 대신 막아주지 않는다.</p>
+     */
     private void validateAccount(UUID targetUserId) {
         AccountReader.AccountState state = accountReader.findState(targetUserId);
         if (state == AccountReader.AccountState.NOT_FOUND) {

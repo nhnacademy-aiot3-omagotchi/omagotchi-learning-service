@@ -4,6 +4,18 @@ import lombok.RequiredArgsConstructor;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
 import site.omagotchi.learningservice.global.exception.ErrorType;
 
+/**
+ * 팀 도메인 에러 코드.
+ *
+ * <p>{@link ErrorType}이 곧 HTTP 상태다 — {@code ErrorHttpStatusMapper}가
+ * INVALID_INPUT→400, AUTHORIZATION→403, NOT_FOUND→404, CONFLICT→409로 옮긴다.
+ * 따라서 상태 코드를 바꾸려면 여기 type을 고치면 되고, 컨트롤러는 손댈 필요가 없다.</p>
+ *
+ * <p>409가 많은 것은 팀 도메인의 제약 대부분이 부분 유니크 인덱스이기 때문이다.
+ * 서비스의 select 선검사는 동시 요청을 막지 못하므로, 같은 상황이 선검사에서도
+ * 인덱스 위반에서도 발생할 수 있다. {@code TeamConstraintTranslator}가 후자를
+ * 전자와 같은 코드로 변환해 클라이언트가 경로를 구분하지 않아도 되게 한다.</p>
+ */
 @RequiredArgsConstructor
 public enum TeamErrorCode implements ErrorCode {
 

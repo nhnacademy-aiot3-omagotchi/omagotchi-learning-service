@@ -28,6 +28,13 @@ public class TeamTestFixture {
     private final CohortRepository cohortRepository;
     private final CohortMembershipRepository membershipRepository;
 
+    /**
+     * 기수를 하나 만들고 id를 돌려준다.
+     *
+     * <p>테스트마다 새 기수를 만드는 것을 권장한다. 통합 테스트는 트랜잭션 롤백 없이
+     * 같은 컨테이너를 공유하므로, 기수를 재사용하면 앞선 테스트가 만든 팀 이름이
+     * {@code uq_teams_active_name}에 걸려 엉뚱한 곳에서 실패한다.</p>
+     */
     public Long createCohort(String name) {
         Cohort cohort = Cohort.create(
                 name,
@@ -84,5 +91,13 @@ public class TeamTestFixture {
         return new Member(membershipId, userId);
     }
 
+    /**
+     * 만들어진 멤버십의 두 얼굴.
+     *
+     * <p>둘 다 필요한 이유는 계층마다 쓰는 키가 다르기 때문이다. API·서비스 진입은
+     * 계정 id({@code userId})로 하지만, {@code team_members}에 저장되고 유니크가 걸리는 것은
+     * {@code membershipId}다. 검증할 때 어느 쪽을 보는지 헷갈리면 통과해선 안 될 테스트가
+     * 통과한다.</p>
+     */
     public record Member(Long membershipId, UUID userId) { }
 }

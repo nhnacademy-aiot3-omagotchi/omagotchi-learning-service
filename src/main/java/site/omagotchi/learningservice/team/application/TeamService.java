@@ -21,10 +21,17 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 팀을 생성하고 생성자를 MASTER로 등록한다 (GR-01, GR-02).
+ * 팀 생성과 조회 (GR-01, GR-02, GR-06, GR-15).
  *
- * teams INSERT와 team_members INSERT는 반드시 한 트랜잭션이다 —
- * 중간에 끊기면 MASTER 없는 팀이 남고, 그 팀은 아무도 해체할 수 없다.
+ * <p>팀원 추가·제외·탈퇴는 {@link TeamMemberService}, 위임·해체는 별도 서비스가 맡는다.
+ * 이 클래스는 "팀이라는 단위를 만들고 보여주는" 책임만 갖는다.</p>
+ *
+ * <p>생성에서 {@code teams} INSERT와 {@code team_members} INSERT는 반드시 한 트랜잭션이다 —
+ * 중간에 끊기면 MASTER 없는 팀이 남고, 그 팀은 아무도 해체할 수 없다.</p>
+ *
+ * <p>조회 응답에는 내부 식별자(user_id, cohort_membership_id)를 넣지 않는다 (GR-15).
+ * 표시명은 Identity Service의 {@code accounts.name}이 출처이며,
+ * membership → user_id → name 두 단계를 모두 배치로 조회한다.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -37,6 +44,22 @@ public class TeamService {
     private final MembershipReader membershipReader;
     private final AccountReader accountReader;
 
+    /**
+     * 팀을 생성하고 생성자를 MASTER로 등록한다 (GR-01, GR-02, GR-18, GR-21).
+     *
+     * <p>중복 이름·기소속 검사를 먼저 하지만 그것으로 끝이 아니다. 두 요청이 같은 시점에
+     * "없음"을 확인하고 둘 다 INSERT할 수 있어서, 선검사는 정상 경로에 친절한 메시지를 주는
+     * 용도이고 실제 방어선은 {@code uq_teams_active_name}과 {@code uq_team_members_membership}이다.
+     * 그래서 INSERT를 try로 감싸 인덱스 위반을 같은 에러 코드로 변환한다.</p>
+     *
+     * <p>{@code request.cohortId()}는 null일 수 있다 (RM-28). 활성 기수가 하나면 서버가
+     * 결정하고, 둘 이상이면 지정을 요구한다 — 자세한 분기는
+     * {@link TeamAccessSupport#resolveMembershipForCreate(Long, UUID)} 참고.</p>
+     *
+     * @param userId JWT에서 꺼낸 요청자 계정 id. 요청 본문의 cohortId가 이 계정의 것인지 서버가 검증한다
+     * @throws site.omagotchi.learningservice.global.exception.BusinessException
+     *         이름 규칙 위반(400), 담당하지 않는 기수(403), 이름 중복·이미 팀 소속(409)
+     */
     @Transactional
     public TeamResponse create(CreateTeamRequest request, UUID userId) {
         TeamMembership membership = accessSupport.resolveMembershipForCreate(request.cohortId(), userId);

@@ -2,6 +2,7 @@ package site.omagotchi.learningservice.study.presentation.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -12,19 +13,26 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import site.omagotchi.learningservice.study.application.StudyRecordCommandService;
 import site.omagotchi.learningservice.study.application.StudyRecordQueryService;
+import site.omagotchi.learningservice.study.application.result.DailyStudyRecordsResult;
+import site.omagotchi.learningservice.study.application.result.MonthlyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.presentation.request.CreateStudyRecordRequest;
 import site.omagotchi.learningservice.study.presentation.request.UpdateStudyRecordRequest;
+import site.omagotchi.learningservice.study.presentation.response.DailyStudyRecordsResponse;
+import site.omagotchi.learningservice.study.presentation.response.MonthlyStudySecondsResponse;
 import site.omagotchi.learningservice.study.presentation.response.StudyRecordResponse;
 
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/cohorts/{cohortId}/study-records")
+@RequestMapping("/api/v1/cohorts/{cohortId}")
 public class StudyRecordController {
 
     private static final String USER_ID_HEADER = "X-User-Id";
@@ -34,7 +42,7 @@ public class StudyRecordController {
     private final StudyRecordCommandService studyRecordCommandService;
     private final StudyRecordQueryService studyRecordQueryService;
 
-    @GetMapping("/{studyRecordId}")
+    @GetMapping("/study-records/{studyRecordId}")
     public ResponseEntity<StudyRecordResponse> get(
             @RequestHeader(USER_ID_HEADER) UUID userId,
             @PathVariable Long cohortId,
@@ -49,7 +57,39 @@ public class StudyRecordController {
         return ResponseEntity.ok(StudyRecordResponse.from(result));
     }
 
-    @PostMapping
+    @GetMapping("/study-records")
+    public ResponseEntity<DailyStudyRecordsResponse> getDailyRecords(
+            @RequestHeader(USER_ID_HEADER) UUID userId,
+            @PathVariable Long cohortId,
+            @RequestParam("date")
+            @DateTimeFormat(pattern = "uuuu-MM-dd") LocalDate aggregationDate
+    ) {
+        DailyStudyRecordsResult result = studyRecordQueryService.getDailyRecords(
+                userId,
+                cohortId,
+                aggregationDate
+        );
+
+        return ResponseEntity.ok(DailyStudyRecordsResponse.from(result));
+    }
+
+    @GetMapping("/study-time-summaries")
+    public ResponseEntity<MonthlyStudySecondsResponse> getMonthlyStudySeconds(
+            @RequestHeader(USER_ID_HEADER) UUID userId,
+            @PathVariable Long cohortId,
+            @RequestParam("month")
+            @DateTimeFormat(pattern = "uuuu-MM") YearMonth aggregationMonth
+    ) {
+        MonthlyStudySecondsResult result = studyRecordQueryService.getMonthlyStudySeconds(
+                userId,
+                cohortId,
+                aggregationMonth
+        );
+
+        return ResponseEntity.ok(MonthlyStudySecondsResponse.from(result));
+    }
+
+    @PostMapping("/study-records")
     public ResponseEntity<StudyRecordResponse> create(
             @RequestHeader(USER_ID_HEADER) UUID userId,
             @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
@@ -66,7 +106,7 @@ public class StudyRecordController {
         return ResponseEntity.status(HttpStatus.CREATED).body(StudyRecordResponse.from(result));
     }
 
-    @PutMapping("/{studyRecordId}")
+    @PutMapping("/study-records/{studyRecordId}")
     public ResponseEntity<StudyRecordResponse> update(
             @RequestHeader(USER_ID_HEADER) UUID userId,
             @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
@@ -85,7 +125,7 @@ public class StudyRecordController {
         return ResponseEntity.ok(StudyRecordResponse.from(result));
     }
 
-    @DeleteMapping("/{studyRecordId}")
+    @DeleteMapping("/study-records/{studyRecordId}")
     public ResponseEntity<Void> delete(
             @RequestHeader(USER_ID_HEADER) UUID userId,
             @RequestHeader(COMMAND_ID_HEADER) UUID commandId,

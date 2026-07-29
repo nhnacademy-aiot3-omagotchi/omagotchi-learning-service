@@ -45,7 +45,7 @@ public class TeamController {
     }
 
     /** 팀원 추가 (GR-03)*/
-    @PostMapping("{teamId}/members")
+    @PostMapping("/{teamId}/members")
     @ResponseStatus(HttpStatus.CREATED)
     public void addMember(
             @PathVariable Long teamId,

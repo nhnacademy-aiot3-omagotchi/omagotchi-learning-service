@@ -24,4 +24,22 @@ public interface SpringDataRoomOccupancyRepository
             @Param("spaceIds") List<Long> spaceIds,
             @Param("now") OffsetDateTime now
     );
+
+    @Query(
+            value = """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM learning_service.room_occupancies ro
+                        WHERE ro.space_id = :spaceId
+                          AND ro.status = 'ACTIVE'
+                          AND ro.ended_at IS NULL
+                          AND ro.expires_at > :now
+                    )
+                    """,
+            nativeQuery = true
+    )
+    boolean existsActiveBySpaceId(
+            @Param("spaceId") Long spaceId,
+            @Param("now") OffsetDateTime now
+    );
 }

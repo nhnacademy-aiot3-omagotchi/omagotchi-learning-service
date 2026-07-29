@@ -1,8 +1,7 @@
-package site.omagotchi.learningservice.study.infrastructure.persistence.entity;
+package site.omagotchi.learningservice.study.domain.entity;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -11,7 +10,7 @@ import java.time.Month;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@DisplayName("study_records Entity")
+@DisplayName("공부 기록")
 class StudyRecordTest {
 
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);

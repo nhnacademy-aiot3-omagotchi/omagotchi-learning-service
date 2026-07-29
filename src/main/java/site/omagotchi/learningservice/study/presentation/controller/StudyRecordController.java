@@ -64,7 +64,7 @@ public class StudyRecordController {
             JwtAuthenticationToken authentication,
             @PathVariable Long cohortId,
             @RequestParam("date")
-            @DateTimeFormat(pattern = "uuuu-MM-dd") LocalDate aggregationDate
+            @DateTimeFormat(pattern = "uuuuMMdd") LocalDate aggregationDate
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         DailyStudyRecordsResult result = studyRecordQueryService.getDailyRecords(
@@ -81,7 +81,7 @@ public class StudyRecordController {
             JwtAuthenticationToken authentication,
             @PathVariable Long cohortId,
             @RequestParam("month")
-            @DateTimeFormat(pattern = "uuuu-MM") YearMonth aggregationMonth
+            @DateTimeFormat(pattern = "uuuuMM") YearMonth aggregationMonth
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         MonthlyStudySecondsResult result = studyRecordQueryService.getMonthlyStudySeconds(

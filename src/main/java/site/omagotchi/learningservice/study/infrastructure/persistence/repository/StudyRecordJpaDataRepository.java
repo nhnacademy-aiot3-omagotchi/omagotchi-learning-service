@@ -5,5 +5,5 @@ import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 
 import java.util.UUID;
 
-public interface StudyRecordRepository extends JpaRepository<StudyRecord, UUID> {
+public interface StudyRecordJpaDataRepository extends JpaRepository<StudyRecord, UUID> {
 }

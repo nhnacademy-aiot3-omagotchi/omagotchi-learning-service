@@ -10,10 +10,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.global.config.JpaAuditingConfig;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
+import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
 import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryRepository;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.projection.DailyStudySeconds;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordJpaDataRepository;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryDslRepository;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
         TestcontainersConfiguration.class,
         QueryDslConfig.class,
         JpaAuditingConfig.class,
-        StudyRecordQueryRepository.class
+        StudyRecordQueryDslRepository.class
 })
 @ActiveProfiles("test")
 @DataJpaTest
@@ -39,10 +39,10 @@ class StudyRecordQueryRepositoryIT {
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);
 
     @Autowired
-    private StudyRecordRepository studyRecordRepository;
+    private StudyRecordJpaDataRepository studyRecordRepository;
 
     @Autowired
-    private StudyRecordQueryRepository studyRecordQueryRepository;
+    private StudyRecordQueryDslRepository studyRecordQueryRepository;
 
     @Nested
     @DisplayName("활성 기록 단건 조회")
@@ -144,7 +144,7 @@ class StudyRecordQueryRepositoryIT {
             deleted.applySoftDelete(Instant.parse("2000-01-02T00:00:00Z"));
             studyRecordRepository.saveAndFlush(deleted);
 
-            List<DailyStudySeconds> result = studyRecordQueryRepository.findDailyStudySeconds(
+            List<DailyStudySecondsResult> result = studyRecordQueryRepository.findDailyStudySeconds(
                     COHORT_MEMBERSHIP_ID,
                     BASE_DATE,
                     BASE_DATE.plusDays(1)
@@ -195,15 +195,15 @@ class StudyRecordQueryRepositoryIT {
                     "2000-01-03T02:00:00Z"
             );
 
-            List<DailyStudySeconds> result = studyRecordQueryRepository.findDailyStudySeconds(
+            List<DailyStudySecondsResult> result = studyRecordQueryRepository.findDailyStudySeconds(
                     COHORT_MEMBERSHIP_ID,
                     BASE_DATE,
                     BASE_DATE.plusDays(1)
             );
 
             assertEquals(List.of(
-                    new DailyStudySeconds(BASE_DATE, 10_800L),
-                    new DailyStudySeconds(BASE_DATE.plusDays(1), 1_800L)
+                    new DailyStudySecondsResult(BASE_DATE, 10_800L),
+                    new DailyStudySecondsResult(BASE_DATE.plusDays(1), 1_800L)
             ), result);
         }
     }

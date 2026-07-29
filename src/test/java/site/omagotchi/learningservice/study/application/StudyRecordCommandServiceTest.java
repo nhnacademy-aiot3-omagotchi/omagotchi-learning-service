@@ -9,22 +9,21 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
-import site.omagotchi.learningservice.global.util.DateTimeProvider;
-import site.omagotchi.learningservice.study.application.dto.CreateStudyRecordCommand;
-import site.omagotchi.learningservice.study.application.dto.UpdateStudyRecordCommand;
+import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
+import site.omagotchi.learningservice.study.application.command.UpdateStudyRecordCommand;
+import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
+import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryRepository;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
@@ -51,9 +50,6 @@ class StudyRecordCommandServiceTest {
             "00000000-0000-0000-0000-000000000001"
     );
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);
-    private static final String DATE = "20000101";
-    private static final String START_TIME_TEXT = "1000";
-    private static final String END_TIME_TEXT = "1100";
     private static final Instant START_TIME = Instant.parse("2000-01-01T01:00:00Z");
     private static final Instant END_TIME = Instant.parse("2000-01-01T02:00:00Z");
     private static final Instant CURRENT_TIME = Instant.parse("2000-01-02T00:00:00Z");
@@ -68,7 +64,7 @@ class StudyRecordCommandServiceTest {
     private CohortAccessService cohortAccessService;
 
     @Mock
-    private DateTimeProvider dateTimeProvider;
+    private Clock clock;
 
     @Mock
     private StudyWriteLock studyWriteLock;
@@ -90,9 +86,8 @@ class StudyRecordCommandServiceTest {
         @DisplayName("활성 소속 없음 예외")
         void doesNotCreateRecordWhenActiveMembershipDoesNotExist() {
             CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                    DATE,
-                    START_TIME_TEXT,
-                    END_TIME_TEXT
+                    START_TIME,
+                    END_TIME
             );
             given(cohortAccessService.requireActiveMembershipId(COHORT_ID, USER_ID))
                     .willThrow(new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
@@ -119,12 +114,10 @@ class StudyRecordCommandServiceTest {
         @DisplayName("정상 처리")
         void savesStudyRecord() {
             CreateStudyRecordCommand request = new CreateStudyRecordCommand(
-                    DATE,
-                    START_TIME_TEXT,
-                    END_TIME_TEXT
+                    START_TIME,
+                    END_TIME
             );
-            given(dateTimeProvider.currentInstant()).willReturn(END_TIME);
-            given(dateTimeProvider.calculateAggregationDate(START_TIME)).willReturn(BASE_DATE);
+            given(clock.instant()).willReturn(END_TIME);
             given(studyRecordRepository.save(any(StudyRecord.class)))
                     .willAnswer(invocation -> invocation.getArgument(0));
 
@@ -152,16 +145,14 @@ class StudyRecordCommandServiceTest {
 
         @Test
         @DisplayName("시간 정책에서 계산한 집계일 적용")
-        void savesAggregationDateCalculatedByDateTimeProvider() {
+        void savesAggregationDateCalculatedByStudyTimePolicy() {
             Instant startTime = Instant.parse("2000-01-01T16:30:00Z");
             Instant endTime = Instant.parse("2000-01-01T17:30:00Z");
             CreateStudyRecordCommand request = new CreateStudyRecordCommand(
-                    "20000102",
-                    "0130",
-                    "0230"
+                    startTime,
+                    endTime
             );
-            given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
-            given(dateTimeProvider.calculateAggregationDate(startTime)).willReturn(BASE_DATE);
+            given(clock.instant()).willReturn(CURRENT_TIME);
             given(studyRecordRepository.save(any(StudyRecord.class)))
                     .willAnswer(invocation -> invocation.getArgument(0));
 
@@ -179,11 +170,10 @@ class StudyRecordCommandServiceTest {
         @DisplayName("기존 기록 겹침 예외")
         void throwsOverlapWhenCreatingOverlappingRecord() {
             CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                    DATE,
-                    START_TIME_TEXT,
-                    END_TIME_TEXT
+                    START_TIME,
+                    END_TIME
             );
-            given(dateTimeProvider.currentInstant()).willReturn(END_TIME);
+            given(clock.instant()).willReturn(END_TIME);
             given(studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     START_TIME,
@@ -210,68 +200,11 @@ class StudyRecordCommandServiceTest {
         class TimeRangeValidation {
 
             @Test
-            @DisplayName("날짜 형식 예외")
-            void rejectsInvalidDateFormat() {
-                CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        "invalidDate",
-                        START_TIME_TEXT,
-                        END_TIME_TEXT
-                );
-
-                BusinessException exception = assertInvalidCreate(command);
-
-                assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
-            }
-
-            @Test
-            @DisplayName("존재하지 않는 날짜 예외")
-            void rejectsInvalidDateValue() {
-                CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        "20000230",
-                        START_TIME_TEXT,
-                        END_TIME_TEXT
-                );
-
-                BusinessException exception = assertInvalidCreate(command);
-
-                assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
-            }
-
-            @Test
-            @DisplayName("시간 형식 예외")
-            void rejectsInvalidTimeFormat() {
-                CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        DATE,
-                        "invalid",
-                        END_TIME_TEXT
-                );
-
-                BusinessException exception = assertInvalidCreate(command);
-
-                assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
-            }
-
-            @Test
-            @DisplayName("존재하지 않는 시간 예외")
-            void rejectsInvalidTimeValue() {
-                CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        DATE,
-                        START_TIME_TEXT,
-                        "2400"
-                );
-
-                BusinessException exception = assertInvalidCreate(command);
-
-                assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
-            }
-
-            @Test
             @DisplayName("동일한 시작 및 종료 시각 예외")
             void rejectsEqualStartAndEndTime() {
                 CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        DATE,
-                        START_TIME_TEXT,
-                        START_TIME_TEXT
+                        START_TIME,
+                        START_TIME
                 );
 
                 BusinessException exception = assertInvalidCreate(command);
@@ -283,9 +216,8 @@ class StudyRecordCommandServiceTest {
             @DisplayName("시작 시각이 종료 시각 이후인 경우 예외")
             void rejectsStartTimeAfterEndTime() {
                 CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        DATE,
-                        END_TIME_TEXT,
-                        START_TIME_TEXT
+                        END_TIME,
+                        START_TIME
                 );
 
                 BusinessException exception = assertInvalidCreate(command);
@@ -298,11 +230,10 @@ class StudyRecordCommandServiceTest {
             void rejectsFutureEndTime() {
                 Instant currentTime = Instant.parse("2000-01-01T02:00:00Z");
                 CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        DATE,
-                        START_TIME_TEXT,
-                        "1101"
+                        START_TIME,
+                        currentTime.plusSeconds(60)
                 );
-                given(dateTimeProvider.currentInstant()).willReturn(currentTime);
+                given(clock.instant()).willReturn(currentTime);
 
                 BusinessException exception = assertInvalidCreate(command);
 
@@ -315,13 +246,10 @@ class StudyRecordCommandServiceTest {
                 Instant startTime = Instant.parse("1999-12-31T18:59:00Z");
                 Instant endTime = Instant.parse("1999-12-31T19:01:00Z");
                 CreateStudyRecordCommand command = new CreateStudyRecordCommand(
-                        DATE,
-                        "0359",
-                        "0401"
+                        startTime,
+                        endTime
                 );
-                given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
-                given(dateTimeProvider.crossesAggregationBoundary(startTime, endTime))
-                        .willReturn(true);
+                given(clock.instant()).willReturn(CURRENT_TIME);
 
                 BusinessException exception = assertInvalidCreate(command);
 
@@ -360,18 +288,16 @@ class StudyRecordCommandServiceTest {
             Instant updatedStartTime = Instant.parse("2000-01-01T03:00:00Z");
             Instant updatedEndTime = Instant.parse("2000-01-01T05:00:00Z");
             UpdateStudyRecordCommand request = new UpdateStudyRecordCommand(
-                    DATE,
-                    "1200",
-                    "1400",
+                    updatedStartTime,
+                    updatedEndTime,
                     0L
             );
             given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
                     studyRecordId,
                     COHORT_MEMBERSHIP_ID
             )).willReturn(Optional.of(entity));
-            given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
-            given(dateTimeProvider.calculateAggregationDate(updatedStartTime)).willReturn(BASE_DATE);
-            given(studyRecordRepository.saveAndFlush(entity)).willReturn(entity);
+            given(clock.instant()).willReturn(CURRENT_TIME);
+            given(studyRecordRepository.saveWithVersionCheck(entity)).willReturn(entity);
 
             StudyRecordResult result = studyRecordCommandService.update(
                     UUID.randomUUID(),
@@ -389,7 +315,7 @@ class StudyRecordCommandServiceTest {
                     () -> assertEquals(BASE_DATE, entity.getAggregationDate()),
                     () -> assertEquals(entity.getStudySeconds(), result.studySeconds())
             );
-            verify(studyRecordRepository).saveAndFlush(entity);
+            verify(studyRecordRepository).saveWithVersionCheck(entity);
         }
 
         @Test
@@ -398,9 +324,8 @@ class StudyRecordCommandServiceTest {
             UUID studyRecordId = UUID.randomUUID();
             StudyRecord entity = createEntity(START_TIME, END_TIME);
             UpdateStudyRecordCommand command = new UpdateStudyRecordCommand(
-                    DATE,
-                    END_TIME_TEXT,
-                    START_TIME_TEXT,
+                    END_TIME,
+                    START_TIME,
                     0L
             );
             given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
@@ -420,7 +345,7 @@ class StudyRecordCommandServiceTest {
             );
 
             assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
-            verify(studyRecordRepository, never()).saveAndFlush(any(StudyRecord.class));
+            verify(studyRecordRepository, never()).saveWithVersionCheck(any(StudyRecord.class));
         }
 
         @Test
@@ -431,16 +356,15 @@ class StudyRecordCommandServiceTest {
             Instant updatedStartTime = Instant.parse("2000-01-01T03:00:00Z");
             Instant updatedEndTime = Instant.parse("2000-01-01T05:00:00Z");
             UpdateStudyRecordCommand command = new UpdateStudyRecordCommand(
-                    DATE,
-                    "1200",
-                    "1400",
+                    updatedStartTime,
+                    updatedEndTime,
                     0L
             );
             given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
                     studyRecordId,
                     COHORT_MEMBERSHIP_ID
             )).willReturn(Optional.of(entity));
-            given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
+            given(clock.instant()).willReturn(CURRENT_TIME);
             given(studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     updatedStartTime,
@@ -464,7 +388,7 @@ class StudyRecordCommandServiceTest {
                     () -> assertEquals(START_TIME, entity.getStartTime()),
                     () -> assertEquals(END_TIME, entity.getEndTime())
             );
-            verify(studyRecordRepository, never()).saveAndFlush(any(StudyRecord.class));
+            verify(studyRecordRepository, never()).saveWithVersionCheck(any(StudyRecord.class));
         }
 
         @Test
@@ -473,9 +397,8 @@ class StudyRecordCommandServiceTest {
             UUID studyRecordId = UUID.randomUUID();
             StudyRecord entity = createEntity(START_TIME, END_TIME);
             UpdateStudyRecordCommand command = new UpdateStudyRecordCommand(
-                    DATE,
-                    "1200",
-                    "1400",
+                    Instant.parse("2000-01-01T03:00:00Z"),
+                    Instant.parse("2000-01-01T05:00:00Z"),
                     1L
             );
             given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
@@ -499,7 +422,7 @@ class StudyRecordCommandServiceTest {
                     () -> assertEquals(START_TIME, entity.getStartTime()),
                     () -> assertEquals(END_TIME, entity.getEndTime())
             );
-            verify(studyRecordRepository, never()).saveAndFlush(any(StudyRecord.class));
+            verify(studyRecordRepository, never()).saveWithVersionCheck(any(StudyRecord.class));
         }
 
         @Test
@@ -510,20 +433,15 @@ class StudyRecordCommandServiceTest {
             Instant updatedStartTime = Instant.parse("1999-12-31T18:59:00Z");
             Instant updatedEndTime = Instant.parse("1999-12-31T19:01:00Z");
             UpdateStudyRecordCommand command = new UpdateStudyRecordCommand(
-                    DATE,
-                    "0359",
-                    "0401",
+                    updatedStartTime,
+                    updatedEndTime,
                     0L
             );
             given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
                     studyRecordId,
                     COHORT_MEMBERSHIP_ID
             )).willReturn(Optional.of(entity));
-            given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
-            given(dateTimeProvider.crossesAggregationBoundary(
-                    updatedStartTime,
-                    updatedEndTime
-            )).willReturn(true);
+            given(clock.instant()).willReturn(CURRENT_TIME);
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
@@ -544,43 +462,7 @@ class StudyRecordCommandServiceTest {
                     () -> assertEquals(START_TIME, entity.getStartTime()),
                     () -> assertEquals(END_TIME, entity.getEndTime())
             );
-            verify(studyRecordRepository, never()).saveAndFlush(any(StudyRecord.class));
-        }
-
-        @Test
-        @DisplayName("동시 변경 충돌 예외")
-        void translatesOptimisticLockingFailureToVersionConflict() {
-            UUID studyRecordId = UUID.randomUUID();
-            StudyRecord entity = createEntity(START_TIME, END_TIME);
-            Instant updatedStartTime = Instant.parse("2000-01-01T03:00:00Z");
-            UpdateStudyRecordCommand command = new UpdateStudyRecordCommand(
-                    DATE,
-                    "1200",
-                    "1400",
-                    0L
-            );
-            given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
-                    studyRecordId,
-                    COHORT_MEMBERSHIP_ID
-            )).willReturn(Optional.of(entity));
-            given(dateTimeProvider.currentInstant()).willReturn(CURRENT_TIME);
-            given(dateTimeProvider.calculateAggregationDate(updatedStartTime)).willReturn(BASE_DATE);
-            given(studyRecordRepository.saveAndFlush(entity)).willThrow(
-                    new ObjectOptimisticLockingFailureException(StudyRecord.class, studyRecordId)
-            );
-
-            BusinessException exception = assertThrows(
-                    BusinessException.class,
-                    () -> studyRecordCommandService.update(
-                            UUID.randomUUID(),
-                            USER_ID,
-                            COHORT_ID,
-                            studyRecordId,
-                            command
-                    )
-            );
-
-            assertSame(StudyRecordErrorCode.VERSION_CONFLICT, exception.getErrorCode());
+            verify(studyRecordRepository, never()).saveWithVersionCheck(any(StudyRecord.class));
         }
 
         @Test
@@ -588,9 +470,8 @@ class StudyRecordCommandServiceTest {
         void throwsNotFoundWhenUpdatingNonExistentRecord() {
             UUID studyRecordId = UUID.randomUUID();
             UpdateStudyRecordCommand request = new UpdateStudyRecordCommand(
-                    DATE,
-                    START_TIME_TEXT,
-                    END_TIME_TEXT,
+                    START_TIME,
+                    END_TIME,
                     0L
             );
             given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
@@ -610,7 +491,7 @@ class StudyRecordCommandServiceTest {
             );
 
             assertSame(StudyRecordErrorCode.NOT_FOUND, exception.getErrorCode());
-            verify(studyRecordRepository, never()).saveAndFlush(any(StudyRecord.class));
+            verify(studyRecordRepository, never()).saveWithVersionCheck(any(StudyRecord.class));
         }
     }
 
@@ -628,7 +509,7 @@ class StudyRecordCommandServiceTest {
                     studyRecordId,
                     COHORT_MEMBERSHIP_ID
             )).willReturn(Optional.of(entity));
-            given(dateTimeProvider.currentInstant()).willReturn(deletedAt);
+            given(clock.instant()).willReturn(deletedAt);
 
             studyRecordCommandService.delete(
                     UUID.randomUUID(),
@@ -640,7 +521,7 @@ class StudyRecordCommandServiceTest {
 
             assertEquals(deletedAt, entity.getDeletedAt());
             verify(studyWriteLock).acquire(COHORT_MEMBERSHIP_ID);
-            verify(studyRecordRepository).saveAndFlush(entity);
+            verify(studyRecordRepository).saveWithVersionCheck(entity);
         }
 
         @Test
@@ -668,7 +549,7 @@ class StudyRecordCommandServiceTest {
                     () -> assertSame(StudyRecordErrorCode.VERSION_CONFLICT, exception.getErrorCode()),
                     () -> assertNull(entity.getDeletedAt())
             );
-            verify(studyRecordRepository, never()).saveAndFlush(any(StudyRecord.class));
+            verify(studyRecordRepository, never()).saveWithVersionCheck(any(StudyRecord.class));
         }
 
         @Test
@@ -692,7 +573,7 @@ class StudyRecordCommandServiceTest {
             );
 
             assertSame(StudyRecordErrorCode.NOT_FOUND, exception.getErrorCode());
-            verify(studyRecordRepository, never()).saveAndFlush(any(StudyRecord.class));
+            verify(studyRecordRepository, never()).saveWithVersionCheck(any(StudyRecord.class));
         }
     }
 

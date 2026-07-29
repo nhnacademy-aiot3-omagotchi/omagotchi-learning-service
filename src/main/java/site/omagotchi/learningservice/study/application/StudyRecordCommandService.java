@@ -1,23 +1,22 @@
 package site.omagotchi.learningservice.study.application;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
-import site.omagotchi.learningservice.global.util.DateTimeProvider;
-import site.omagotchi.learningservice.global.util.StudyTimeParser;
-import site.omagotchi.learningservice.study.application.dto.CreateStudyRecordCommand;
-import site.omagotchi.learningservice.study.application.dto.UpdateStudyRecordCommand;
+import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
+import site.omagotchi.learningservice.study.application.command.UpdateStudyRecordCommand;
+import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
+import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
+import site.omagotchi.learningservice.study.application.time.StudyTimePolicy;
 import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryRepository;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -32,7 +31,7 @@ public class StudyRecordCommandService {
     private final CohortAccessService cohortAccessService;
     private final StudyRecordRepository studyRecordRepository;
     private final StudyRecordQueryRepository studyRecordQueryRepository;
-    private final DateTimeProvider dateTimeProvider;
+    private final Clock clock;
     private final StudyWriteLock studyWriteLock;
 
     public StudyRecordResult create(
@@ -46,9 +45,8 @@ public class StudyRecordCommandService {
         // membershipId 검증 및 변환
         Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
 
-        // Instance로 날짜 파싱
-        Instant startInstant = StudyTimeParser.parseToInstant(command.date(), command.startTime());
-        Instant endInstant = StudyTimeParser.parseToInstant(command.date(), command.endTime());
+        Instant startInstant = command.startTime();
+        Instant endInstant = command.endTime();
 
         // 기록 시간 범위, 집계 경계 겹침 검증
         validateTimeRange(startInstant, endInstant);
@@ -67,7 +65,7 @@ public class StudyRecordCommandService {
 
         // 현재 단계에서는 전달받은 구간 전체를 하나의 기록으로 저장한다.
         long studySeconds = Duration.between(startInstant, endInstant).getSeconds();
-        LocalDate aggregationDate = dateTimeProvider.calculateAggregationDate(startInstant);
+        LocalDate aggregationDate = StudyTimePolicy.aggregationDate(startInstant);
 
         StudyRecord entity = StudyRecord.builder()
                 .cohortMembershipId(cohortMembershipId)
@@ -104,9 +102,8 @@ public class StudyRecordCommandService {
 
         validateExpectedVersion(entity, command.expectedVersion());
 
-        // Instance로 날짜 파싱
-        Instant startInstant = StudyTimeParser.parseToInstant(command.date(), command.startTime());
-        Instant endInstant = StudyTimeParser.parseToInstant(command.date(), command.endTime());
+        Instant startInstant = command.startTime();
+        Instant endInstant = command.endTime();
 
         // 기록 시간 범위, 집계 경계 겹침 검증
         validateTimeRange(startInstant, endInstant);
@@ -123,10 +120,10 @@ public class StudyRecordCommandService {
         // 수정 구간으로 studySeconds를 재계산
         long studySeconds = Duration.between(startInstant, endInstant).getSeconds();
         // 기준 시간 계산
-        LocalDate aggregationDate = dateTimeProvider.calculateAggregationDate(startInstant);
+        LocalDate aggregationDate = StudyTimePolicy.aggregationDate(startInstant);
 
         entity.applyUpdate(aggregationDate, startInstant, endInstant, studySeconds);
-        StudyRecord saved = saveWithOptimisticLock(entity);
+        StudyRecord saved = studyRecordRepository.saveWithVersionCheck(entity);
 
         return StudyRecordResult.from(saved);
     }
@@ -154,10 +151,10 @@ public class StudyRecordCommandService {
         validateExpectedVersion(entity, expectedVersion);
 
         // 현재 기록 소프트 삭제
-        entity.applySoftDelete(dateTimeProvider.currentInstant());
+        entity.applySoftDelete(clock.instant());
         // TODO: 삭제 시, 삭제한 유저에 대한 정보를 log에 남기기 (Optional)
 
-        saveWithOptimisticLock(entity);
+        studyRecordRepository.saveWithVersionCheck(entity);
     }
 
     // ===== Private Methods =====
@@ -168,7 +165,7 @@ public class StudyRecordCommandService {
             throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
         }
         // 미래 시간 저장 예외 검증
-        if (endInstant.isAfter(dateTimeProvider.currentInstant())) {
+        if (endInstant.isAfter(clock.instant())) {
             throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
         }
         // TODO: KDT 학습 기간 범위 검증 + 과거 기록 범위 검증(Optional)
@@ -206,17 +203,8 @@ public class StudyRecordCommandService {
             Instant startInstant,
             Instant endInstant
     ) {
-        if (dateTimeProvider.crossesAggregationBoundary(startInstant, endInstant)) {
+        if (StudyTimePolicy.crossesAggregationBoundary(startInstant, endInstant)) {
             throw new BusinessException(StudyRecordErrorCode.AGGREGATION_BOUNDARY_CROSSED);
-        }
-    }
-
-    private StudyRecord saveWithOptimisticLock(StudyRecord entity) {
-        try {
-            // flush 시점에 @Version을 WHERE 조건으로 검증하고 성공한 변경만 version을 증가시킨다.
-            return studyRecordRepository.saveAndFlush(entity);
-        } catch (OptimisticLockingFailureException exception) {
-            throw new BusinessException(StudyRecordErrorCode.VERSION_CONFLICT);
         }
     }
 }

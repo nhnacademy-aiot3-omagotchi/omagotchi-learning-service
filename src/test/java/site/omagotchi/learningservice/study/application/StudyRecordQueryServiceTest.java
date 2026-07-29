@@ -11,15 +11,15 @@ import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
-import site.omagotchi.learningservice.global.util.DateTimeProvider;
+import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.result.DailyStudyRecordsResult;
+import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.MonthlyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryRepository;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.projection.DailyStudySeconds;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
@@ -46,6 +46,7 @@ class StudyRecordQueryServiceTest {
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);
     private static final Instant START_TIME = Instant.parse("2000-01-01T01:00:00Z");
     private static final Instant END_TIME = Instant.parse("2000-01-01T02:00:00Z");
+    private static final Instant JANUARY_15_CURRENT_TIME = Instant.parse("2000-01-15T00:00:00Z");
 
     @Mock
     private StudyRecordQueryRepository studyRecordQueryRepository;
@@ -54,7 +55,7 @@ class StudyRecordQueryServiceTest {
     private CohortAccessService cohortAccessService;
 
     @Mock
-    private DateTimeProvider dateTimeProvider;
+    private Clock clock;
 
     @InjectMocks
     private StudyRecordQueryService studyRecordQueryService;
@@ -153,8 +154,7 @@ class StudyRecordQueryServiceTest {
                 "2000-01-09T22:00:00Z",
                 "2000-01-10T00:00:00Z"
         );
-        given(dateTimeProvider.currentAggregationDate())
-                .willReturn(LocalDate.of(2000, Month.JANUARY, 15));
+        given(clock.instant()).willReturn(JANUARY_15_CURRENT_TIME);
         given(studyRecordQueryRepository.findDailyRecords(
                 COHORT_MEMBERSHIP_ID,
                 aggregationDate
@@ -179,8 +179,7 @@ class StudyRecordQueryServiceTest {
     @DisplayName("일간 기록이 없으면 빈 목록과 0초 반환")
     void returnsEmptyDailyResultWhenNoRecordExists() {
         LocalDate aggregationDate = LocalDate.of(2000, Month.JANUARY, 10);
-        given(dateTimeProvider.currentAggregationDate())
-                .willReturn(LocalDate.of(2000, Month.JANUARY, 15));
+        given(clock.instant()).willReturn(JANUARY_15_CURRENT_TIME);
         given(studyRecordQueryRepository.findDailyRecords(
                 COHORT_MEMBERSHIP_ID,
                 aggregationDate
@@ -202,7 +201,7 @@ class StudyRecordQueryServiceTest {
     @DisplayName("서버 기준 미래 집계일 조회 거절")
     void rejectsFutureDailyPeriod() {
         LocalDate currentAggregationDate = LocalDate.of(2000, Month.JANUARY, 15);
-        given(dateTimeProvider.currentAggregationDate()).willReturn(currentAggregationDate);
+        given(clock.instant()).willReturn(JANUARY_15_CURRENT_TIME);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -224,14 +223,14 @@ class StudyRecordQueryServiceTest {
         LocalDate currentAggregationDate = LocalDate.of(2000, Month.JANUARY, 15);
         LocalDate startDate = aggregationMonth.atDay(1);
         LocalDate endDate = aggregationMonth.atEndOfMonth();
-        given(dateTimeProvider.currentAggregationDate()).willReturn(currentAggregationDate);
+        given(clock.instant()).willReturn(JANUARY_15_CURRENT_TIME);
         given(studyRecordQueryRepository.findDailyStudySeconds(
                 COHORT_MEMBERSHIP_ID,
                 startDate,
                 currentAggregationDate
         )).willReturn(List.of(
-                new DailyStudySeconds(LocalDate.of(2000, Month.JANUARY, 1), 3_600L),
-                new DailyStudySeconds(LocalDate.of(2000, Month.JANUARY, 3), 7_200L)
+                new DailyStudySecondsResult(LocalDate.of(2000, Month.JANUARY, 1), 3_600L),
+                new DailyStudySecondsResult(LocalDate.of(2000, Month.JANUARY, 3), 7_200L)
         ));
 
         MonthlyStudySecondsResult result = studyRecordQueryService.getMonthlyStudySeconds(
@@ -257,8 +256,7 @@ class StudyRecordQueryServiceTest {
         YearMonth aggregationMonth = YearMonth.of(2000, Month.FEBRUARY);
         LocalDate startDate = aggregationMonth.atDay(1);
         LocalDate endDate = aggregationMonth.atEndOfMonth();
-        given(dateTimeProvider.currentAggregationDate())
-                .willReturn(LocalDate.of(2000, Month.MARCH, 1));
+        given(clock.instant()).willReturn(Instant.parse("2000-03-01T00:00:00Z"));
         given(studyRecordQueryRepository.findDailyStudySeconds(
                 COHORT_MEMBERSHIP_ID,
                 startDate,
@@ -282,8 +280,7 @@ class StudyRecordQueryServiceTest {
     @Test
     @DisplayName("서버 기준 미래 집계월 조회 거절")
     void rejectsFutureMonthlyPeriod() {
-        given(dateTimeProvider.currentAggregationDate())
-                .willReturn(LocalDate.of(2000, Month.JANUARY, 15));
+        given(clock.instant()).willReturn(JANUARY_15_CURRENT_TIME);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,

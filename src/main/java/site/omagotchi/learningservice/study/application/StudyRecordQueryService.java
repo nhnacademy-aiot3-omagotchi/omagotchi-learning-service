@@ -6,16 +6,16 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
-import site.omagotchi.learningservice.global.util.DateTimeProvider;
+import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.result.DailyStudyRecordsResult;
 import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.MonthlyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
+import site.omagotchi.learningservice.study.application.time.StudyTimePolicy;
 import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryRepository;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.projection.DailyStudySeconds;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
@@ -31,7 +31,7 @@ public class StudyRecordQueryService {
 
     private final CohortAccessService cohortAccessService;
     private final StudyRecordQueryRepository studyRecordQueryRepository;
-    private final DateTimeProvider dateTimeProvider;
+    private final Clock clock;
 
     public StudyRecordResult getRecord(
             UUID userId,
@@ -82,7 +82,7 @@ public class StudyRecordQueryService {
             YearMonth aggregationMonth
     ) {
         Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
-        LocalDate currentAggregationDate = dateTimeProvider.currentAggregationDate();
+        LocalDate currentAggregationDate = currentAggregationDate();
         // 날짜 범위 검증
         validateMonthRange(aggregationMonth, currentAggregationDate);
 
@@ -98,8 +98,8 @@ public class StudyRecordQueryService {
                 )
                 .stream()
                 .collect(Collectors.toUnmodifiableMap(
-                        DailyStudySeconds::aggregationDate,
-                        DailyStudySeconds::studySeconds
+                        DailyStudySecondsResult::aggregationDate,
+                        DailyStudySecondsResult::studySeconds
                 ));
 
         List<DailyStudySecondsResult> dailyTotals = IntStream
@@ -123,7 +123,7 @@ public class StudyRecordQueryService {
     }
 
     private void validateDateRange(LocalDate aggregationDate) {
-        if (aggregationDate.isAfter(dateTimeProvider.currentAggregationDate())) {
+        if (aggregationDate.isAfter(currentAggregationDate())) {
             throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
         }
         // KDT 범위 검증(Optional)
@@ -141,5 +141,9 @@ public class StudyRecordQueryService {
 
     private LocalDate min(LocalDate first, LocalDate second) {
         return first.isBefore(second) ? first : second;
+    }
+
+    private LocalDate currentAggregationDate() {
+        return StudyTimePolicy.aggregationDate(clock.instant());
     }
 }

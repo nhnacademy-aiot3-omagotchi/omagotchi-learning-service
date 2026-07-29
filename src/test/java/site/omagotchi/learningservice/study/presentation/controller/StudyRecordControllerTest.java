@@ -17,8 +17,8 @@ import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
 import site.omagotchi.learningservice.study.application.StudyRecordCommandService;
 import site.omagotchi.learningservice.study.application.StudyRecordQueryService;
-import site.omagotchi.learningservice.study.application.dto.CreateStudyRecordCommand;
-import site.omagotchi.learningservice.study.application.dto.UpdateStudyRecordCommand;
+import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
+import site.omagotchi.learningservice.study.application.command.UpdateStudyRecordCommand;
 import site.omagotchi.learningservice.study.application.result.DailyStudyRecordsResult;
 import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.MonthlyStudySecondsResult;
@@ -29,6 +29,7 @@ import site.omagotchi.learningservice.study.presentation.response.StudyRecordRes
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.Month;
 import java.time.YearMonth;
 import java.util.List;
@@ -59,9 +60,9 @@ class StudyRecordControllerTest {
     );
     private static final Long COHORT_ID = 10L;
     private static final Long EXPECTED_VERSION = 1L;
-    private static final String DATE = "20000101";
-    private static final String START_TIME = "1000";
-    private static final String END_TIME = "1100";
+    private static final LocalDate DATE = LocalDate.of(2000, Month.JANUARY, 1);
+    private static final LocalTime START_TIME = LocalTime.of(10, 0);
+    private static final LocalTime END_TIME = LocalTime.of(11, 0);
 
     @Mock
     private StudyRecordCommandService studyRecordCommandService;

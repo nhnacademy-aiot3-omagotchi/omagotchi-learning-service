@@ -12,8 +12,8 @@ import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.global.config.JpaAuditingConfig;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
 import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryRepository;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordJpaDataRepository;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryDslRepository;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         TestcontainersConfiguration.class,
         QueryDslConfig.class,
         JpaAuditingConfig.class,
-        StudyRecordQueryRepository.class
+        StudyRecordQueryDslRepository.class
 })
 @ActiveProfiles("test")
 @DataJpaTest
@@ -40,10 +40,10 @@ class StudyRecordRepositoryIT {
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);
 
     @Autowired
-    private StudyRecordRepository studyRecordRepository;
+    private StudyRecordJpaDataRepository studyRecordRepository;
 
     @Autowired
-    private StudyRecordQueryRepository studyRecordQueryRepository;
+    private StudyRecordQueryDslRepository studyRecordQueryRepository;
 
     @Nested
     @DisplayName("활성 기록 겹침 조회")

@@ -29,12 +29,15 @@ public class TeamMemberService {
      * <p>
      * 검증을 락 밖에서 먼저 끝내고 락 구간에는 카운트와 INSERT만 남긴다 —
      * 계정 조회는 외부 호출이라 락 안에 넣으면 그 시간만큼 다른 요청이 전부 대기한다.
+     * <p>
+     * 락 전 단계에서 Team을 엔티티로 읽지 않는 것이 핵심이다. 읽어두면 1차 캐시의
+     * 인스턴스가 lockActiveTeam의 반환값이 되어 해체 재확인이 락 이전 상태를 본다.
      */
     @Transactional
     public void addMember(Long teamId, AddTeamMemberRequest request, UUID userId) {
-        Team team = accessSupport.loadActiveTeam(teamId);
+        Long cohortId = accessSupport.requireActiveTeamCohortId(teamId);
         TeamMembership requestMembership =
-                accessSupport.requiredActiveMembership(team.getCohortId(), userId);
+                accessSupport.requiredActiveMembership(cohortId, userId);
         accessSupport.requireMaster(teamId, requestMembership.id());
 
         validateAccount(request.targetUserId());
@@ -44,7 +47,7 @@ public class TeamMemberService {
         // 조회 방향을 뒤집으면 "대상의 기수 == 팀의 기수" 검증이 조회 결과로 자동 충족된다.
         // team_members에 cohort_id가 없으므로 이 앱 검증이 유일한 방어선이다.
         TeamMembership targetMembership = membershipReader
-                .findActive(team.getCohortId(), request.targetUserId())
+                .findActive(cohortId, request.targetUserId())
                 .orElseThrow(() -> new BusinessException(TeamErrorCode.TARGET_NOT_IN_COHORT));
 
 

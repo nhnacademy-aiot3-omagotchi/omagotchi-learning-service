@@ -64,6 +64,19 @@ public class TeamAccessSupport {
     }
 
     /**
+     * 락을 잡기 전에 팀의 기수만 확인한다.
+     *
+     * 팀원 추가처럼 "검증은 락 밖, 카운트·INSERT만 락 안"인 흐름에서 쓴다.
+     * 검증에 필요한 건 cohort_id 하나뿐인데 loadActiveTeam으로 엔티티를 읽으면
+     * 그 인스턴스가 1차 캐시에 남아 뒤따르는 lockActiveTeam의 deleted_at 재확인을
+     * 락 이전 스냅샷으로 만들어버린다. 락 전에는 Team을 엔티티로 만들지 않는다.
+     */
+    public Long requireActiveTeamCohortId(Long teamId) {
+        return teamRepository.findActiveCohortId(teamId)
+                .orElseThrow(() -> new BusinessException(TeamErrorCode.TEAM_NOT_FOUND));
+    }
+
+    /**
      * 팀 행을 배타 락으로 잡고 해체 여부를 재확인한다.
      *
      * 락 획득 "후" deleted_at을 보는 것이 핵심이다. 쿼리 조건에 넣으면

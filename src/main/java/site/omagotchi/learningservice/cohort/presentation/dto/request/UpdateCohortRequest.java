@@ -1,7 +1,8 @@
-package site.omagotchi.learningservice.cohort.application.dto.command;
+package site.omagotchi.learningservice.cohort.presentation.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import site.omagotchi.learningservice.cohort.application.dto.command.UpdateCohortCommand;
 
 import java.time.LocalDate;
 
@@ -13,5 +14,9 @@ public record UpdateCohortRequest(
         String description,
         @NotNull LocalDate startDate,
         @NotNull LocalDate endDate
-        ) {
+) {
+
+    public UpdateCohortCommand toCommand() {
+        return new UpdateCohortCommand(name, description, startDate, endDate);
+    }
 }

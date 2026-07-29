@@ -1,8 +1,9 @@
-package site.omagotchi.learningservice.cohort.application.dto.command;
+package site.omagotchi.learningservice.cohort.presentation.dto.request;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import site.omagotchi.learningservice.cohort.application.dto.command.SaveAttendancePolicyCommand;
 
 import java.time.LocalTime;
 
@@ -16,4 +17,14 @@ public record SaveAttendancePolicyRequest(
         LocalTime absenceCutoffTime,
         @NotNull @Min(0) Integer allowedAwayMinutes
 ) {
+
+    public SaveAttendancePolicyCommand toCommand() {
+        return new SaveAttendancePolicyCommand(
+                timezone,
+                scheduledStartTime,
+                scheduledEndTime,
+                absenceCutoffTime,
+                allowedAwayMinutes
+        );
+    }
 }

@@ -13,12 +13,14 @@ import site.omagotchi.learningservice.team.application.*;
 import site.omagotchi.learningservice.team.application.dto.command.CreateTeamRequest;
 import site.omagotchi.learningservice.team.application.dto.result.TeamDetailResponse;
 import site.omagotchi.learningservice.team.application.dto.result.TeamResponse;
+import site.omagotchi.learningservice.team.application.port.AccountReader;
+import site.omagotchi.learningservice.team.application.port.MembershipReader;
 import site.omagotchi.learningservice.team.domain.Team;
-import site.omagotchi.learningservice.team.domain.TeamErrorCode;
+import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.team.domain.TeamMemberRole;
-import site.omagotchi.learningservice.team.infrastructure.TeamMemberRepository;
-import site.omagotchi.learningservice.team.infrastructure.TeamRepository;
+import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
+import site.omagotchi.learningservice.team.application.port.TeamRepository;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -79,12 +81,12 @@ class TeamServiceTest {
         given(teamAccessSupport.resolveMembershipForCreate(1L, userId)).willReturn(membership);
         given(teamRepository.existsActiveByCohortIdAndName(1L, "오마고치")).willReturn(false);
         given(teamMemberRepository.existsByCohortMembershipId(10L)).willReturn(false);
-        given(teamRepository.saveAndFlush(any())).willAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
+        given(teamRepository.save(any())).willAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
 
         teamService.create(new CreateTeamRequest(1L, "오마고치"), userId);
 
         ArgumentCaptor<TeamMember> captor = ArgumentCaptor.forClass(TeamMember.class);
-        verify(teamMemberRepository).saveAndFlush(captor.capture());
+        verify(teamMemberRepository).save(captor.capture());
         assertThat(captor.getValue().isMaster()).isTrue();
         assertThat(captor.getValue().getCohortMembershipId()).isEqualTo(10L);
     }
@@ -96,7 +98,9 @@ class TeamServiceTest {
         given(teamRepository.existsActiveByCohortIdAndName(1L, "오마고치")).willReturn(false);
         given(teamMemberRepository.existsByCohortMembershipId(10L)).willReturn(true);
 
-        assertThatThrownBy(() -> teamService.create(new CreateTeamRequest(1L, "오마고치"), userId))
+        CreateTeamRequest request = new CreateTeamRequest(1L, "오마고치");
+
+        assertThatThrownBy(() -> teamService.create(request, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.ALREADY_IN_TEAM);
     }
 
@@ -106,11 +110,13 @@ class TeamServiceTest {
         given(teamAccessSupport.resolveMembershipForCreate(1L, userId)).willReturn(membership);
         given(teamRepository.existsActiveByCohortIdAndName(1L, "오마고치")).willReturn(true);
 
-        assertThatThrownBy(() -> teamService.create(new CreateTeamRequest(1L, "오마고치"), userId))
+        CreateTeamRequest request = new CreateTeamRequest(1L, "오마고치");
+
+        assertThatThrownBy(() -> teamService.create(request, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.DUPLICATE_NAME);
 
-        verify(teamRepository, never()).saveAndFlush(any());
-        verify(teamMemberRepository, never()).saveAndFlush(any());
+        verify(teamRepository, never()).save(any());
+        verify(teamMemberRepository, never()).save(any());
     }
 
     @Test
@@ -127,7 +133,7 @@ class TeamServiceTest {
         TeamMember normalMember = createMember(2L, teamId, 20L, TeamMemberRole.MEMBER, now);
 
         given(teamAccessSupport.loadActiveTeam(teamId)).willReturn(team);
-        given(teamAccessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
+        given(teamAccessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(teamAccessSupport.requireMembership(teamId, 10L)).willReturn(masterMember);
         given(teamMemberRepository.findByTeamIdOrderByJoinedAtAsc(teamId))
                 .willReturn(List.of(normalMember, masterMember));
@@ -154,7 +160,7 @@ class TeamServiceTest {
         Team team = createTeamWithId(teamId, 1L);
 
         given(teamAccessSupport.loadActiveTeam(teamId)).willReturn(team);
-        given(teamAccessSupport.requiredActiveMembership(1L, userId))
+        given(teamAccessSupport.requireActiveMembership(1L, userId))
                 .willThrow(new BusinessException(TeamErrorCode.NOT_A_MEMBER));
 
         assertThatThrownBy(() -> teamService.getTeam(teamId, userId))

@@ -9,14 +9,22 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * {@code teams} 접근.
+ * {@code teams}의 Spring Data 접근. Application은 이 인터페이스를 보지 않는다 —
+ * {@code TeamRepository} Port를 통하고, 그 구현은 {@link TeamJpaPersistence}다.
+ *
+ * <p>Port가 아니라 여기에 {@code JpaRepository}가 붙는 이유는 flush 시점과 인덱스 위반
+ * 변환이 기술 세부사항이기 때문이다. 이 인터페이스가 Port를 직접 구현하면
+ * {@code save}의 flush 의미와 실패 변환을 표현할 수 없다.</p>
  *
  * <p>팀은 소프트 삭제이므로 "행이 있다"와 "살아 있다"가 다르다. 조회 메서드에
  * {@code DeletedAtIsNull}이 붙어 있는지 항상 확인해야 하며, 해체된 팀이 목록이나
  * 상세에 새어 나가면 안 된다. 예외는 {@link #findByIdForUpdate(Long)} 하나뿐이고
  * 그건 의도적이다.</p>
+ *
+ * <p>테스트는 이 인터페이스를 직접 써도 된다. Port를 우회해 DB 제약 자체를 확인하는 것이
+ * 목적일 때가 있고, 컨벤션의 의존 방향 규칙은 {@code src/main}에만 적용된다.</p>
  */
-public interface TeamRepository extends JpaRepository<Team, Long> {
+public interface TeamJpaRepository extends JpaRepository<Team, Long> {
 
     /**
      * 단건 조회. 해체된 팀은 없는 것으로 취급한다.

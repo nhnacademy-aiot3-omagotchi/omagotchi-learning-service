@@ -6,14 +6,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import site.omagotchi.learningservice.team.application.MembershipReader;
+import site.omagotchi.learningservice.team.application.port.MembershipReader;
 import site.omagotchi.learningservice.team.application.TeamAccessSupport;
 import site.omagotchi.learningservice.team.application.TeamMembership;
 import site.omagotchi.learningservice.team.domain.Team;
-import site.omagotchi.learningservice.team.domain.TeamErrorCode;
+import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.domain.TeamMember;
-import site.omagotchi.learningservice.team.infrastructure.TeamMemberRepository;
-import site.omagotchi.learningservice.team.infrastructure.TeamRepository;
+import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
+import site.omagotchi.learningservice.team.application.port.TeamRepository;
 
 import java.util.List;
 import java.util.Optional;
@@ -77,7 +77,7 @@ class TeamAccessSupportTest {
         TeamMembership membership = new TeamMembership(10L, 1L, userId);
         given(membershipReader.findActive(1L, userId)).willReturn(Optional.of(membership));
 
-        assertThat(teamAccessSupport.requiredActiveMembership(1L, userId)).isEqualTo(membership);
+        assertThat(teamAccessSupport.requireActiveMembership(1L, userId)).isEqualTo(membership);
     }
 
     @Test
@@ -85,7 +85,7 @@ class TeamAccessSupportTest {
     void test5() {
         given(membershipReader.findActive(1L, userId)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> teamAccessSupport.requiredActiveMembership(1L, userId))
+        assertThatThrownBy(() -> teamAccessSupport.requireActiveMembership(1L, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.COHORT_ACCESS_DENIED);
     }
 

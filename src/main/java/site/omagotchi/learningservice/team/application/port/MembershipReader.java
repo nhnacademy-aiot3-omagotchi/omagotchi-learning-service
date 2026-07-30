@@ -1,4 +1,6 @@
-package site.omagotchi.learningservice.team.application;
+package site.omagotchi.learningservice.team.application.port;
+
+import site.omagotchi.learningservice.team.application.TeamMembership;
 
 import java.util.Collection;
 import java.util.List;

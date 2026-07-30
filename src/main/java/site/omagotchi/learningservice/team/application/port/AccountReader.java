@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.team.application;
+package site.omagotchi.learningservice.team.application.port;
 
 import java.util.Collection;
 import java.util.Map;

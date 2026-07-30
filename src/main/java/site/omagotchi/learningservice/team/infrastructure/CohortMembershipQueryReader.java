@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
-import site.omagotchi.learningservice.team.application.MembershipReader;
+import site.omagotchi.learningservice.team.application.port.MembershipReader;
 import site.omagotchi.learningservice.team.application.TeamMembership;
 
 import java.util.Collection;
@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
  */
 @Component
 @RequiredArgsConstructor
-public class CohortMembershipReaderAdapter implements MembershipReader {
+public class CohortMembershipQueryReader implements MembershipReader {
 
     private final CohortMembershipRepository membershipRepository;
 

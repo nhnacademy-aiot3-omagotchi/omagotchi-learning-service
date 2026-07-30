@@ -1,7 +1,6 @@
 package site.omagotchi.learningservice.team.application;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
@@ -10,10 +9,11 @@ import site.omagotchi.learningservice.team.application.dto.result.TeamDetailResp
 import site.omagotchi.learningservice.team.application.dto.result.TeamMemberResponse;
 import site.omagotchi.learningservice.team.application.dto.result.TeamResponse;
 import site.omagotchi.learningservice.team.domain.Team;
-import site.omagotchi.learningservice.team.domain.TeamErrorCode;
 import site.omagotchi.learningservice.team.domain.TeamMember;
-import site.omagotchi.learningservice.team.infrastructure.TeamMemberRepository;
-import site.omagotchi.learningservice.team.infrastructure.TeamRepository;
+import site.omagotchi.learningservice.team.application.port.AccountReader;
+import site.omagotchi.learningservice.team.application.port.MembershipReader;
+import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
+import site.omagotchi.learningservice.team.application.port.TeamRepository;
 
 import java.util.Comparator;
 import java.util.List;
@@ -50,7 +50,8 @@ public class TeamService {
      * <p>중복 이름·기소속 검사를 먼저 하지만 그것으로 끝이 아니다. 두 요청이 같은 시점에
      * "없음"을 확인하고 둘 다 INSERT할 수 있어서, 선검사는 정상 경로에 친절한 메시지를 주는
      * 용도이고 실제 방어선은 {@code uq_teams_active_name}과 {@code uq_team_members_membership}이다.
-     * 그래서 INSERT를 try로 감싸 인덱스 위반을 같은 에러 코드로 변환한다.</p>
+     * 인덱스 위반을 같은 에러 코드로 되돌리는 일은 Port 구현이 맡으므로 여기서는
+     * 두 경로가 같은 예외로 보인다.</p>
      *
      * <p>{@code request.cohortId()}는 null일 수 있다 (RM-28). 활성 기수가 하나면 서버가
      * 결정하고, 둘 이상이면 지정을 요구한다 — 자세한 분기는
@@ -63,7 +64,13 @@ public class TeamService {
     @Transactional
     public TeamResponse create(CreateTeamRequest request, UUID userId) {
         TeamMembership membership = accessSupport.resolveMembershipForCreate(request.cohortId(), userId);
+
+        // 도메인은 규칙을 boolean으로만 표현한다. 그것을 사용자 대상 400으로 옮기는 것이 여기 책임이다 —
+        // Team이 직접 BusinessException을 던지면 도메인이 외부 오류 계약을 알게 된다.
         String name = Team.normalizeName(request.name());
+        if (!Team.isValidName(name)) {
+            throw new BusinessException(TeamErrorCode.INVALID_NAME);
+        }
 
         if (teamRepository.existsActiveByCohortIdAndName(membership.cohortId(), name)) {
             throw new BusinessException(TeamErrorCode.DUPLICATE_NAME);
@@ -75,15 +82,11 @@ public class TeamService {
             throw new BusinessException(TeamErrorCode.ALREADY_IN_TEAM);
         }
 
-        try {
-            // saveAndFlush를 쓴 이유는 save만 하면 flush가 커밋 시점으로 밀려서 try 밖에서 예외가 터지기 때문이다.
-            // 그러면 변환기가 안 잡습니다.
-            Team team = teamRepository.saveAndFlush(Team.create(membership.cohortId(), name));
-            teamMemberRepository.saveAndFlush(TeamMember.master(team.getId(), membership.id()));
-            return TeamResponse.from(team);
-        } catch (DataIntegrityViolationException e) {
-            throw TeamConstraintTranslator.translate(e);
-        }
+        // 인덱스 위반의 ErrorCode 변환은 Port 구현이 책임진다 —
+        // 여기서 기술 예외를 잡으면 Application이 Spring Data와 인덱스명을 알게 된다.
+        Team team = teamRepository.save(Team.create(membership.cohortId(), name));
+        teamMemberRepository.save(TeamMember.master(team.getId(), membership.id()));
+        return TeamResponse.from(team);
     }
 
     /**
@@ -116,7 +119,7 @@ public class TeamService {
      */
     public TeamDetailResponse getTeam(Long teamId, UUID userId) {
         Team team = accessSupport.loadActiveTeam(teamId);
-        TeamMembership membership = accessSupport.requiredActiveMembership(team.getCohortId(), userId);
+        TeamMembership membership = accessSupport.requireActiveMembership(team.getCohortId(), userId);
         accessSupport.requireMembership(teamId, membership.id());
 
         List<TeamMember> members = teamMemberRepository.findByTeamIdOrderByJoinedAtAsc(teamId);

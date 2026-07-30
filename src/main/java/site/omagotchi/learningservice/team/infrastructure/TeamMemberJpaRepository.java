@@ -11,7 +11,11 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * {@code team_members} 접근.
+ * {@code team_members}의 Spring Data 접근. Application은 {@code TeamMemberRepository} Port를
+ * 통하며, 그 구현은 {@link TeamMemberJpaPersistence}다.
+ *
+ * <p>Port에 없는 메서드가 여기 남아 있는 것은 의도다 — 위임·해체·자동 위임(이슈 #8)이
+ * 쓸 조회들이며, 해당 서비스를 구현할 때 Port로 올린다. 지금 안 쓰인다고 지우면 안 된다.</p>
  *
  * <p>이 테이블에는 상태 컬럼이 없다. 행의 존재 자체가 소속이고, 탈퇴·제외·해체는 모두
  * 물리 삭제다. 따라서 여기에는 "활성 필터"가 없으며, 소프트 삭제 메서드를 추가하면
@@ -20,7 +24,7 @@ import java.util.Optional;
  * <p>주체 키가 {@code cohort_membership_id}인 것도 유의한다. 같은 사람이라도 기수가
  * 다르면 다른 값이므로, "이 계정이 팀에 있나"를 계정 id로 묻는 메서드는 여기 없다.</p>
  */
-public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
+public interface TeamMemberJpaRepository extends JpaRepository<TeamMember, Long> {
 
     /**
      * 이 멤버십이 이미 어떤 팀에든 소속됐는지 (GR-18).

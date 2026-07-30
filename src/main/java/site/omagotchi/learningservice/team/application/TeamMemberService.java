@@ -1,15 +1,15 @@
 package site.omagotchi.learningservice.team.application;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.application.dto.command.AddTeamMemberRequest;
 import site.omagotchi.learningservice.team.domain.Team;
-import site.omagotchi.learningservice.team.domain.TeamErrorCode;
 import site.omagotchi.learningservice.team.domain.TeamMember;
-import site.omagotchi.learningservice.team.infrastructure.TeamMemberRepository;
+import site.omagotchi.learningservice.team.application.port.AccountReader;
+import site.omagotchi.learningservice.team.application.port.MembershipReader;
+import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 
 import java.util.UUID;
 
@@ -51,7 +51,7 @@ public class TeamMemberService {
     public void addMember(Long teamId, AddTeamMemberRequest request, UUID userId) {
         Long cohortId = accessSupport.requireActiveTeamCohortId(teamId);
         TeamMembership requestMembership =
-                accessSupport.requiredActiveMembership(cohortId, userId);
+                accessSupport.requireActiveMembership(cohortId, userId);
         accessSupport.requireMaster(teamId, requestMembership.id());
 
         validateAccount(request.targetUserId());
@@ -73,14 +73,9 @@ public class TeamMemberService {
             throw new BusinessException(TeamErrorCode.CAPACITY_EXCEEDED);
         }
 
-        try {
-            teamMemberRepository.saveAndFlush(
-                    TeamMember.member(lockedTeam.getId(), targetMembership.id())
-            );
-        } catch (DataIntegrityViolationException exception) {
-            // 대상이 이미 같은 기수의 다른 팀 소속 → uq_team_members_membership 위반 (GR-10, GR-18)
-            throw TeamConstraintTranslator.translate(exception);
-        }
+        // 대상이 이미 같은 기수의 다른 팀 소속이면 uq_team_members_membership 위반이 되고 (GR-10, GR-18),
+        // Port 구현이 그것을 ALREADY_IN_TEAM으로 변환해 던진다.
+        teamMemberRepository.save(TeamMember.member(lockedTeam.getId(), targetMembership.id()));
     }
 
     /**
@@ -103,7 +98,7 @@ public class TeamMemberService {
     public void kickMember(Long teamId, Long targetMemberId, UUID userId) {
         Team team = accessSupport.lockActiveTeam(teamId);
         TeamMembership requestMembership =
-                accessSupport.requiredActiveMembership(team.getCohortId(), userId);
+                accessSupport.requireActiveMembership(team.getCohortId(), userId);
         accessSupport.requireMaster(teamId, requestMembership.id());
 
         TeamMember target = teamMemberRepository.findById(targetMemberId)
@@ -129,7 +124,7 @@ public class TeamMemberService {
     public void leave(Long teamId, UUID userId) {
         Team team = accessSupport.lockActiveTeam(teamId);
         TeamMembership membership =
-                accessSupport.requiredActiveMembership(team.getCohortId(), userId);
+                accessSupport.requireActiveMembership(team.getCohortId(), userId);
         TeamMember member = accessSupport.requireMembership(teamId, membership.id());
 
         if (member.isMaster()) {

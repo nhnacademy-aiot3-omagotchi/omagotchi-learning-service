@@ -4,9 +4,6 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.team.domain.TeamErrorCode;
-
 import java.time.OffsetDateTime;
 
 /**
@@ -58,28 +55,47 @@ public class Team {
      * 마스터 없는 팀이 남는다.</p>
      *
      * @param cohortId 팀이 속할 기수. 요청자의 활성 기수임이 검증된 값이어야 한다 (RM-28)
-     * @param rawName  정규화 전 이름
-     * @throws site.omagotchi.learningservice.global.exception.BusinessException 이름이 trim 후 1~30자가 아니면
+     * @param rawName  정규화 전 이름. 호출 전에 {@link #isValidName(String)}으로 확인해야 한다
+     * @throws IllegalArgumentException 이름 규칙을 어긴 경우. 사용자 입력 오류가 아니라
+     *         Application이 선검증을 빠뜨린 호출 계약 위반이며, 400이 아니라 500으로 드러나야 한다
      */
     public static Team create(Long cohortId, String rawName) {
+        String normalized = normalizeName(rawName);
+        if (!isValidName(normalized)) {
+            throw new IllegalArgumentException("팀 이름 규칙을 만족하지 않습니다. Application에서 먼저 검증해야 합니다.");
+        }
+
         Team team = new Team();
         team.cohortId = cohortId;
-        team.name = normalizeName(rawName);
+        team.name = normalized;
         team.createdAt = OffsetDateTime.now();
         return team;
     }
 
     /**
-     * 팀 이름 정규화 및 검증 (GR-21).
-     * ck_teams_name이 name = BTRIM(name)을 요구하므로 정규화를 건너뛰면 DB에서 거부된다.
-     * 중복 검사 쿼리와 저장이 같은 기준을 쓰도록 이 메서드를 공유한다.
+     * 팀 이름 정규화 (GR-21). 앞뒤 공백을 제거하고 null은 빈 문자열로 만든다.
+     *
+     * <p>{@code ck_teams_name}이 {@code name = BTRIM(name)}을 요구하므로 정규화를 건너뛰면
+     * DB에서 거부된다. 중복 검사 쿼리와 저장이 같은 기준을 쓰도록 이 메서드를 공유한다.</p>
+     *
+     * <p>검증하지 않고 변환만 한다 — 규칙 위반 여부는 {@link #isValidName(String)}로 따로 묻는다.
+     * 도메인은 조건을 {@code boolean}으로 표현하고, 그것을 사용자 대상 실패로 옮기는 것은
+     * Application의 몫이기 때문이다.</p>
      */
     public static String normalizeName(String rawName) {
-        String normalized = rawName == null ? "" : rawName.strip();
-        if (normalized.isEmpty() || normalized.length() > NAME_MAX_LENGTH) {
-            throw new BusinessException(TeamErrorCode.INVALID_NAME);
-        }
-        return normalized;
+        return rawName == null ? "" : rawName.strip();
+    }
+
+    /**
+     * 정규화된 이름이 팀 이름 규칙을 만족하는가 (GR-21): 1자 이상 {@value #NAME_MAX_LENGTH}자 이하.
+     *
+     * <p>{@link #normalizeName(String)}의 결과를 넘겨야 한다. 원문을 그대로 넣으면
+     * 앞뒤 공백이 길이에 포함돼 "30자 + 공백"이 잘못 거부된다.</p>
+     */
+    public static boolean isValidName(String normalizedName) {
+        return normalizedName != null
+                && !normalizedName.isEmpty()
+                && normalizedName.length() <= NAME_MAX_LENGTH;
     }
 
     /** 팀 해체 (GR-13 단독 탈퇴 / GR-19 해체 / CE-01 기수 종료). 행은 보존한다. */

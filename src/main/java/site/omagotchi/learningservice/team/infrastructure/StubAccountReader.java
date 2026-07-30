@@ -2,7 +2,7 @@ package site.omagotchi.learningservice.team.infrastructure;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
-import site.omagotchi.learningservice.team.application.AccountReader;
+import site.omagotchi.learningservice.team.application.port.AccountReader;
 
 import java.util.Collection;
 import java.util.Map;

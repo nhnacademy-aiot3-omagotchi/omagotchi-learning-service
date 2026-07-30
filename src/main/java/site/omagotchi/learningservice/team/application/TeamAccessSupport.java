@@ -4,10 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.domain.Team;
-import site.omagotchi.learningservice.team.domain.TeamErrorCode;
 import site.omagotchi.learningservice.team.domain.TeamMember;
-import site.omagotchi.learningservice.team.infrastructure.TeamMemberRepository;
-import site.omagotchi.learningservice.team.infrastructure.TeamRepository;
+import site.omagotchi.learningservice.team.application.port.MembershipReader;
+import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
+import site.omagotchi.learningservice.team.application.port.TeamRepository;
 
 import java.util.List;
 import java.util.UUID;
@@ -53,7 +53,7 @@ public class TeamAccessSupport {
      * 팀 조작 권한은 모두 팀의 기수 기준으로 판정한다 —
      * 기수가 종료돼 멤버십이 ENDED가 되면 MASTER였어도 여기서 막힌다.
      */
-    public TeamMembership requiredActiveMembership(Long cohortId, UUID userId) {
+    public TeamMembership requireActiveMembership(Long cohortId, UUID userId) {
         return membershipReader.findActive(cohortId, userId)
                 .orElseThrow(() -> new BusinessException(TeamErrorCode.COHORT_ACCESS_DENIED));
     }

@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.study.application.time;
+package site.omagotchi.learningservice.study.domain;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -9,7 +9,9 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.Month;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("학습 시간 정책")
 class StudyTimePolicyTest {

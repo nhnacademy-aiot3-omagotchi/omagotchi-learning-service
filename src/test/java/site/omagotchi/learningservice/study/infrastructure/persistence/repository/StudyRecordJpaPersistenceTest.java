@@ -13,8 +13,6 @@ import site.omagotchi.learningservice.study.domain.StudyRecord;
 import site.omagotchi.learningservice.study.application.StudyRecordErrorCode;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.Month;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -42,13 +40,12 @@ class StudyRecordJpaPersistenceTest {
             UUID studyRecordId = UUID.fromString(
                     "00000000-0000-0000-0000-000000000001"
             );
-            StudyRecord studyRecord = StudyRecord.builder()
-                    .cohortMembershipId(1L)
-                    .aggregationDate(LocalDate.of(2000, Month.JANUARY, 1))
-                    .startTime(Instant.parse("2000-01-01T01:00:00Z"))
-                    .endTime(Instant.parse("2000-01-01T02:00:00Z"))
-                    .studySeconds(3_600L)
-                    .build();
+            StudyRecord studyRecord = StudyRecord.create(
+                    1L,
+                    Instant.parse("2000-01-01T01:00:00Z"),
+                    Instant.parse("2000-01-01T02:00:00Z"),
+                    3_600L
+            );
             given(studyRecordJpaRepository.saveAndFlush(studyRecord)).willThrow(
                     new ObjectOptimisticLockingFailureException(StudyRecord.class, studyRecordId)
             );

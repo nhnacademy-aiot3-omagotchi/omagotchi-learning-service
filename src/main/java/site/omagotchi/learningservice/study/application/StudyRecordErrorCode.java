@@ -25,7 +25,7 @@ public enum StudyRecordErrorCode implements ErrorCode {
     VERSION_CONFLICT(
             ErrorType.CONFLICT,
             "STUDY_RECORD_VERSION_CONFLICT",
-            "다른 사용자가 먼저 데이터를 수정했습니다. 최신 데이터를 조회한 후 다시 요청해 주세요."
+            "데이터가 최신이 아닙니다. 최신 데이터를 조회한 후 다시 요청해 주세요."
     ),
     WRITE_LOCK_TIMEOUT(
             ErrorType.CONFLICT,

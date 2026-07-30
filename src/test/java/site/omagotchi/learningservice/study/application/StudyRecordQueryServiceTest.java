@@ -63,13 +63,12 @@ class StudyRecordQueryServiceTest {
     @DisplayName("정상 처리")
     void returnsStudyRecordResult() {
         UUID studyRecordId = UUID.randomUUID();
-        StudyRecord entity = StudyRecord.builder()
-                .cohortMembershipId(1L)
-                .aggregationDate(BASE_DATE)
-                .startTime(START_TIME)
-                .endTime(END_TIME)
-                .studySeconds(3_600L)
-                .build();
+        StudyRecord entity = StudyRecord.create(
+                COHORT_MEMBERSHIP_ID,
+                START_TIME,
+                END_TIME,
+                3_600L
+        );
         given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
                 studyRecordId,
                 COHORT_MEMBERSHIP_ID
@@ -138,12 +137,10 @@ class StudyRecordQueryServiceTest {
     void returnsDailyRecordsAndTotalStudySeconds() {
         LocalDate aggregationDate = LocalDate.of(2000, Month.JANUARY, 10);
         StudyRecord first = record(
-                aggregationDate,
                 "2000-01-09T20:00:00Z",
                 "2000-01-09T21:00:00Z"
         );
         StudyRecord second = record(
-                aggregationDate,
                 "2000-01-09T22:00:00Z",
                 "2000-01-10T00:00:00Z"
         );
@@ -289,18 +286,16 @@ class StudyRecordQueryServiceTest {
     }
 
     private StudyRecord record(
-            LocalDate aggregationDate,
             String startTime,
             String endTime
     ) {
         Instant startInstant = Instant.parse(startTime);
         Instant endInstant = Instant.parse(endTime);
-        return StudyRecord.builder()
-                .cohortMembershipId(COHORT_MEMBERSHIP_ID)
-                .aggregationDate(aggregationDate)
-                .startTime(startInstant)
-                .endTime(endInstant)
-                .studySeconds(endInstant.getEpochSecond() - startInstant.getEpochSecond())
-                .build();
+        return StudyRecord.create(
+                COHORT_MEMBERSHIP_ID,
+                startInstant,
+                endInstant,
+                endInstant.getEpochSecond() - startInstant.getEpochSecond()
+        );
     }
 }

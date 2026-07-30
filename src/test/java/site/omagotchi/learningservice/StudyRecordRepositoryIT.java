@@ -92,7 +92,7 @@ class StudyRecordRepositoryIT {
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
             );
-            studyRecord.applySoftDelete(Instant.parse("2000-01-02T00:00:00Z"));
+            studyRecord.softDelete(Instant.parse("2000-01-02T00:00:00Z"));
             studyRecordRepository.saveAndFlush(studyRecord);
 
             boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
@@ -180,8 +180,7 @@ class StudyRecordRepositoryIT {
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
             );
-            studyRecord.applyUpdate(
-                    BASE_DATE,
+            studyRecord.updateTimeRange(
                     Instant.parse("2000-01-01T03:00:00Z"),
                     Instant.parse("2000-01-01T04:00:00Z"),
                     3_600L
@@ -224,13 +223,12 @@ class StudyRecordRepositoryIT {
     ) {
         Instant startInstant = Instant.parse(startTime);
         Instant endInstant = Instant.parse(endTime);
-        StudyRecord studyRecord = StudyRecord.builder()
-                .cohortMembershipId(cohortMembershipId)
-                .aggregationDate(BASE_DATE)
-                .startTime(startInstant)
-                .endTime(endInstant)
-                .studySeconds(endInstant.getEpochSecond() - startInstant.getEpochSecond())
-                .build();
+        StudyRecord studyRecord = StudyRecord.create(
+                cohortMembershipId,
+                startInstant,
+                endInstant,
+                endInstant.getEpochSecond() - startInstant.getEpochSecond()
+        );
 
         return studyRecordRepository.saveAndFlush(studyRecord);
     }

@@ -12,13 +12,12 @@ import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRep
 import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
-import site.omagotchi.learningservice.study.application.time.StudyTimePolicy;
 import site.omagotchi.learningservice.study.domain.StudyRecord;
+import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -64,15 +63,12 @@ public class StudyRecordCommandService {
 
         // 현재 단계에서는 전달받은 구간 전체를 하나의 기록으로 저장한다.
         long studySeconds = Duration.between(startInstant, endInstant).getSeconds();
-        LocalDate aggregationDate = StudyTimePolicy.aggregationDate(startInstant);
-
-        StudyRecord entity = StudyRecord.builder()
-                .cohortMembershipId(cohortMembershipId)
-                .aggregationDate(aggregationDate)
-                .startTime(startInstant)
-                .endTime(endInstant)
-                .studySeconds(studySeconds)
-                .build();
+        StudyRecord entity = StudyRecord.create(
+                cohortMembershipId,
+                startInstant,
+                endInstant,
+                studySeconds
+        );
 
         StudyRecord saved = studyRecordRepository.save(entity);
 
@@ -118,10 +114,8 @@ public class StudyRecordCommandService {
 
         // 수정 구간으로 studySeconds를 재계산
         long studySeconds = Duration.between(startInstant, endInstant).getSeconds();
-        // 기준 시간 계산
-        LocalDate aggregationDate = StudyTimePolicy.aggregationDate(startInstant);
 
-        entity.applyUpdate(aggregationDate, startInstant, endInstant, studySeconds);
+        entity.updateTimeRange(startInstant, endInstant, studySeconds);
         StudyRecord saved = studyRecordRepository.saveWithVersionCheck(entity);
 
         return StudyRecordResult.from(saved);
@@ -150,7 +144,7 @@ public class StudyRecordCommandService {
         validateExpectedVersion(entity, expectedVersion);
 
         // 현재 기록 소프트 삭제
-        entity.applySoftDelete(clock.instant());
+        entity.softDelete(clock.instant());
         // TODO: 삭제 시, 삭제한 유저에 대한 정보를 log에 남기기 (Optional)
 
         studyRecordRepository.saveWithVersionCheck(entity);

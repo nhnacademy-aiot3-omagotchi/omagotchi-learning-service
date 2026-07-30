@@ -2,7 +2,7 @@ package site.omagotchi.learningservice.study.presentation.request;
 
 import jakarta.validation.constraints.NotNull;
 import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
-import site.omagotchi.learningservice.study.application.time.StudyTimePolicy;
+import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
 
 import java.time.LocalDate;
 import java.time.LocalTime;

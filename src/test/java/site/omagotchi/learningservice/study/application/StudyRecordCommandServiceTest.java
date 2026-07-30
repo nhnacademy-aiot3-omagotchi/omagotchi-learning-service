@@ -575,13 +575,12 @@ class StudyRecordCommandServiceTest {
     }
 
     private StudyRecord createEntity(Instant startTime, Instant endTime) {
-        StudyRecord entity = StudyRecord.builder()
-                .cohortMembershipId(COHORT_MEMBERSHIP_ID)
-                .aggregationDate(BASE_DATE)
-                .startTime(startTime)
-                .endTime(endTime)
-                .studySeconds(endTime.getEpochSecond() - startTime.getEpochSecond())
-                .build();
+        StudyRecord entity = StudyRecord.create(
+                COHORT_MEMBERSHIP_ID,
+                startTime,
+                endTime,
+                endTime.getEpochSecond() - startTime.getEpochSecond()
+        );
 
         ReflectionTestUtils.setField(entity, "id", STUDY_RECORD_ID);
         ReflectionTestUtils.setField(entity, "version", 0L);

@@ -1,6 +1,6 @@
 package site.omagotchi.learningservice.team.support;
 
-import site.omagotchi.learningservice.team.application.AccountReader;
+import site.omagotchi.learningservice.team.application.port.AccountReader;
 
 import java.util.Collection;
 import java.util.HashMap;

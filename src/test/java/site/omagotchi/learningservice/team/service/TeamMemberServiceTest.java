@@ -8,16 +8,16 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import site.omagotchi.learningservice.team.application.AccountReader;
-import site.omagotchi.learningservice.team.application.MembershipReader;
+import site.omagotchi.learningservice.team.application.port.AccountReader;
+import site.omagotchi.learningservice.team.application.port.MembershipReader;
 import site.omagotchi.learningservice.team.application.TeamAccessSupport;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamMembership;
 import site.omagotchi.learningservice.team.application.dto.command.AddTeamMemberRequest;
 import site.omagotchi.learningservice.team.domain.Team;
-import site.omagotchi.learningservice.team.domain.TeamErrorCode;
+import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.domain.TeamMember;
-import site.omagotchi.learningservice.team.infrastructure.TeamMemberRepository;
+import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -70,7 +70,7 @@ class TeamMemberServiceTest {
     @DisplayName("팀원이 남아있으면 마스터는 위임 없이 탈퇴할 수 없다.")
     void test1() {
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
-        given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
+        given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMembership(1L, 10L)).willReturn(masterMember);
         given(teamMemberRepository.countByTeamId(1L)).willReturn(3L);
 
@@ -84,7 +84,7 @@ class TeamMemberServiceTest {
     @DisplayName("혼자 남은 마스터가 탈퇴하면 팀도 해체된다.")
     void test2() {
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
-        given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
+        given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMembership(1L, 10L)).willReturn(masterMember);
         given(teamMemberRepository.countByTeamId(1L)).willReturn(1L);
 
@@ -101,7 +101,7 @@ class TeamMemberServiceTest {
         TeamMembership targetMembership = new TeamMembership(20L, 1L, targetUserId);
 
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
-        given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
+        given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.ACTIVE);
         given(membershipReader.findActive(1L, targetUserId)).willReturn(Optional.of(targetMembership));
@@ -111,7 +111,7 @@ class TeamMemberServiceTest {
         teamMemberService.addMember(1L, new AddTeamMemberRequest(targetUserId), userId);
 
         ArgumentCaptor<TeamMember> captor = ArgumentCaptor.forClass(TeamMember.class);
-        verify(teamMemberRepository).saveAndFlush(captor.capture());
+        verify(teamMemberRepository).save(captor.capture());
         assertThat(captor.getValue().getCohortMembershipId()).isEqualTo(20L);
         assertThat(captor.getValue().isMaster()).isFalse();
     }
@@ -122,15 +122,17 @@ class TeamMemberServiceTest {
         UUID targetUserId = UUID.randomUUID();
 
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
-        given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
+        given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.ACTIVE);
         given(membershipReader.findActive(1L, targetUserId)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> teamMemberService.addMember(1L, new AddTeamMemberRequest(targetUserId), userId))
+        AddTeamMemberRequest request = new AddTeamMemberRequest(targetUserId);
+
+        assertThatThrownBy(() -> teamMemberService.addMember(1L, request, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.TARGET_NOT_IN_COHORT);
 
-        verify(teamMemberRepository, never()).saveAndFlush(any());
+        verify(teamMemberRepository, never()).save(any());
     }
 
     @Test
@@ -139,14 +141,16 @@ class TeamMemberServiceTest {
         UUID targetUserId = UUID.randomUUID();
 
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
-        given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
+        given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.WITHDRAWN);
 
-        assertThatThrownBy(() -> teamMemberService.addMember(1L, new AddTeamMemberRequest(targetUserId), userId))
+        AddTeamMemberRequest request = new AddTeamMemberRequest(targetUserId);
+
+        assertThatThrownBy(() -> teamMemberService.addMember(1L, request, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.ACCOUNT_WITHDRAWN);
 
-        verify(teamMemberRepository, never()).saveAndFlush(any());
+        verify(teamMemberRepository, never()).save(any());
     }
 
     @Test
@@ -155,14 +159,16 @@ class TeamMemberServiceTest {
         UUID targetUserId = UUID.randomUUID();
 
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
-        given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
+        given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.NOT_FOUND);
 
-        assertThatThrownBy(() -> teamMemberService.addMember(1L, new AddTeamMemberRequest(targetUserId), userId))
+        AddTeamMemberRequest request = new AddTeamMemberRequest(targetUserId);
+
+        assertThatThrownBy(() -> teamMemberService.addMember(1L, request, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.ACCOUNT_NOT_FOUND);
 
-        verify(teamMemberRepository, never()).saveAndFlush(any());
+        verify(teamMemberRepository, never()).save(any());
     }
 
     @Test
@@ -172,17 +178,19 @@ class TeamMemberServiceTest {
         TeamMembership targetMembership = new TeamMembership(20L, 1L, targetUserId);
 
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
-        given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
+        given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.ACTIVE);
         given(membershipReader.findActive(1L, targetUserId)).willReturn(Optional.of(targetMembership));
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
         given(teamMemberRepository.countByTeamId(1L)).willReturn(8L);
 
-        assertThatThrownBy(() -> teamMemberService.addMember(1L, new AddTeamMemberRequest(targetUserId), userId))
+        AddTeamMemberRequest request = new AddTeamMemberRequest(targetUserId);
+
+        assertThatThrownBy(() -> teamMemberService.addMember(1L, request, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.CAPACITY_EXCEEDED);
 
-        verify(teamMemberRepository, never()).saveAndFlush(any());
+        verify(teamMemberRepository, never()).save(any());
     }
 
     @Test
@@ -191,7 +199,7 @@ class TeamMemberServiceTest {
         TeamMember normalMember = createMemberWithId(2L, 1L, 20L, false);
 
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
-        given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
+        given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(teamMemberRepository.findById(2L)).willReturn(Optional.of(normalMember));
 
@@ -204,7 +212,7 @@ class TeamMemberServiceTest {
     @DisplayName("마스터 본인은 제외할 수 없다.")
     void test9() {
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
-        given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
+        given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(teamMemberRepository.findById(1L)).willReturn(Optional.of(masterMember));
 
@@ -218,7 +226,7 @@ class TeamMemberServiceTest {
     @DisplayName("존재하지 않는 팀원을 제외할 수 없다.")
     void test10() {
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
-        given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
+        given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(teamMemberRepository.findById(999L)).willReturn(Optional.empty());
 
@@ -232,7 +240,7 @@ class TeamMemberServiceTest {
         TeamMember otherTeamMember = createMemberWithId(5L, 2L, 30L, false);
 
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
-        given(accessSupport.requiredActiveMembership(1L, userId)).willReturn(membership);
+        given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(teamMemberRepository.findById(5L)).willReturn(Optional.of(otherTeamMember));
 

@@ -13,8 +13,8 @@ import site.omagotchi.learningservice.team.application.TeamAccessSupport;
 import site.omagotchi.learningservice.team.application.TeamService;
 import site.omagotchi.learningservice.team.application.dto.command.CreateTeamRequest;
 import site.omagotchi.learningservice.team.domain.Team;
-import site.omagotchi.learningservice.team.domain.TeamErrorCode;
-import site.omagotchi.learningservice.team.infrastructure.TeamRepository;
+import site.omagotchi.learningservice.team.application.TeamErrorCode;
+import site.omagotchi.learningservice.team.infrastructure.TeamJpaRepository;
 import site.omagotchi.learningservice.team.support.TeamTestFixture;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,7 +46,7 @@ class TeamDisbandRaceTest {
     TeamAccessSupport accessSupport;
 
     @Autowired
-    TeamRepository teamRepository;
+    TeamJpaRepository teamJpaRepository;
 
     @Autowired
     TransactionTemplate transactionTemplate;
@@ -120,9 +120,9 @@ class TeamDisbandRaceTest {
      */
     private void disbandInSeparateTransaction(Long teamId) {
         Thread other = new Thread(() -> transactionTemplate.executeWithoutResult(status -> {
-            Team target = teamRepository.findById(teamId).orElseThrow();
+            Team target = teamJpaRepository.findById(teamId).orElseThrow();
             target.disband();
-            teamRepository.saveAndFlush(target);
+            teamJpaRepository.saveAndFlush(target);
         }));
         other.start();
         try {

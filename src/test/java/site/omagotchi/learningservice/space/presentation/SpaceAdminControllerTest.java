@@ -13,6 +13,8 @@ import site.omagotchi.learningservice.space.application.port.in.ActivateSpaceUse
 import site.omagotchi.learningservice.space.application.port.in.DeactivateSpaceUseCase;
 import site.omagotchi.learningservice.space.application.port.in.DeleteSpaceUseCase;
 import site.omagotchi.learningservice.space.application.port.in.UpdateSpaceUseCase;
+import site.omagotchi.learningservice.space.application.port.in.AssignLabCohortUseCase;
+import site.omagotchi.learningservice.space.application.port.in.UnassignLabCohortUseCase;
 import site.omagotchi.learningservice.space.domain.exception.SpaceErrorCode;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
@@ -20,14 +22,17 @@ import site.omagotchi.learningservice.space.domain.SpaceType;
 
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -37,11 +42,17 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standal
 
 class SpaceAdminControllerTest {
 
+    private static final UUID USER_ID = UUID.fromString(
+            "019d2a48-80c0-4d6a-9a15-0b16d2dd74f1"
+    );
+
     private CreateSpaceUseCase createSpaceUseCase;
     private DeleteSpaceUseCase deleteSpaceUseCase;
     private ActivateSpaceUseCase activateSpaceUseCase;
     private DeactivateSpaceUseCase deactivateSpaceUseCase;
     private UpdateSpaceUseCase updateSpaceUseCase;
+    private AssignLabCohortUseCase assignLabCohortUseCase;
+    private UnassignLabCohortUseCase unassignLabCohortUseCase;
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -51,22 +62,32 @@ class SpaceAdminControllerTest {
         deactivateSpaceUseCase = mock(DeactivateSpaceUseCase.class);
         updateSpaceUseCase = mock(UpdateSpaceUseCase.class);
         deleteSpaceUseCase = mock(DeleteSpaceUseCase.class);
+        assignLabCohortUseCase = mock(AssignLabCohortUseCase.class);
+        unassignLabCohortUseCase = mock(UnassignLabCohortUseCase.class);
         SpaceAdminController controller = new SpaceAdminController(
                 createSpaceUseCase,
                 activateSpaceUseCase,
                 deactivateSpaceUseCase,
                 updateSpaceUseCase,
-                deleteSpaceUseCase
+                deleteSpaceUseCase,
+                assignLabCohortUseCase,
+                unassignLabCohortUseCase
         );
 
         mockMvc = standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
+                .defaultRequest(get("/")
+                        .header("X-User-Id", USER_ID))
                 .build();
     }
 
     @Test
     void mapsDuplicateSpaceNameToConflictResponse() throws Exception {
-        when(createSpaceUseCase.create(any(CreateSpaceCommand.class)))
+        when(createSpaceUseCase.create(
+                any(CreateSpaceCommand.class),
+                any(UUID.class),
+                anyString()
+        ))
                 .thenThrow(new BusinessException(
                         SpaceErrorCode.DUPLICATE_NAME
                 ));
@@ -86,7 +107,7 @@ class SpaceAdminControllerTest {
     void mapsSpaceNotFoundToNotFoundResponse() throws Exception {
         doThrow(new BusinessException(SpaceErrorCode.NOT_FOUND))
                 .when(deleteSpaceUseCase)
-                .delete(999L);
+                .delete(999L, USER_ID, "USER");
 
         mockMvc.perform(delete("/api/admin/spaces/999"))
                 .andExpect(status().isNotFound())
@@ -100,7 +121,11 @@ class SpaceAdminControllerTest {
 
     @Test
     void mapsInvalidSpaceNameToBadRequestResponse() throws Exception {
-        when(createSpaceUseCase.create(any(CreateSpaceCommand.class)))
+        when(createSpaceUseCase.create(
+                any(CreateSpaceCommand.class),
+                any(UUID.class),
+                anyString()
+        ))
                 .thenThrow(new BusinessException(
                         SpaceErrorCode.INVALID_NAME
                 ));
@@ -118,7 +143,11 @@ class SpaceAdminControllerTest {
 
     @Test
     void mapsInvalidSpaceCapacityToBadRequestResponse() throws Exception {
-        when(createSpaceUseCase.create(any(CreateSpaceCommand.class)))
+        when(createSpaceUseCase.create(
+                any(CreateSpaceCommand.class),
+                any(UUID.class),
+                anyString()
+        ))
                 .thenThrow(new BusinessException(
                         SpaceErrorCode.INVALID_CAPACITY
                 ));
@@ -153,12 +182,16 @@ class SpaceAdminControllerTest {
                 .andExpect(jsonPath("$.path").value("/api/admin/spaces"));
 
         verify(createSpaceUseCase, never())
-                .create(any(CreateSpaceCommand.class));
+                .create(
+                        any(CreateSpaceCommand.class),
+                        any(UUID.class),
+                        anyString()
+                );
     }
 
     @Test
     void activatesSpaceAndReturnsChangedStatus() throws Exception {
-        when(activateSpaceUseCase.activate(1L))
+        when(activateSpaceUseCase.activate(1L, USER_ID, "USER"))
                 .thenReturn(space(SpaceOperationalStatus.ACTIVE, null));
 
         mockMvc.perform(patch("/api/admin/spaces/1/activate"))
@@ -170,7 +203,12 @@ class SpaceAdminControllerTest {
 
     @Test
     void deactivatesSpaceWithReason() throws Exception {
-        when(deactivateSpaceUseCase.deactivate(1L, "정기 점검"))
+        when(deactivateSpaceUseCase.deactivate(
+                1L,
+                "정기 점검",
+                USER_ID,
+                "USER"
+        ))
                 .thenReturn(space(
                         SpaceOperationalStatus.INACTIVE,
                         "정기 점검"
@@ -215,12 +253,22 @@ class SpaceAdminControllerTest {
                         .value("COMMON_INVALID_REQUEST"));
 
         verify(deactivateSpaceUseCase, never())
-                .deactivate(any(Long.class), any(String.class));
+                .deactivate(
+                        any(Long.class),
+                        any(String.class),
+                        any(UUID.class),
+                        anyString()
+                );
     }
 
     @Test
     void mapsActiveOccupancyConflict() throws Exception {
-        when(deactivateSpaceUseCase.deactivate(1L, "점검"))
+        when(deactivateSpaceUseCase.deactivate(
+                1L,
+                "점검",
+                USER_ID,
+                "USER"
+        ))
                 .thenThrow(new BusinessException(
                         SpaceErrorCode.ACTIVE_OCCUPANCY_EXISTS
                 ));
@@ -233,6 +281,55 @@ class SpaceAdminControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_ACTIVE_OCCUPANCY_EXISTS"));
+    }
+
+    @Test
+    void assignsAndUnassignsLabCohort() throws Exception {
+        when(assignLabCohortUseCase.assignCohort(
+                1L,
+                42L,
+                USER_ID,
+                "USER"
+        )).thenReturn(lab(42L));
+        when(unassignLabCohortUseCase.unassignCohort(
+                1L,
+                USER_ID,
+                "SYSTEM_ADMIN"
+        )).thenReturn(lab(null));
+
+        mockMvc.perform(put("/api/admin/spaces/1/cohort")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"cohortId":42}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.cohortId").value(42))
+                .andExpect(jsonPath("$.updatedAt").exists());
+
+        mockMvc.perform(delete("/api/admin/spaces/1/cohort")
+                        .header("X-Global-Role", "SYSTEM_ADMIN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.cohortId").isEmpty());
+    }
+
+    @Test
+    void rejectsMissingAssignmentCohortIdAtRequestBoundary()
+            throws Exception {
+        mockMvc.perform(put("/api/admin/spaces/1/cohort")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code")
+                        .value("COMMON_INVALID_REQUEST"));
+
+        verify(assignLabCohortUseCase, never()).assignCohort(
+                any(Long.class),
+                any(Long.class),
+                any(UUID.class),
+                anyString()
+        );
     }
 
     @Test
@@ -258,7 +355,12 @@ class SpaceAdminControllerTest {
                         .value("COMMON_INVALID_REQUEST"));
 
         verify(updateSpaceUseCase, never())
-                .update(any(Long.class), any(UpdateSpaceCommand.class));
+                .update(
+                        any(Long.class),
+                        any(UpdateSpaceCommand.class),
+                        any(UUID.class),
+                        anyString()
+                );
     }
 
     @Test
@@ -277,7 +379,12 @@ class SpaceAdminControllerTest {
                         .value("COMMON_MALFORMED_REQUEST"));
 
         verify(updateSpaceUseCase, never())
-                .update(any(Long.class), any(UpdateSpaceCommand.class));
+                .update(
+                        any(Long.class),
+                        any(UpdateSpaceCommand.class),
+                        any(UUID.class),
+                        anyString()
+                );
     }
 
     private String validRequest() {
@@ -285,7 +392,8 @@ class SpaceAdminControllerTest {
                 {
                   "name": "회의실 A",
                   "type": "MEETING",
-                  "capacity": 8
+                  "capacity": 8,
+                  "cohortId": 42
                 }
                 """;
     }
@@ -301,12 +409,32 @@ class SpaceAdminControllerTest {
 
         return Space.restore(
                 1L,
-                null,
+                42L,
                 "회의실 A",
                 SpaceType.MEETING,
                 8,
                 status,
                 reason,
+                now.minusDays(1),
+                now,
+                null
+        );
+    }
+
+    private Space lab(Long cohortId) {
+        ZonedDateTime now = ZonedDateTime.of(
+                2026, 7, 29, 10, 0, 0, 0,
+                ZoneId.of("Asia/Seoul")
+        );
+
+        return Space.restore(
+                1L,
+                cohortId,
+                "실습실 A",
+                SpaceType.LAB,
+                20,
+                SpaceOperationalStatus.INACTIVE,
+                null,
                 now.minusDays(1),
                 now,
                 null

@@ -1,11 +1,16 @@
-package site.omagotchi.learningservice.team.domain;
+package site.omagotchi.learningservice.team.application;
 
 import lombok.RequiredArgsConstructor;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
 import site.omagotchi.learningservice.global.exception.ErrorType;
 
 /**
- * 팀 도메인 에러 코드.
+ * 팀 기능의 에러 코드.
+ *
+ * <p>{@code domain}이 아니라 {@code application}에 있는 것이 의도다. 오류 코드는 외부에 공개하는
+ * 실패 계약이지 업무 상태가 아니며, 도메인이 이걸 알면 {@code BusinessException}까지 끌고 들어와
+ * "업무 규칙"과 "HTTP로 어떻게 보일지"가 한 클래스에 섞인다. 도메인은 조건을 {@code boolean}으로만
+ * 표현하고, 그것을 여기 코드로 옮기는 것은 Application의 책임이다.</p>
  *
  * <p>{@link ErrorType}이 곧 HTTP 상태다 — {@code ErrorHttpStatusMapper}가
  * INVALID_INPUT→400, AUTHORIZATION→403, NOT_FOUND→404, CONFLICT→409로 옮긴다.

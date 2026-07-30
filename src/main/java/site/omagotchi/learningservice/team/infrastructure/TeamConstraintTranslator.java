@@ -1,14 +1,19 @@
-package site.omagotchi.learningservice.team.application;
+package site.omagotchi.learningservice.team.infrastructure;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.team.domain.TeamErrorCode;
+import site.omagotchi.learningservice.team.application.TeamErrorCode;
 
 /**
- * 유니크 위반을 도메인 에러로 변환한다.
+ * 유니크 위반을 기능 오류 코드로 변환한다.
+ *
+ * <p>{@code infrastructure}에 있는 이유는 여기서 다루는 것이 전부 기술 정보이기 때문이다 —
+ * Hibernate 예외 계층과 DB 인덱스명. Application이 이걸 알면 서비스 코드가 Spring Data와
+ * 인덱스 이름에 묶인다. 기술 실패가 하나의 오류 코드와 명확히 대응하고 호출자가
+ * 재시도·복구를 판단하지 않으므로, 중간 예외 타입을 두지 않고 곧바로 변환한다.</p>
  *
  * 서비스의 select 선검사는 동시 요청을 막지 못한다 — 두 트랜잭션이 같은 시점에
  * "없음"을 확인하고 둘 다 INSERT할 수 있다. 부분 유니크 인덱스가 최종 방어선이다.

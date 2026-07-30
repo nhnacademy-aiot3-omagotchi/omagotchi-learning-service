@@ -6,12 +6,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, TestJwtKeyConfig.class})
 @ActiveProfiles("test")
 @SpringBootTest
 class LearningServiceApplicationIT {

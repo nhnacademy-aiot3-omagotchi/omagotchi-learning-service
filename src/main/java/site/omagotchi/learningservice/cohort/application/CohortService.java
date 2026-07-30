@@ -12,6 +12,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.util.List;
@@ -30,7 +31,11 @@ public class CohortService {
      * 생성자는 검증된 JWT sub와 같은 UUID userId를 createdByUserId에 저장한다.
      */
     @Transactional
-    public CohortResponse create(CreateCohortCommand command, UUID userId, String globalRole) {
+    public CohortResponse create(
+            CreateCohortCommand command,
+            UUID userId,
+            GlobalRole globalRole
+    ) {
         accessService.requireSystemAdmin(globalRole);
 
         Cohort cohort = Cohort.create(
@@ -87,7 +92,11 @@ public class CohortService {
      * ACTIVE 전환 시 활성 MANAGER 소속이 최소 1명 있어야 한다.
      */
     @Transactional
-    public CohortResponse changeStatus(Long cohortId, ChangeCohortStatusCommand command, String globalRole) {
+    public CohortResponse changeStatus(
+            Long cohortId,
+            ChangeCohortStatusCommand command,
+            GlobalRole globalRole
+    ) {
         accessService.requireSystemAdmin(globalRole);
 
         Cohort cohort = getCohortOrThrow(cohortId);

@@ -59,3 +59,9 @@ telegram:
     token: ${TELEGRAM_BOT_TOKEN:}
   link-token:
     ttl: ${TELEGRAM_LINK_TOKEN_TTL:PT10M}
+
+auth:
+  jwt:
+    issuer: ${JWT_ISSUER:https://identity.omagotchi.local}
+    audience: ${JWT_AUDIENCE:omagotchi-api}
+    public-key-location: ${JWT_PUBLIC_KEY_LOCATION:file:./secrets/jwt-public.pem}

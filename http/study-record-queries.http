@@ -2,14 +2,14 @@
 # ACTIVE 학생 membership과 cohortId가 준비되었다고 가정하고 위에서 아래 순서대로 한 번 실행합니다.
 
 @baseUrl = http://localhost:8084
-@userId = 00000000-0000-0000-0000-000000000003
+@userAccessToken = <USER JWT>
 @dailyDate = 2000-01-01
 @monthlyMonth = 2000-01
 
 
 ### 일별 조회 확인용 첫 번째 공부 기록 생성 (1시간)
 POST {{baseUrl}}/api/v1/cohorts/{{cohortId}}/study-records
-X-User-Id: {{userId}}
+Authorization: Bearer {{userAccessToken}}
 X-Command-Id: {{$uuid}}
 Content-Type: application/json
 Accept: application/json
@@ -29,7 +29,7 @@ Accept: application/json
 
 ### 일별 조회 확인용 두 번째 공부 기록 생성 (30분)
 POST {{baseUrl}}/api/v1/cohorts/{{cohortId}}/study-records
-X-User-Id: {{userId}}
+Authorization: Bearer {{userAccessToken}}
 X-Command-Id: {{$uuid}}
 Content-Type: application/json
 Accept: application/json
@@ -49,7 +49,7 @@ Accept: application/json
 
 ### 월별 조회 확인용 다음 날 공부 기록 생성 (45분)
 POST {{baseUrl}}/api/v1/cohorts/{{cohortId}}/study-records
-X-User-Id: {{userId}}
+Authorization: Bearer {{userAccessToken}}
 X-Command-Id: {{$uuid}}
 Content-Type: application/json
 Accept: application/json
@@ -69,7 +69,7 @@ Accept: application/json
 
 ### 일별 공부 기록 조회
 GET {{baseUrl}}/api/v1/cohorts/{{cohortId}}/study-records?date={{dailyDate}}
-X-User-Id: {{userId}}
+Authorization: Bearer {{userAccessToken}}
 Accept: application/json
 
 > {%
@@ -83,7 +83,7 @@ Accept: application/json
 
 ### 월별 공부 시간 조회
 GET {{baseUrl}}/api/v1/cohorts/{{cohortId}}/study-time-summaries?month={{monthlyMonth}}
-X-User-Id: {{userId}}
+Authorization: Bearer {{userAccessToken}}
 Accept: application/json
 
 > {%

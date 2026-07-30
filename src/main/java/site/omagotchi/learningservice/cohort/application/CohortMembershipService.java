@@ -18,6 +18,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortJoinCodeRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.OffsetDateTime;
@@ -119,7 +120,7 @@ public class CohortMembershipService {
             Long membershipId,
             ApproveMembershipCommand command,
             UUID processedByUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         CohortMembership pendingMembership = membershipRepository.findByIdAndStatus(
                 membershipId,

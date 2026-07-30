@@ -23,6 +23,26 @@ cp .env.example .env
 
 `.env`의 DB 접속값은 개인 로컬 PostgreSQL 또는 팀 Compose 환경에 맞게 설정합니다. 학교 DB는 데이터베이스 이름과 `learning_service` schema 생성 권한을 확인하기 전까지 연결하지 않습니다.
 
+### 로컬 JWT 공개키
+
+`identity-service`와 `learning-service`가 같은 상위 디렉터리에 있다고 가정합니다. Identity에서 로컬 RSA key pair를 한 번 생성하면 Learning은 private key를 복사하지 않고 다음 public key를 직접 참조합니다.
+
+```text
+../identity-service/secrets/jwt-public.pem
+```
+
+아직 로컬 key pair가 없다면 `identity-service` 저장소에서 생성합니다.
+
+```bash
+mkdir -p secrets
+chmod 700 secrets
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out secrets/jwt-private.pem
+openssl pkey -in secrets/jwt-private.pem -pubout -out secrets/jwt-public.pem
+chmod 600 secrets/jwt-private.pem secrets/jwt-public.pem
+```
+
+`local` profile의 기본 공개키 경로와 `.env.example`은 이 파일을 가리킵니다. 경로를 바꿔야 할 때만 `.env`의 `JWT_PUBLIC_KEY_LOCATION`을 변경합니다.
+
 ## Migration 규칙
 
 실행 SQL은 `src/main/resources/db/migration/`에서 관리합니다. 공유 브랜치나 공용 환경에 적용된 파일은 수정하지 않고, 변경이 필요하면 다음 버전의 Migration을 추가합니다. Entity는 테이블을 만들지 않으며 `ddl-auto: validate`로 Migration 결과와 일치하는지만 검사합니다.

@@ -11,7 +11,6 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Objects;
 import java.util.UUID;
 
 @Entity
@@ -61,11 +60,12 @@ public class StudyRecord {
             Instant endTime,
             long studySeconds
     ) {
+        if (cohortMembershipId == null) {
+            throw new IllegalArgumentException("cohortMembershipId가 null입니다.");
+        }
+        
         StudyRecord studyRecord = new StudyRecord();
-        studyRecord.cohortMembershipId = Objects.requireNonNull(
-                cohortMembershipId,
-                "cohortMembershipId"
-        );
+        studyRecord.cohortMembershipId = cohortMembershipId;
         studyRecord.replaceTimeRange(startTime, endTime, studySeconds);
         return studyRecord;
     }
@@ -81,7 +81,10 @@ public class StudyRecord {
 
     public void softDelete(Instant deletedAt) {
         requireActive();
-        this.deletedAt = Objects.requireNonNull(deletedAt, "deletedAt");
+        if (deletedAt == null) {
+            throw new IllegalArgumentException("deletedAt이 null입니다.");
+        }
+        this.deletedAt = deletedAt;
     }
 
     private void replaceTimeRange(
@@ -89,26 +92,25 @@ public class StudyRecord {
             Instant endTime,
             long studySeconds
     ) {
-        Instant newStartTime = Objects.requireNonNull(startTime, "startTime");
-        Instant newEndTime = Objects.requireNonNull(endTime, "endTime");
-
-        if (!newStartTime.isBefore(newEndTime)) {
-            throw new IllegalArgumentException("시작 시각은 종료 시각보다 빨라야 합니다.");
-        }
-        if (StudyTimePolicy.crossesAggregationBoundary(newStartTime, newEndTime)) {
-            throw new IllegalArgumentException("공부 기록은 집계 경계를 넘을 수 없습니다.");
+        if (startTime == null || endTime == null) {
+            throw new IllegalArgumentException("시간 입력이 누락되었습니다.");
         }
 
-        long occupiedSeconds = Duration.between(newStartTime, newEndTime).getSeconds();
+        if (!startTime.isBefore(endTime)) {
+            throw new IllegalArgumentException("시작 시각이 종료 시각보다 빠릅니다.");
+        }
+        if (StudyTimePolicy.crossesAggregationBoundary(startTime, endTime)) {
+            throw new IllegalArgumentException("공부 기록이 집계 경계와 겹쳐있습니다.");
+        }
+
+        long occupiedSeconds = Duration.between(startTime, endTime).getSeconds();
         if (studySeconds <= 0 || studySeconds > occupiedSeconds) {
-            throw new IllegalArgumentException(
-                    "공부 시간은 0초보다 크고 점유 구간 이하여야 합니다."
-            );
+            throw new IllegalArgumentException("공부 시간은 0초보다 크고 점유 구간 이하여야 합니다.");
         }
 
-        this.aggregationDate = StudyTimePolicy.aggregationDate(newStartTime);
-        this.startTime = newStartTime;
-        this.endTime = newEndTime;
+        this.aggregationDate = StudyTimePolicy.aggregationDate(startTime);
+        this.startTime = startTime;
+        this.endTime = endTime;
         this.studySeconds = studySeconds;
     }
 

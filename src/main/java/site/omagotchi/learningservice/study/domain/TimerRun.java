@@ -9,7 +9,6 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Objects;
 import java.util.UUID;
 
 @Entity
@@ -44,12 +43,16 @@ public class TimerRun {
     private Instant createdAt;
 
     public static TimerRun start(Long cohortMembershipId, Instant startedAt) {
+        if (cohortMembershipId == null) {
+            throw new IllegalArgumentException("cohortMembershipId가 null입니다.");
+        }
+        if (startedAt == null) {
+            throw new IllegalArgumentException("startedAt이 null입니다.");
+        }
+
         TimerRun timerRun = new TimerRun();
-        timerRun.cohortMembershipId = Objects.requireNonNull(
-                cohortMembershipId,
-                "cohortMembershipId"
-        );
-        timerRun.startedAt = Objects.requireNonNull(startedAt, "startedAt");
+        timerRun.cohortMembershipId = cohortMembershipId;
+        timerRun.startedAt = startedAt;
         return timerRun;
     }
 
@@ -58,32 +61,39 @@ public class TimerRun {
     }
 
     public void stop(Instant endedAt) {
-        Instant newEndedAt = validateEndTime(endedAt);
-        long elapsedSeconds = Duration.between(startedAt, newEndedAt).getSeconds();
+        validateEndTime(endedAt);
+        long elapsedSeconds = Duration.between(startedAt, endedAt).getSeconds();
 
-        finish(newEndedAt, elapsedSeconds, TimerEndReason.STOP);
+        endTimer(endedAt, elapsedSeconds, TimerEndReason.STOP);
     }
 
     public void discard(Instant endedAt) {
-        finish(validateEndTime(endedAt), null, TimerEndReason.DISCARD);
+        validateEndTime(endedAt);
+        endTimer(endedAt, null, TimerEndReason.DISCARD);
     }
 
     public void expire(Instant expiredAt) {
-        finish(validateEndTime(expiredAt), null, TimerEndReason.EXPIRED);
+        validateEndTime(expiredAt);
+        endTimer(expiredAt, null, TimerEndReason.EXPIRED);
     }
 
-    private Instant validateEndTime(Instant endedAt) {
-        requireRunning();
-        Instant newEndedAt = Objects.requireNonNull(endedAt, "endedAt");
+    // ===== Private Methods =====
 
-        if (newEndedAt.isBefore(startedAt)) {
-            throw new IllegalArgumentException("종료 시각은 시작 시각보다 빠를 수 없습니다.");
+    private void validateEndTime(Instant endedAt) {
+        if (endedAt == null) {
+            throw new IllegalArgumentException("endedAt이 null입니다.");
         }
 
-        return newEndedAt;
+        if (!isRunning()) {
+            throw new IllegalStateException("종료된 타이머 실행은 변경할 수 없습니다.");
+        }
+
+        if (endedAt.isBefore(startedAt)) {
+            throw new IllegalArgumentException("종료 시각은 시작 시각보다 빠를 수 없습니다.");
+        }
     }
 
-    private void finish(
+    private void endTimer(
             Instant endedAt,
             Long measuredSeconds,
             TimerEndReason endReason
@@ -91,11 +101,5 @@ public class TimerRun {
         this.endedAt = endedAt;
         this.measuredSeconds = measuredSeconds;
         this.endReason = endReason;
-    }
-
-    private void requireRunning() {
-        if (!isRunning()) {
-            throw new IllegalStateException("종료된 타이머 실행은 변경할 수 없습니다.");
-        }
     }
 }

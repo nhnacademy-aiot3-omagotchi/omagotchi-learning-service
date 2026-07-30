@@ -15,5 +15,7 @@ public interface SpaceRepository {
 
     Optional<Space> findById(Long spaceId);
 
+    Optional<Space> findByIdForUpdate(Long spaceId);
+
     Space save(Space space);
 }

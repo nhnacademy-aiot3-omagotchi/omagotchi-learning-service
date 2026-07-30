@@ -56,6 +56,13 @@ public class SpaceRepositoryJpaAdapter
     }
 
     @Override
+    public Optional<Space> findByIdForUpdate(Long spaceId) {
+        return springDataSpaceRepository
+                .findByIdForUpdate(spaceId)
+                .map(spacePersistenceMapper::toDomain);
+    }
+
+    @Override
     public Space save(Space space) {
         SpaceJpaEntity entity =
                 spacePersistenceMapper.toEntity(space);

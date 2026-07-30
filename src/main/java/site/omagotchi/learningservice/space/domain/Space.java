@@ -96,6 +96,7 @@ public class Space {
             String name,
             SpaceType spaceType,
             Integer capacity,
+            Long cohortId,
             ZonedDateTime now
     ) {
         ZonedDateTime createdAt = Objects.requireNonNull(
@@ -105,7 +106,7 @@ public class Space {
 
         return new Space(
                 null,
-                null,
+                validateCohortId(cohortId),
                 name,
                 spaceType,
                 capacity,
@@ -312,9 +313,7 @@ public class Space {
     /**
      * 공간을 소프트 삭제한 새로운 객체를 반환한다.
      *
-     * 삭제는 비활성 상태에서만 가능하며 기수에 배정된
-     * 실습실은 삭제할 수 없다. 활성 점유 여부는
-     * Application 계층에서 검증한다.
+     * 삭제는 비활성 상태이며 관리 주체 기수가 있는 공간에만 가능하다.
      */
     public Space delete(ZonedDateTime deletedAt) {
         if (isDeleted()) {
@@ -330,12 +329,6 @@ public class Space {
         if (cohortId == null) {
             throw new BusinessException(
                     SpaceErrorCode.UNMANAGED_SPACE_DELETE_NOT_ALLOWED
-            );
-        }
-
-        if (isAssignedLab()) {
-            throw new BusinessException(
-                    SpaceErrorCode.ASSIGNED_LAB_DELETE_NOT_ALLOWED
             );
         }
 
@@ -355,6 +348,53 @@ public class Space {
                 createdAt,
                 deletionTime,
                 deletionTime
+        );
+    }
+
+    public Space assignCohort(
+            Long cohortId,
+            ZonedDateTime updatedAt
+    ) {
+        ensureNotDeleted();
+        ensureLab();
+
+        if (this.cohortId != null) {
+            throw new BusinessException(SpaceErrorCode.LAB_ALREADY_ASSIGNED);
+        }
+
+        return new Space(
+                id,
+                validateCohortId(cohortId),
+                name,
+                spaceType,
+                capacity,
+                operationalStatus,
+                inactiveReason,
+                createdAt,
+                requireUpdatedAt(updatedAt),
+                deletedAt
+        );
+    }
+
+    public Space unassignCohort(ZonedDateTime updatedAt) {
+        ensureNotDeleted();
+        ensureLab();
+
+        if (cohortId == null) {
+            throw new BusinessException(SpaceErrorCode.LAB_NOT_ASSIGNED);
+        }
+
+        return new Space(
+                id,
+                null,
+                name,
+                spaceType,
+                capacity,
+                operationalStatus,
+                inactiveReason,
+                createdAt,
+                requireUpdatedAt(updatedAt),
+                deletedAt
         );
     }
 
@@ -392,6 +432,14 @@ public class Space {
         return spaceType == SpaceType.LAB && cohortId != null;
     }
 
+    private void ensureLab() {
+        if (spaceType != SpaceType.LAB) {
+            throw new BusinessException(
+                    SpaceErrorCode.LAB_ONLY_COHORT_ASSIGNMENT
+            );
+        }
+    }
+
     private void ensureNotDeleted() {
         if (isDeleted()) {
             throw new BusinessException(SpaceErrorCode.DELETED_SPACE);
@@ -426,6 +474,14 @@ public class Space {
         }
 
         return spaceType;
+    }
+
+    private static Long validateCohortId(Long cohortId) {
+        if (cohortId == null || cohortId <= 0) {
+            throw new BusinessException(SpaceErrorCode.INVALID_COHORT_ID);
+        }
+
+        return cohortId;
     }
 
     /**

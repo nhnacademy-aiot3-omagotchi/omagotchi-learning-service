@@ -1,15 +1,14 @@
 package site.omagotchi.learningservice.space.application.port.in;
 
-import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
 import site.omagotchi.learningservice.space.domain.Space;
 
 import java.util.UUID;
 
-public interface UpdateSpaceUseCase {
+public interface AssignLabCohortUseCase {
 
-    Space update(
+    Space assignCohort(
             Long spaceId,
-            UpdateSpaceCommand command,
+            Long cohortId,
             UUID actorUserId,
             String globalRole
     );

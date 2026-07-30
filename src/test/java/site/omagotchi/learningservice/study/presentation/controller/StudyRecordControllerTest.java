@@ -10,6 +10,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
@@ -91,7 +93,7 @@ class StudyRecordControllerTest {
                     .willReturn(result);
 
             ResponseEntity<StudyRecordResponse> response = studyRecordController.get(
-                    USER_ID,
+                    authentication(),
                     COHORT_ID,
                     STUDY_RECORD_ID
             );
@@ -124,7 +126,7 @@ class StudyRecordControllerTest {
                             "/api/v1/cohorts/{cohortId}/study-records",
                             COHORT_ID
                     )
-                    .header("X-User-Id", USER_ID)
+                    .principal(authentication())
                     .queryParam("date", "2000-01-01"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.aggregationDate").value("2000-01-01"))
@@ -147,7 +149,7 @@ class StudyRecordControllerTest {
                             "/api/v1/cohorts/{cohortId}/study-records",
                             COHORT_ID
                     )
-                    .header("X-User-Id", USER_ID)
+                    .principal(authentication())
                     .queryParam("date", "2000-02-30"))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code")
@@ -163,7 +165,7 @@ class StudyRecordControllerTest {
                             "/api/v1/cohorts/{cohortId}/study-records",
                             COHORT_ID
                     )
-                    .header("X-User-Id", USER_ID))
+                    .principal(authentication()))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code")
                             .value(CommonErrorCode.INVALID_REQUEST.code()));
@@ -204,7 +206,7 @@ class StudyRecordControllerTest {
                             "/api/v1/cohorts/{cohortId}/study-time-summaries",
                             COHORT_ID
                     )
-                    .header("X-User-Id", USER_ID)
+                    .principal(authentication())
                     .queryParam("month", "2000-01"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.aggregationMonth").value("2000-01"))
@@ -229,7 +231,7 @@ class StudyRecordControllerTest {
                             "/api/v1/cohorts/{cohortId}/study-time-summaries",
                             COHORT_ID
                     )
-                    .header("X-User-Id", USER_ID)
+                    .principal(authentication())
                     .queryParam("month", "2000-1"))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code")
@@ -245,7 +247,7 @@ class StudyRecordControllerTest {
                             "/api/v1/cohorts/{cohortId}/study-time-summaries",
                             COHORT_ID
                     )
-                    .header("X-User-Id", USER_ID))
+                    .principal(authentication()))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code")
                             .value(CommonErrorCode.INVALID_REQUEST.code()));
@@ -272,7 +274,7 @@ class StudyRecordControllerTest {
                     .willReturn(result);
 
             ResponseEntity<StudyRecordResponse> response = studyRecordController.create(
-                    USER_ID,
+                    authentication(),
                     COMMAND_ID,
                     COHORT_ID,
                     request
@@ -307,7 +309,7 @@ class StudyRecordControllerTest {
             )).willReturn(result);
 
             ResponseEntity<StudyRecordResponse> response = studyRecordController.update(
-                    USER_ID,
+                    authentication(),
                     COMMAND_ID,
                     COHORT_ID,
                     STUDY_RECORD_ID,
@@ -327,7 +329,7 @@ class StudyRecordControllerTest {
         @DisplayName("정상 처리")
         void deletesStudyRecord() {
             ResponseEntity<Void> response = studyRecordController.delete(
-                    USER_ID,
+                    authentication(),
                     COMMAND_ID,
                     EXPECTED_VERSION,
                     COHORT_ID,
@@ -357,5 +359,17 @@ class StudyRecordControllerTest {
                 Instant.parse("2000-01-01T02:00:01Z"),
                 Instant.parse("2000-01-01T02:00:01Z")
         );
+    }
+
+    private JwtAuthenticationToken authentication() {
+        Instant now = Instant.now();
+        Jwt jwt = Jwt.withTokenValue("test-token")
+                .header("alg", "RS256")
+                .subject(USER_ID.toString())
+                .claim("role", "USER")
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(300))
+                .build();
+        return new JwtAuthenticationToken(jwt);
     }
 }

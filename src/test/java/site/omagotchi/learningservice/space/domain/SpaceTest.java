@@ -25,6 +25,7 @@ class SpaceTest {
                 "  회의실 A  ",
                 SpaceType.MEETING,
                 8,
+                42L,
                 CREATED_AT
         );
 
@@ -37,15 +38,16 @@ class SpaceTest {
     }
 
     @Test
-    void createsInactiveSpaceWithoutCohort() {
+    void createsInactiveSpaceWithManagementCohort() {
         Space space = Space.create(
                 "회의실 A",
                 SpaceType.MEETING,
                 8,
+                42L,
                 CREATED_AT
         );
 
-        assertThat(space.getCohortId()).isNull();
+        assertThat(space.getCohortId()).isEqualTo(42L);
         assertThat(space.getOperationalStatus())
                 .isEqualTo(SpaceOperationalStatus.INACTIVE);
     }
@@ -200,7 +202,7 @@ class SpaceTest {
     }
 
     @Test
-    void rejectsChangingAssignedLabTypeOrDeletingIt() {
+    void rejectsChangingAssignedLabTypeButAllowsDeletingIt() {
         Space assignedLab = Space.restore(
                 1L,
                 42L,
@@ -218,10 +220,8 @@ class SpaceTest {
                 SpaceErrorCode.ASSIGNED_LAB_TYPE_CHANGE_NOT_ALLOWED,
                 () -> assignedLab.changeType(SpaceType.STUDY, UPDATED_AT)
         );
-        assertDomainError(
-                SpaceErrorCode.ASSIGNED_LAB_DELETE_NOT_ALLOWED,
-                () -> assignedLab.delete(UPDATED_AT)
-        );
+        assertThat(assignedLab.delete(UPDATED_AT).getDeletedAt())
+                .isEqualTo(UPDATED_AT);
     }
 
     @Test
@@ -254,6 +254,7 @@ class SpaceTest {
                         null,
                         SpaceType.MEETING,
                         8,
+                        42L,
                         CREATED_AT
                 ),
                 BusinessException.class
@@ -270,6 +271,7 @@ class SpaceTest {
                         "   ",
                         SpaceType.MEETING,
                         8,
+                        42L,
                         CREATED_AT
                 ),
                 BusinessException.class
@@ -286,6 +288,7 @@ class SpaceTest {
                         "가".repeat(51),
                         SpaceType.MEETING,
                         8,
+                        42L,
                         CREATED_AT
                 ),
                 BusinessException.class
@@ -302,6 +305,7 @@ class SpaceTest {
                         "회의실 A",
                         SpaceType.MEETING,
                         null,
+                        42L,
                         CREATED_AT
                 ),
                 BusinessException.class
@@ -318,6 +322,7 @@ class SpaceTest {
                         "회의실 A",
                         SpaceType.MEETING,
                         0,
+                        42L,
                         CREATED_AT
                 ),
                 BusinessException.class
@@ -334,6 +339,7 @@ class SpaceTest {
                         "회의실 A",
                         SpaceType.MEETING,
                         -1,
+                        42L,
                         CREATED_AT
                 ),
                 BusinessException.class
@@ -350,6 +356,7 @@ class SpaceTest {
                         "회의실 A",
                         null,
                         8,
+                        42L,
                         CREATED_AT
                 ),
                 BusinessException.class
@@ -357,6 +364,103 @@ class SpaceTest {
 
         assertThat(exception.getErrorCode())
                 .isEqualTo(SpaceErrorCode.INVALID_TYPE);
+    }
+
+    @Test
+    void rejectsNullManagementCohortId() {
+        BusinessException exception = catchThrowableOfType(
+                () -> Space.create(
+                        "회의실 A",
+                        SpaceType.MEETING,
+                        8,
+                        null,
+                        CREATED_AT
+                ),
+                BusinessException.class
+        );
+
+        assertThat(exception.getErrorCode())
+                .isEqualTo(SpaceErrorCode.INVALID_COHORT_ID);
+    }
+
+    @Test
+    void assignsAndUnassignsLabCohort() {
+        Space lab = Space.restore(
+                1L,
+                null,
+                "실습실 A",
+                SpaceType.LAB,
+                20,
+                SpaceOperationalStatus.INACTIVE,
+                null,
+                CREATED_AT,
+                CREATED_AT,
+                null
+        );
+
+        Space assigned = lab.assignCohort(42L, UPDATED_AT);
+        Space unassigned = assigned.unassignCohort(UPDATED_AT.plusHours(1));
+
+        assertThat(assigned.getCohortId()).isEqualTo(42L);
+        assertThat(assigned.getUpdatedAt()).isEqualTo(UPDATED_AT);
+        assertThat(unassigned.getCohortId()).isNull();
+        assertThat(unassigned.getUpdatedAt())
+                .isEqualTo(UPDATED_AT.plusHours(1));
+    }
+
+    @Test
+    void rejectsCohortAssignmentForNonLab() {
+        BusinessException exception = catchThrowableOfType(
+                () -> spaceWithCohort().assignCohort(42L, UPDATED_AT),
+                BusinessException.class
+        );
+
+        assertThat(exception.getErrorCode())
+                .isEqualTo(SpaceErrorCode.LAB_ONLY_COHORT_ASSIGNMENT);
+    }
+
+    @Test
+    void rejectsDuplicateAssignmentAndUnassignedRelease() {
+        BusinessException duplicate = catchThrowableOfType(
+                () -> assignedLab().assignCohort(42L, UPDATED_AT),
+                BusinessException.class
+        );
+        Space unassignedLab = Space.restore(
+                1L,
+                null,
+                "실습실 A",
+                SpaceType.LAB,
+                20,
+                SpaceOperationalStatus.INACTIVE,
+                null,
+                CREATED_AT,
+                CREATED_AT,
+                null
+        );
+        BusinessException notAssigned = catchThrowableOfType(
+                () -> unassignedLab.unassignCohort(UPDATED_AT),
+                BusinessException.class
+        );
+
+        assertThat(duplicate.getErrorCode())
+                .isEqualTo(SpaceErrorCode.LAB_ALREADY_ASSIGNED);
+        assertThat(notAssigned.getErrorCode())
+                .isEqualTo(SpaceErrorCode.LAB_NOT_ASSIGNED);
+    }
+
+    private Space assignedLab() {
+        return Space.restore(
+                1L,
+                42L,
+                "실습실 A",
+                SpaceType.LAB,
+                20,
+                SpaceOperationalStatus.INACTIVE,
+                null,
+                CREATED_AT,
+                CREATED_AT,
+                null
+        );
     }
 
     private Space spaceWithCohort() {

@@ -10,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
+import site.omagotchi.learningservice.space.application.port.out.SpaceCohortAccessPort;
 import site.omagotchi.learningservice.space.application.port.out.SpaceRepository;
 import site.omagotchi.learningservice.space.application.port.out.SpaceOccupancyQueryPort;
 import site.omagotchi.learningservice.space.domain.Space;
@@ -21,11 +22,15 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,6 +40,9 @@ class SpaceCommandServiceTest {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final Instant NOW = Instant.parse("2026-07-24T01:00:00Z");
+    private static final UUID ACTOR_USER_ID = UUID.fromString(
+            "019d2a48-80c0-4d6a-9a15-0b16d2dd74f1"
+    );
 
     @Mock
     private SpaceRepository spaceRepository;
@@ -42,16 +50,28 @@ class SpaceCommandServiceTest {
     @Mock
     private SpaceOccupancyQueryPort spaceOccupancyQueryPort;
 
-    private SpaceCommandService spaceCommandService;
+    @Mock
+    private SpaceCohortAccessPort cohortAccessPort;
+
+    private TestSpaceCommandService spaceCommandService;
 
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(NOW, SEOUL);
-        spaceCommandService = new SpaceCommandService(
+        SpaceCommandService delegate = new SpaceCommandService(
                 spaceRepository,
                 spaceOccupancyQueryPort,
+                cohortAccessPort,
                 clock
         );
+        spaceCommandService = new TestSpaceCommandService(delegate);
+        lenient().when(cohortAccessPort.exists(anyLong()))
+                .thenReturn(true);
+        lenient().when(cohortAccessPort.isActiveManager(
+                        anyLong(),
+                        any(UUID.class)
+                ))
+                .thenReturn(true);
     }
 
     @Test
@@ -65,7 +85,8 @@ class SpaceCommandServiceTest {
                         new CreateSpaceCommand(
                                 " 회의실 A ",
                                 SpaceType.MEETING,
-                                8
+                                8,
+                                42L
                         )
                 )
         );
@@ -82,7 +103,8 @@ class SpaceCommandServiceTest {
                         new CreateSpaceCommand(
                                 "회의실 a",
                                 SpaceType.MEETING,
-                                8
+                                8,
+                                42L
                         )
                 )
         );
@@ -99,7 +121,8 @@ class SpaceCommandServiceTest {
                 new CreateSpaceCommand(
                         " 회의실 A ",
                         SpaceType.MEETING,
-                        8
+                        8,
+                        42L
                 )
         );
 
@@ -178,7 +201,7 @@ class SpaceCommandServiceTest {
     }
 
     @Test
-    void createsSpaceWithoutChangingExistingBehavior() {
+    void createsManagedInactiveSpaceAfterManagerAuthorization() {
         when(spaceRepository.existsActiveByName("회의실 A"))
                 .thenReturn(false);
         when(spaceRepository.save(any(Space.class)))
@@ -188,14 +211,84 @@ class SpaceCommandServiceTest {
                 new CreateSpaceCommand(
                         " 회의실 A ",
                         SpaceType.MEETING,
-                        8
+                        8,
+                        42L
                 )
         );
 
         assertThat(created.getName()).isEqualTo("회의실 A");
-        assertThat(created.getCohortId()).isNull();
+        assertThat(created.getCohortId()).isEqualTo(42L);
         assertThat(created.getOperationalStatus())
                 .isEqualTo(SpaceOperationalStatus.INACTIVE);
+        verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
+    }
+
+    @Test
+    void usesActorsActiveManagedCohortWhenCreateCohortIdIsOmitted() {
+        when(cohortAccessPort.findActiveManagedCohortIds(ACTOR_USER_ID))
+                .thenReturn(List.of(42L));
+        when(spaceRepository.save(any(Space.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Space created = spaceCommandService.create(new CreateSpaceCommand(
+                "회의실 A",
+                SpaceType.MEETING,
+                8,
+                null
+        ));
+
+        assertThat(created.getCohortId()).isEqualTo(42L);
+        assertThat(created.getOperationalStatus())
+                .isEqualTo(SpaceOperationalStatus.INACTIVE);
+    }
+
+    @Test
+    void rejectsCreateWithoutActiveManagedCohort() {
+        when(cohortAccessPort.findActiveManagedCohortIds(ACTOR_USER_ID))
+                .thenReturn(List.of());
+
+        assertBusinessError(
+                SpaceErrorCode.ACTIVE_COHORT_NOT_FOUND,
+                () -> spaceCommandService.create(new CreateSpaceCommand(
+                        "회의실 A",
+                        SpaceType.MEETING,
+                        8,
+                        null
+                ))
+        );
+    }
+
+    @Test
+    void requiresCohortIdWhenActorManagesMultipleActiveCohorts() {
+        when(cohortAccessPort.findActiveManagedCohortIds(ACTOR_USER_ID))
+                .thenReturn(List.of(42L, 84L));
+
+        assertBusinessError(
+                SpaceErrorCode.COHORT_ID_REQUIRED,
+                () -> spaceCommandService.create(new CreateSpaceCommand(
+                        "회의실 A",
+                        SpaceType.MEETING,
+                        8,
+                        null
+                ))
+        );
+        verify(spaceRepository, never()).save(any(Space.class));
+    }
+
+    @Test
+    void rejectsCreateForAnotherCohort() {
+        when(cohortAccessPort.isActiveManager(84L, ACTOR_USER_ID))
+                .thenReturn(false);
+
+        assertBusinessError(
+                SpaceErrorCode.ACCESS_DENIED,
+                () -> spaceCommandService.create(new CreateSpaceCommand(
+                        "회의실 A",
+                        SpaceType.MEETING,
+                        8,
+                        84L
+                ))
+        );
     }
 
     @Test
@@ -220,6 +313,7 @@ class SpaceCommandServiceTest {
         assertThat(updated.getSpaceType()).isEqualTo(SpaceType.STUDY);
         assertThat(updated.getCapacity()).isEqualTo(12);
         assertThat(updated.getCohortId()).isEqualTo(42L);
+        verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
     }
 
     @Test
@@ -235,6 +329,7 @@ class SpaceCommandServiceTest {
         verify(spaceRepository).save(captor.capture());
         assertThat(captor.getValue().isDeleted()).isTrue();
         assertThat(captor.getValue().getCohortId()).isEqualTo(42L);
+        verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
     }
 
     @Test
@@ -255,6 +350,7 @@ class SpaceCommandServiceTest {
         assertThat(activated.getInactiveReason()).isNull();
         assertThat(activated.getUpdatedAt())
                 .isEqualTo(ZonedDateTime.ofInstant(NOW, SEOUL));
+        verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
     }
 
     @Test
@@ -336,6 +432,7 @@ class SpaceCommandServiceTest {
         assertThat(deactivated.getOperationalStatus())
                 .isEqualTo(SpaceOperationalStatus.INACTIVE);
         assertThat(deactivated.getInactiveReason()).isEqualTo("냉방 점검");
+        verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
     }
 
     @Test
@@ -503,17 +600,17 @@ class SpaceCommandServiceTest {
     }
 
     @Test
-    void rejectsDeleteWhenActiveOccupancyExists() {
+    void deleteDoesNotQueryActiveOccupancy() {
         when(spaceRepository.findById(1L))
                 .thenReturn(Optional.of(existingSpace()));
-        when(spaceOccupancyQueryPort.existsActiveOccupancy(
+        when(spaceRepository.save(any(Space.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        spaceCommandService.delete(1L);
+
+        verify(spaceOccupancyQueryPort, never()).existsActiveOccupancy(
                 any(Long.class),
                 any(ZonedDateTime.class)
-        )).thenReturn(true);
-
-        assertBusinessError(
-                SpaceErrorCode.ACTIVE_OCCUPANCY_EXISTS,
-                () -> spaceCommandService.delete(1L)
         );
     }
 
@@ -569,14 +666,15 @@ class SpaceCommandServiceTest {
     }
 
     @Test
-    void rejectsDeletingAssignedLabWithSpecificError() {
+    void deletesAssignedInactiveLab() {
         when(spaceRepository.findById(1L))
                 .thenReturn(Optional.of(assignedLab()));
+        when(spaceRepository.save(any(Space.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertBusinessError(
-                SpaceErrorCode.ASSIGNED_LAB_DELETE_NOT_ALLOWED,
-                () -> spaceCommandService.delete(1L)
-        );
+        spaceCommandService.delete(1L);
+
+        verify(spaceRepository).save(any(Space.class));
     }
 
     @Test
@@ -594,6 +692,100 @@ class SpaceCommandServiceTest {
                                 8
                         )
                 )
+        );
+    }
+
+    @Test
+    void assignsCohortToUnassignedLabAndUpdatesTimestamp() {
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(lab(null, null)));
+        when(spaceRepository.save(any(Space.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Space assigned = spaceCommandService.assignCohort(1L, 42L);
+
+        assertThat(assigned.getCohortId()).isEqualTo(42L);
+        assertThat(assigned.getUpdatedAt())
+                .isEqualTo(ZonedDateTime.ofInstant(NOW, SEOUL));
+    }
+
+    @Test
+    void rejectsAssigningAlreadyAssignedLabToSameOrOtherCohort() {
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(lab(42L, null)));
+
+        assertBusinessError(
+                SpaceErrorCode.LAB_ALREADY_ASSIGNED,
+                () -> spaceCommandService.assignCohort(1L, 42L)
+        );
+        assertBusinessError(
+                SpaceErrorCode.LAB_ALREADY_ASSIGNED,
+                () -> spaceCommandService.assignCohort(1L, 84L)
+        );
+    }
+
+    @Test
+    void rejectsCohortAssignmentToNonLab() {
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(existingSpace()));
+
+        assertBusinessError(
+                SpaceErrorCode.LAB_ONLY_COHORT_ASSIGNMENT,
+                () -> spaceCommandService.assignCohort(1L, 42L)
+        );
+    }
+
+    @Test
+    void rejectsAssigningDeletedLab() {
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(lab(
+                        null,
+                        ZonedDateTime.ofInstant(NOW, SEOUL)
+                )));
+
+        assertBusinessError(
+                SpaceErrorCode.DELETED_SPACE,
+                () -> spaceCommandService.assignCohort(1L, 42L)
+        );
+    }
+
+    @Test
+    void rejectsAssignmentByManagerOfAnotherCohort() {
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(lab(42L, null)));
+        when(cohortAccessPort.isActiveManager(42L, ACTOR_USER_ID))
+                .thenReturn(false);
+
+        assertBusinessError(
+                SpaceErrorCode.ACCESS_DENIED,
+                () -> spaceCommandService.assignCohort(1L, 84L)
+        );
+    }
+
+    @Test
+    void unassignsLabAndUpdatesTimestamp() {
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(lab(42L, null)));
+        when(spaceRepository.save(any(Space.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Space unassigned = spaceCommandService.unassignCohort(1L);
+
+        assertThat(unassigned.getCohortId()).isNull();
+        assertThat(unassigned.getUpdatedAt())
+                .isEqualTo(ZonedDateTime.ofInstant(NOW, SEOUL));
+    }
+
+    @Test
+    void rejectsUnassigningUnassignedLabForSystemAdmin() {
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(lab(null, null)));
+        when(cohortAccessPort.isSystemAdmin("SYSTEM_ADMIN"))
+                .thenReturn(true);
+
+        assertBusinessError(
+                SpaceErrorCode.LAB_NOT_ASSIGNED,
+                () -> spaceCommandService.unassignCohortAsSystemAdmin(1L)
         );
     }
 
@@ -656,6 +848,23 @@ class SpaceCommandServiceTest {
         );
     }
 
+    private Space lab(Long cohortId, ZonedDateTime deletedAt) {
+        ZonedDateTime now = ZonedDateTime.ofInstant(NOW, SEOUL);
+
+        return Space.restore(
+                1L,
+                cohortId,
+                "실습실 A",
+                SpaceType.LAB,
+                20,
+                SpaceOperationalStatus.INACTIVE,
+                null,
+                now.minusDays(1),
+                now.minusHours(1),
+                deletedAt
+        );
+    }
+
     private void assertBusinessError(
             SpaceErrorCode expectedErrorCode,
             ThrowingCallable action
@@ -665,5 +874,70 @@ class SpaceCommandServiceTest {
                 .satisfies(exception -> assertThat(
                         ((BusinessException) exception).getErrorCode()
                 ).isEqualTo(expectedErrorCode));
+    }
+
+    private static class TestSpaceCommandService {
+
+        private final SpaceCommandService delegate;
+
+        private TestSpaceCommandService(SpaceCommandService delegate) {
+            this.delegate = delegate;
+        }
+
+        private Space create(CreateSpaceCommand command) {
+            return delegate.create(command, ACTOR_USER_ID, "USER");
+        }
+
+        private Space update(
+                Long spaceId,
+                UpdateSpaceCommand command
+        ) {
+            return delegate.update(spaceId, command, ACTOR_USER_ID, "USER");
+        }
+
+        private Space activate(Long spaceId) {
+            return delegate.activate(spaceId, ACTOR_USER_ID, "USER");
+        }
+
+        private Space deactivate(
+                Long spaceId,
+                String reason
+        ) {
+            return delegate.deactivate(
+                    spaceId,
+                    reason,
+                    ACTOR_USER_ID,
+                    "USER"
+            );
+        }
+
+        private void delete(Long spaceId) {
+            delegate.delete(spaceId, ACTOR_USER_ID, "USER");
+        }
+
+        private Space assignCohort(Long spaceId, Long cohortId) {
+            return delegate.assignCohort(
+                    spaceId,
+                    cohortId,
+                    ACTOR_USER_ID,
+                    "USER"
+            );
+        }
+
+        private Space unassignCohort(Long spaceId) {
+            return delegate.unassignCohort(
+                    spaceId,
+                    ACTOR_USER_ID,
+                    "USER"
+            );
+        }
+
+        private Space unassignCohortAsSystemAdmin(Long spaceId) {
+            return delegate.unassignCohort(
+                    spaceId,
+                    ACTOR_USER_ID,
+                    "SYSTEM_ADMIN"
+            );
+        }
     }
 }

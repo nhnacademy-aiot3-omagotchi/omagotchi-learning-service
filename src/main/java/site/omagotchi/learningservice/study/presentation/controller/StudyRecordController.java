@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.study.application.StudyRecordCommandService;
 import site.omagotchi.learningservice.study.application.StudyRecordQueryService;
 import site.omagotchi.learningservice.study.application.result.DailyStudyRecordsResult;
@@ -35,7 +37,6 @@ import java.util.UUID;
 @RequestMapping("/api/v1/cohorts/{cohortId}")
 public class StudyRecordController {
 
-    private static final String USER_ID_HEADER = "X-User-Id";
     private static final String COMMAND_ID_HEADER = "X-Command-Id";
     private static final String EXPECTED_VERSION_HEADER = "If-Match";
 
@@ -44,12 +45,13 @@ public class StudyRecordController {
 
     @GetMapping("/study-records/{studyRecordId}")
     public ResponseEntity<StudyRecordResponse> get(
-            @RequestHeader(USER_ID_HEADER) UUID userId,
+            JwtAuthenticationToken authentication,
             @PathVariable Long cohortId,
             @PathVariable UUID studyRecordId
     ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
         StudyRecordResult result = studyRecordQueryService.getRecord(
-                userId,
+                user.userId(),
                 cohortId,
                 studyRecordId
         );
@@ -59,13 +61,14 @@ public class StudyRecordController {
 
     @GetMapping("/study-records")
     public ResponseEntity<DailyStudyRecordsResponse> getDailyRecords(
-            @RequestHeader(USER_ID_HEADER) UUID userId,
+            JwtAuthenticationToken authentication,
             @PathVariable Long cohortId,
             @RequestParam("date")
             @DateTimeFormat(pattern = "uuuu-MM-dd") LocalDate aggregationDate
     ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
         DailyStudyRecordsResult result = studyRecordQueryService.getDailyRecords(
-                userId,
+                user.userId(),
                 cohortId,
                 aggregationDate
         );
@@ -75,13 +78,14 @@ public class StudyRecordController {
 
     @GetMapping("/study-time-summaries")
     public ResponseEntity<MonthlyStudySecondsResponse> getMonthlyStudySeconds(
-            @RequestHeader(USER_ID_HEADER) UUID userId,
+            JwtAuthenticationToken authentication,
             @PathVariable Long cohortId,
             @RequestParam("month")
             @DateTimeFormat(pattern = "uuuu-MM") YearMonth aggregationMonth
     ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
         MonthlyStudySecondsResult result = studyRecordQueryService.getMonthlyStudySeconds(
-                userId,
+                user.userId(),
                 cohortId,
                 aggregationMonth
         );
@@ -91,14 +95,15 @@ public class StudyRecordController {
 
     @PostMapping("/study-records")
     public ResponseEntity<StudyRecordResponse> create(
-            @RequestHeader(USER_ID_HEADER) UUID userId,
+            JwtAuthenticationToken authentication,
             @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @PathVariable Long cohortId,
             @Valid @RequestBody CreateStudyRecordRequest request
     ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
         StudyRecordResult result = studyRecordCommandService.create(
                 commandId,
-                userId,
+                user.userId(),
                 cohortId,
                 request.toCommand()
         );
@@ -108,15 +113,16 @@ public class StudyRecordController {
 
     @PutMapping("/study-records/{studyRecordId}")
     public ResponseEntity<StudyRecordResponse> update(
-            @RequestHeader(USER_ID_HEADER) UUID userId,
+            JwtAuthenticationToken authentication,
             @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @PathVariable Long cohortId,
             @PathVariable UUID studyRecordId,
             @Valid @RequestBody UpdateStudyRecordRequest request
     ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
         StudyRecordResult result = studyRecordCommandService.update(
                 commandId,
-                userId,
+                user.userId(),
                 cohortId,
                 studyRecordId,
                 request.toCommand()
@@ -127,15 +133,16 @@ public class StudyRecordController {
 
     @DeleteMapping("/study-records/{studyRecordId}")
     public ResponseEntity<Void> delete(
-            @RequestHeader(USER_ID_HEADER) UUID userId,
+            JwtAuthenticationToken authentication,
             @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @RequestHeader(EXPECTED_VERSION_HEADER) Long expectedVersion,
             @PathVariable Long cohortId,
             @PathVariable UUID studyRecordId
     ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
         studyRecordCommandService.delete(
                 commandId,
-                userId,
+                user.userId(),
                 cohortId,
                 studyRecordId,
                 expectedVersion

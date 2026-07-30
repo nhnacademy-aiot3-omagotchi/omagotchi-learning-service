@@ -4,20 +4,20 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import site.omagotchi.learningservice.cohort.application.CohortManagerService;
-import site.omagotchi.learningservice.cohort.application.dto.command.ChangeCohortStatusRequest;
-import site.omagotchi.learningservice.cohort.application.dto.command.ChangeCohortMemberRoleRequest;
 import site.omagotchi.learningservice.cohort.application.dto.result.CohortMembershipResponse;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
 import site.omagotchi.learningservice.cohort.application.dto.result.CohortResponse;
 import site.omagotchi.learningservice.cohort.application.CohortService;
-import site.omagotchi.learningservice.cohort.application.dto.command.AssignCohortManagerRequest;
-import site.omagotchi.learningservice.cohort.application.dto.command.CreateCohortRequest;
-import site.omagotchi.learningservice.cohort.application.dto.command.CreateJoinRequest;
-import site.omagotchi.learningservice.cohort.application.dto.command.IssueJoinCodeRequest;
 import site.omagotchi.learningservice.cohort.application.dto.result.IssuedJoinCodeResponse;
 import site.omagotchi.learningservice.cohort.application.dto.result.JoinCodeResponse;
 import site.omagotchi.learningservice.cohort.application.JoinCodeService;
-import site.omagotchi.learningservice.cohort.application.dto.command.UpdateCohortRequest;
+import site.omagotchi.learningservice.cohort.presentation.dto.request.AssignCohortManagerRequest;
+import site.omagotchi.learningservice.cohort.presentation.dto.request.ChangeCohortMemberRoleRequest;
+import site.omagotchi.learningservice.cohort.presentation.dto.request.ChangeCohortStatusRequest;
+import site.omagotchi.learningservice.cohort.presentation.dto.request.CreateCohortRequest;
+import site.omagotchi.learningservice.cohort.presentation.dto.request.CreateJoinRequest;
+import site.omagotchi.learningservice.cohort.presentation.dto.request.IssueJoinCodeRequest;
+import site.omagotchi.learningservice.cohort.presentation.dto.request.UpdateCohortRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -41,7 +41,7 @@ public class CohortController {
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER") String globalRole,
             @Valid @RequestBody CreateCohortRequest request
     ) {
-        return cohortService.create(request, userId, globalRole);
+        return cohortService.create(request.toCommand(), userId, globalRole);
     }
 
     @GetMapping
@@ -60,7 +60,7 @@ public class CohortController {
             @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody UpdateCohortRequest request
     ) {
-        return cohortService.update(cohortId, request, userId);
+        return cohortService.update(cohortId, request.toCommand(), userId);
     }
 
     @PatchMapping("/{cohortId}/status")
@@ -69,7 +69,7 @@ public class CohortController {
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER") String globalRole,
             @Valid @RequestBody ChangeCohortStatusRequest request
     ) {
-        return cohortService.changeStatus(cohortId, request, globalRole);
+        return cohortService.changeStatus(cohortId, request.toCommand(), globalRole);
     }
 
     @GetMapping("/{cohortId}/join-code")
@@ -86,7 +86,7 @@ public class CohortController {
             @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody IssueJoinCodeRequest request
     ) {
-        return joinCodeService.issue(cohortId, request, userId);
+        return joinCodeService.issue(cohortId, request.toCommand(), userId);
     }
 
     @PatchMapping("/{cohortId}/join-code/revoke")
@@ -102,7 +102,7 @@ public class CohortController {
             @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody CreateJoinRequest request
     ) {
-        return membershipService.join(request, userId);
+        return membershipService.join(request.toCommand(), userId);
     }
 
     @GetMapping("/join-requests/me")
@@ -135,7 +135,7 @@ public class CohortController {
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER") String globalRole,
             @Valid @RequestBody AssignCohortManagerRequest request
     ) {
-        return managerService.assignManager(cohortId, request, userId, globalRole);
+        return managerService.assignManager(cohortId, request.toCommand(), userId, globalRole);
     }
 
     @PatchMapping("/{cohortId}/members/{memberUserId}/role")
@@ -146,6 +146,6 @@ public class CohortController {
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER") String globalRole,
             @Valid @RequestBody ChangeCohortMemberRoleRequest request
     ) {
-        return managerService.changeMemberRole(cohortId, memberUserId, request, userId, globalRole);
+        return managerService.changeMemberRole(cohortId, memberUserId, request.toCommand(), userId, globalRole);
     }
 }

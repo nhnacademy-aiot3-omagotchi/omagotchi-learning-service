@@ -1,3 +1,6 @@
+-- BIGINT 동등 비교와 시간 범위 겹침 연산을 하나의 GiST 제약에서 사용한다.
+CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public;
+
 CREATE TABLE learning_service.study_records
 (
     id                   UUID        PRIMARY KEY,
@@ -28,7 +31,17 @@ CREATE TABLE learning_service.study_records
         ),
 
     CONSTRAINT ck_study_records_version
-        CHECK (version >= 0)
+        CHECK (version >= 0),
+
+    -- 같은 기수 소속의 활성 기록은 반개구간 [start_time, end_time)이 겹칠 수 없다.
+    -- 기본은 문장 종료 시 검사하고, 다중 청크 교체 트랜잭션에서만 명시적으로 지연할 수 있다.
+    CONSTRAINT ex_study_records_no_overlap
+        EXCLUDE USING gist (
+            cohort_membership_id WITH =,
+            tstzrange(start_time, end_time, '[)') WITH &&
+        )
+        WHERE (deleted_at IS NULL)
+        DEFERRABLE INITIALLY IMMEDIATE
 );
 
 -- 삭제되지 않은 소속별 기록과 집계 일자 범위를 기준으로 한 복합 인덱스

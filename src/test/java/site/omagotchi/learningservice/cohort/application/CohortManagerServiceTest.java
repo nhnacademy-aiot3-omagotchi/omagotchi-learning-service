@@ -6,7 +6,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import site.omagotchi.learningservice.cohort.application.dto.command.ChangeCohortMemberRoleRequest;
+import site.omagotchi.learningservice.cohort.application.dto.command.ChangeCohortMemberRoleCommand;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
@@ -65,7 +65,7 @@ class CohortManagerServiceTest {
         assertThatThrownBy(() -> managerService.changeMemberRole(
                 cohortId,
                 managerUserId,
-                new ChangeCohortMemberRoleRequest(CohortMembershipRole.MENTOR),
+                new ChangeCohortMemberRoleCommand(CohortMembershipRole.MENTOR),
                 PROCESSOR_USER_ID,
                 "SYSTEM_ADMIN"
         )).isInstanceOf(BusinessException.class);

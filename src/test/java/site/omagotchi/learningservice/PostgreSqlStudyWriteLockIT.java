@@ -11,7 +11,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
-import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
+import site.omagotchi.learningservice.study.application.StudyRecordErrorCode;
 
 import java.time.Duration;
 import java.util.concurrent.*;

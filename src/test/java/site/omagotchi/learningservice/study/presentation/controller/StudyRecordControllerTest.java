@@ -89,7 +89,7 @@ class StudyRecordControllerTest {
             given(studyRecordQueryService.getRecord(USER_ID, COHORT_ID, STUDY_RECORD_ID))
                     .willReturn(result);
 
-            ResponseEntity<StudyRecordResponse> response = studyRecordController.get(
+            ResponseEntity<StudyRecordResponse> response = studyRecordController.getStudyRecord(
                     authentication(),
                     COHORT_ID,
                     STUDY_RECORD_ID
@@ -270,7 +270,7 @@ class StudyRecordControllerTest {
             given(studyRecordCommandService.create(COMMAND_ID, USER_ID, COHORT_ID, command))
                     .willReturn(result);
 
-            ResponseEntity<StudyRecordResponse> response = studyRecordController.create(
+            ResponseEntity<StudyRecordResponse> response = studyRecordController.createStudyRecord(
                     authentication(),
                     COMMAND_ID,
                     COHORT_ID,
@@ -305,7 +305,7 @@ class StudyRecordControllerTest {
                     command
             )).willReturn(result);
 
-            ResponseEntity<StudyRecordResponse> response = studyRecordController.update(
+            ResponseEntity<StudyRecordResponse> response = studyRecordController.updateStudyRecord(
                     authentication(),
                     COMMAND_ID,
                     COHORT_ID,
@@ -325,7 +325,7 @@ class StudyRecordControllerTest {
         @Test
         @DisplayName("정상 처리")
         void deletesStudyRecord() {
-            ResponseEntity<Void> response = studyRecordController.delete(
+            ResponseEntity<Void> response = studyRecordController.deleteStudyRecord(
                     authentication(),
                     COMMAND_ID,
                     EXPECTED_VERSION,

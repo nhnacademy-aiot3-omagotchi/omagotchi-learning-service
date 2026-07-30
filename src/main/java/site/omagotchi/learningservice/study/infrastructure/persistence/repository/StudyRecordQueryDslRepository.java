@@ -8,8 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
-import site.omagotchi.learningservice.study.domain.entity.QStudyRecord;
-import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
+import site.omagotchi.learningservice.study.domain.QStudyRecord;
+import site.omagotchi.learningservice.study.domain.StudyRecord;
 
 import java.time.Instant;
 import java.time.LocalDate;

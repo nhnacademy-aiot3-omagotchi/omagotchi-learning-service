@@ -13,8 +13,7 @@ import site.omagotchi.learningservice.study.application.port.StudyRecordReposito
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.application.time.StudyTimePolicy;
-import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
-import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
+import site.omagotchi.learningservice.study.domain.StudyRecord;
 
 import java.time.Clock;
 import java.time.Duration;

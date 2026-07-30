@@ -11,8 +11,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.global.config.JpaAuditingConfig;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
-import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordJpaDataRepository;
+import site.omagotchi.learningservice.study.domain.StudyRecord;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordJpaRepository;
 import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryDslRepository;
 
 import java.time.Instant;
@@ -37,7 +37,7 @@ class StudyRecordRepositoryIT {
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);
 
     @Autowired
-    private StudyRecordJpaDataRepository studyRecordRepository;
+    private StudyRecordJpaRepository studyRecordRepository;
 
     @Autowired
     private StudyRecordQueryDslRepository studyRecordQueryRepository;

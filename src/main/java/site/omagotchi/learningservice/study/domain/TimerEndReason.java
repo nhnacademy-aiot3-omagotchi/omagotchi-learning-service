@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.study.domain.entity;
+package site.omagotchi.learningservice.study.domain;
 
 public enum TimerEndReason {
     STOP,

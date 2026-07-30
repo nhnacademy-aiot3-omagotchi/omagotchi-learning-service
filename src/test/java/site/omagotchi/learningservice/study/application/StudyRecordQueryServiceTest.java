@@ -16,8 +16,7 @@ import site.omagotchi.learningservice.study.application.result.DailyStudyRecords
 import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.MonthlyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
-import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
-import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
+import site.omagotchi.learningservice.study.domain.StudyRecord;
 
 import java.time.*;
 import java.util.List;

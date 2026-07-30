@@ -9,8 +9,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
-import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
+import site.omagotchi.learningservice.study.domain.StudyRecord;
+import site.omagotchi.learningservice.study.application.StudyRecordErrorCode;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -24,13 +24,13 @@ import static org.mockito.Mockito.verify;
 
 @DisplayName("JPA 학습 기록 저장소")
 @ExtendWith(MockitoExtension.class)
-class StudyRecordJpaRepositoryTest {
+class StudyRecordJpaPersistenceTest {
 
     @Mock
-    private StudyRecordJpaDataRepository studyRecordJpaDataRepository;
+    private StudyRecordJpaRepository studyRecordJpaRepository;
 
     @InjectMocks
-    private StudyRecordJpaRepository studyRecordJpaRepository;
+    private StudyRecordJpaPersistence studyRecordJpaPersistence;
 
     @Nested
     @DisplayName("버전 검증 저장")
@@ -49,17 +49,17 @@ class StudyRecordJpaRepositoryTest {
                     .endTime(Instant.parse("2000-01-01T02:00:00Z"))
                     .studySeconds(3_600L)
                     .build();
-            given(studyRecordJpaDataRepository.saveAndFlush(studyRecord)).willThrow(
+            given(studyRecordJpaRepository.saveAndFlush(studyRecord)).willThrow(
                     new ObjectOptimisticLockingFailureException(StudyRecord.class, studyRecordId)
             );
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
-                    () -> studyRecordJpaRepository.saveWithVersionCheck(studyRecord)
+                    () -> studyRecordJpaPersistence.saveWithVersionCheck(studyRecord)
             );
 
             assertSame(StudyRecordErrorCode.VERSION_CONFLICT, exception.getErrorCode());
-            verify(studyRecordJpaDataRepository).saveAndFlush(studyRecord);
+            verify(studyRecordJpaRepository).saveAndFlush(studyRecord);
         }
     }
 }

@@ -15,6 +15,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortJoinCodeRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 
 import java.time.LocalDate;
 import java.util.Optional;
@@ -74,7 +75,7 @@ class CohortMembershipServiceTest {
                 membershipId,
                 new ApproveMembershipCommand(CohortMembershipRole.MENTOR),
                 managerUserId,
-                "USER"
+                GlobalRole.USER
         );
 
         verify(accessService).requireManager(cohortId, managerUserId);

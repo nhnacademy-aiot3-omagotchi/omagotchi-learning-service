@@ -9,12 +9,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
@@ -32,6 +34,33 @@ class CohortAccessServiceTest {
 
     @InjectMocks
     private CohortAccessService accessService;
+
+    @Nested
+    @DisplayName("시스템 관리자 확인")
+    class RequireSystemAdmin {
+
+        @Test
+        @DisplayName("SYSTEM_ADMIN 허용")
+        void acceptsSystemAdmin() {
+            // When & Then
+            assertDoesNotThrow(() ->
+                    accessService.requireSystemAdmin(GlobalRole.SYSTEM_ADMIN)
+            );
+        }
+
+        @Test
+        @DisplayName("USER 거부")
+        void rejectsUser() {
+            // When
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> accessService.requireSystemAdmin(GlobalRole.USER)
+            );
+
+            // Then
+            assertSame(CohortErrorCode.SYSTEM_ADMIN_REQUIRED, exception.getErrorCode());
+        }
+    }
 
     @Nested
     @DisplayName("활성 기수 소속 식별자 확인")

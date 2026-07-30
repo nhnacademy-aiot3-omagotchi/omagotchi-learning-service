@@ -13,6 +13,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.LocalDate;
@@ -67,7 +68,7 @@ class CohortManagerServiceTest {
                 managerUserId,
                 new ChangeCohortMemberRoleCommand(CohortMembershipRole.MENTOR),
                 PROCESSOR_USER_ID,
-                "SYSTEM_ADMIN"
+                GlobalRole.SYSTEM_ADMIN
         )).isInstanceOf(BusinessException.class);
 
         verify(membershipRepository, never()).changeActiveRole(any(), any(), any(), any());

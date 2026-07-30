@@ -10,6 +10,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
 
@@ -25,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, TestJwtKeyConfig.class})
 @ActiveProfiles("test")
 @SpringBootTest
 @DisplayName("공부 쓰기 잠금")

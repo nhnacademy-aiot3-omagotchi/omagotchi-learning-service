@@ -14,6 +14,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.OffsetDateTime;
@@ -37,7 +38,7 @@ public class CohortManagerService {
             Long cohortId,
             AssignCohortManagerCommand command,
             UUID processedByUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         accessService.requireSystemAdmin(globalRole);
         validateCohortCanChangeManager(cohortId);
@@ -57,7 +58,7 @@ public class CohortManagerService {
             UUID userId,
             ChangeCohortMemberRoleCommand command,
             UUID processedByUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         validateCohortCanChangeManager(cohortId);
 

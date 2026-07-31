@@ -22,7 +22,9 @@ public class PostgreSqlStudyWriteLock implements StudyWriteLock {
     @Override
     public void acquire(long cohortMembershipId) {
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-            throw new BusinessException(StudyRecordErrorCode.WRITE_LOCK_TRANSACTION_REQUIRED);
+            throw new IllegalStateException(
+                    "공부 쓰기 잠금을 획득하려면 활성 트랜잭션이 필요합니다."
+            );
         }
 
         try {

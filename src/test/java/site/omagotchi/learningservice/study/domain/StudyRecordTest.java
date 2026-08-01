@@ -28,7 +28,7 @@ class StudyRecordTest {
         @Test
         @DisplayName("정상 처리")
         void createsValidRecord() {
-            StudyRecord record = StudyRecord.create(
+            StudyRecord studyRecord = StudyRecord.create(
                     COHORT_MEMBERSHIP_ID,
                     START_TIME,
                     END_TIME,
@@ -36,11 +36,11 @@ class StudyRecordTest {
             );
 
             assertAll(
-                    () -> assertEquals(COHORT_MEMBERSHIP_ID, record.getCohortMembershipId()),
-                    () -> assertEquals(BASE_DATE, record.getAggregationDate()),
-                    () -> assertEquals(START_TIME, record.getStartTime()),
-                    () -> assertEquals(END_TIME, record.getEndTime()),
-                    () -> assertEquals(1_800L, record.getStudySeconds())
+                    () -> assertEquals(COHORT_MEMBERSHIP_ID, studyRecord.getCohortMembershipId()),
+                    () -> assertEquals(BASE_DATE, studyRecord.getAggregationDate()),
+                    () -> assertEquals(START_TIME, studyRecord.getStartTime()),
+                    () -> assertEquals(END_TIME, studyRecord.getEndTime()),
+                    () -> assertEquals(1_800L, studyRecord.getStudySeconds())
             );
         }
 
@@ -49,15 +49,15 @@ class StudyRecordTest {
         void rejectsMissingRequiredValues() {
             assertAll(
                     () -> assertThrows(
-                            NullPointerException.class,
+                            IllegalArgumentException.class,
                             () -> StudyRecord.create(null, START_TIME, END_TIME, 3_600L)
                     ),
                     () -> assertThrows(
-                            NullPointerException.class,
+                            IllegalArgumentException.class,
                             () -> StudyRecord.create(COHORT_MEMBERSHIP_ID, null, END_TIME, 3_600L)
                     ),
                     () -> assertThrows(
-                            NullPointerException.class,
+                            IllegalArgumentException.class,
                             () -> StudyRecord.create(COHORT_MEMBERSHIP_ID, START_TIME, null, 3_600L)
                     )
             );
@@ -119,7 +119,7 @@ class StudyRecordTest {
             Instant startTime = Instant.parse("1999-12-31T18:59:00Z");
             Instant boundary = Instant.parse("1999-12-31T19:00:00Z");
 
-            StudyRecord record = StudyRecord.create(
+            StudyRecord studyRecord = StudyRecord.create(
                     COHORT_MEMBERSHIP_ID,
                     startTime,
                     boundary,
@@ -129,7 +129,7 @@ class StudyRecordTest {
             assertAll(
                     () -> assertEquals(
                             LocalDate.of(1999, Month.DECEMBER, 31),
-                            record.getAggregationDate()
+                            studyRecord.getAggregationDate()
                     ),
                     () -> assertThrows(
                             IllegalArgumentException.class,
@@ -151,38 +151,38 @@ class StudyRecordTest {
         @Test
         @DisplayName("정상 처리")
         void updatesTimeRange() {
-            StudyRecord record = createRecord();
+            StudyRecord studyRecord = createRecord();
             Instant startTime = Instant.parse("2000-01-02T01:00:00Z");
             Instant endTime = Instant.parse("2000-01-02T03:00:00Z");
 
-            record.updateTimeRange(startTime, endTime, 7_200L);
+            studyRecord.updateTimeRange(startTime, endTime, 7_200L);
 
             assertAll(
                     () -> assertEquals(
                             LocalDate.of(2000, Month.JANUARY, 2),
-                            record.getAggregationDate()
+                            studyRecord.getAggregationDate()
                     ),
-                    () -> assertEquals(startTime, record.getStartTime()),
-                    () -> assertEquals(endTime, record.getEndTime()),
-                    () -> assertEquals(7_200L, record.getStudySeconds())
+                    () -> assertEquals(startTime, studyRecord.getStartTime()),
+                    () -> assertEquals(endTime, studyRecord.getEndTime()),
+                    () -> assertEquals(7_200L, studyRecord.getStudySeconds())
             );
         }
 
         @Test
         @DisplayName("실패 시 기존 상태 유지")
         void keepsStateWhenUpdateFails() {
-            StudyRecord record = createRecord();
+            StudyRecord studyRecord = createRecord();
 
             assertThrows(
                     IllegalArgumentException.class,
-                    () -> record.updateTimeRange(END_TIME, START_TIME, 3_600L)
+                    () -> studyRecord.updateTimeRange(END_TIME, START_TIME, 3_600L)
             );
 
             assertAll(
-                    () -> assertEquals(BASE_DATE, record.getAggregationDate()),
-                    () -> assertEquals(START_TIME, record.getStartTime()),
-                    () -> assertEquals(END_TIME, record.getEndTime()),
-                    () -> assertEquals(3_600L, record.getStudySeconds())
+                    () -> assertEquals(BASE_DATE, studyRecord.getAggregationDate()),
+                    () -> assertEquals(START_TIME, studyRecord.getStartTime()),
+                    () -> assertEquals(END_TIME, studyRecord.getEndTime()),
+                    () -> assertEquals(3_600L, studyRecord.getStudySeconds())
             );
         }
     }
@@ -194,39 +194,39 @@ class StudyRecordTest {
         @Test
         @DisplayName("정상 처리")
         void softDeletesRecord() {
-            StudyRecord record = createRecord();
+            StudyRecord studyRecord = createRecord();
             Instant deletedAt = Instant.parse("2000-01-01T03:00:00Z");
 
-            record.softDelete(deletedAt);
+            studyRecord.softDelete(deletedAt);
 
-            assertEquals(deletedAt, record.getDeletedAt());
+            assertEquals(deletedAt, studyRecord.getDeletedAt());
         }
 
         @Test
         @DisplayName("삭제 시각 누락 예외")
         void rejectsMissingDeletedAt() {
-            StudyRecord record = createRecord();
+            StudyRecord studyRecord = createRecord();
 
-            assertThrows(NullPointerException.class, () -> record.softDelete(null));
+            assertThrows(IllegalArgumentException.class, () -> studyRecord.softDelete(null));
 
-            assertNull(record.getDeletedAt());
+            assertNull(studyRecord.getDeletedAt());
         }
 
         @Test
         @DisplayName("삭제 후 변경 예외")
         void rejectsChangesAfterDeletion() {
-            StudyRecord record = createRecord();
+            StudyRecord studyRecord = createRecord();
             Instant deletedAt = Instant.parse("2000-01-01T03:00:00Z");
-            record.softDelete(deletedAt);
+            studyRecord.softDelete(deletedAt);
 
             assertAll(
                     () -> assertThrows(
                             IllegalStateException.class,
-                            () -> record.updateTimeRange(START_TIME, END_TIME, 3_600L)
+                            () -> studyRecord.updateTimeRange(START_TIME, END_TIME, 3_600L)
                     ),
                     () -> assertThrows(
                             IllegalStateException.class,
-                            () -> record.softDelete(deletedAt.plusSeconds(1))
+                            () -> studyRecord.softDelete(deletedAt.plusSeconds(1))
                     )
             );
         }

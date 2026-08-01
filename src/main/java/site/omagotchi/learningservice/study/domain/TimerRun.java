@@ -7,7 +7,6 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -60,40 +59,90 @@ public class TimerRun {
         return endedAt == null && measuredSeconds == null && endReason == null;
     }
 
-    public void stop(Instant endedAt) {
-        validateEndTime(endedAt);
-        long elapsedSeconds = Duration.between(startedAt, endedAt).getSeconds();
+    public boolean isRunningAt(Instant currentAt, TimerTimePolicy timePolicy) {
+        validateTimePolicy(timePolicy);
+        validateCurrentTime(currentAt);
 
-        endTimer(endedAt, elapsedSeconds, TimerEndReason.STOP);
+        return isRunning() && !timePolicy.isExpired(startedAt, currentAt);
     }
 
-    public void discard(Instant endedAt) {
-        validateEndTime(endedAt);
-        endTimer(endedAt, null, TimerEndReason.DISCARD);
+    public TimerEndReason stopOrExpire(
+            Instant currentAt,
+            TimerTimePolicy timePolicy
+    ) {
+        validateEndRequest(currentAt, timePolicy);
+
+        if (expireIfDue(currentAt, timePolicy)) {
+            return TimerEndReason.EXPIRED;
+        }
+
+        long elapsedSeconds = timePolicy.elapsedSeconds(startedAt, currentAt);
+        return endTimer(currentAt, elapsedSeconds, TimerEndReason.STOP);
     }
 
-    public void expire(Instant expiredAt) {
-        validateEndTime(expiredAt);
-        endTimer(expiredAt, null, TimerEndReason.EXPIRED);
+    public TimerEndReason discardOrExpire(
+            Instant currentAt,
+            TimerTimePolicy timePolicy
+    ) {
+        validateEndRequest(currentAt, timePolicy);
+
+        if (expireIfDue(currentAt, timePolicy)) {
+            return TimerEndReason.EXPIRED;
+        }
+
+        return endTimer(currentAt, null, TimerEndReason.DISCARD);
+    }
+
+    public boolean expireIfDue(
+            Instant currentAt,
+            TimerTimePolicy timePolicy
+    ) {
+        validateTimePolicy(timePolicy);
+        validateCurrentTime(currentAt);
+
+        if (!isRunning() || !timePolicy.isExpired(startedAt, currentAt)) {
+            return false;
+        }
+
+        expireAt(timePolicy.expirationAt(startedAt));
+        return true;
     }
 
     // ===== Private Methods =====
 
-    private void validateEndTime(Instant endedAt) {
-        if (endedAt == null) {
-            throw new IllegalArgumentException("endedAt이 null입니다.");
-        }
+    private void validateEndRequest(
+            Instant currentAt,
+            TimerTimePolicy timePolicy
+    ) {
+        validateTimePolicy(timePolicy);
+        validateCurrentTime(currentAt);
 
         if (!isRunning()) {
             throw new IllegalStateException("종료된 타이머 실행은 변경할 수 없습니다.");
         }
 
-        if (endedAt.isBefore(startedAt)) {
+        if (currentAt.isBefore(startedAt)) {
             throw new IllegalArgumentException("종료 시각은 시작 시각보다 빠를 수 없습니다.");
         }
     }
 
-    private void endTimer(
+    private void validateTimePolicy(TimerTimePolicy timePolicy) {
+        if (timePolicy == null) {
+            throw new IllegalArgumentException("timePolicy가 null입니다.");
+        }
+    }
+
+    private void validateCurrentTime(Instant currentAt) {
+        if (currentAt == null) {
+            throw new IllegalArgumentException("currentAt이 null입니다.");
+        }
+    }
+
+    private TimerEndReason expireAt(Instant expirationAt) {
+        return endTimer(expirationAt, null, TimerEndReason.EXPIRED);
+    }
+
+    private TimerEndReason endTimer(
             Instant endedAt,
             Long measuredSeconds,
             TimerEndReason endReason
@@ -101,5 +150,6 @@ public class TimerRun {
         this.endedAt = endedAt;
         this.measuredSeconds = measuredSeconds;
         this.endReason = endReason;
+        return endReason;
     }
 }

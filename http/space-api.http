@@ -1,0 +1,213 @@
+@baseUrl = http://localhost:8084
+
+### 공간 API 공통 계약
+### 요청·응답 type 허용값: LAB, MEETING, STUDY
+### DB 컬럼은 space_type이지만 JSON 필드명은 type을 유지한다.
+### 목록 operationalStatus: 공간 운영 상태 (ACTIVE, INACTIVE)
+### 목록 status: 공간 사용 상태
+### - AVAILABLE: 사용 가능한 활성 회의실
+### - OCCUPIED: 유효한 활성 점유가 있는 활성 회의실
+### - UNAVAILABLE: 비활성 회의실
+### - NOT_APPLICABLE: 점유 대상이 아닌 LAB 또는 STUDY
+### occupancyExpiresAt과 remainingTimeSeconds는 OCCUPIED 회의실만 값을 반환한다.
+
+### =========================================================
+### 1. 공간 등록 성공
+### 기대 결과: 201 Created
+### 주의: 이미 "회의실 B"가 등록되어 있으면 중복 오류가 발생할 수 있음
+### =========================================================
+POST {{baseUrl}}/api/admin/spaces
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "회의실 B",
+  "type": "MEETING",
+  "capacity": 8
+}
+
+
+### =========================================================
+### 2. 공간 목록 조회
+### 기대 결과: 200 OK
+### 등록한 회의실 B가 목록에 포함되어야 함
+### operationalStatus와 status는 서로 다른 상태이므로 함께 확인한다.
+### 응답 필드:
+### spaceId, name, type, capacity, operationalStatus, inactiveReason,
+### cohortId, status, occupancyExpiresAt, remainingTimeSeconds
+### =========================================================
+GET {{baseUrl}}/api/spaces
+Accept: application/json
+
+
+### =========================================================
+### 3. 연구실 등록 성공
+### 기대 결과: 201 Created
+### =========================================================
+POST {{baseUrl}}/api/admin/spaces
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "연구실 A",
+  "type": "LAB",
+  "capacity": 20
+}
+
+
+### =========================================================
+### 4. 학습 공간 등록 성공
+### 기대 결과: 201 Created
+### =========================================================
+POST {{baseUrl}}/api/admin/spaces
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "스터디룸 A",
+  "type": "STUDY",
+  "capacity": 10
+}
+
+
+### =========================================================
+### 5. 등록 이후 공간 목록 재조회
+### 기대 결과: 200 OK
+### 회의실 B, 연구실 A, 스터디룸 A 확인
+### =========================================================
+GET {{baseUrl}}/api/spaces
+Accept: application/json
+
+
+### =========================================================
+### 6. 중복 공간명 등록
+### 먼저 1번 요청으로 회의실 B를 등록한 뒤 실행
+### 기대 결과: 409 Conflict
+### =========================================================
+POST {{baseUrl}}/api/admin/spaces
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "회의실 B",
+  "type": "MEETING",
+  "capacity": 8
+}
+
+
+### =========================================================
+### 7. 빈 공간명 등록
+### 기대 결과: 400 Bad Request
+### =========================================================
+POST {{baseUrl}}/api/admin/spaces
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "",
+  "type": "MEETING",
+  "capacity": 8
+}
+
+
+### =========================================================
+### 8. 공백만 있는 공간명 등록
+### 기대 결과: 400 Bad Request
+### =========================================================
+POST {{baseUrl}}/api/admin/spaces
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "   ",
+  "type": "MEETING",
+  "capacity": 8
+}
+
+
+### =========================================================
+### 9. 공간명 누락
+### 기대 결과: 400 Bad Request
+### =========================================================
+POST {{baseUrl}}/api/admin/spaces
+Content-Type: application/json
+Accept: application/json
+
+{
+  "type": "MEETING",
+  "capacity": 8
+}
+
+
+### =========================================================
+### 10. 공간 타입 누락
+### 기대 결과: 400 Bad Request
+### =========================================================
+POST {{baseUrl}}/api/admin/spaces
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "타입 없는 공간",
+  "capacity": 8
+}
+
+
+### =========================================================
+### 11. 존재하지 않는 공간 타입
+### 기대 결과: 400 Bad Request
+### 현재 허용 타입: LAB, MEETING, STUDY
+### =========================================================
+POST {{baseUrl}}/api/admin/spaces
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "잘못된 타입 공간",
+  "type": "ROOM",
+  "capacity": 8
+}
+
+
+### =========================================================
+### 12. 수용 인원 0
+### 기대 결과: 400 Bad Request
+### =========================================================
+POST {{baseUrl}}/api/admin/spaces
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "수용 인원 0 공간",
+  "type": "MEETING",
+  "capacity": 0
+}
+
+
+### =========================================================
+### 13. 음수 수용 인원
+### 기대 결과: 400 Bad Request
+### =========================================================
+POST {{baseUrl}}/api/admin/spaces
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "음수 수용 인원 공간",
+  "type": "MEETING",
+  "capacity": -1
+}
+
+
+### =========================================================
+### 14. 수용 인원 누락
+### 기대 결과: 400 Bad Request
+### =========================================================
+POST {{baseUrl}}/api/admin/spaces
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "수용 인원 없는 공간",
+  "type": "MEETING"
+}

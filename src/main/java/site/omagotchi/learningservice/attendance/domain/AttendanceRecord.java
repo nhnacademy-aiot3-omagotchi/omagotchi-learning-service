@@ -62,7 +62,7 @@ public class AttendanceRecord {
 
     @Version
     @Column(nullable = false)
-    private Long version;
+    private Integer version;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

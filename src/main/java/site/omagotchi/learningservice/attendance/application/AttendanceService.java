@@ -9,8 +9,11 @@ import site.omagotchi.learningservice.attendance.domain.AttendanceChangeLog;
 import site.omagotchi.learningservice.attendance.domain.AttendanceErrorCode;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
+import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
+import site.omagotchi.learningservice.attendance.domain.PresenceState;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceChangeLogRepository;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
+import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
@@ -41,6 +44,7 @@ public class AttendanceService {
     private final CohortAttendancePolicyRepository attendancePolicyRepository;
     private final AttendanceRecordRepository attendanceRecordRepository;
     private final AttendanceChangeLogRepository attendanceChangeLogRepository;
+    private final PresenceIntervalRepository presenceIntervalRepository;
     private final DateTimeProvider dateTimeProvider;
 
     // 출석 기록 결과 -> 출석(기수 Id, 유저 Id)
@@ -66,7 +70,15 @@ public class AttendanceService {
                 lateMinutes
         );
 
-        return AttendanceRecordResult.from(attendanceRecordRepository.save(record));
+        AttendanceRecord savedRecord = attendanceRecordRepository.save(record);
+        presenceIntervalRepository.save(PresenceInterval.start(
+                savedRecord.getId(),
+                PresenceState.PRESENT,
+                null,
+                now
+        ));
+
+        return AttendanceRecordResult.from(savedRecord);
     }
 
     @Transactional
@@ -90,6 +102,8 @@ public class AttendanceService {
         int earlyLeaveMinutes = calculateEarlyLeaveMinutes(policy, now);
         AttendanceStatus status = resolveCompletedStatus(record.getLateMinutes(), earlyLeaveMinutes);
         record.checkOut(now, status, earlyLeaveMinutes);
+        presenceIntervalRepository.findFirstByAttendanceIdAndEndedAtIsNullOrderByStartedAtDesc(record.getId())
+                .ifPresent(interval -> interval.end(now));
 
         return AttendanceRecordResult.from(attendanceRecordRepository.save(record));
     }

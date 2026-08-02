@@ -19,7 +19,7 @@ public record AttendanceRecordResponse(
         Instant checkedOutAt,
         Integer lateMinutes,
         Integer earlyLeaveMinutes,
-        Long version,
+        Integer version,
         Instant createdAt,
         Instant updatedAt
 ) {

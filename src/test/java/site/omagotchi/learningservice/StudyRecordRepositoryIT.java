@@ -4,12 +4,15 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.study.domain.entity.StudyRecordEntity;
+import site.omagotchi.learningservice.global.config.JpaAuditingConfig;
+import site.omagotchi.learningservice.global.config.QueryDslConfig;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
 
 import java.time.Instant;
@@ -21,10 +24,15 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Import(TestcontainersConfiguration.class)
+@Import({
+        TestcontainersConfiguration.class,
+        QueryDslConfig.class,
+        JpaAuditingConfig.class,
+        StudyRecordQueryRepository.class
+})
 @ActiveProfiles("test")
-@SpringBootTest
-@Transactional
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @DisplayName("학습 기록 저장소")
 class StudyRecordRepositoryIT {
 
@@ -33,6 +41,9 @@ class StudyRecordRepositoryIT {
 
     @Autowired
     private StudyRecordRepository studyRecordRepository;
+
+    @Autowired
+    private StudyRecordQueryRepository studyRecordQueryRepository;
 
     @Nested
     @DisplayName("활성 기록 겹침 조회")
@@ -47,7 +58,7 @@ class StudyRecordRepositoryIT {
                     "2000-01-01T02:00:00Z"
             );
 
-            boolean overlaps = studyRecordRepository.existsActiveOverlap(
+            boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     Instant.parse("2000-01-01T01:30:00Z"),
                     Instant.parse("2000-01-01T02:30:00Z"),
@@ -66,7 +77,7 @@ class StudyRecordRepositoryIT {
                     "2000-01-01T02:00:00Z"
             );
 
-            boolean overlaps = studyRecordRepository.existsActiveOverlap(
+            boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     Instant.parse("2000-01-01T02:00:00Z"),
                     Instant.parse("2000-01-01T03:00:00Z"),
@@ -79,7 +90,7 @@ class StudyRecordRepositoryIT {
         @Test
         @DisplayName("삭제 기록 제외")
         void excludesDeletedRecord() {
-            StudyRecordEntity studyRecord = saveRecord(
+            StudyRecord studyRecord = saveRecord(
                     COHORT_MEMBERSHIP_ID,
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
@@ -87,7 +98,7 @@ class StudyRecordRepositoryIT {
             studyRecord.applySoftDelete(Instant.parse("2000-01-02T00:00:00Z"));
             studyRecordRepository.saveAndFlush(studyRecord);
 
-            boolean overlaps = studyRecordRepository.existsActiveOverlap(
+            boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     Instant.parse("2000-01-01T01:30:00Z"),
                     Instant.parse("2000-01-01T02:30:00Z"),
@@ -106,7 +117,7 @@ class StudyRecordRepositoryIT {
                     "2000-01-01T02:00:00Z"
             );
 
-            boolean overlaps = studyRecordRepository.existsActiveOverlap(
+            boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     Instant.parse("2000-01-01T01:30:00Z"),
                     Instant.parse("2000-01-01T02:30:00Z"),
@@ -119,13 +130,13 @@ class StudyRecordRepositoryIT {
         @Test
         @DisplayName("수정 대상 자신 제외")
         void excludesUpdatedRecordItself() {
-            StudyRecordEntity studyRecord = saveRecord(
+            StudyRecord studyRecord = saveRecord(
                     COHORT_MEMBERSHIP_ID,
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
             );
 
-            boolean overlaps = studyRecordRepository.existsActiveOverlap(
+            boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     Instant.parse("2000-01-01T01:00:00Z"),
                     Instant.parse("2000-01-01T02:00:00Z"),
@@ -138,7 +149,7 @@ class StudyRecordRepositoryIT {
         @Test
         @DisplayName("수정 대상 외 다른 겹침 기록 조회")
         void findsOtherOverlappingRecordAfterExclusion() {
-            StudyRecordEntity updatedRecord = saveRecord(
+            StudyRecord updatedRecord = saveRecord(
                     COHORT_MEMBERSHIP_ID,
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
@@ -149,7 +160,7 @@ class StudyRecordRepositoryIT {
                     "2000-01-01T04:00:00Z"
             );
 
-            boolean overlaps = studyRecordRepository.existsActiveOverlap(
+            boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
                     COHORT_MEMBERSHIP_ID,
                     Instant.parse("2000-01-01T03:30:00Z"),
                     Instant.parse("2000-01-01T04:30:00Z"),
@@ -157,6 +168,31 @@ class StudyRecordRepositoryIT {
             );
 
             assertTrue(overlaps);
+        }
+    }
+
+    @Nested
+    @DisplayName("낙관적 버전")
+    class OptimisticVersion {
+
+        @Test
+        @DisplayName("변경 성공 시 버전 증가")
+        void incrementsVersionAfterSuccessfulUpdate() {
+            StudyRecord studyRecord = saveRecord(
+                    COHORT_MEMBERSHIP_ID,
+                    "2000-01-01T01:00:00Z",
+                    "2000-01-01T02:00:00Z"
+            );
+            studyRecord.applyUpdate(
+                    BASE_DATE,
+                    Instant.parse("2000-01-01T03:00:00Z"),
+                    Instant.parse("2000-01-01T04:00:00Z"),
+                    3_600L
+            );
+
+            StudyRecord updated = studyRecordRepository.saveAndFlush(studyRecord);
+
+            assertEquals(1L, updated.getVersion());
         }
     }
 
@@ -184,39 +220,14 @@ class StudyRecordRepositoryIT {
         }
     }
 
-    @Nested
-    @DisplayName("낙관적 버전")
-    class OptimisticVersion {
-
-        @Test
-        @DisplayName("변경 성공 시 버전 증가")
-        void incrementsVersionAfterSuccessfulUpdate() {
-            StudyRecordEntity studyRecord = saveRecord(
-                    COHORT_MEMBERSHIP_ID,
-                    "2000-01-01T01:00:00Z",
-                    "2000-01-01T02:00:00Z"
-            );
-            studyRecord.applyUpdate(
-                    BASE_DATE,
-                    Instant.parse("2000-01-01T03:00:00Z"),
-                    Instant.parse("2000-01-01T04:00:00Z"),
-                    3_600L
-            );
-
-            StudyRecordEntity updated = studyRecordRepository.saveAndFlush(studyRecord);
-
-            assertEquals(1L, updated.getVersion());
-        }
-    }
-
-    private StudyRecordEntity saveRecord(
+    private StudyRecord saveRecord(
             Long cohortMembershipId,
             String startTime,
             String endTime
     ) {
         Instant startInstant = Instant.parse(startTime);
         Instant endInstant = Instant.parse(endTime);
-        StudyRecordEntity studyRecord = StudyRecordEntity.builder()
+        StudyRecord studyRecord = StudyRecord.builder()
                 .cohortMembershipId(cohortMembershipId)
                 .aggregationDate(BASE_DATE)
                 .startTime(startInstant)

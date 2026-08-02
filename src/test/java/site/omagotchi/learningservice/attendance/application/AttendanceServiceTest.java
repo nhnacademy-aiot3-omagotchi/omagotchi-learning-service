@@ -13,6 +13,7 @@ import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceChangeLogRepository;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
+import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
@@ -63,6 +64,9 @@ class AttendanceServiceTest {
     private AttendanceChangeLogRepository attendanceChangeLogRepository;
 
     @Mock
+    private PresenceIntervalRepository presenceIntervalRepository;
+
+    @Mock
     private DateTimeProvider dateTimeProvider;
 
     @InjectMocks
@@ -79,7 +83,7 @@ class AttendanceServiceTest {
         given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
                 .willReturn(Optional.empty());
         given(attendanceRecordRepository.save(any(AttendanceRecord.class)))
-                .willAnswer(invocation -> invocation.getArgument(0));
+                .willAnswer(invocation -> savedRecord(invocation.getArgument(0)));
 
         var result = attendanceService.checkIn(COHORT_ID, USER_ID);
 
@@ -87,6 +91,7 @@ class AttendanceServiceTest {
         assertEquals(AttendanceStatus.PENDING, result.finalStatus());
         assertEquals(checkInAt, result.checkedInAt());
         assertEquals(0, result.lateMinutes());
+        verify(presenceIntervalRepository).save(any());
     }
 
     @Test
@@ -100,7 +105,7 @@ class AttendanceServiceTest {
         given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
                 .willReturn(Optional.empty());
         given(attendanceRecordRepository.save(any(AttendanceRecord.class)))
-                .willAnswer(invocation -> invocation.getArgument(0));
+                .willAnswer(invocation -> savedRecord(invocation.getArgument(0)));
 
         var result = attendanceService.checkIn(COHORT_ID, USER_ID);
 
@@ -213,5 +218,10 @@ class AttendanceServiceTest {
                 0,
                 MANAGER_ID
         );
+    }
+
+    private AttendanceRecord savedRecord(AttendanceRecord record) {
+        ReflectionTestUtils.setField(record, "id", 1L);
+        return record;
     }
 }

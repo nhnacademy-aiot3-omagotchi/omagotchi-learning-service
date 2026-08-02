@@ -27,42 +27,63 @@ class DateTimeProviderTest {
         dateTimeProvider = new DateTimeProvider(clock);
     }
 
-    @Nested
+    @Test
     @DisplayName("현재 시각 조회")
-    class CurrentInstant {
+    void returnsCurrentInstantFromUtcClock() {
+        Instant currentTime = dateTimeProvider.currentInstant();
 
-        @Test
-        @DisplayName("정상 처리")
-        void returnsCurrentInstantFromUtcClock() {
-            Instant currentTime = dateTimeProvider.currentInstant();
+        log.info("- 현재 시각 -");
+        log.info("결과: {}", currentTime);
 
-            log.info("- 현재 시각 -");
-            log.info("결과: {}", currentTime);
-
-            assertEquals(FIXED_NOW, currentTime);
-        }
+        assertEquals(FIXED_NOW, currentTime);
     }
 
     @Nested
-    @DisplayName("지역 시각 변환")
-    class ConvertToZonedDateTime {
+    @DisplayName("현재 집계일 조회")
+    class CurrentAggregationDate {
 
         @Test
-        @DisplayName("정상 처리")
-        void convertsInstantToSeoulZonedDateTime() {
-            Instant instant = Instant.parse("2000-01-01T00:00:00Z");
+        @DisplayName("KST 04시 직전은 전날 집계일")
+        void returnsPreviousDateBeforeResetBoundary() {
+            DateTimeProvider provider = new DateTimeProvider(Clock.fixed(
+                    Instant.parse("2000-01-01T18:59:59Z"),
+                    ZoneOffset.UTC
+            ));
 
-            ZonedDateTime zonedDateTime = dateTimeProvider.toZonedDateTime(instant);
+            LocalDate result = provider.currentAggregationDate();
 
-            log.info("- 지역 시간 변화 -");
-            log.info("입력: {}", instant);
-            log.info("결과: {}", zonedDateTime);
-
-            assertEquals(
-                    ZonedDateTime.parse("2000-01-01T09:00:00+09:00[Asia/Seoul]"),
-                    zonedDateTime
-            );
+            assertEquals(LocalDate.of(2000, Month.JANUARY, 1), result);
         }
+
+        @Test
+        @DisplayName("KST 04시부터 당일 집계일")
+        void returnsCurrentDateFromResetBoundary() {
+            DateTimeProvider provider = new DateTimeProvider(Clock.fixed(
+                    Instant.parse("2000-01-01T19:00:00Z"),
+                    ZoneOffset.UTC
+            ));
+
+            LocalDate result = provider.currentAggregationDate();
+
+            assertEquals(LocalDate.of(2000, Month.JANUARY, 2), result);
+        }
+    }
+
+    @Test
+    @DisplayName("지역 시각 변환")
+    void convertsInstantToSeoulZonedDateTime() {
+        Instant instant = Instant.parse("2000-01-01T00:00:00Z");
+
+        ZonedDateTime zonedDateTime = dateTimeProvider.toZonedDateTime(instant);
+
+        log.info("- 지역 시간 변화 -");
+        log.info("입력: {}", instant);
+        log.info("결과: {}", zonedDateTime);
+
+        assertEquals(
+                ZonedDateTime.parse("2000-01-01T09:00:00+09:00[Asia/Seoul]"),
+                zonedDateTime
+        );
     }
 
     @Nested
@@ -98,34 +119,29 @@ class DateTimeProviderTest {
         }
     }
 
-    @Nested
+    @Test
     @DisplayName("집계 구간 계산")
-    class CalculateAggregationWindow {
+    void calculatesAggregationDateWindowAsInstants() {
+        LocalDate aggregationDate = LocalDate.of(2000, Month.JANUARY, 10);
 
-        @Test
-        @DisplayName("정상 처리")
-        void calculatesAggregationDateWindowAsInstants() {
-            LocalDate aggregationDate = LocalDate.of(2000, Month.JANUARY, 10);
+        Instant start = dateTimeProvider.startOfAggregationDate(aggregationDate);
+        Instant endExclusive = dateTimeProvider.endExclusiveOfAggregationDate(aggregationDate);
 
-            Instant start = dateTimeProvider.startOfAggregationDate(aggregationDate);
-            Instant endExclusive = dateTimeProvider.endExclusiveOfAggregationDate(aggregationDate);
+        log.info("- 기준 시작 시간 계산 -");
+        log.info("입력: {}", aggregationDate);
+        log.info("기준 시작 시간: {}", start);
+        log.info("기준 종료 시간: {}", endExclusive);
 
-            log.info("- 기준 시작 시간 계산 -");
-            log.info("입력: {}", aggregationDate);
-            log.info("기준 시작 시간: {}", start);
-            log.info("기준 종료 시간: {}", endExclusive);
-
-            assertAll(
-                    () -> assertEquals(
-                            Instant.parse("2000-01-09T19:00:00Z"),
-                            start
-                    ),
-                    () -> assertEquals(
-                            Instant.parse("2000-01-10T19:00:00Z"),
-                            endExclusive
-                    )
-            );
-        }
+        assertAll(
+                () -> assertEquals(
+                        Instant.parse("2000-01-09T19:00:00Z"),
+                        start
+                ),
+                () -> assertEquals(
+                        Instant.parse("2000-01-10T19:00:00Z"),
+                        endExclusive
+                )
+        );
     }
 
     @Nested

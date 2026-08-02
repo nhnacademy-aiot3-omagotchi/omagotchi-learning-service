@@ -5,12 +5,14 @@
 @systemAdminUserId = 00000000-0000-0000-0000-000000000001
 @managerUserId = 00000000-0000-0000-0000-000000000002
 @userId = 00000000-0000-0000-0000-000000000003
+@systemAdminAccessToken = <SYSTEM_ADMIN JWT>
+@managerAccessToken = <USER JWT for managerUserId>
+@userAccessToken = <USER JWT for userId>
 
 ### 기수 생성
 # @name createCohort
 POST {{baseUrl}}/api/cohorts
-X-User-Id: {{systemAdminUserId}}
-X-Global-Role: SYSTEM_ADMIN
+Authorization: Bearer {{systemAdminAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -29,8 +31,7 @@ Accept: application/json
 
 ### 기수 관리자 membership 생성
 POST {{baseUrl}}/api/cohorts/{{cohortId}}/managers
-X-User-Id: {{systemAdminUserId}}
-X-Global-Role: SYSTEM_ADMIN
+Authorization: Bearer {{systemAdminAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -40,7 +41,7 @@ Accept: application/json
 
 ### 가입 코드 발급
 POST {{baseUrl}}/api/cohorts/{{cohortId}}/join-code
-X-User-Id: {{managerUserId}}
+Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -56,7 +57,7 @@ Accept: application/json
 
 ### 학생 membership 참가 신청
 POST {{baseUrl}}/api/cohorts/join-requests
-X-User-Id: {{userId}}
+Authorization: Bearer {{userAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -72,7 +73,7 @@ Accept: application/json
 
 ### 학생 membership 승인
 PATCH {{baseUrl}}/api/cohort-memberships/{{membershipId}}/approve
-X-User-Id: {{managerUserId}}
+Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
 

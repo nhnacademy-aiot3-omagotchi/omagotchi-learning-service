@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.study.presentation.controller;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -9,10 +10,18 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import site.omagotchi.learningservice.study.application.dto.CreateStudyRecordCommand;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.test.web.servlet.MockMvc;
+import site.omagotchi.learningservice.global.exception.CommonErrorCode;
+import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
 import site.omagotchi.learningservice.study.application.StudyRecordCommandService;
-import site.omagotchi.learningservice.study.application.dto.UpdateStudyRecordCommand;
 import site.omagotchi.learningservice.study.application.StudyRecordQueryService;
+import site.omagotchi.learningservice.study.application.dto.CreateStudyRecordCommand;
+import site.omagotchi.learningservice.study.application.dto.UpdateStudyRecordCommand;
+import site.omagotchi.learningservice.study.application.result.DailyStudyRecordsResult;
+import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
+import site.omagotchi.learningservice.study.application.result.MonthlyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.presentation.request.CreateStudyRecordRequest;
 import site.omagotchi.learningservice.study.presentation.request.UpdateStudyRecordRequest;
@@ -21,12 +30,19 @@ import site.omagotchi.learningservice.study.presentation.response.StudyRecordRes
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
+import java.time.YearMonth;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
 @DisplayName("학습 기록 API")
 @ExtendWith(MockitoExtension.class)
@@ -56,6 +72,15 @@ class StudyRecordControllerTest {
     @InjectMocks
     private StudyRecordController studyRecordController;
 
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUpMockMvc() {
+        mockMvc = standaloneSetup(studyRecordController)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+    }
+
     @Nested
     @DisplayName("단건 조회")
     class Get {
@@ -68,13 +93,166 @@ class StudyRecordControllerTest {
                     .willReturn(result);
 
             ResponseEntity<StudyRecordResponse> response = studyRecordController.get(
-                    USER_ID,
+                    authentication(),
                     COHORT_ID,
                     STUDY_RECORD_ID
             );
 
             assertEquals(HttpStatus.OK, response.getStatusCode());
             assertEquals(StudyRecordResponse.from(result), response.getBody());
+        }
+    }
+
+    @Nested
+    @DisplayName("일간 조회")
+    class GetDailyRecords {
+
+        @Test
+        @DisplayName("정상 처리")
+        void returnsDailyRecords() throws Exception {
+            LocalDate aggregationDate = LocalDate.of(2000, Month.JANUARY, 1);
+            DailyStudyRecordsResult result = new DailyStudyRecordsResult(
+                    aggregationDate,
+                    3_600L,
+                    List.of(studyRecordResult())
+            );
+            given(studyRecordQueryService.getDailyRecords(
+                    USER_ID,
+                    COHORT_ID,
+                    aggregationDate
+            )).willReturn(result);
+
+            mockMvc.perform(get(
+                            "/api/v1/cohorts/{cohortId}/study-records",
+                            COHORT_ID
+                    )
+                    .principal(authentication())
+                    .queryParam("date", "2000-01-01"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.aggregationDate").value("2000-01-01"))
+                    .andExpect(jsonPath("$.totalStudySeconds").value(3_600L))
+                    .andExpect(jsonPath("$.records[0].id").value(STUDY_RECORD_ID.toString()))
+                    .andExpect(jsonPath("$.periodStart").doesNotExist())
+                    .andExpect(jsonPath("$.periodEndExclusive").doesNotExist());
+
+            verify(studyRecordQueryService).getDailyRecords(
+                    USER_ID,
+                    COHORT_ID,
+                    aggregationDate
+            );
+        }
+
+        @Test
+        @DisplayName("잘못된 집계일 형식 예외")
+        void rejectsInvalidAggregationDateFormat() throws Exception {
+            mockMvc.perform(get(
+                            "/api/v1/cohorts/{cohortId}/study-records",
+                            COHORT_ID
+                    )
+                    .principal(authentication())
+                    .queryParam("date", "2000-02-30"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code")
+                            .value(CommonErrorCode.INVALID_REQUEST.code()));
+
+            verifyNoInteractions(studyRecordQueryService);
+        }
+
+        @Test
+        @DisplayName("집계일 누락 예외")
+        void rejectsMissingAggregationDate() throws Exception {
+            mockMvc.perform(get(
+                            "/api/v1/cohorts/{cohortId}/study-records",
+                            COHORT_ID
+                    )
+                    .principal(authentication()))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code")
+                            .value(CommonErrorCode.INVALID_REQUEST.code()));
+
+            verifyNoInteractions(studyRecordQueryService);
+        }
+    }
+
+    @Nested
+    @DisplayName("월간 조회")
+    class GetMonthlyStudySeconds {
+
+        @Test
+        @DisplayName("정상 처리")
+        void returnsMonthlyStudySeconds() throws Exception {
+            YearMonth aggregationMonth = YearMonth.of(2000, Month.JANUARY);
+            MonthlyStudySecondsResult result = new MonthlyStudySecondsResult(
+                    aggregationMonth,
+                    3_600L,
+                    List.of(
+                            new DailyStudySecondsResult(
+                                    LocalDate.of(2000, Month.JANUARY, 1),
+                                    3_600L
+                            ),
+                            new DailyStudySecondsResult(
+                                    LocalDate.of(2000, Month.JANUARY, 2),
+                                    0L
+                            )
+                    )
+            );
+            given(studyRecordQueryService.getMonthlyStudySeconds(
+                    USER_ID,
+                    COHORT_ID,
+                    aggregationMonth
+            )).willReturn(result);
+
+            mockMvc.perform(get(
+                            "/api/v1/cohorts/{cohortId}/study-time-summaries",
+                            COHORT_ID
+                    )
+                    .principal(authentication())
+                    .queryParam("month", "2000-01"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.aggregationMonth").value("2000-01"))
+                    .andExpect(jsonPath("$.totalStudySeconds").value(3_600L))
+                    .andExpect(jsonPath("$.dailyTotals[0].aggregationDate")
+                            .value("2000-01-01"))
+                    .andExpect(jsonPath("$.dailyTotals[1].studySeconds").value(0L))
+                    .andExpect(jsonPath("$.periodStart").doesNotExist())
+                    .andExpect(jsonPath("$.periodEndExclusive").doesNotExist());
+
+            verify(studyRecordQueryService).getMonthlyStudySeconds(
+                    USER_ID,
+                    COHORT_ID,
+                    aggregationMonth
+            );
+        }
+
+        @Test
+        @DisplayName("잘못된 집계월 형식 예외")
+        void rejectsInvalidAggregationMonthFormat() throws Exception {
+            mockMvc.perform(get(
+                            "/api/v1/cohorts/{cohortId}/study-time-summaries",
+                            COHORT_ID
+                    )
+                    .principal(authentication())
+                    .queryParam("month", "2000-1"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code")
+                            .value(CommonErrorCode.INVALID_REQUEST.code()));
+
+            verifyNoInteractions(studyRecordQueryService);
+        }
+
+        @Test
+        @DisplayName("집계월 누락 예외")
+        void rejectsMissingAggregationMonth() throws Exception {
+            mockMvc.perform(get(
+                            "/api/v1/cohorts/{cohortId}/study-time-summaries",
+                            COHORT_ID
+                    )
+                    .principal(authentication()))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code")
+                            .value(CommonErrorCode.INVALID_REQUEST.code()));
+
+            verifyNoInteractions(studyRecordQueryService);
         }
     }
 
@@ -96,7 +274,7 @@ class StudyRecordControllerTest {
                     .willReturn(result);
 
             ResponseEntity<StudyRecordResponse> response = studyRecordController.create(
-                    USER_ID,
+                    authentication(),
                     COMMAND_ID,
                     COHORT_ID,
                     request
@@ -131,7 +309,7 @@ class StudyRecordControllerTest {
             )).willReturn(result);
 
             ResponseEntity<StudyRecordResponse> response = studyRecordController.update(
-                    USER_ID,
+                    authentication(),
                     COMMAND_ID,
                     COHORT_ID,
                     STUDY_RECORD_ID,
@@ -151,7 +329,7 @@ class StudyRecordControllerTest {
         @DisplayName("정상 처리")
         void deletesStudyRecord() {
             ResponseEntity<Void> response = studyRecordController.delete(
-                    USER_ID,
+                    authentication(),
                     COMMAND_ID,
                     EXPECTED_VERSION,
                     COHORT_ID,
@@ -181,5 +359,17 @@ class StudyRecordControllerTest {
                 Instant.parse("2000-01-01T02:00:01Z"),
                 Instant.parse("2000-01-01T02:00:01Z")
         );
+    }
+
+    private JwtAuthenticationToken authentication() {
+        Instant now = Instant.now();
+        Jwt jwt = Jwt.withTokenValue("test-token")
+                .header("alg", "RS256")
+                .subject(USER_ID.toString())
+                .claim("role", "USER")
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(300))
+                .build();
+        return new JwtAuthenticationToken(jwt);
     }
 }

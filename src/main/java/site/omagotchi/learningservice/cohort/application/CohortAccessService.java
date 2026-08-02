@@ -22,10 +22,9 @@ public class CohortAccessService {
 
     /**
      * 전역 시스템 관리자 권한이 필요한 작업인지 확인
-     * Gateway/JWT 연동 전까지 X-Global-Role 헤더 값을 사용한다.
      */
-    public void requireSystemAdmin(String globalRole) {
-        if (GlobalRole.from(globalRole) != GlobalRole.SYSTEM_ADMIN) {
+    public void requireSystemAdmin(GlobalRole globalRole) {
+        if (globalRole != GlobalRole.SYSTEM_ADMIN) {
             throw new BusinessException(CohortErrorCode.SYSTEM_ADMIN_REQUIRED);
         }
     }

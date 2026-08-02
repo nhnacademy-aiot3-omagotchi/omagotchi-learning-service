@@ -1,11 +1,11 @@
 package site.omagotchi.learningservice.global.exception;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.springframework.http.HttpStatus;
 
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class ErrorHttpStatusMapper {
-
-    private ErrorHttpStatusMapper() {
-    }
 
     public static HttpStatus map(ErrorType type) {
         return switch (type) {

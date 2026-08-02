@@ -3,11 +3,12 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.cohort.application.dto.command.ApproveMembershipRequest;
-import site.omagotchi.learningservice.cohort.application.dto.command.CreateJoinRequest;
-import site.omagotchi.learningservice.cohort.application.dto.command.RejectMembershipRequest;
+import site.omagotchi.learningservice.cohort.application.dto.command.ApproveMembershipCommand;
+import site.omagotchi.learningservice.cohort.application.dto.command.CreateJoinCommand;
+import site.omagotchi.learningservice.cohort.application.dto.command.RejectMembershipCommand;
 import site.omagotchi.learningservice.cohort.application.dto.result.CohortMembershipResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
+import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortJoinCode;
 import site.omagotchi.learningservice.cohort.domain.CohortJoinCodeStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
@@ -17,6 +18,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortJoinCodeRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.OffsetDateTime;
@@ -46,8 +48,8 @@ public class CohortMembershipService {
      * 멱등성: 엘리베이터 5번 누르면 1번 눌러짐 처리
      */
     @Transactional
-    public CohortMembershipResponse join(CreateJoinRequest request, UUID userId) {
-        String rawJoinCode = request.joinCode();
+    public CohortMembershipResponse join(CreateJoinCommand command, UUID userId) {
+        String rawJoinCode = command.joinCode();
         if (rawJoinCode == null || rawJoinCode.isBlank()) {
             throw new BusinessException(CohortErrorCode.JOIN_CODE_REQUIRED);
         }
@@ -116,22 +118,22 @@ public class CohortMembershipService {
     @Transactional
     public CohortMembershipResponse approve(
             Long membershipId,
-            ApproveMembershipRequest request,
+            ApproveMembershipCommand command,
             UUID processedByUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         CohortMembership pendingMembership = membershipRepository.findByIdAndStatus(
                 membershipId,
                 CohortMembershipStatus.PENDING
         ).orElseThrow(() -> new BusinessException(CohortErrorCode.INVALID_MEMBERSHIP_STATUS_TRANSITION));
         validateCohortNotClosed(pendingMembership.getCohortId());
-        if (request.role() == CohortMembershipRole.MANAGER) {
+        if (command.role() == CohortMembershipRole.MANAGER) {
             accessService.requireSystemAdmin(globalRole);
         } else {
             accessService.requireManager(pendingMembership.getCohortId(), processedByUserId);
         }
 
-        if (request.role() == CohortMembershipRole.STUDENT
+        if (command.role() == CohortMembershipRole.STUDENT
                 && membershipRepository.existsByUserIdAndRoleAndStatusAndEndedAtIsNull(
                 pendingMembership.getUserId(),
                 CohortMembershipRole.STUDENT,
@@ -143,7 +145,7 @@ public class CohortMembershipService {
         int updatedCount = membershipRepository.approvePending(
                 membershipId,
                 CohortMembershipStatus.ACTIVE,
-                request.role(),
+                command.role(),
                 OffsetDateTime.now(),
                 processedByUserId
         );
@@ -163,10 +165,10 @@ public class CohortMembershipService {
     @Transactional
     public CohortMembershipResponse reject(
             Long membershipId,
-            RejectMembershipRequest request,
+            RejectMembershipCommand command,
             UUID processedByUserId
     ) {
-        if (request.reason() == null || request.reason().isBlank()) {
+        if (command.reason() == null || command.reason().isBlank()) {
             throw new BusinessException(CohortErrorCode.REJECTION_REASON_REQUIRED);
         }
 
@@ -180,7 +182,7 @@ public class CohortMembershipService {
         int updatedCount = membershipRepository.rejectPending(
                 membershipId,
                 CohortMembershipStatus.REJECTED,
-                request.reason(),
+                command.reason(),
                 OffsetDateTime.now(),
                 processedByUserId
         );

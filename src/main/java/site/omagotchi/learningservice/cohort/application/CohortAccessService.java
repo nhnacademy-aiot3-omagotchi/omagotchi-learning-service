@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
@@ -21,10 +22,9 @@ public class CohortAccessService {
 
     /**
      * 전역 시스템 관리자 권한이 필요한 작업인지 확인
-     * Gateway/JWT 연동 전까지 X-Global-Role 헤더 값을 사용한다.
      */
-    public void requireSystemAdmin(String globalRole) {
-        if (GlobalRole.from(globalRole) != GlobalRole.SYSTEM_ADMIN) {
+    public void requireSystemAdmin(GlobalRole globalRole) {
+        if (globalRole != GlobalRole.SYSTEM_ADMIN) {
             throw new BusinessException(CohortErrorCode.SYSTEM_ADMIN_REQUIRED);
         }
     }
@@ -44,11 +44,20 @@ public class CohortAccessService {
     }
 
     /**
+     * 사용자가 해당 기수의 ACTIVE 소속인지 확인하고, 소속 식별자를 반환
+     * ACTIVE 소속이 없으면 기수 존재를 숨기기 위해 404로 처리
+     */
+    public Long requireActiveMembershipId(Long cohortId, UUID userId) {
+        return membershipRepository.findActiveMembershipId(userId, cohortId)
+                .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
+    }
+
+    /**
      * 사용자가 해당 기수에서 MANAGER 역할의 ACTIVE 소속인지 확인
      * 소속은 있지만 관리자 역할이 아니면 403으로 처리
      */
     public void requireManager(Long cohortId, UUID userId) {
-        requireActiveMembership(cohortId, userId);
+        requireActiveMembershipId(cohortId, userId);
 
         boolean isManager = membershipRepository.existsByCohortIdAndUserIdAndRoleAndStatus(
                 cohortId,

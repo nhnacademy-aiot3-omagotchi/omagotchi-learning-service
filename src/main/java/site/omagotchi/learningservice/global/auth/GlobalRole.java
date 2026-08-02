@@ -1,20 +1,22 @@
 package site.omagotchi.learningservice.global.auth;
 
-/**
- * 일반 사용자, 시스템 어드민
- */
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 public enum GlobalRole {
+
+    // 시스템 사용자
     USER,
+
+    // 시스템 전역 운영 관리자
     SYSTEM_ADMIN;
 
-    public static GlobalRole from(String value) {
-        if (value == null || value.isBlank()) {
-            return USER;
-        }
-        try {
-            return GlobalRole.valueOf(value.trim().toUpperCase());
-        } catch (IllegalArgumentException exception) {
-            return USER;
-        }
+    public static boolean isSupported(String name) {
+        return name != null && NAMES.contains(name);
     }
+
+    private static final Set<String> NAMES = Arrays.stream(values())
+            .map(Enum::name)
+            .collect(Collectors.toUnmodifiableSet());
 }

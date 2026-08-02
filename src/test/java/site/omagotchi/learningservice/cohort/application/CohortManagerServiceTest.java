@@ -6,13 +6,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import site.omagotchi.learningservice.cohort.application.dto.command.ChangeCohortMemberRoleRequest;
+import site.omagotchi.learningservice.cohort.application.dto.command.ChangeCohortMemberRoleCommand;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.LocalDate;
@@ -65,9 +66,9 @@ class CohortManagerServiceTest {
         assertThatThrownBy(() -> managerService.changeMemberRole(
                 cohortId,
                 managerUserId,
-                new ChangeCohortMemberRoleRequest(CohortMembershipRole.MENTOR),
+                new ChangeCohortMemberRoleCommand(CohortMembershipRole.MENTOR),
                 PROCESSOR_USER_ID,
-                "SYSTEM_ADMIN"
+                GlobalRole.SYSTEM_ADMIN
         )).isInstanceOf(BusinessException.class);
 
         verify(membershipRepository, never()).changeActiveRole(any(), any(), any(), any());

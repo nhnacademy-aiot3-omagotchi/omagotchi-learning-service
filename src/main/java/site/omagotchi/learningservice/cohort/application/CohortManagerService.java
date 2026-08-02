@@ -3,16 +3,18 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.cohort.application.dto.command.AssignCohortManagerRequest;
-import site.omagotchi.learningservice.cohort.application.dto.command.ChangeCohortMemberRoleRequest;
+import site.omagotchi.learningservice.cohort.application.dto.command.AssignCohortManagerCommand;
+import site.omagotchi.learningservice.cohort.application.dto.command.ChangeCohortMemberRoleCommand;
 import site.omagotchi.learningservice.cohort.application.dto.result.CohortMembershipResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
+import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.OffsetDateTime;
@@ -34,16 +36,16 @@ public class CohortManagerService {
     @Transactional
     public CohortMembershipResponse assignManager(
             Long cohortId,
-            AssignCohortManagerRequest request,
+            AssignCohortManagerCommand command,
             UUID processedByUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         accessService.requireSystemAdmin(globalRole);
         validateCohortCanChangeManager(cohortId);
 
-        return membershipRepository.findByCohortIdAndUserId(cohortId, request.userId())
+        return membershipRepository.findByCohortIdAndUserId(cohortId, command.userId())
                 .map(membership -> assignExistingMembershipAsManager(membership, processedByUserId))
-                .orElseGet(() -> createActiveManager(cohortId, request.userId(), processedByUserId));
+                .orElseGet(() -> createActiveManager(cohortId, command.userId(), processedByUserId));
     }
 
     /**
@@ -54,9 +56,9 @@ public class CohortManagerService {
     public CohortMembershipResponse changeMemberRole(
             Long cohortId,
             UUID userId,
-            ChangeCohortMemberRoleRequest request,
+            ChangeCohortMemberRoleCommand command,
             UUID processedByUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         validateCohortCanChangeManager(cohortId);
 
@@ -66,14 +68,14 @@ public class CohortManagerService {
                 CohortMembershipStatus.ACTIVE
         ).orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_MEMBERSHIP_NOT_FOUND));
 
-        if (membership.getRole() == CohortMembershipRole.MANAGER || request.role() == CohortMembershipRole.MANAGER) {
+        if (membership.getRole() == CohortMembershipRole.MANAGER || command.role() == CohortMembershipRole.MANAGER) {
             accessService.requireSystemAdmin(globalRole);
         } else {
             accessService.requireManager(cohortId, processedByUserId);
         }
         // 매니저가 1명 이상이어야 함 (매니저 < 1) 방지
         if (membership.getRole() == CohortMembershipRole.MANAGER
-                && request.role() != CohortMembershipRole.MANAGER
+                && command.role() != CohortMembershipRole.MANAGER
                 && membershipRepository.countByCohortIdAndRoleAndStatus(
                 cohortId,
                 CohortMembershipRole.MANAGER,
@@ -84,7 +86,7 @@ public class CohortManagerService {
 
         int updatedCount = membershipRepository.changeActiveRole(
                 membership.getId(),
-                request.role(),
+                command.role(),
                 OffsetDateTime.now(),
                 processedByUserId
         );

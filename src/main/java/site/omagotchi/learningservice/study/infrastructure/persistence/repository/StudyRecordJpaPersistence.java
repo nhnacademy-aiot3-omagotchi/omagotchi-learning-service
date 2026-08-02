@@ -4,9 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.study.application.StudyRecordErrorCode;
 import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.domain.StudyRecord;
-import site.omagotchi.learningservice.study.application.StudyRecordErrorCode;
 
 @Repository
 @RequiredArgsConstructor

@@ -63,7 +63,7 @@ public class StudyRecord {
         if (cohortMembershipId == null) {
             throw new IllegalArgumentException("cohortMembershipId가 null입니다.");
         }
-        
+
         StudyRecord studyRecord = new StudyRecord();
         studyRecord.cohortMembershipId = cohortMembershipId;
         studyRecord.replaceTimeRange(startTime, endTime, studySeconds);

@@ -37,7 +37,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -338,58 +337,6 @@ class TimerCommandServiceTest {
 
             assertExpired(timerRun);
             verify(timerRunRepository).end(timerRun);
-        }
-    }
-
-    @Nested
-    @DisplayName("자동 만료")
-    class Expire {
-
-        @Test
-        @DisplayName("지연 처리 시 계산된 만료 시각 저장")
-        void storesCalculatedExpirationTimeWhenCleanupIsDelayed() {
-            TimerRun timerRun = runningTimer();
-            given(timerRunQueryRepository.findOwnedById(
-                    TIMER_RUN_ID,
-                    COHORT_MEMBERSHIP_ID
-            )).willReturn(Optional.of(timerRun));
-            given(clock.instant()).willReturn(EXPIRATION_AT.plusSeconds(3_600L));
-
-            timerCommandService.expire(TIMER_RUN_ID, COHORT_MEMBERSHIP_ID);
-
-            assertExpired(timerRun);
-            verify(studyWriteLock).acquire(COHORT_MEMBERSHIP_ID);
-            verify(timerRunRepository).end(timerRun);
-        }
-
-        @Test
-        @DisplayName("만료 전 실행 무변경")
-        void keepsTimerRunningBeforeExpirationBoundary() {
-            TimerRun timerRun = runningTimer();
-            given(timerRunQueryRepository.findOwnedById(
-                    TIMER_RUN_ID,
-                    COHORT_MEMBERSHIP_ID
-            )).willReturn(Optional.of(timerRun));
-            given(clock.instant()).willReturn(EXPIRATION_AT.minusNanos(1L));
-
-            timerCommandService.expire(TIMER_RUN_ID, COHORT_MEMBERSHIP_ID);
-
-            assertTrue(timerRun.isRunning());
-            verify(timerRunRepository, never()).end(any(TimerRun.class));
-        }
-
-        @Test
-        @DisplayName("대상 없음 무변경")
-        void doesNotExpireMissingTimer() {
-            given(timerRunQueryRepository.findOwnedById(
-                    TIMER_RUN_ID,
-                    COHORT_MEMBERSHIP_ID
-            )).willReturn(Optional.empty());
-
-            timerCommandService.expire(TIMER_RUN_ID, COHORT_MEMBERSHIP_ID);
-
-            verify(studyWriteLock).acquire(COHORT_MEMBERSHIP_ID);
-            verifyNoInteractions(clock, timerRunRepository);
         }
     }
 

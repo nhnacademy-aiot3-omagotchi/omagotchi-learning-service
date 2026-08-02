@@ -11,8 +11,8 @@ import site.omagotchi.learningservice.study.application.result.DailyStudyRecords
 import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.MonthlyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
-import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
 import site.omagotchi.learningservice.study.domain.StudyRecord;
+import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
 
 import java.time.Clock;
 import java.time.LocalDate;

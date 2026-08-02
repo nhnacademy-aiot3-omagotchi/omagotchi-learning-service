@@ -106,23 +106,6 @@ public class TimerCommandService {
         timerRunRepository.end(timerRun);
     }
 
-    public void expire(UUID timerRunId, Long cohortMembershipId) {
-        studyWriteLock.acquire(cohortMembershipId);
-
-        TimerRun timerRun = timerRunQueryRepository
-                .findOwnedById(timerRunId, cohortMembershipId)
-                .orElse(null);
-
-        if (timerRun == null) {
-            return;
-        }
-
-        Instant currentAt = clock.instant();
-        if (timerRun.expireIfDue(currentAt, timerTimePolicy)) {
-            timerRunRepository.end(timerRun);
-        }
-    }
-
     private TimerRun requireOwnedOpenTimer(
             UUID timerRunId,
             Long cohortMembershipId

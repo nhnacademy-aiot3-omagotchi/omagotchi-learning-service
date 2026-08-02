@@ -105,6 +105,14 @@ public class CohortController {
         return membershipService.join(request, userId);
     }
 
+    @PostMapping("/applications")
+    public CohortMembershipResponse apply(
+            @RequestHeader("X-User-Id") UUID userId,
+            @Valid @RequestBody CreateJoinRequest request
+    ) {
+        return membershipService.join(request, userId);
+    }
+
     @GetMapping("/join-requests/me")
     public List<CohortMembershipResponse> getMyJoinRequests(
             @RequestHeader("X-User-Id") UUID userId

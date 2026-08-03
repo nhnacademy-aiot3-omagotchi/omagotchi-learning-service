@@ -50,7 +50,9 @@ public class RoomOccupancyService {
      * @param spaceId 대상 회의실
      * @param userId  요청자 계정 id. 점유자 멤버십은 재실 구간에서 도출하므로 받지 않는다
      * @throws BusinessException 회의실 아님·비활성(400), 재실 아님(403), 공간 없음(404),
-     *                           사용 중·이미 점유 중·이미 참여 중(409), 출결 조회 불가(503)
+     *                           사용 중·이미 점유 중·이미 참여 중(409)
+     * @throws RuntimeException  출결 모듈 조회 자체가 실패한 경우. 잡지 않고 전파해
+     *                           {@code GlobalExceptionHandler}가 500으로 옮긴다
      */
     @Transactional
     public RoomOccupancyResult start(Long spaceId, UUID userId) {
@@ -122,20 +124,16 @@ public class RoomOccupancyService {
     }
 
     /**
-     * 재실 조회. 실패와 "재실 아님"을 구분한다.
+     * 재실 조회. "재실 아님"만 403으로 변환한다.
      *
-     * <p>조회 자체가 실패했을 때 통과시키면 안 된다 — 재실 여부를 확인할 수 없으면
-     * 안전 측으로 차단하되, 영구 실패가 아님을 503으로 알린다.</p>
+     * <p>조회 자체가 실패하면(출결 모듈 장애 등) 여기서 잡지 않고 그대로 전파한다 —
+     * 클라이언트가 분기할 외부 계약이 없는 기술 실패이므로 {@code BusinessException}으로
+     * 숨기지 않는다 (04-error-handling "예상하지 못한 실패"). 결과적으로 안전 측 차단은
+     * 유지되면서(요청 실패), {@code GlobalExceptionHandler}가 스택 트레이스를 한 번
+     * 남기고 500으로 옮긴다.</p>
      */
     private PresenceReader.PresenceContext findOpenPresence(UUID userId) {
-        try {
-            return presenceReader.findOpenPresence(userId)
-                    .orElseThrow(() -> new BusinessException(OccupancyErrorCode.NOT_PRESENT));
-        } catch (BusinessException exception) {
-            throw exception;
-        } catch (RuntimeException exception) {
-            log.warn("재실 조회 실패. userId={}", userId, exception);
-            throw new BusinessException(OccupancyErrorCode.PRESENCE_UNAVAILABLE);
-        }
+        return presenceReader.findOpenPresence(userId)
+                .orElseThrow(() -> new BusinessException(OccupancyErrorCode.NOT_PRESENT));
     }
 }

@@ -59,7 +59,7 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
                 SET o.status = :expired, o.endedAt = o.expiresAt
                 WHERE o.occupierUserId = :userId
                 AND o.status = :active
-                AND o.expiresAt = :now
+                AND o.expiresAt <= :now
                 """)
     int expireStaleByUserId(
             @Param("userId") UUID userId,

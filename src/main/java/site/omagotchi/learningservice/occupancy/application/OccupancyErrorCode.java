@@ -38,10 +38,13 @@ public enum OccupancyErrorCode implements ErrorCode {
     ALREADY_OCCUPYING(ErrorType.CONFLICT, "OCCUPANCY_ALREADY_OCCUPYING",
             "이미 점유 중인 회의실이 있습니다."),                                    // MR-10
     ALREADY_PARTICIPATING(ErrorType.CONFLICT, "OCCUPANCY_ALREADY_PARTICIPATING",
-            "이미 다른 회의에 참여 중입니다."),                                // MR-30
+            "이미 다른 회의에 참여 중입니다.");                               // MR-30
 
-    //500
-    PRESENCE_UNAVAILABLE(ErrorType.INVALID_INPUT, "ㅇ", "ㅇ");
+    // 재실 조회 자체의 실패(명세서 02, 503)에는 전용 코드를 두지 않는다.
+    // BusinessException은 ErrorType.INTERNAL을 전달할 수 없고(의도된 가드), 이 실패는
+    // 클라이언트가 분기할 외부 계약도 없다 — 04-error-handling의 "예상하지 못한 실패"로
+    // 분류해 원본 예외를 그대로 전파시키고 GlobalExceptionHandler의 마지막 경계에서
+    // COMMON_INTERNAL_SERVER_ERROR(500)로 변환한다 (RoomOccupancyService 참고).
 
     private final ErrorType type;
     private final String code;

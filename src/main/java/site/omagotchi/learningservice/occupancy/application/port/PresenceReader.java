@@ -15,9 +15,11 @@ import java.util.UUID;
  * 같아야 한다는 규칙은 명세에 없다 — 참여자의 위치가 다른 공간이어도 정상으로
  * 취급한다는 규정(명세서 02)과 같은 맥락이다. 쓰지 않는 값을 계약에 두지 않는다.</p>
  *
- * <p>실패를 {@code Optional.empty()}(재실 아님, 403)와 예외(조회 불가, 503)로
+ * <p>실패를 {@code Optional.empty()}(재실 아님, 403)와 예외(조회 불가)로
  * 구분한다. 재실 여부를 확인할 수 없을 때 통과시키면 안 되므로 구현은 반드시
- * 실패를 삼키지 말고 던져야 한다.</p>
+ * 실패를 삼키지 말고 던져야 한다. 명세서(02)는 조회 불가를 503으로 요구하지만,
+ * 공용 {@code ErrorType}에 아직 대응 값이 없어 호출부는 당분간 400으로 옮긴다
+ * ({@code OccupancyErrorCode#PRESENCE_UNAVAILABLE} 참고).</p>
  */
 public interface PresenceReader {
 
@@ -25,7 +27,7 @@ public interface PresenceReader {
      * 열린 재실 구간을 조회한다.
      *
      * @return 재실 중이 아니면 {@code Optional.empty()}
-     * @throws RuntimeException 조회 자체가 실패한 경우. 호출부가 503으로 옮긴다
+     * @throws RuntimeException 조회 자체가 실패한 경우. 호출부가 오류로 옮긴다
      */
     Optional<PresenceContext> findOpenPresence(UUID userId);
 

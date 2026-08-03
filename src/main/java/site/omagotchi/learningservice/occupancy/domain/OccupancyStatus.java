@@ -14,11 +14,11 @@ public enum OccupancyStatus {
     ACTIVE,
 
     /** 점유자 수동 반납 (MR-14). 공실 알림 발송 대상이다. */
-    RELEASE,
+    RELEASED,
 
     /** expires_at 경과 (스케줄러 #9). 공실 알림 발송 대상이다. */
     EXPIRED,
 
     /** 기수 매니저 강제 종료 (MR-21). 공실 알림을 발송하지 않는다. */
-    FORCE_RELEASE
+    FORCE_RELEASED
 }

@@ -9,7 +9,15 @@ CREATE TABLE learning_service.timer_runs (
 
     CONSTRAINT pk_timer_runs PRIMARY KEY (id),
     CONSTRAINT ck_timer_runs_end_reason
-        CHECK (end_reason IN ('STOP', 'DISCARD', 'EXPIRED'))
+        CHECK (end_reason IN ('STOP', 'DISCARD', 'EXPIRED')),
+    CONSTRAINT ck_timer_runs_second_precision
+        CHECK (
+            started_at = date_trunc('second', started_at)
+            AND (
+                ended_at IS NULL
+                OR ended_at = date_trunc('second', ended_at)
+            )
+        )
 );
 
 CREATE UNIQUE INDEX uq_timer_runs_active_membership

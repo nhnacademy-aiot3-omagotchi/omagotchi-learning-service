@@ -129,45 +129,48 @@ public class TimerCommandService {
     private List<StudyRecord> createStudyRecords(TimerRun timerRun) {
         Instant startedAt = timerRun.getStartedAt();
         Instant endedAt = timerRun.getEndedAt();
+        Instant recordStartedAt = StudyTimePolicy.floorToMinute(startedAt);
+        Instant recordEndedAt = StudyTimePolicy.ceilToMinute(endedAt);
         long measuredSeconds = timerRun.getMeasuredSeconds();
 
         return StudyTimePolicy.findCrossedAggregationBoundary(startedAt, endedAt)
                 .map(boundary -> createSplitStudyRecords(
-                        timerRun.getCohortMembershipId(),
-                        startedAt,
+                        timerRun,
+                        recordStartedAt,
                         boundary,
-                        endedAt,
-                        measuredSeconds
+                        recordEndedAt
                 ))
                 .orElseGet(() -> List.of(StudyRecord.create(
                         timerRun.getCohortMembershipId(),
-                        startedAt,
-                        endedAt,
+                        recordStartedAt,
+                        recordEndedAt,
                         measuredSeconds
                 )));
     }
 
     private List<StudyRecord> createSplitStudyRecords(
-            Long cohortMembershipId,
-            Instant startedAt,
+            TimerRun timerRun,
+            Instant recordStartedAt,
             Instant boundary,
-            Instant endedAt,
-            long measuredSeconds
+            Instant recordEndedAt
     ) {
-        long firstChunkSeconds = Duration.between(startedAt, boundary).getSeconds();
-        long secondChunkSeconds = measuredSeconds - firstChunkSeconds;
+        long firstChunkSeconds = Duration.between(
+                timerRun.getStartedAt(),
+                boundary
+        ).getSeconds();
+        long secondChunkSeconds = timerRun.getMeasuredSeconds() - firstChunkSeconds;
 
         return List.of(
                 StudyRecord.create(
-                        cohortMembershipId,
-                        startedAt,
+                        timerRun.getCohortMembershipId(),
+                        recordStartedAt,
                         boundary,
                         firstChunkSeconds
                 ),
                 StudyRecord.create(
-                        cohortMembershipId,
+                        timerRun.getCohortMembershipId(),
                         boundary,
-                        endedAt,
+                        recordEndedAt,
                         secondChunkSeconds
                 )
         );

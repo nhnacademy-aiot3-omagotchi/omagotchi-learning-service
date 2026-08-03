@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 public final class StudyTimePolicy {
@@ -16,6 +17,23 @@ public final class StudyTimePolicy {
 
     public static Instant toInstant(LocalDate date, LocalTime time) {
         return date.atTime(time).atZone(ZONE_ID).toInstant();
+    }
+
+    public static boolean isMinuteAligned(Instant instant) {
+        return instant.equals(floorToMinute(instant));
+    }
+
+    public static boolean isMinuteAligned(LocalTime time) {
+        return time.equals(time.truncatedTo(ChronoUnit.MINUTES));
+    }
+
+    public static Instant floorToMinute(Instant instant) {
+        return instant.truncatedTo(ChronoUnit.MINUTES);
+    }
+
+    public static Instant ceilToMinute(Instant instant) {
+        Instant floor = floorToMinute(instant);
+        return instant.equals(floor) ? floor : floor.plus(1, ChronoUnit.MINUTES);
     }
 
     public static LocalDate aggregationDate(Instant instant) {

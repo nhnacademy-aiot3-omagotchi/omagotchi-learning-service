@@ -9,15 +9,15 @@ import site.omagotchi.learningservice.study.domain.TimerRun;
 @RequiredArgsConstructor
 public class TimerRunJpaPersistence implements TimerRunRepository {
 
-    private final TimerRunJpaRepository repository;
+    private final TimerRunJpaRepository timerRunJpaRepository;
 
     @Override
     public TimerRun create(TimerRun timerRun) {
-        return repository.save(timerRun);
+        return timerRunJpaRepository.save(timerRun);
     }
 
     @Override
     public void end(TimerRun timerRun) {
-        repository.saveAndFlush(timerRun);
+        timerRunJpaRepository.saveAndFlush(timerRun);
     }
 }

@@ -95,6 +95,10 @@ public class StudyRecord {
         if (startTime == null || endTime == null) {
             throw new IllegalArgumentException("시간 입력이 누락되었습니다.");
         }
+        if (!StudyTimePolicy.isMinuteAligned(startTime)
+                || !StudyTimePolicy.isMinuteAligned(endTime)) {
+            throw new IllegalArgumentException("시작 및 종료 시각은 분 단위여야 합니다.");
+        }
 
         if (!startTime.isBefore(endTime)) {
             throw new IllegalArgumentException("시작 시각이 종료 시각보다 빠릅니다.");

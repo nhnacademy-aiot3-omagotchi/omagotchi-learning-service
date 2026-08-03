@@ -4,15 +4,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.Clock;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 
 @Configuration
-public class TimeConfig {
+public class ClockConfig {
 
     @Bean
-    public Clock clock() {
-        return Clock.system(
-                ZoneId.of("Asia/Seoul")
-        );
+    public Clock utcClock() {
+        return Clock.tickSeconds(ZoneOffset.UTC);
     }
 }

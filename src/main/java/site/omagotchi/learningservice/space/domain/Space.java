@@ -1,8 +1,6 @@
 package site.omagotchi.learningservice.space.domain;
 
 import lombok.Getter;
-import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.space.domain.exception.SpaceErrorCode;
 
 import java.time.ZonedDateTime;
 import java.util.Objects;
@@ -189,14 +187,14 @@ public class Space {
         ensureNotDeleted();
 
         if (spaceType != newType && isActive()) {
-            throw new BusinessException(
-                    SpaceErrorCode.ACTIVE_TYPE_CHANGE_NOT_ALLOWED
+            throw new IllegalStateException(
+                    "활성 공간의 유형은 변경할 수 없습니다."
             );
         }
 
         if (spaceType != newType && isAssignedLab()) {
-            throw new BusinessException(
-                    SpaceErrorCode.ASSIGNED_LAB_TYPE_CHANGE_NOT_ALLOWED
+            throw new IllegalStateException(
+                    "기수에 배정된 실습실의 유형은 변경할 수 없습니다."
             );
         }
 
@@ -229,8 +227,8 @@ public class Space {
         if (newCapacity != null
                 && newCapacity < capacity
                 && isActive()) {
-            throw new BusinessException(
-                    SpaceErrorCode.ACTIVE_CAPACITY_REDUCTION_NOT_ALLOWED
+            throw new IllegalStateException(
+                    "활성 공간의 최대 인원은 줄일 수 없습니다."
             );
         }
 
@@ -257,7 +255,7 @@ public class Space {
         ensureNotDeleted();
 
         if (isActive()) {
-            throw new BusinessException(SpaceErrorCode.ALREADY_ACTIVE);
+            throw new IllegalStateException("이미 활성화된 공간입니다.");
         }
 
         return new Space(
@@ -287,12 +285,12 @@ public class Space {
         ensureNotDeleted();
 
         if (isInactive()) {
-            throw new BusinessException(SpaceErrorCode.ALREADY_INACTIVE);
+            throw new IllegalStateException("이미 비활성화된 공간입니다.");
         }
 
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException(
-                    SpaceErrorCode.INVALID_INACTIVE_REASON
+            throw new IllegalArgumentException(
+                    "비활성 사유는 필수입니다."
             );
         }
 
@@ -317,18 +315,18 @@ public class Space {
      */
     public Space delete(ZonedDateTime deletedAt) {
         if (isDeleted()) {
-            throw new BusinessException(SpaceErrorCode.DELETED_SPACE);
+            throw new IllegalStateException("이미 삭제된 공간입니다.");
         }
 
         if (isActive()) {
-            throw new BusinessException(
-                    SpaceErrorCode.ACTIVE_SPACE_DELETE_NOT_ALLOWED
+            throw new IllegalStateException(
+                    "활성 공간은 삭제할 수 없습니다."
             );
         }
 
         if (cohortId == null) {
-            throw new BusinessException(
-                    SpaceErrorCode.UNMANAGED_SPACE_DELETE_NOT_ALLOWED
+            throw new IllegalStateException(
+                    "관리 주체가 없는 공간은 삭제할 수 없습니다."
             );
         }
 
@@ -359,7 +357,7 @@ public class Space {
         ensureLab();
 
         if (this.cohortId != null) {
-            throw new BusinessException(SpaceErrorCode.LAB_ALREADY_ASSIGNED);
+            throw new IllegalStateException("이미 기수에 배정된 실습실입니다.");
         }
 
         return new Space(
@@ -381,7 +379,7 @@ public class Space {
         ensureLab();
 
         if (cohortId == null) {
-            throw new BusinessException(SpaceErrorCode.LAB_NOT_ASSIGNED);
+            throw new IllegalStateException("기수에 배정되지 않은 실습실입니다.");
         }
 
         return new Space(
@@ -434,27 +432,29 @@ public class Space {
 
     private void ensureLab() {
         if (spaceType != SpaceType.LAB) {
-            throw new BusinessException(
-                    SpaceErrorCode.LAB_ONLY_COHORT_ASSIGNMENT
+            throw new IllegalStateException(
+                    "실습실에만 기수를 배정하거나 해제할 수 있습니다."
             );
         }
     }
 
     private void ensureNotDeleted() {
         if (isDeleted()) {
-            throw new BusinessException(SpaceErrorCode.DELETED_SPACE);
+            throw new IllegalStateException("삭제된 공간은 변경할 수 없습니다.");
         }
     }
 
     private static String validateName(String name) {
         if (name == null || name.isBlank()) {
-            throw new BusinessException(SpaceErrorCode.INVALID_NAME);
+            throw new IllegalArgumentException("공간 이름은 필수입니다.");
         }
 
         String normalizedName = name.trim();
 
         if (normalizedName.length() > MAX_NAME_LENGTH) {
-            throw new BusinessException(SpaceErrorCode.INVALID_NAME);
+            throw new IllegalArgumentException(
+                    "공간 이름은 50자를 초과할 수 없습니다."
+            );
         }
 
         return normalizedName;
@@ -462,7 +462,9 @@ public class Space {
 
     private static Integer validateCapacity(Integer capacity) {
         if (capacity == null || capacity <= 0) {
-            throw new BusinessException(SpaceErrorCode.INVALID_CAPACITY);
+            throw new IllegalArgumentException(
+                    "공간 최대 인원은 양수여야 합니다."
+            );
         }
 
         return capacity;
@@ -470,7 +472,7 @@ public class Space {
 
     private static SpaceType validateType(SpaceType spaceType) {
         if (spaceType == null) {
-            throw new BusinessException(SpaceErrorCode.INVALID_TYPE);
+            throw new IllegalArgumentException("공간 유형은 필수입니다.");
         }
 
         return spaceType;
@@ -478,7 +480,7 @@ public class Space {
 
     private static Long validateCohortId(Long cohortId) {
         if (cohortId == null || cohortId <= 0) {
-            throw new BusinessException(SpaceErrorCode.INVALID_COHORT_ID);
+            throw new IllegalArgumentException("기수 ID는 양수여야 합니다.");
         }
 
         return cohortId;

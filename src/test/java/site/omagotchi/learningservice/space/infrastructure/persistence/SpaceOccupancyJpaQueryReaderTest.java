@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.space.infrastructure.persistence.adapter;
+package site.omagotchi.learningservice.space.infrastructure.persistence;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,13 +15,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class SpaceOccupancyQueryJpaAdapterTest {
+class SpaceOccupancyJpaQueryReaderTest {
 
     @Mock
     private SpringDataRoomOccupancyRepository repository;
 
     @InjectMocks
-    private SpaceOccupancyQueryJpaAdapter adapter;
+    private SpaceOccupancyJpaQueryReader adapter;
 
     @Test
     void delegatesExistsQueryWithEquivalentOffsetDateTime() {

@@ -1,23 +1,26 @@
-package site.omagotchi.learningservice.space.infrastructure.persistence.query;
+package site.omagotchi.learningservice.space.infrastructure.persistence;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import site.omagotchi.learningservice.space.application.query.SpaceListItem;
+import site.omagotchi.learningservice.space.application.result.SpaceListResult;
 import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
 import site.omagotchi.learningservice.space.domain.SpaceType;
 import site.omagotchi.learningservice.space.domain.SpaceUsageStatus;
-import site.omagotchi.learningservice.space.infrastructure.persistence.entity.RoomOccupancyJpaEntity;
 import site.omagotchi.learningservice.space.infrastructure.persistence.entity.SpaceJpaEntity;
 import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataRoomOccupancyRepository;
+import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataRoomOccupancyRepository.ActiveOccupancyView;
+import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataRoomOccupancyRepository.ActiveParticipantView;
 import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataSpaceRepository;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
@@ -27,7 +30,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class SpaceQueryJpaAdapterTest {
+class SpaceJpaQueryReaderTest {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final ZonedDateTime NOW = ZonedDateTime.of(
@@ -40,11 +43,11 @@ class SpaceQueryJpaAdapterTest {
     @Mock
     private SpringDataRoomOccupancyRepository roomOccupancyRepository;
 
-    private SpaceQueryJpaAdapter adapter;
+    private SpaceJpaQueryReader adapter;
 
     @BeforeEach
     void setUp() {
-        adapter = new SpaceQueryJpaAdapter(
+        adapter = new SpaceJpaQueryReader(
                 spaceRepository,
                 roomOccupancyRepository
         );
@@ -61,7 +64,7 @@ class SpaceQueryJpaAdapterTest {
         );
         stubSpaces(List.of(space), List.of());
 
-        SpaceListItem item = findOnlyItem();
+        SpaceListResult item = findOnlyItem();
 
         assertThat(item.operationalStatus())
                 .isEqualTo(SpaceOperationalStatus.ACTIVE);
@@ -80,13 +83,13 @@ class SpaceQueryJpaAdapterTest {
                 null,
                 11L
         );
-        RoomOccupancyJpaEntity occupancy = occupancy(
+        ActiveOccupancyView occupancy = occupancy(
                 1L,
                 NOW.plusMinutes(30).toOffsetDateTime()
         );
         stubSpaces(List.of(space), List.of(occupancy));
 
-        SpaceListItem item = findOnlyItem();
+        SpaceListResult item = findOnlyItem();
 
         assertThat(item.operationalStatus())
                 .isEqualTo(SpaceOperationalStatus.ACTIVE);
@@ -99,6 +102,54 @@ class SpaceQueryJpaAdapterTest {
     }
 
     @Test
+    void exposesOccupancyDetailsOnlyToSameCohortRequester() {
+        SpaceJpaEntity space = space(
+                1L,
+                SpaceType.MEETING,
+                SpaceOperationalStatus.ACTIVE,
+                null,
+                11L
+        );
+        UUID occupierUserId = UUID.randomUUID();
+        UUID participantUserId = UUID.randomUUID();
+        ActiveOccupancyView occupancy = occupancy(
+                1L,
+                NOW.plusMinutes(30).toOffsetDateTime()
+        );
+        when(occupancy.getOccupierMembershipId()).thenReturn(31L);
+        when(occupancy.getOccupierUserId()).thenReturn(occupierUserId);
+        ActiveParticipantView participant = mock(
+                ActiveParticipantView.class
+        );
+        when(participant.getOccupancyId()).thenReturn(101L);
+        when(participant.getUserId()).thenReturn(participantUserId);
+        stubSpaces(List.of(space), List.of(occupancy));
+        when(roomOccupancyRepository.findAllActiveParticipants(
+                List.of(101L)
+        )).thenReturn(List.of(participant));
+
+        SpaceListResult sameCohort = adapter
+                .findAllSpacesWithStatus(Set.of(21L), NOW)
+                .getFirst();
+        SpaceListResult otherCohort = adapter
+                .findAllSpacesWithStatus(Set.of(22L), NOW)
+                .getFirst();
+
+        assertThat(sameCohort.occupancyCohortId()).isEqualTo(21L);
+        assertThat(sameCohort.occupierMembershipId()).isEqualTo(31L);
+        assertThat(sameCohort.occupierUserId()).isEqualTo(occupierUserId);
+        assertThat(sameCohort.participantUserIds())
+                .containsExactly(participantUserId);
+        assertThat(otherCohort.status())
+                .isEqualTo(SpaceUsageStatus.OCCUPIED);
+        assertThat(otherCohort.occupancyExpiresAt()).isNotNull();
+        assertThat(otherCohort.occupancyCohortId()).isNull();
+        assertThat(otherCohort.occupierMembershipId()).isNull();
+        assertThat(otherCohort.occupierUserId()).isNull();
+        assertThat(otherCohort.participantUserIds()).isNull();
+    }
+
+    @Test
     void returnsUnavailableForInactiveMeetingAndHidesOccupancy() {
         SpaceJpaEntity space = space(
                 1L,
@@ -107,13 +158,13 @@ class SpaceQueryJpaAdapterTest {
                 "시설 점검",
                 11L
         );
-        RoomOccupancyJpaEntity occupancy = occupancy(
+        ActiveOccupancyView occupancy = occupancy(
                 1L,
                 NOW.plusMinutes(30).toOffsetDateTime()
         );
         stubSpaces(List.of(space), List.of(occupancy));
 
-        SpaceListItem item = findOnlyItem();
+        SpaceListResult item = findOnlyItem();
 
         assertThat(item.operationalStatus())
                 .isEqualTo(SpaceOperationalStatus.INACTIVE);
@@ -157,7 +208,7 @@ class SpaceQueryJpaAdapterTest {
         when(spaceRepository.findAllByDeletedAtIsNullOrderByIdAsc())
                 .thenReturn(List.of());
 
-        assertThat(adapter.findAllSpacesWithStatus(NOW)).isEmpty();
+        assertThat(adapter.findAllSpacesWithStatus(Set.of(), NOW)).isEmpty();
 
         verify(spaceRepository)
                 .findAllByDeletedAtIsNullOrderByIdAsc();
@@ -178,7 +229,7 @@ class SpaceQueryJpaAdapterTest {
                         : null,
                 11L
         );
-        List<RoomOccupancyJpaEntity> occupancies =
+        List<ActiveOccupancyView> occupancies =
                 includeIncorrectOccupancy
                         ? List.of(occupancy(
                                 1L,
@@ -187,7 +238,7 @@ class SpaceQueryJpaAdapterTest {
                         : List.of();
         stubSpaces(List.of(space), occupancies);
 
-        SpaceListItem item = findOnlyItem();
+        SpaceListResult item = findOnlyItem();
 
         assertThat(item.operationalStatus())
                 .isEqualTo(operationalStatus);
@@ -199,7 +250,7 @@ class SpaceQueryJpaAdapterTest {
 
     private void stubSpaces(
             List<SpaceJpaEntity> spaces,
-            List<RoomOccupancyJpaEntity> occupancies
+            List<ActiveOccupancyView> occupancies
     ) {
         when(spaceRepository.findAllByDeletedAtIsNullOrderByIdAsc())
                 .thenReturn(spaces);
@@ -207,11 +258,18 @@ class SpaceQueryJpaAdapterTest {
                 spaces.stream().map(SpaceJpaEntity::getId).toList(),
                 NOW.toOffsetDateTime()
         )).thenReturn(occupancies);
+        if (!occupancies.isEmpty()) {
+            lenient().when(roomOccupancyRepository.findAllActiveParticipants(
+                    occupancies.stream()
+                            .map(ActiveOccupancyView::getId)
+                            .toList()
+            )).thenReturn(List.of());
+        }
     }
 
-    private SpaceListItem findOnlyItem() {
-        List<SpaceListItem> items =
-                adapter.findAllSpacesWithStatus(NOW);
+    private SpaceListResult findOnlyItem() {
+        List<SpaceListResult> items =
+                adapter.findAllSpacesWithStatus(Set.of(), NOW);
         assertThat(items).hasSize(1);
         return items.getFirst();
     }
@@ -239,14 +297,16 @@ class SpaceQueryJpaAdapterTest {
         );
     }
 
-    private RoomOccupancyJpaEntity occupancy(
+    private ActiveOccupancyView occupancy(
             Long spaceId,
             OffsetDateTime expiresAt
     ) {
-        RoomOccupancyJpaEntity occupancy =
-                mock(RoomOccupancyJpaEntity.class);
+        ActiveOccupancyView occupancy = mock(ActiveOccupancyView.class);
+        lenient().when(occupancy.getId()).thenReturn(spaceId + 100L);
         when(occupancy.getSpaceId()).thenReturn(spaceId);
-        lenient().when(occupancy.getExpiresAt()).thenReturn(expiresAt);
+        lenient().when(occupancy.getExpiresAt())
+                .thenReturn(expiresAt.toInstant());
+        lenient().when(occupancy.getOccupierCohortId()).thenReturn(21L);
         return occupancy;
     }
 }

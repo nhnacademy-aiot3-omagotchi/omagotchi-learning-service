@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.space.application.service;
+package site.omagotchi.learningservice.space.application;
 
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,13 +10,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
-import site.omagotchi.learningservice.space.application.port.out.SpaceCohortAccessPort;
-import site.omagotchi.learningservice.space.application.port.out.SpaceRepository;
-import site.omagotchi.learningservice.space.application.port.out.SpaceOccupancyQueryPort;
+import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPort;
+import site.omagotchi.learningservice.space.application.port.SpaceRepository;
+import site.omagotchi.learningservice.space.application.port.SpaceOccupancyQueryPort;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
 import site.omagotchi.learningservice.space.domain.SpaceType;
-import site.omagotchi.learningservice.space.domain.exception.SpaceErrorCode;
+import site.omagotchi.learningservice.space.application.SpaceErrorCode;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -690,6 +690,42 @@ class SpaceCommandServiceTest {
                                 "회의실 A",
                                 null,
                                 8
+                        )
+                )
+        );
+    }
+
+    @Test
+    void rejectsInvalidNameFromDirectServiceCall() {
+        when(spaceRepository.findById(1L))
+                .thenReturn(Optional.of(existingSpace()));
+
+        assertBusinessError(
+                SpaceErrorCode.INVALID_NAME,
+                () -> spaceCommandService.update(
+                        1L,
+                        new UpdateSpaceCommand(
+                                "   ",
+                                SpaceType.MEETING,
+                                8
+                        )
+                )
+        );
+    }
+
+    @Test
+    void rejectsInvalidCapacityFromDirectServiceCall() {
+        when(spaceRepository.findById(1L))
+                .thenReturn(Optional.of(existingSpace()));
+
+        assertBusinessError(
+                SpaceErrorCode.INVALID_CAPACITY,
+                () -> spaceCommandService.update(
+                        1L,
+                        new UpdateSpaceCommand(
+                                "회의실 A",
+                                SpaceType.MEETING,
+                                0
                         )
                 )
         );

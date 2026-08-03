@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.space.infrastructure.persistence.adapter;
+package site.omagotchi.learningservice.space.infrastructure.persistence;
 
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,7 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.domain.Space;
-import site.omagotchi.learningservice.space.domain.exception.SpaceErrorCode;
+import site.omagotchi.learningservice.space.application.SpaceErrorCode;
 import site.omagotchi.learningservice.space.infrastructure.persistence.entity.SpaceJpaEntity;
 import site.omagotchi.learningservice.space.infrastructure.persistence.mapper.SpacePersistenceMapper;
 import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataSpaceRepository;
@@ -22,7 +22,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class SpaceRepositoryJpaAdapterTest {
+class SpaceJpaPersistenceTest {
 
     @Mock
     private SpringDataSpaceRepository springDataSpaceRepository;
@@ -30,11 +30,11 @@ class SpaceRepositoryJpaAdapterTest {
     @Mock
     private SpacePersistenceMapper spacePersistenceMapper;
 
-    private SpaceRepositoryJpaAdapter adapter;
+    private SpaceJpaPersistence adapter;
 
     @BeforeEach
     void setUp() {
-        adapter = new SpaceRepositoryJpaAdapter(
+        adapter = new SpaceJpaPersistence(
                 springDataSpaceRepository,
                 spacePersistenceMapper
         );
@@ -69,17 +69,32 @@ class SpaceRepositoryJpaAdapterTest {
                 .thenReturn("uq_spaces_active_name");
         when(spacePersistenceMapper.toEntity(space))
                 .thenReturn(entity);
-        when(springDataSpaceRepository.saveAndFlush(entity))
-                .thenThrow(new DataIntegrityViolationException(
+        DataIntegrityViolationException duplicateNameViolation =
+                new DataIntegrityViolationException(
                         "duplicate space name",
                         violation
-                ));
+                );
+        when(springDataSpaceRepository.saveAndFlush(entity))
+                .thenThrow(duplicateNameViolation);
 
         assertThatThrownBy(() -> adapter.save(space))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> assertThat(
                         ((BusinessException) exception).getErrorCode()
                 ).isEqualTo(SpaceErrorCode.DUPLICATE_NAME));
+    }
+
+    @Test
+    void propagatesUnexpectedDataIntegrityViolation() {
+        Space space = mock(Space.class);
+        SpaceJpaEntity entity = mock(SpaceJpaEntity.class);
+        DataIntegrityViolationException unexpected =
+                new DataIntegrityViolationException("unexpected constraint");
+        when(spacePersistenceMapper.toEntity(space)).thenReturn(entity);
+        when(springDataSpaceRepository.saveAndFlush(entity))
+                .thenThrow(unexpected);
+
+        assertThatThrownBy(() -> adapter.save(space)).isSameAs(unexpected);
     }
 
     @Test

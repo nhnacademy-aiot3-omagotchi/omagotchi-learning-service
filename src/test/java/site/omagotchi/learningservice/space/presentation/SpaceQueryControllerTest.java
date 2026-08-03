@@ -6,8 +6,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import site.omagotchi.learningservice.space.application.query.SpaceListItem;
-import site.omagotchi.learningservice.space.application.query.SpaceQueryService;
+import site.omagotchi.learningservice.space.application.result.SpaceListResult;
+import site.omagotchi.learningservice.space.application.SpaceQueryService;
 import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
 import site.omagotchi.learningservice.space.domain.SpaceType;
 import site.omagotchi.learningservice.space.domain.SpaceUsageStatus;
@@ -34,14 +34,14 @@ class SpaceQueryControllerTest {
 
     @Test
     void returnsEmptyJsonArrayWhenNoSpacesExist() throws Exception {
-        when(spaceQueryService.getSpaceList()).thenReturn(List.of());
+        when(spaceQueryService.getSpaceList(null)).thenReturn(List.of());
 
         mockMvc.perform(get("/api/spaces"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());
 
-        verify(spaceQueryService).getSpaceList();
+        verify(spaceQueryService).getSpaceList(null);
     }
 
     @Test
@@ -50,8 +50,8 @@ class SpaceQueryControllerTest {
                 2026, 7, 27, 15, 0, 0, 0,
                 ZoneId.of("Asia/Seoul")
         );
-        when(spaceQueryService.getSpaceList()).thenReturn(List.of(
-                new SpaceListItem(
+        when(spaceQueryService.getSpaceList(null)).thenReturn(List.of(
+                new SpaceListResult(
                         1L,
                         "회의실 A",
                         SpaceType.MEETING,
@@ -81,6 +81,6 @@ class SpaceQueryControllerTest {
                 .andExpect(jsonPath("$[0].remainingTimeSeconds")
                         .value(1800));
 
-        verify(spaceQueryService).getSpaceList();
+        verify(spaceQueryService).getSpaceList(null);
     }
 }

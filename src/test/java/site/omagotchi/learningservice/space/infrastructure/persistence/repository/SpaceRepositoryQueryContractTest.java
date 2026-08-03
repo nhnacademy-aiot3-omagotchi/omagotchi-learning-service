@@ -40,9 +40,12 @@ class SpaceRepositoryQueryContractTest {
         String listQuery = listQueryMethod.getAnnotation(Query.class).value();
 
         assertThat(listQuery)
+                .contains("JOIN learning_service.cohort_memberships")
+                .contains("occupier_membership.id = ro.occupier_membership_id")
+                .contains("occupier_membership.cohort_id")
                 .contains("ro.status = 'ACTIVE'")
-                .contains("ro.endedAt IS NULL")
-                .contains("ro.expiresAt > :now");
+                .contains("ro.ended_at IS NULL")
+                .contains("ro.expires_at > :now");
 
         Method existsQueryMethod =
                 SpringDataRoomOccupancyRepository.class.getMethod(

@@ -13,14 +13,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import site.omagotchi.learningservice.space.application.SpaceCommandService;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
-import site.omagotchi.learningservice.space.application.port.in.CreateSpaceUseCase;
-import site.omagotchi.learningservice.space.application.port.in.ActivateSpaceUseCase;
-import site.omagotchi.learningservice.space.application.port.in.DeactivateSpaceUseCase;
-import site.omagotchi.learningservice.space.application.port.in.DeleteSpaceUseCase;
-import site.omagotchi.learningservice.space.application.port.in.UpdateSpaceUseCase;
-import site.omagotchi.learningservice.space.application.port.in.AssignLabCohortUseCase;
-import site.omagotchi.learningservice.space.application.port.in.UnassignLabCohortUseCase;
 import site.omagotchi.learningservice.space.presentation.request.AssignLabCohortRequest;
 import site.omagotchi.learningservice.space.presentation.request.CreateSpaceRequest;
 import site.omagotchi.learningservice.space.presentation.request.DeactivateSpaceRequest;
@@ -37,26 +31,7 @@ import java.util.UUID;
 @RequestMapping("/api/admin/spaces")
 public class SpaceAdminController {
 
-    private final CreateSpaceUseCase
-            createSpaceUseCase;
-
-    private final ActivateSpaceUseCase
-            activateSpaceUseCase;
-
-    private final DeactivateSpaceUseCase
-            deactivateSpaceUseCase;
-
-    private final UpdateSpaceUseCase
-            updateSpaceUseCase;
-
-    private final DeleteSpaceUseCase
-            deleteSpaceUseCase;
-
-    private final AssignLabCohortUseCase
-            assignLabCohortUseCase;
-
-    private final UnassignLabCohortUseCase
-            unassignLabCohortUseCase;
+    private final SpaceCommandService spaceCommandService;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -69,7 +44,7 @@ public class SpaceAdminController {
             CreateSpaceRequest request
     ) {
         return CreateSpaceResponse.from(
-                createSpaceUseCase.create(
+                spaceCommandService.create(
                         request.toCommand(),
                         userId,
                         globalRole
@@ -77,9 +52,9 @@ public class SpaceAdminController {
         );
     }
 
-    @PutMapping("/{spaceId}")
+    @PutMapping("/{space-id}")
     public UpdateSpaceResponse update(
-            @PathVariable Long spaceId,
+            @PathVariable("space-id") Long spaceId,
             @RequestHeader("X-User-Id") UUID userId,
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER")
             String globalRole,
@@ -95,7 +70,7 @@ public class SpaceAdminController {
                 );
 
         return UpdateSpaceResponse.from(
-                updateSpaceUseCase.update(
+                spaceCommandService.update(
                         spaceId,
                         command,
                         userId,
@@ -104,28 +79,28 @@ public class SpaceAdminController {
         );
     }
 
-    @PatchMapping("/{spaceId}/activate")
+    @PatchMapping("/{space-id}/activate")
     public SpaceStatusResponse activate(
-            @PathVariable Long spaceId,
+            @PathVariable("space-id") Long spaceId,
             @RequestHeader("X-User-Id") UUID userId,
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER")
             String globalRole
     ) {
         return SpaceStatusResponse.from(
-                activateSpaceUseCase.activate(spaceId, userId, globalRole)
+                spaceCommandService.activate(spaceId, userId, globalRole)
         );
     }
 
-    @PatchMapping("/{spaceId}/deactivate")
+    @PatchMapping("/{space-id}/deactivate")
     public SpaceStatusResponse deactivate(
-            @PathVariable Long spaceId,
+            @PathVariable("space-id") Long spaceId,
             @RequestHeader("X-User-Id") UUID userId,
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER")
             String globalRole,
             @Valid @RequestBody DeactivateSpaceRequest request
     ) {
         return SpaceStatusResponse.from(
-                deactivateSpaceUseCase.deactivate(
+                spaceCommandService.deactivate(
                         spaceId,
                         request.inactiveReason(),
                         userId,
@@ -134,27 +109,27 @@ public class SpaceAdminController {
         );
     }
 
-    @DeleteMapping("/{spaceId}")
+    @DeleteMapping("/{space-id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
-            @PathVariable Long spaceId,
+            @PathVariable("space-id") Long spaceId,
             @RequestHeader("X-User-Id") UUID userId,
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER")
             String globalRole
     ) {
-        deleteSpaceUseCase.delete(spaceId, userId, globalRole);
+        spaceCommandService.delete(spaceId, userId, globalRole);
     }
 
-    @PutMapping("/{spaceId}/cohort")
+    @PutMapping("/{space-id}/cohort")
     public SpaceCohortResponse assignCohort(
-            @PathVariable Long spaceId,
+            @PathVariable("space-id") Long spaceId,
             @RequestHeader("X-User-Id") UUID userId,
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER")
             String globalRole,
             @Valid @RequestBody AssignLabCohortRequest request
     ) {
         return SpaceCohortResponse.from(
-                assignLabCohortUseCase.assignCohort(
+                spaceCommandService.assignCohort(
                         spaceId,
                         request.cohortId(),
                         userId,
@@ -163,15 +138,15 @@ public class SpaceAdminController {
         );
     }
 
-    @DeleteMapping("/{spaceId}/cohort")
+    @DeleteMapping("/{space-id}/cohort")
     public SpaceCohortResponse unassignCohort(
-            @PathVariable Long spaceId,
+            @PathVariable("space-id") Long spaceId,
             @RequestHeader("X-User-Id") UUID userId,
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER")
             String globalRole
     ) {
         return SpaceCohortResponse.from(
-                unassignLabCohortUseCase.unassignCohort(
+                spaceCommandService.unassignCohort(
                         spaceId,
                         userId,
                         globalRole

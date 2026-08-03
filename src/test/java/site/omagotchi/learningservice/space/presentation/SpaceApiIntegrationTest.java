@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.space.application.port.in.AssignLabCohortUseCase;
+import site.omagotchi.learningservice.space.application.SpaceCommandService;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -68,7 +68,7 @@ class SpaceApiIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
-    private AssignLabCohortUseCase assignLabCohortUseCase;
+    private SpaceCommandService spaceCommandService;
 
     @Test
     void returnsNonDeletedActiveMeetingAsAvailable() throws Exception {
@@ -89,6 +89,10 @@ class SpaceApiIntegrationTest {
                 ).value(contains("AVAILABLE")))
                 .andExpect(jsonPath(
                         "$[?(@.spaceId == %d)].occupancyExpiresAt"
+                                .formatted(spaceId)
+                ).value(contains((Object) null)))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].remainingTimeSeconds"
                                 .formatted(spaceId)
                 ).value(contains((Object) null)));
     }
@@ -137,6 +141,118 @@ class SpaceApiIntegrationTest {
                         "$[?(@.spaceId == %d)].remainingTimeSeconds"
                                 .formatted(spaceId)
                 ).value(contains(1800)));
+    }
+
+    @Test
+    void sameCohortRequesterReceivesOccupierAndParticipantDetails()
+            throws Exception {
+        UUID requesterUserId = UUID.randomUUID();
+        Long cohortId = insertCohortWithManager(requesterUserId);
+        Long spaceId = insertSpace(
+                "통합 동일 기수 점유 회의실",
+                "ACTIVE",
+                null
+        );
+        OccupancyFixture occupancy = insertOccupancyWithDetails(
+                spaceId,
+                cohortId
+        );
+
+        mockMvc.perform(get("/api/spaces")
+                        .header("X-User-Id", requesterUserId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].status".formatted(spaceId)
+                ).value(contains("OCCUPIED")))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupancyCohortId"
+                                .formatted(spaceId)
+                ).value(contains(cohortId.intValue())))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupierMembershipId"
+                                .formatted(spaceId)
+                ).value(contains(occupancy.membershipId().intValue())))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupierUserId"
+                                .formatted(spaceId)
+                ).value(contains(occupancy.occupierUserId().toString())))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].participantUserIds[0]"
+                                .formatted(spaceId)
+                ).value(contains(occupancy.participantUserId().toString())));
+    }
+
+    @Test
+    void otherCohortRequesterReceivesOccupancyWithoutPersonalDetails()
+            throws Exception {
+        UUID requesterUserId = UUID.randomUUID();
+        insertCohortWithManager(requesterUserId);
+        Long occupierCohortId = insertCohortWithManager(UUID.randomUUID());
+        Long spaceId = insertSpace(
+                "통합 타 기수 점유 회의실",
+                "ACTIVE",
+                null
+        );
+        insertOccupancyWithDetails(spaceId, occupierCohortId);
+
+        mockMvc.perform(get("/api/spaces")
+                        .header("X-User-Id", requesterUserId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].status".formatted(spaceId)
+                ).value(contains("OCCUPIED")))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupancyExpiresAt"
+                                .formatted(spaceId)
+                ).value(contains("2026-07-28T14:30:00+09:00")))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].remainingTimeSeconds"
+                                .formatted(spaceId)
+                ).value(contains(1800)))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupancyCohortId"
+                                .formatted(spaceId)
+                ).value(contains((Object) null)))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupierMembershipId"
+                                .formatted(spaceId)
+                ).value(contains((Object) null)))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupierUserId"
+                                .formatted(spaceId)
+                ).value(contains((Object) null)))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].participantUserIds"
+                                .formatted(spaceId)
+                ).value(contains((Object) null)));
+    }
+
+    @Test
+    void inactiveSpaceIncludesReasonAndIsUnavailable() throws Exception {
+        Long spaceId = insertSpace(
+                "통합 비활성 조회 회의실",
+                "INACTIVE",
+                null
+        );
+        jdbcTemplate.update("""
+                UPDATE learning_service.spaces
+                SET inactive_reason = '시설 점검'
+                WHERE id = ?
+                """, spaceId);
+
+        mockMvc.perform(get("/api/spaces"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].operationalStatus"
+                                .formatted(spaceId)
+                ).value(contains("INACTIVE")))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].inactiveReason"
+                                .formatted(spaceId)
+                ).value(contains("시설 점검")))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].status".formatted(spaceId)
+                ).value(contains("UNAVAILABLE")));
     }
 
     @Test
@@ -412,7 +528,7 @@ class SpaceApiIntegrationTest {
         assignManagementCohort(spaceId);
 
         mockMvc.perform(patch(
-                        "/api/admin/spaces/{spaceId}/activate",
+                        "/api/admin/spaces/{space-id}/activate",
                         spaceId
                 ).header("X-User-Id", MANAGER_ID))
                 .andExpect(status().isOk())
@@ -430,7 +546,7 @@ class SpaceApiIntegrationTest {
         assignManagementCohort(spaceId);
 
         mockMvc.perform(patch(
-                        "/api/admin/spaces/{spaceId}/deactivate",
+                        "/api/admin/spaces/{space-id}/deactivate",
                         spaceId
                 ).header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -459,7 +575,7 @@ class SpaceApiIntegrationTest {
         assignManagementCohort(spaceId);
 
         mockMvc.perform(patch(
-                        "/api/admin/spaces/{spaceId}/deactivate",
+                        "/api/admin/spaces/{space-id}/deactivate",
                         spaceId
                 ).header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -561,7 +677,7 @@ class SpaceApiIntegrationTest {
         assignManagementCohort(inactiveId);
         assignManagementCohort(activeId);
 
-        mockMvc.perform(put("/api/admin/spaces/{spaceId}", inactiveId)
+        mockMvc.perform(put("/api/admin/spaces/{space-id}", inactiveId)
                         .header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -576,7 +692,7 @@ class SpaceApiIntegrationTest {
                 .andExpect(jsonPath("$.type").value("STUDY"))
                 .andExpect(jsonPath("$.capacity").value(4));
 
-        mockMvc.perform(put("/api/admin/spaces/{spaceId}", activeId)
+        mockMvc.perform(put("/api/admin/spaces/{space-id}", activeId)
                         .header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -598,7 +714,7 @@ class SpaceApiIntegrationTest {
         Long spaceId = insertSpace(name, "INACTIVE", null);
         assignManagementCohort(spaceId);
 
-        mockMvc.perform(delete("/api/admin/spaces/{spaceId}", spaceId)
+        mockMvc.perform(delete("/api/admin/spaces/{space-id}", spaceId)
                         .header("X-User-Id", MANAGER_ID))
                 .andExpect(status().isNoContent());
 
@@ -627,7 +743,7 @@ class SpaceApiIntegrationTest {
         assignManagementCohort(activeSpaceId);
 
         mockMvc.perform(delete(
-                        "/api/admin/spaces/{spaceId}",
+                        "/api/admin/spaces/{space-id}",
                         activeSpaceId
                 ).header("X-User-Id", MANAGER_ID))
                 .andExpect(status().isConflict())
@@ -644,7 +760,7 @@ class SpaceApiIntegrationTest {
         );
 
         mockMvc.perform(put(
-                        "/api/admin/spaces/{spaceId}",
+                        "/api/admin/spaces/{space-id}",
                         otherSpaceId
                 ).header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -660,7 +776,7 @@ class SpaceApiIntegrationTest {
                         .value("SPACE_ACCESS_DENIED"));
 
         mockMvc.perform(patch(
-                        "/api/admin/spaces/{spaceId}/activate",
+                        "/api/admin/spaces/{space-id}/activate",
                         otherSpaceId
                 ).header("X-User-Id", MANAGER_ID))
                 .andExpect(status().isForbidden())
@@ -668,7 +784,7 @@ class SpaceApiIntegrationTest {
                         .value("SPACE_ACCESS_DENIED"));
 
         mockMvc.perform(patch(
-                        "/api/admin/spaces/{spaceId}/deactivate",
+                        "/api/admin/spaces/{space-id}/deactivate",
                         otherSpaceId
                 ).header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -680,7 +796,7 @@ class SpaceApiIntegrationTest {
                         .value("SPACE_ACCESS_DENIED"));
 
         mockMvc.perform(delete(
-                        "/api/admin/spaces/{spaceId}",
+                        "/api/admin/spaces/{space-id}",
                         otherSpaceId
                 ).header("X-User-Id", MANAGER_ID))
                 .andExpect(status().isForbidden())
@@ -706,7 +822,7 @@ class SpaceApiIntegrationTest {
         );
 
         mockMvc.perform(delete(
-                        "/api/admin/spaces/{spaceId}",
+                        "/api/admin/spaces/{space-id}",
                         spaceId
                 ).header("X-User-Id", MANAGER_ID))
                 .andExpect(status().isNoContent());
@@ -731,7 +847,7 @@ class SpaceApiIntegrationTest {
         );
 
         mockMvc.perform(put(
-                        "/api/admin/spaces/{spaceId}/cohort",
+                        "/api/admin/spaces/{space-id}/cohort",
                         labId
                 ).header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -746,7 +862,7 @@ class SpaceApiIntegrationTest {
         assertThat(readCohortId(labId)).isEqualTo(cohortId);
 
         mockMvc.perform(delete(
-                        "/api/admin/spaces/{spaceId}/cohort",
+                        "/api/admin/spaces/{space-id}/cohort",
                         labId
                 ).header("X-User-Id", MANAGER_ID))
                 .andExpect(status().isOk())
@@ -784,7 +900,7 @@ class SpaceApiIntegrationTest {
                 """.formatted(cohortId);
 
         mockMvc.perform(put(
-                        "/api/admin/spaces/{spaceId}/cohort",
+                        "/api/admin/spaces/{space-id}/cohort",
                         assignedLabId
                 ).header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -794,7 +910,7 @@ class SpaceApiIntegrationTest {
                         .value("SPACE_LAB_ALREADY_ASSIGNED"));
 
         mockMvc.perform(put(
-                        "/api/admin/spaces/{spaceId}/cohort",
+                        "/api/admin/spaces/{space-id}/cohort",
                         meetingId
                 ).header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -804,7 +920,7 @@ class SpaceApiIntegrationTest {
                         .value("SPACE_LAB_ONLY_COHORT_ASSIGNMENT"));
 
         mockMvc.perform(put(
-                        "/api/admin/spaces/{spaceId}/cohort",
+                        "/api/admin/spaces/{space-id}/cohort",
                         deletedLabId
                 ).header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -814,7 +930,7 @@ class SpaceApiIntegrationTest {
                         .value("SPACE_ALREADY_DELETED"));
 
         mockMvc.perform(put(
-                        "/api/admin/spaces/{spaceId}/cohort",
+                        "/api/admin/spaces/{space-id}/cohort",
                         Long.MAX_VALUE
                 ).header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -823,7 +939,7 @@ class SpaceApiIntegrationTest {
                 .andExpect(jsonPath("$.code").value("SPACE_NOT_FOUND"));
 
         mockMvc.perform(put(
-                        "/api/admin/spaces/{spaceId}/cohort",
+                        "/api/admin/spaces/{space-id}/cohort",
                         assignedLabId
                 ).header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -853,7 +969,7 @@ class SpaceApiIntegrationTest {
         );
 
         mockMvc.perform(delete(
-                        "/api/admin/spaces/{spaceId}/cohort",
+                        "/api/admin/spaces/{space-id}/cohort",
                         meetingId
                 ).header("X-User-Id", MANAGER_ID))
                 .andExpect(status().isBadRequest())
@@ -861,7 +977,7 @@ class SpaceApiIntegrationTest {
                         .value("SPACE_LAB_ONLY_COHORT_ASSIGNMENT"));
 
         mockMvc.perform(delete(
-                        "/api/admin/spaces/{spaceId}/cohort",
+                        "/api/admin/spaces/{space-id}/cohort",
                         unassignedLabId
                 ).header("X-User-Id", UUID.randomUUID())
                         .header("X-Global-Role", "SYSTEM_ADMIN"))
@@ -884,7 +1000,7 @@ class SpaceApiIntegrationTest {
         );
 
         mockMvc.perform(put(
-                        "/api/admin/spaces/{spaceId}/cohort",
+                        "/api/admin/spaces/{space-id}/cohort",
                         labId
                 ).header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -896,7 +1012,7 @@ class SpaceApiIntegrationTest {
                         .value("SPACE_ACCESS_DENIED"));
 
         mockMvc.perform(delete(
-                        "/api/admin/spaces/{spaceId}/cohort",
+                        "/api/admin/spaces/{space-id}/cohort",
                         labId
                 ).header("X-User-Id", MANAGER_ID))
                 .andExpect(status().isForbidden())
@@ -914,7 +1030,7 @@ class SpaceApiIntegrationTest {
         );
 
         mockMvc.perform(patch(
-                        "/api/admin/spaces/{spaceId}/activate",
+                        "/api/admin/spaces/{space-id}/activate",
                         seedSpaceId
                 ).header("X-User-Id", UUID.randomUUID())
                         .header("X-Global-Role", "SYSTEM_ADMIN"))
@@ -927,7 +1043,7 @@ class SpaceApiIntegrationTest {
                 """, seedSpaceId);
 
         mockMvc.perform(delete(
-                        "/api/admin/spaces/{spaceId}",
+                        "/api/admin/spaces/{space-id}",
                         seedSpaceId
                 ).header("X-User-Id", UUID.randomUUID())
                         .header("X-Global-Role", "SYSTEM_ADMIN"))
@@ -944,7 +1060,7 @@ class SpaceApiIntegrationTest {
                 null
         );
 
-        mockMvc.perform(delete("/api/admin/spaces/{spaceId}", spaceId)
+        mockMvc.perform(delete("/api/admin/spaces/{space-id}", spaceId)
                         .header("X-User-Id", MANAGER_ID))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
@@ -956,7 +1072,7 @@ class SpaceApiIntegrationTest {
             throws Exception {
         Long spaceId = insertAssignedLab("통합 배정 실습실 보호");
 
-        mockMvc.perform(put("/api/admin/spaces/{spaceId}", spaceId)
+        mockMvc.perform(put("/api/admin/spaces/{space-id}", spaceId)
                         .header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -971,7 +1087,7 @@ class SpaceApiIntegrationTest {
                         "SPACE_ASSIGNED_LAB_TYPE_CHANGE_NOT_ALLOWED"
                 ));
 
-        mockMvc.perform(delete("/api/admin/spaces/{spaceId}", spaceId)
+        mockMvc.perform(delete("/api/admin/spaces/{space-id}", spaceId)
                         .header("X-User-Id", MANAGER_ID))
                 .andExpect(status().isNoContent());
 
@@ -985,7 +1101,7 @@ class SpaceApiIntegrationTest {
     private void assertDeactivationSucceeds(Long spaceId) throws Exception {
         assignManagementCohort(spaceId);
         mockMvc.perform(patch(
-                        "/api/admin/spaces/{spaceId}/deactivate",
+                        "/api/admin/spaces/{space-id}/deactivate",
                         spaceId
                 ).header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1104,6 +1220,60 @@ class SpaceApiIntegrationTest {
         );
     }
 
+    private OccupancyFixture insertOccupancyWithDetails(
+            Long spaceId,
+            Long cohortId
+    ) {
+        UUID occupierUserId = UUID.randomUUID();
+        UUID participantUserId = UUID.randomUUID();
+        Long membershipId = insertActiveMembershipReturningId(
+                cohortId,
+                occupierUserId,
+                "STUDENT"
+        );
+        Long participantMembershipId = insertActiveMembershipReturningId(
+                cohortId,
+                participantUserId,
+                "STUDENT"
+        );
+        Long occupancyId = jdbcTemplate.queryForObject("""
+                INSERT INTO learning_service.room_occupancies (
+                    space_id,
+                    occupier_membership_id,
+                    occupier_user_id,
+                    status,
+                    started_at,
+                    expires_at
+                ) VALUES (?, ?, ?, 'ACTIVE', ?, ?)
+                RETURNING id
+                """,
+                Long.class,
+                spaceId,
+                membershipId,
+                occupierUserId,
+                OFFSET_NOW.minusMinutes(10),
+                OFFSET_NOW.plusMinutes(30)
+        );
+        jdbcTemplate.update("""
+                INSERT INTO learning_service.occupancy_participants (
+                    occupancy_id,
+                    cohort_membership_id,
+                    user_id,
+                    joined_at
+                ) VALUES (?, ?, ?, ?)
+                """,
+                occupancyId,
+                participantMembershipId,
+                participantUserId,
+                OFFSET_NOW.minusMinutes(5)
+        );
+        return new OccupancyFixture(
+                membershipId,
+                occupierUserId,
+                participantUserId
+        );
+    }
+
     private void assignManagementCohort(Long spaceId) {
         Long cohortId = insertManagementCohort();
 
@@ -1189,7 +1359,7 @@ class SpaceApiIntegrationTest {
         }
 
         try {
-            assignLabCohortUseCase.assignCohort(
+            spaceCommandService.assignCohort(
                     spaceId,
                     cohortId,
                     actorUserId,
@@ -1224,6 +1394,40 @@ class SpaceApiIntegrationTest {
                 OFFSET_NOW,
                 userId
         );
+    }
+
+    private Long insertActiveMembershipReturningId(
+            Long cohortId,
+            UUID userId,
+            String role
+    ) {
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO learning_service.cohort_memberships (
+                    cohort_id,
+                    user_id,
+                    role,
+                    status,
+                    requested_at,
+                    processed_at,
+                    processed_by_user_id
+                ) VALUES (?, ?, ?, 'ACTIVE', ?, ?, ?)
+                RETURNING id
+                """,
+                Long.class,
+                cohortId,
+                userId,
+                role,
+                OFFSET_NOW,
+                OFFSET_NOW,
+                userId
+        );
+    }
+
+    private record OccupancyFixture(
+            Long membershipId,
+            UUID occupierUserId,
+            UUID participantUserId
+    ) {
     }
 
     private String createRequest(String name, int capacity, Long cohortId) {

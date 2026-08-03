@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.space.application.port.out;
+package site.omagotchi.learningservice.space.application.port;
 
 import java.util.List;
 import java.util.UUID;
@@ -15,4 +15,6 @@ public interface SpaceCohortAccessPort {
     boolean isActiveManager(Long cohortId, UUID userId);
 
     List<Long> findActiveManagedCohortIds(UUID userId);
+
+    List<Long> findActiveCohortIds(UUID userId);
 }

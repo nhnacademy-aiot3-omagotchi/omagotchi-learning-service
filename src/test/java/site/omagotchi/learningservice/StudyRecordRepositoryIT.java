@@ -8,6 +8,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.global.config.JpaAuditingConfig;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
@@ -18,6 +19,8 @@ import site.omagotchi.learningservice.study.infrastructure.persistence.repositor
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -41,6 +44,9 @@ class StudyRecordRepositoryIT {
 
     @Autowired
     private StudyRecordQueryDslRepository studyRecordQueryRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Nested
     @DisplayName("활성 기록 겹침 조회")
@@ -211,6 +217,36 @@ class StudyRecordRepositoryIT {
                             COHORT_MEMBERSHIP_ID,
                             "2000-01-01T01:30:00Z",
                             "2000-01-01T02:30:00Z"
+                    )
+            );
+        }
+    }
+
+    @Nested
+    @DisplayName("시간 정밀도 제약")
+    class TimePrecisionConstraint {
+
+        @Test
+        @DisplayName("분 미만 정밀도 저장 거절")
+        void rejectsSubMinutePrecision() {
+            assertThrows(
+                    DataIntegrityViolationException.class,
+                    () -> jdbcTemplate.update("""
+                                    INSERT INTO learning_service.study_records (
+                                        id,
+                                        cohort_membership_id,
+                                        aggregation_date,
+                                        start_time,
+                                        end_time,
+                                        study_seconds
+                                    ) VALUES (?, ?, ?, ?, ?, ?)
+                                    """,
+                            UUID.fromString("00000000-0000-0000-0000-000000000101"),
+                            101L,
+                            BASE_DATE,
+                            OffsetDateTime.parse("2000-01-01T01:00:00.001Z"),
+                            OffsetDateTime.parse("2000-01-01T02:00:00Z"),
+                            3_600L
                     )
             );
         }

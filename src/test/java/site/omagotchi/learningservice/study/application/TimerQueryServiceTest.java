@@ -22,12 +22,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -38,10 +33,10 @@ class TimerQueryServiceTest {
     private static final Long COHORT_ID = 10L;
     private static final Long COHORT_MEMBERSHIP_ID = 1L;
     private static final UUID USER_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000002"
+            "00000000-0000-0000-0000-000000000001"
     );
     private static final UUID TIMER_RUN_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000001"
+            "00000000-0000-0000-0000-000000000003"
     );
     private static final Instant STARTED_AT = Instant.parse("2000-01-01T00:00:00Z");
     private static final Duration MAX_DURATION = Duration.ofHours(12);

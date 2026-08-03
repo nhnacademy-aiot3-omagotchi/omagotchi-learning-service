@@ -7,6 +7,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.global.config.JpaAuditingConfig;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
@@ -20,12 +22,10 @@ import site.omagotchi.learningservice.study.infrastructure.persistence.repositor
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 @Import({
         TestcontainersConfiguration.class,
@@ -52,6 +52,9 @@ class TimerRunRepositoryIT {
 
     @Autowired
     private TimerRunQueryRepository timerRunQueryRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Nested
     @DisplayName("실행 생명주기")
@@ -94,6 +97,30 @@ class TimerRunRepositoryIT {
                     () -> assertEquals(3_600L, ended.getMeasuredSeconds()),
                     () -> assertEquals(TimerEndReason.STOP, ended.getEndReason()),
                     () -> assertEquals(active.getCreatedAt(), ended.getCreatedAt())
+            );
+        }
+    }
+
+    @Nested
+    @DisplayName("시간 정밀도 제약")
+    class TimePrecisionConstraint {
+
+        @Test
+        @DisplayName("초 미만 정밀도 저장 거절")
+        void rejectsSubSecondPrecision() {
+            assertThrows(
+                    DataIntegrityViolationException.class,
+                    () -> jdbcTemplate.update("""
+                                    INSERT INTO learning_service.timer_runs (
+                                        id,
+                                        cohort_membership_id,
+                                        started_at
+                                    ) VALUES (?, ?, ?)
+                                    """,
+                            UUID.fromString("00000000-0000-0000-0000-000000000102"),
+                            102L,
+                            OffsetDateTime.parse("2000-01-01T00:00:00.001Z")
+                    )
             );
         }
     }

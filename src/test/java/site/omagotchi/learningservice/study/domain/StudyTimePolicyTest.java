@@ -31,6 +31,29 @@ class StudyTimePolicyTest {
     }
 
     @Nested
+    @DisplayName("분 단위 정규화")
+    class MinuteNormalization {
+
+        @Test
+        @DisplayName("시작 내림과 종료 올림")
+        void normalizesStartAndEndToMinutes() {
+            Instant instant = Instant.parse("2000-01-01T00:00:30Z");
+
+            Instant startTime = StudyTimePolicy.floorToMinute(instant);
+            Instant endTime = StudyTimePolicy.ceilToMinute(instant);
+
+            assertAll(
+                    () -> assertEquals(Instant.parse("2000-01-01T00:00:00Z"), startTime),
+                    () -> assertEquals(Instant.parse("2000-01-01T00:01:00Z"), endTime),
+                    () -> assertTrue(StudyTimePolicy.isMinuteAligned(startTime)),
+                    () -> assertTrue(StudyTimePolicy.isMinuteAligned(endTime)),
+                    () -> assertTrue(StudyTimePolicy.isMinuteAligned(LocalTime.of(10, 0))),
+                    () -> assertFalse(StudyTimePolicy.isMinuteAligned(LocalTime.of(10, 0, 1)))
+            );
+        }
+    }
+
+    @Nested
     @DisplayName("집계일 계산")
     class AggregationDate {
 

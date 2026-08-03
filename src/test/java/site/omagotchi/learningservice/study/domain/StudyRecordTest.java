@@ -8,10 +8,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("공부 기록")
 class StudyRecordTest {
@@ -83,6 +80,31 @@ class StudyRecordTest {
                                     END_TIME,
                                     START_TIME,
                                     1L
+                            )
+                    )
+            );
+        }
+
+        @Test
+        @DisplayName("분 정밀도 위반 예외")
+        void rejectsNonMinuteAlignedTime() {
+            assertAll(
+                    () -> assertThrows(
+                            IllegalArgumentException.class,
+                            () -> StudyRecord.create(
+                                    COHORT_MEMBERSHIP_ID,
+                                    START_TIME.plusSeconds(1),
+                                    END_TIME,
+                                    3_599L
+                            )
+                    ),
+                    () -> assertThrows(
+                            IllegalArgumentException.class,
+                            () -> StudyRecord.create(
+                                    COHORT_MEMBERSHIP_ID,
+                                    START_TIME,
+                                    END_TIME.plusNanos(1),
+                                    3_600L
                             )
                     )
             );

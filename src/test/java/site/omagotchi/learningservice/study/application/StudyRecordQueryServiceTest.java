@@ -34,7 +34,10 @@ class StudyRecordQueryServiceTest {
     private static final Long COHORT_ID = 10L;
     private static final Long COHORT_MEMBERSHIP_ID = 1L;
     private static final UUID USER_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000002"
+            "00000000-0000-0000-0000-000000000001"
+    );
+    private static final UUID STUDY_RECORD_ID = UUID.fromString(
+            "00000000-0000-0000-0000-000000000004"
     );
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);
     private static final Instant START_TIME = Instant.parse("2000-01-01T01:00:00Z");
@@ -62,7 +65,7 @@ class StudyRecordQueryServiceTest {
     @Test
     @DisplayName("정상 처리")
     void returnsStudyRecordResult() {
-        UUID studyRecordId = UUID.randomUUID();
+        UUID studyRecordId = STUDY_RECORD_ID;
         StudyRecord entity = StudyRecord.create(
                 COHORT_MEMBERSHIP_ID,
                 START_TIME,
@@ -97,7 +100,7 @@ class StudyRecordQueryServiceTest {
     @Test
     @DisplayName("대상 없음 예외")
     void throwsNotFoundWhenRecordDoesNotExist() {
-        UUID studyRecordId = UUID.randomUUID();
+        UUID studyRecordId = STUDY_RECORD_ID;
         given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
                 studyRecordId,
                 COHORT_MEMBERSHIP_ID
@@ -119,7 +122,7 @@ class StudyRecordQueryServiceTest {
     @Test
     @DisplayName("활성 소속 없음 예외")
     void doesNotQueryRecordWhenActiveMembershipDoesNotExist() {
-        UUID studyRecordId = UUID.randomUUID();
+        UUID studyRecordId = STUDY_RECORD_ID;
         given(cohortAccessService.requireActiveMembershipId(COHORT_ID, USER_ID))
                 .willThrow(new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
 
@@ -136,11 +139,11 @@ class StudyRecordQueryServiceTest {
     @DisplayName("일간 활성 기록 전체와 합계 조회")
     void returnsDailyRecordsAndTotalStudySeconds() {
         LocalDate aggregationDate = LocalDate.of(2000, Month.JANUARY, 10);
-        StudyRecord first = record(
+        StudyRecord first = craeteStudyRecord(
                 "2000-01-09T20:00:00Z",
                 "2000-01-09T21:00:00Z"
         );
-        StudyRecord second = record(
+        StudyRecord second = craeteStudyRecord(
                 "2000-01-09T22:00:00Z",
                 "2000-01-10T00:00:00Z"
         );
@@ -212,7 +215,6 @@ class StudyRecordQueryServiceTest {
         YearMonth aggregationMonth = YearMonth.of(2000, Month.JANUARY);
         LocalDate currentAggregationDate = LocalDate.of(2000, Month.JANUARY, 15);
         LocalDate startDate = aggregationMonth.atDay(1);
-        LocalDate endDate = aggregationMonth.atEndOfMonth();
         given(clock.instant()).willReturn(JANUARY_15_CURRENT_TIME);
         given(studyRecordQueryRepository.findDailyStudySeconds(
                 COHORT_MEMBERSHIP_ID,
@@ -285,7 +287,7 @@ class StudyRecordQueryServiceTest {
         verifyNoInteractions(studyRecordQueryRepository);
     }
 
-    private StudyRecord record(
+    private StudyRecord craeteStudyRecord(
             String startTime,
             String endTime
     ) {

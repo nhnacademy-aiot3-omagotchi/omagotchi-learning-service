@@ -27,6 +27,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,13 +44,13 @@ class TimerCommandServiceTest {
     private static final Long COHORT_ID = 10L;
     private static final Long COHORT_MEMBERSHIP_ID = 1L;
     private static final UUID TIMER_RUN_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000001"
+            "00000000-0000-0000-0000-000000000003"
     );
     private static final UUID USER_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000002"
+            "00000000-0000-0000-0000-000000000001"
     );
     private static final UUID COMMAND_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000003"
+            "00000000-0000-0000-0000-000000000002"
     );
     private static final Instant STARTED_AT = Instant.parse("2000-01-01T00:00:00Z");
     private static final Instant EXPIRATION_AT = Instant.parse("2000-01-01T12:00:00Z");
@@ -115,8 +116,13 @@ class TimerCommandServiceTest {
                     COHORT_ID
             );
 
+            // advisory lock에 의한 순서 보장 검증 (잠금 -> 조회 -> 저장)
+            InOrder inOrder = inOrder(studyWriteLock, timerRunQueryRepository, timerRunRepository);
+            inOrder.verify(studyWriteLock).acquire(COHORT_MEMBERSHIP_ID);
+            inOrder.verify(timerRunQueryRepository).findActiveByCohortMembershipId(COHORT_MEMBERSHIP_ID);
+
             ArgumentCaptor<TimerRun> captor = ArgumentCaptor.forClass(TimerRun.class);
-            verify(timerRunRepository, times(1)).create(captor.capture());
+            inOrder.verify(timerRunRepository).create(captor.capture());
             TimerRun created = captor.getValue();
             assertAll(
                     () -> assertEquals(TIMER_RUN_ID, result.timerRunId()),
@@ -128,9 +134,36 @@ class TimerCommandServiceTest {
                             created.getCohortMembershipId()
                     ),
                     () -> assertEquals(STARTED_AT, created.getStartedAt()),
+                    () -> assertEquals(0, created.getStartedAt().getNano()),
                     () -> assertTrue(created.isRunning())
             );
-            verify(studyWriteLock, times(1)).acquire(COHORT_MEMBERSHIP_ID);
+        }
+
+        @Test
+        @DisplayName("소수 초 시작 시각 절삭")
+        void truncatesFractionalStartTimeToSeconds() {
+            Instant currentAt = STARTED_AT.plusMillis(999);
+            TimerCommandService service = serviceWithClock(Clock.tick(
+                    Clock.fixed(currentAt, ZoneOffset.UTC),
+                    Duration.ofSeconds(1)
+            ));
+            givenActiveMembership();
+            given(timerRunQueryRepository.findActiveByCohortMembershipId(
+                    COHORT_MEMBERSHIP_ID
+            )).willReturn(Optional.empty());
+            given(timerRunRepository.create(any(TimerRun.class)))
+                    .willAnswer(invocation -> invocation.getArgument(0));
+
+            TimerStateResult result = service.start(
+                    COMMAND_ID,
+                    USER_ID,
+                    COHORT_ID
+            );
+
+            assertAll(
+                    () -> assertEquals(STARTED_AT, result.startedAt()),
+                    () -> assertEquals(0, result.startedAt().getNano())
+            );
         }
 
         @Test
@@ -172,7 +205,7 @@ class TimerCommandServiceTest {
                     () -> assertSame(TimerErrorCode.ALREADY_RUNNING, exception.getErrorCode()),
                     () -> assertTrue(timerRun.isRunning())
             );
-            verify(studyWriteLock, times(1)).acquire(COHORT_MEMBERSHIP_ID);
+            verify(studyWriteLock).acquire(COHORT_MEMBERSHIP_ID);
             verifyNoInteractions(timerRunRepository);
         }
 
@@ -205,9 +238,12 @@ class TimerCommandServiceTest {
                     () -> assertEquals(TIMER_RUN_ID, result.timerRunId()),
                     () -> assertEquals(currentAt, result.startedAt())
             );
-            InOrder order = inOrder(timerRunRepository);
-            order.verify(timerRunRepository, times(1)).end(previous);
-            order.verify(timerRunRepository, times(1)).create(any(TimerRun.class));
+            // advisory lock에 의한 순서 보장 검증 (잠금 -> 조회 -> 저장)
+            InOrder order = inOrder(studyWriteLock, timerRunQueryRepository, timerRunRepository);
+            order.verify(studyWriteLock).acquire(COHORT_MEMBERSHIP_ID);
+            order.verify(timerRunQueryRepository).findActiveByCohortMembershipId(COHORT_MEMBERSHIP_ID);
+            order.verify(timerRunRepository).end(previous);
+            order.verify(timerRunRepository).create(any(TimerRun.class));
         }
     }
 
@@ -231,7 +267,7 @@ class TimerCommandServiceTest {
             );
 
             ArgumentCaptor<StudyRecord> captor = ArgumentCaptor.forClass(StudyRecord.class);
-            verify(studyRecordRepository, times(1)).save(captor.capture());
+            verify(studyRecordRepository).save(captor.capture());
             StudyRecord saved = captor.getValue();
             assertAll(
                     () -> assertEquals(COHORT_MEMBERSHIP_ID, saved.getCohortMembershipId()),
@@ -242,8 +278,70 @@ class TimerCommandServiceTest {
                     () -> assertEquals(TimerEndReason.STOP, timerRun.getEndReason())
             );
             InOrder order = inOrder(studyRecordRepository, timerRunRepository);
-            order.verify(studyRecordRepository, times(1)).save(saved);
-            order.verify(timerRunRepository, times(1)).end(timerRun);
+            order.verify(studyRecordRepository).save(saved);
+            order.verify(timerRunRepository).end(timerRun);
+        }
+
+        @Test
+        @DisplayName("소수 초 종료 시각 절삭")
+        void truncatesFractionalEndTimeToSeconds() {
+            // given
+            Instant startedAt = Instant.parse("2000-01-01T18:59:00Z");
+            Instant boundary = Instant.parse("2000-01-01T19:00:00Z");
+            Instant endedAt = Instant.parse("2000-01-01T19:00:00.500Z");
+            TimerRun timerRun = TimerRun.start(COHORT_MEMBERSHIP_ID, startedAt);
+            TimerCommandService service = serviceWithClock(Clock.tick(
+                    Clock.fixed(endedAt, ZoneOffset.UTC),
+                    Duration.ofSeconds(1)
+            ));
+            givenOwnedTimer(timerRun);
+
+            // when
+            service.stop(
+                    COMMAND_ID,
+                    USER_ID,
+                    COHORT_ID,
+                    TIMER_RUN_ID
+            );
+
+            // then
+            ArgumentCaptor<StudyRecord> captor = ArgumentCaptor.forClass(StudyRecord.class);
+            verify(studyRecordRepository).save(captor.capture());
+            StudyRecord saved = captor.getValue();
+
+            assertAll(
+                    () -> assertEquals(boundary, timerRun.getEndedAt()),
+                    () -> assertEquals(LocalDate.parse("2000-01-01"), saved.getAggregationDate()),
+                    () -> assertEquals(startedAt, saved.getStartTime()),
+                    () -> assertEquals(boundary, saved.getEndTime()),
+                    () -> assertEquals(60L, saved.getStudySeconds())
+            );
+        }
+
+        @Test
+        @DisplayName("공부 기록 시작 내림과 종료 올림")
+        void savesStudyRecordWithMinuteAlignedTimes() {
+            Instant startedAt = STARTED_AT.plusSeconds(20);
+            Instant endedAt = STARTED_AT.plusSeconds(3_640);
+            TimerRun timerRun = TimerRun.start(COHORT_MEMBERSHIP_ID, startedAt);
+            givenOwnedTimer(timerRun);
+            given(clock.instant()).willReturn(endedAt);
+
+            timerCommandService.stop(
+                    COMMAND_ID,
+                    USER_ID,
+                    COHORT_ID,
+                    TIMER_RUN_ID
+            );
+
+            ArgumentCaptor<StudyRecord> captor = ArgumentCaptor.forClass(StudyRecord.class);
+            verify(studyRecordRepository).save(captor.capture());
+            StudyRecord saved = captor.getValue();
+            assertAll(
+                    () -> assertEquals(STARTED_AT, saved.getStartTime()),
+                    () -> assertEquals(STARTED_AT.plusSeconds(3_660), saved.getEndTime()),
+                    () -> assertEquals(3_620L, saved.getStudySeconds())
+            );
         }
 
         @Test
@@ -283,9 +381,9 @@ class TimerCommandServiceTest {
                     )
             );
             InOrder order = inOrder(studyRecordRepository, timerRunRepository);
-            order.verify(studyRecordRepository, times(1)).save(first);
-            order.verify(studyRecordRepository, times(1)).save(second);
-            order.verify(timerRunRepository, times(1)).end(timerRun);
+            order.verify(studyRecordRepository).save(first);
+            order.verify(studyRecordRepository).save(second);
+            order.verify(timerRunRepository).end(timerRun);
         }
 
         @Test
@@ -305,7 +403,7 @@ class TimerCommandServiceTest {
             );
 
             ArgumentCaptor<StudyRecord> captor = ArgumentCaptor.forClass(StudyRecord.class);
-            verify(studyRecordRepository, times(1)).save(captor.capture());
+            verify(studyRecordRepository).save(captor.capture());
             StudyRecord saved = captor.getValue();
             assertAll(
                     () -> assertEquals(LocalDate.parse("2000-01-01"), saved.getAggregationDate()),
@@ -335,7 +433,7 @@ class TimerCommandServiceTest {
                     () -> assertEquals(0L, timerRun.getMeasuredSeconds()),
                     () -> assertEquals(TimerEndReason.STOP, timerRun.getEndReason())
             );
-            verify(timerRunRepository, times(1)).end(timerRun);
+            verify(timerRunRepository).end(timerRun);
             verifyNoInteractions(studyRecordRepository);
         }
 
@@ -398,7 +496,7 @@ class TimerCommandServiceTest {
             );
 
             assertExpired(timerRun);
-            verify(timerRunRepository, times(1)).end(timerRun);
+            verify(timerRunRepository).end(timerRun);
             verifyNoInteractions(studyRecordRepository);
         }
 
@@ -451,7 +549,7 @@ class TimerCommandServiceTest {
                     () -> assertNull(timerRun.getMeasuredSeconds()),
                     () -> assertEquals(TimerEndReason.DISCARD, timerRun.getEndReason())
             );
-            verify(timerRunRepository, times(1)).end(timerRun);
+            verify(timerRunRepository).end(timerRun);
             verifyNoInteractions(studyRecordRepository);
         }
 
@@ -470,7 +568,7 @@ class TimerCommandServiceTest {
             );
 
             assertExpired(timerRun);
-            verify(timerRunRepository, times(1)).end(timerRun);
+            verify(timerRunRepository).end(timerRun);
             verifyNoInteractions(studyRecordRepository);
         }
     }
@@ -480,6 +578,18 @@ class TimerCommandServiceTest {
     private void givenActiveMembership() {
         given(cohortAccessService.requireActiveMembershipId(COHORT_ID, USER_ID))
                 .willReturn(COHORT_MEMBERSHIP_ID);
+    }
+
+    private TimerCommandService serviceWithClock(Clock configuredClock) {
+        return new TimerCommandService(
+                cohortAccessService,
+                timerRunRepository,
+                timerRunQueryRepository,
+                studyRecordRepository,
+                studyWriteLock,
+                configuredClock,
+                TIME_POLICY
+        );
     }
 
     private void givenOwnedTimer(TimerRun timerRun) {

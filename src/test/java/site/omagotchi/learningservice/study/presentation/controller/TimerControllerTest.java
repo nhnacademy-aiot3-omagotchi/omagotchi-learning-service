@@ -58,7 +58,7 @@ class TimerControllerTest {
     }
 
     @Nested
-    @DisplayName("시작")
+    @DisplayName("타이머 시작")
     class Start {
 
         @Test
@@ -85,16 +85,16 @@ class TimerControllerTest {
                     .andExpect(jsonPath("$.startedAt").value(STARTED_AT.toString()))
                     .andExpect(jsonPath("$.elapsedSeconds").value(0L));
 
-            verify(timerCommandService, times(1)).start(COMMAND_ID, USER_ID, COHORT_ID);
+            verify(timerCommandService).start(COMMAND_ID, USER_ID, COHORT_ID);
         }
     }
 
     @Nested
-    @DisplayName("현재 상태 조회")
+    @DisplayName("타이머 상태 조회")
     class GetCurrent {
 
         @Test
-        @DisplayName("실행 중 정상 처리")
+        @DisplayName("실행 중 응답")
         void returnsRunningTimer() throws Exception {
             TimerStateResult result = TimerStateResult.running(
                     TIMER_RUN_ID,
@@ -114,11 +114,11 @@ class TimerControllerTest {
                     .andExpect(jsonPath("$.startedAt").value(STARTED_AT.toString()))
                     .andExpect(jsonPath("$.elapsedSeconds").value(125L));
 
-            verify(timerQueryService, times(1)).getCurrent(USER_ID, COHORT_ID);
+            verify(timerQueryService).getCurrent(USER_ID, COHORT_ID);
         }
 
         @Test
-        @DisplayName("활성 실행 없음 처리")
+        @DisplayName("실행 없음 응답")
         void returnsStoppedWhenNoActiveTimerExists() throws Exception {
             given(timerQueryService.getCurrent(USER_ID, COHORT_ID))
                     .willReturn(TimerStateResult.stopped());
@@ -134,12 +134,12 @@ class TimerControllerTest {
                     .andExpect(jsonPath("$.startedAt").value(nullValue()))
                     .andExpect(jsonPath("$.elapsedSeconds").value(0L));
 
-            verify(timerQueryService, times(1)).getCurrent(USER_ID, COHORT_ID);
+            verify(timerQueryService).getCurrent(USER_ID, COHORT_ID);
         }
     }
 
     @Nested
-    @DisplayName("폐기")
+    @DisplayName("타이머 폐기")
     class Discard {
 
         @Test
@@ -154,7 +154,7 @@ class TimerControllerTest {
                             .header("X-Command-Id", COMMAND_ID))
                     .andExpect(status().isNoContent());
 
-            verify(timerCommandService, times(1)).discard(
+            verify(timerCommandService).discard(
                     COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
@@ -164,12 +164,12 @@ class TimerControllerTest {
     }
 
     @Nested
-    @DisplayName("정상 종료")
+    @DisplayName("타이머 종료")
     class Stop {
 
         @Test
-        @DisplayName("미구현 응답 유지")
-        void keepsStopEndpointUnimplemented() throws Exception {
+        @DisplayName("정상 처리")
+        void stopsTimerSuccessfully() throws Exception {
             mockMvc.perform(post(
                             "/api/v1/cohorts/{cohortId}/timer/{timerRunId}/stop",
                             COHORT_ID,
@@ -177,9 +177,14 @@ class TimerControllerTest {
                     )
                             .header("X-User-Id", USER_ID)
                             .header("X-Command-Id", COMMAND_ID))
-                    .andExpect(status().isNotImplemented());
+                    .andExpect(status().isNoContent());
 
-            verifyNoInteractions(timerCommandService, timerQueryService);
+            verify(timerCommandService).stop(
+                    COMMAND_ID,
+                    USER_ID,
+                    COHORT_ID,
+                    TIMER_RUN_ID
+            );
         }
     }
 }

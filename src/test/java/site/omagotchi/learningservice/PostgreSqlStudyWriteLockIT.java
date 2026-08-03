@@ -10,8 +10,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.StudyRecordErrorCode;
+import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 
 import java.time.Duration;
 import java.util.concurrent.*;

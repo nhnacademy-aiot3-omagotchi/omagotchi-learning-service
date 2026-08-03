@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -12,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
@@ -23,20 +25,15 @@ import site.omagotchi.learningservice.study.application.result.DailyStudyRecords
 import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.MonthlyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
-import site.omagotchi.learningservice.study.presentation.request.CreateStudyRecordRequest;
-import site.omagotchi.learningservice.study.presentation.request.UpdateStudyRecordRequest;
-import site.omagotchi.learningservice.study.presentation.response.StudyRecordResponse;
 
 import java.time.*;
 import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
@@ -52,13 +49,10 @@ class StudyRecordControllerTest {
             "00000000-0000-0000-0000-000000000002"
     );
     private static final UUID STUDY_RECORD_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000003"
+            "00000000-0000-0000-0000-000000000004"
     );
     private static final Long COHORT_ID = 10L;
     private static final Long EXPECTED_VERSION = 1L;
-    private static final LocalDate DATE = LocalDate.of(2000, Month.JANUARY, 1);
-    private static final LocalTime START_TIME = LocalTime.of(10, 0);
-    private static final LocalTime END_TIME = LocalTime.of(11, 0);
 
     @Mock
     private StudyRecordCommandService studyRecordCommandService;
@@ -79,24 +73,24 @@ class StudyRecordControllerTest {
     }
 
     @Nested
-    @DisplayName("단건 조회")
+    @DisplayName("기록 단건 조회")
     class Get {
 
         @Test
         @DisplayName("정상 처리")
-        void returnsStudyRecord() {
+        void returnsStudyRecord() throws Exception {
             StudyRecordResult result = studyRecordResult();
             given(studyRecordQueryService.getRecord(USER_ID, COHORT_ID, STUDY_RECORD_ID))
                     .willReturn(result);
 
-            ResponseEntity<StudyRecordResponse> response = studyRecordController.getStudyRecord(
-                    authentication(),
-                    COHORT_ID,
-                    STUDY_RECORD_ID
-            );
-
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-            assertEquals(StudyRecordResponse.from(result), response.getBody());
+            mockMvc.perform(get(
+                            "/api/v1/cohorts/{cohortId}/study-records/{studyRecordId}",
+                            COHORT_ID,
+                            STUDY_RECORD_ID
+                    )
+                            .header("X-User-Id", USER_ID))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(STUDY_RECORD_ID.toString()));
         }
     }
 
@@ -129,8 +123,8 @@ class StudyRecordControllerTest {
                     .andExpect(jsonPath("$.aggregationDate").value("2000-01-01"))
                     .andExpect(jsonPath("$.totalStudySeconds").value(3_600L))
                     .andExpect(jsonPath("$.records[0].id").value(STUDY_RECORD_ID.toString()))
-                    .andExpect(jsonPath("$.periodStart").doesNotExist())
-                    .andExpect(jsonPath("$.periodEndExclusive").doesNotExist());
+                    .andExpect(jsonPath("$.startTime").doesNotExist())
+                    .andExpect(jsonPath("$.endTime").doesNotExist());
 
             verify(studyRecordQueryService).getDailyRecords(
                     USER_ID,
@@ -172,7 +166,7 @@ class StudyRecordControllerTest {
     }
 
     @Nested
-    @DisplayName("월간 조회")
+    @DisplayName("월간 요약 조회")
     class GetMonthlyStudySeconds {
 
         @Test
@@ -211,8 +205,8 @@ class StudyRecordControllerTest {
                     .andExpect(jsonPath("$.dailyTotals[0].aggregationDate")
                             .value("2000-01-01"))
                     .andExpect(jsonPath("$.dailyTotals[1].studySeconds").value(0L))
-                    .andExpect(jsonPath("$.periodStart").doesNotExist())
-                    .andExpect(jsonPath("$.periodEndExclusive").doesNotExist());
+                    .andExpect(jsonPath("$.startTime").doesNotExist())
+                    .andExpect(jsonPath("$.endTime").doesNotExist());
 
             verify(studyRecordQueryService).getMonthlyStudySeconds(
                     USER_ID,
@@ -259,26 +253,57 @@ class StudyRecordControllerTest {
 
         @Test
         @DisplayName("정상 처리")
-        void createsStudyRecord() {
-            CreateStudyRecordRequest request = new CreateStudyRecordRequest(
-                    DATE,
-                    START_TIME,
-                    END_TIME
-            );
-            CreateStudyRecordCommand command = request.toCommand();
+        void createsStudyRecord() throws Exception {
             StudyRecordResult result = studyRecordResult();
-            given(studyRecordCommandService.create(COMMAND_ID, USER_ID, COHORT_ID, command))
+            given(studyRecordCommandService.create(eq(COMMAND_ID), eq(USER_ID), eq(COHORT_ID), any()))
                     .willReturn(result);
 
-            ResponseEntity<StudyRecordResponse> response = studyRecordController.createStudyRecord(
-                    authentication(),
-                    COMMAND_ID,
-                    COHORT_ID,
-                    request
-            );
+            mockMvc.perform(post(
+                            "/api/v1/cohorts/{cohortId}/study-records",
+                            COHORT_ID
+                    )
+                            .header("X-User-Id", USER_ID)
+                            .header("X-Command-Id", COMMAND_ID)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                        "date": "2000-01-01",
+                                        "startTime": "10:00",
+                                        "endTime": "11:00"
+                                    }
+                                    """))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.id").value(STUDY_RECORD_ID.toString()));
 
-            assertEquals(HttpStatus.CREATED, response.getStatusCode());
-            assertEquals(StudyRecordResponse.from(result), response.getBody());
+            ArgumentCaptor<CreateStudyRecordCommand> captor = ArgumentCaptor.forClass(CreateStudyRecordCommand.class);
+            verify(studyRecordCommandService).create(eq(COMMAND_ID), eq(USER_ID), eq(COHORT_ID), captor.capture());
+            CreateStudyRecordCommand command = captor.getValue();
+            assertEquals(Instant.parse("2000-01-01T01:00:00Z"), command.startTime());
+            assertEquals(Instant.parse("2000-01-01T02:00:00Z"), command.endTime());
+        }
+
+        @Test
+        @DisplayName("초 단위 시간 형식 예외")
+        void rejectsSecondPrecisionTime() throws Exception {
+            mockMvc.perform(post(
+                            "/api/v1/cohorts/{cohortId}/study-records",
+                            COHORT_ID
+                    )
+                            .header("X-User-Id", USER_ID)
+                            .header("X-Command-Id", COMMAND_ID)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                        "date": "2000-01-01",
+                                        "startTime": "10:00:59",
+                                        "endTime": "11:00:01"
+                                    }
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code")
+                            .value(CommonErrorCode.MALFORMED_REQUEST.code()));
+
+            verifyNoInteractions(studyRecordCommandService);
         }
     }
 
@@ -288,33 +313,73 @@ class StudyRecordControllerTest {
 
         @Test
         @DisplayName("정상 처리")
-        void updatesStudyRecord() {
-            UpdateStudyRecordRequest request = new UpdateStudyRecordRequest(
-                    DATE,
-                    START_TIME,
-                    END_TIME,
-                    EXPECTED_VERSION
-            );
-            UpdateStudyRecordCommand command = request.toCommand();
+        void updatesStudyRecord() throws Exception {
             StudyRecordResult result = studyRecordResult();
             given(studyRecordCommandService.update(
-                    COMMAND_ID,
-                    USER_ID,
-                    COHORT_ID,
-                    STUDY_RECORD_ID,
-                    command
+                    eq(COMMAND_ID),
+                    eq(USER_ID),
+                    eq(COHORT_ID),
+                    eq(STUDY_RECORD_ID),
+                    any()
             )).willReturn(result);
 
-            ResponseEntity<StudyRecordResponse> response = studyRecordController.updateStudyRecord(
-                    authentication(),
-                    COMMAND_ID,
-                    COHORT_ID,
-                    STUDY_RECORD_ID,
-                    request
-            );
+            mockMvc.perform(put(
+                            "/api/v1/cohorts/{cohortId}/study-records/{studyRecordId}",
+                            COHORT_ID,
+                            STUDY_RECORD_ID
+                    )
+                            .header("X-User-Id", USER_ID)
+                            .header("X-Command-Id", COMMAND_ID)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                        "date": "2000-01-01",
+                                        "startTime": "10:00",
+                                        "endTime": "11:00",
+                                        "expectedVersion": 1
+                                    }
+                                    """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(STUDY_RECORD_ID.toString()));
 
-            assertEquals(HttpStatus.OK, response.getStatusCode());
-            assertEquals(StudyRecordResponse.from(result), response.getBody());
+            ArgumentCaptor<UpdateStudyRecordCommand> captor = ArgumentCaptor.forClass(UpdateStudyRecordCommand.class);
+            verify(studyRecordCommandService).update(
+                    eq(COMMAND_ID),
+                    eq(USER_ID),
+                    eq(COHORT_ID),
+                    eq(STUDY_RECORD_ID),
+                    captor.capture()
+            );
+            UpdateStudyRecordCommand command = captor.getValue();
+            assertEquals(Instant.parse("2000-01-01T01:00:00Z"), command.startTime());
+            assertEquals(Instant.parse("2000-01-01T02:00:00Z"), command.endTime());
+            assertEquals(EXPECTED_VERSION, command.expectedVersion());
+        }
+
+        @Test
+        @DisplayName("소수 초 시간 형식 예외")
+        void rejectsFractionalSecondTime() throws Exception {
+            mockMvc.perform(put(
+                            "/api/v1/cohorts/{cohortId}/study-records/{studyRecordId}",
+                            COHORT_ID,
+                            STUDY_RECORD_ID
+                    )
+                            .header("X-User-Id", USER_ID)
+                            .header("X-Command-Id", COMMAND_ID)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                        "date": "2000-01-01",
+                                        "startTime": "10:00:00.999",
+                                        "endTime": "11:00:00.001",
+                                        "expectedVersion": 1
+                                    }
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code")
+                            .value(CommonErrorCode.MALFORMED_REQUEST.code()));
+
+            verifyNoInteractions(studyRecordCommandService);
         }
     }
 
@@ -324,17 +389,17 @@ class StudyRecordControllerTest {
 
         @Test
         @DisplayName("정상 처리")
-        void deletesStudyRecord() {
-            ResponseEntity<Void> response = studyRecordController.deleteStudyRecord(
-                    authentication(),
-                    COMMAND_ID,
-                    EXPECTED_VERSION,
-                    COHORT_ID,
-                    STUDY_RECORD_ID
-            );
+        void deletesStudyRecord() throws Exception {
+            mockMvc.perform(delete(
+                            "/api/v1/cohorts/{cohortId}/study-records/{studyRecordId}",
+                            COHORT_ID,
+                            STUDY_RECORD_ID
+                    )
+                            .header("X-User-Id", USER_ID)
+                            .header("X-Command-Id", COMMAND_ID)
+                            .header("X-RESOURCE-VERSION", EXPECTED_VERSION))
+                    .andExpect(status().isNoContent());
 
-            assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
-            assertNull(response.getBody());
             verify(studyRecordCommandService).delete(
                     COMMAND_ID,
                     USER_ID,

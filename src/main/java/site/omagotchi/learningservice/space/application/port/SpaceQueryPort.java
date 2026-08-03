@@ -1,9 +1,10 @@
-package site.omagotchi.learningservice.space.application.port.out;
+package site.omagotchi.learningservice.space.application.port;
 
-import site.omagotchi.learningservice.space.application.query.SpaceListItem;
+import site.omagotchi.learningservice.space.application.result.SpaceListResult;
 
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 공간 목록과 현재 점유 상태를 조회하기 위한 출력 포트.
@@ -18,7 +19,8 @@ public interface SpaceQueryPort {
      * @param now 활성 점유 및 남은 시간 계산 기준 시각
      * @return 공간 목록 조회 결과
      */
-    List<SpaceListItem> findAllSpacesWithStatus(
+    List<SpaceListResult> findAllSpacesWithStatus(
+            Set<Long> requesterCohortIds,
             ZonedDateTime now
     );
 }

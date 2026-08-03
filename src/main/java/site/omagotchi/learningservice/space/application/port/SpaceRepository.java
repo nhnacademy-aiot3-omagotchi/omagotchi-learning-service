@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.space.application.port.out;
+package site.omagotchi.learningservice.space.application.port;
 
 import site.omagotchi.learningservice.space.domain.Space;
 

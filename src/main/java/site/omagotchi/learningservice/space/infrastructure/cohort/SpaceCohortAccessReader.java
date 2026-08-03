@@ -9,7 +9,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.space.application.port.out.SpaceCohortAccessPort;
+import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPort;
 
 import java.util.List;
 import java.util.Set;
@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
-public class SpaceCohortAccessAdapter implements SpaceCohortAccessPort {
+public class SpaceCohortAccessReader implements SpaceCohortAccessPort {
 
     private final CohortAccessService cohortAccessService;
     private final CohortRepository cohortRepository;
@@ -68,6 +68,20 @@ public class SpaceCohortAccessAdapter implements SpaceCohortAccessPort {
                 )
                 .map(membership -> membership.getCohortId())
                 .filter(activeCohortIds::contains)
+                .distinct()
+                .toList();
+    }
+
+    @Override
+    public List<Long> findActiveCohortIds(UUID userId) {
+        return membershipRepository
+                .findByUserIdOrderByRequestedAtDesc(userId)
+                .stream()
+                .filter(membership ->
+                        membership.getStatus() == CohortMembershipStatus.ACTIVE
+                )
+                .filter(membership -> membership.getEndedAt() == null)
+                .map(membership -> membership.getCohortId())
                 .distinct()
                 .toList();
     }

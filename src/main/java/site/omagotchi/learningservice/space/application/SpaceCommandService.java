@@ -1,23 +1,16 @@
-package site.omagotchi.learningservice.space.application.service;
+package site.omagotchi.learningservice.space.application;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
-import site.omagotchi.learningservice.space.application.port.in.CreateSpaceUseCase;
-import site.omagotchi.learningservice.space.application.port.in.ActivateSpaceUseCase;
-import site.omagotchi.learningservice.space.application.port.in.DeactivateSpaceUseCase;
-import site.omagotchi.learningservice.space.application.port.in.DeleteSpaceUseCase;
-import site.omagotchi.learningservice.space.application.port.in.UpdateSpaceUseCase;
-import site.omagotchi.learningservice.space.application.port.in.AssignLabCohortUseCase;
-import site.omagotchi.learningservice.space.application.port.in.UnassignLabCohortUseCase;
-import site.omagotchi.learningservice.space.application.port.out.SpaceCohortAccessPort;
-import site.omagotchi.learningservice.space.application.port.out.SpaceRepository;
-import site.omagotchi.learningservice.space.application.port.out.SpaceOccupancyQueryPort;
+import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPort;
+import site.omagotchi.learningservice.space.application.port.SpaceOccupancyQueryPort;
+import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
-import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.space.domain.exception.SpaceErrorCode;
+import site.omagotchi.learningservice.space.domain.SpaceType;
 
 import java.time.Clock;
 import java.time.ZonedDateTime;
@@ -27,21 +20,15 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class SpaceCommandService
-        implements CreateSpaceUseCase,
-        ActivateSpaceUseCase,
-        DeactivateSpaceUseCase,
-        UpdateSpaceUseCase,
-        DeleteSpaceUseCase,
-        AssignLabCohortUseCase,
-        UnassignLabCohortUseCase {
+public class SpaceCommandService {
+
+    private static final int MAX_NAME_LENGTH = 50;
 
     private final SpaceRepository spaceRepository;
     private final SpaceOccupancyQueryPort spaceOccupancyQueryPort;
     private final SpaceCohortAccessPort cohortAccessPort;
     private final Clock clock;
 
-    @Override
     public Space create(
             CreateSpaceCommand command,
             UUID actorUserId,
@@ -63,6 +50,12 @@ public class SpaceCommandService
             throw new BusinessException(SpaceErrorCode.DUPLICATE_NAME);
         }
 
+        validateSpaceAttributes(
+                normalizedName,
+                command.spaceType(),
+                command.capacity()
+        );
+
         Space space = Space.create(
                 normalizedName,
                 command.spaceType(),
@@ -74,7 +67,6 @@ public class SpaceCommandService
         return spaceRepository.save(space);
     }
 
-    @Override
     public Space update(
             Long spaceId,
             UpdateSpaceCommand command,
@@ -100,11 +92,36 @@ public class SpaceCommandService
             throw new BusinessException(SpaceErrorCode.DUPLICATE_NAME);
         }
 
+        validateSpaceAttributes(
+                normalizedName,
+                command.spaceType(),
+                command.capacity()
+        );
+
         ZonedDateTime now =
                 ZonedDateTime.now(clock);
 
         boolean changesType = existingSpace.getSpaceType()
                 != command.spaceType();
+
+        if (changesType && existingSpace.isActive()) {
+            throw new BusinessException(
+                    SpaceErrorCode.ACTIVE_TYPE_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        if (changesType && existingSpace.isAssignedLab()) {
+            throw new BusinessException(
+                    SpaceErrorCode.ASSIGNED_LAB_TYPE_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        if (command.capacity() < existingSpace.getCapacity()
+                && existingSpace.isActive()) {
+            throw new BusinessException(
+                    SpaceErrorCode.ACTIVE_CAPACITY_REDUCTION_NOT_ALLOWED
+            );
+        }
 
         Space updatedSpace = existingSpace
                 .changeName(
@@ -129,7 +146,6 @@ public class SpaceCommandService
         );
     }
 
-    @Override
     public void delete(
             Long spaceId,
             UUID actorUserId,
@@ -142,13 +158,18 @@ public class SpaceCommandService
         ZonedDateTime now =
                 ZonedDateTime.now(clock);
 
+        if (existingSpace.isActive()) {
+            throw new BusinessException(
+                    SpaceErrorCode.ACTIVE_SPACE_DELETE_NOT_ALLOWED
+            );
+        }
+
         Space deletedSpace =
                 existingSpace.delete(now);
 
         spaceRepository.save(deletedSpace);
     }
 
-    @Override
     public Space activate(
             Long spaceId,
             UUID actorUserId,
@@ -159,10 +180,13 @@ public class SpaceCommandService
         requireSpaceManager(existingSpace, actorUserId, globalRole, false);
         ZonedDateTime now = ZonedDateTime.now(clock);
 
+        if (existingSpace.isActive()) {
+            throw new BusinessException(SpaceErrorCode.ALREADY_ACTIVE);
+        }
+
         return spaceRepository.save(existingSpace.activate(now));
     }
 
-    @Override
     public Space deactivate(
             Long spaceId,
             String reason,
@@ -174,6 +198,16 @@ public class SpaceCommandService
         requireSpaceManager(existingSpace, actorUserId, globalRole, false);
         ZonedDateTime now = ZonedDateTime.now(clock);
 
+        if (existingSpace.isInactive()) {
+            throw new BusinessException(SpaceErrorCode.ALREADY_INACTIVE);
+        }
+
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException(
+                    SpaceErrorCode.INVALID_INACTIVE_REASON
+            );
+        }
+
         Space deactivatedSpace = existingSpace.deactivate(reason, now);
 
         ensureNoActiveOccupancy(spaceId, now);
@@ -181,7 +215,6 @@ public class SpaceCommandService
         return spaceRepository.save(deactivatedSpace);
     }
 
-    @Override
     public Space assignCohort(
             Long spaceId,
             Long cohortId,
@@ -206,13 +239,18 @@ public class SpaceCommandService
             }
         }
 
+        ensureLab(existingSpace);
+
+        if (existingSpace.getCohortId() != null) {
+            throw new BusinessException(SpaceErrorCode.LAB_ALREADY_ASSIGNED);
+        }
+
         return spaceRepository.save(existingSpace.assignCohort(
                 cohortId,
                 ZonedDateTime.now(clock)
         ));
     }
 
-    @Override
     public Space unassignCohort(
             Long spaceId,
             UUID actorUserId,
@@ -231,6 +269,12 @@ public class SpaceCommandService
                     actorUserId,
                     globalRole
             );
+        }
+
+        ensureLab(existingSpace);
+
+        if (existingSpace.getCohortId() == null) {
+            throw new BusinessException(SpaceErrorCode.LAB_NOT_ASSIGNED);
         }
 
         return spaceRepository.save(existingSpace.unassignCohort(
@@ -354,6 +398,33 @@ public class SpaceCommandService
 
         if (!cohortAccessPort.exists(cohortId)) {
             throw new BusinessException(SpaceErrorCode.COHORT_NOT_FOUND);
+        }
+    }
+
+    private void ensureLab(Space space) {
+        if (space.getSpaceType() != SpaceType.LAB) {
+            throw new BusinessException(
+                    SpaceErrorCode.LAB_ONLY_COHORT_ASSIGNMENT
+            );
+        }
+    }
+
+    private void validateSpaceAttributes(
+            String name,
+            SpaceType spaceType,
+            Integer capacity
+    ) {
+        if (name == null || name.isBlank()
+                || name.length() > MAX_NAME_LENGTH) {
+            throw new BusinessException(SpaceErrorCode.INVALID_NAME);
+        }
+
+        if (spaceType == null) {
+            throw new BusinessException(SpaceErrorCode.INVALID_TYPE);
+        }
+
+        if (capacity == null || capacity <= 0) {
+            throw new BusinessException(SpaceErrorCode.INVALID_CAPACITY);
         }
     }
 

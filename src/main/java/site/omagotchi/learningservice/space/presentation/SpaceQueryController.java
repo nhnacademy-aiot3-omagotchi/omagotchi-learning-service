@@ -4,11 +4,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
-import site.omagotchi.learningservice.space.application.query.SpaceQueryService;
+import site.omagotchi.learningservice.space.application.SpaceQueryService;
 import site.omagotchi.learningservice.space.presentation.response.SpaceListResponse;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 공간 조회 API Controller.
@@ -26,9 +28,12 @@ public class SpaceQueryController {
      * GET /api/spaces
      */
     @GetMapping
-    public ResponseEntity<List<SpaceListResponse>> getSpaceList() {
+    public ResponseEntity<List<SpaceListResponse>> getSpaceList(
+            @RequestHeader(value = "X-User-Id", required = false)
+            UUID requesterUserId
+    ) {
         List<SpaceListResponse> response =
-                spaceQueryService.getSpaceList()
+                spaceQueryService.getSpaceList(requesterUserId)
                         .stream()
                         .map(SpaceListResponse::from)
                         .toList();

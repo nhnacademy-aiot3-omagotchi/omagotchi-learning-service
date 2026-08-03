@@ -19,7 +19,7 @@ public record AttendanceRecordResult(
         Instant checkedOutAt, // 퇴실 시각
         Integer lateMinutes, // 지각 시각
         Integer earlyLeaveMinutes, // 조퇴 시각
-        Integer version, // 버전
+        Short version, // 버전
         Instant createdAt, // 생성 시각
         Instant updatedAt // 수정 시각
 ) {

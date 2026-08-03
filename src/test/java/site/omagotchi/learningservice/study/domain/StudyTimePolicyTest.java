@@ -9,9 +9,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.Month;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 @DisplayName("학습 시간 정책")
 class StudyTimePolicyTest {
@@ -81,6 +79,32 @@ class StudyTimePolicyTest {
             boolean crosses = StudyTimePolicy.crossesAggregationBoundary(startTime, endTime);
 
             assertTrue(crosses);
+        }
+
+        @Test
+        @DisplayName("교차한 KST 04시 경계 반환")
+        void returnsCrossedBoundary() {
+            Instant startTime = Instant.parse("2000-01-01T18:59:00Z");
+            Instant endTime = Instant.parse("2000-01-01T19:01:00Z");
+
+            Instant boundary = StudyTimePolicy
+                    .findCrossedAggregationBoundary(startTime, endTime)
+                    .orElseThrow();
+
+            assertEquals(Instant.parse("2000-01-01T19:00:00Z"), boundary);
+        }
+
+        @Test
+        @DisplayName("미교차 시 경계 없음")
+        void returnsEmptyWhenBoundaryIsNotCrossed() {
+            Instant startTime = Instant.parse("2000-01-01T18:59:00Z");
+            Instant endTime = Instant.parse("2000-01-01T19:00:00Z");
+
+            boolean empty = StudyTimePolicy
+                    .findCrossedAggregationBoundary(startTime, endTime)
+                    .isEmpty();
+
+            assertTrue(empty);
         }
     }
 }

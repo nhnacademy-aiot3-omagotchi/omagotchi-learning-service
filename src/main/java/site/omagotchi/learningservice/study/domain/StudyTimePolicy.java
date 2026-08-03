@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.Optional;
 
 public final class StudyTimePolicy {
 
@@ -27,6 +28,18 @@ public final class StudyTimePolicy {
 
     public static boolean crossesAggregationBoundary(Instant startTime, Instant endTime) {
         return !aggregationDate(startTime).equals(aggregationDate(endTime.minusNanos(1)));
+    }
+
+    public static Optional<Instant> findCrossedAggregationBoundary(
+            Instant startTime,
+            Instant endTime
+    ) {
+        if (!crossesAggregationBoundary(startTime, endTime)) {
+            return Optional.empty();
+        }
+
+        LocalDate nextAggregationDate = aggregationDate(startTime).plusDays(1);
+        return Optional.of(startOfAggregationDate(nextAggregationDate));
     }
 
     private static Instant startOfAggregationDate(LocalDate aggregationDate) {

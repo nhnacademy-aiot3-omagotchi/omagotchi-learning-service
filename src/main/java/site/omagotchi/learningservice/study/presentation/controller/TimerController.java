@@ -58,8 +58,14 @@ public class TimerController {
             @PathVariable Long cohortId,
             @PathVariable UUID timerRunId
     ) {
-        // TODO: 정상 정지와 공부 기록 확정 Application 연결
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+        timerCommandService.stop(
+                commandId,
+                userId,
+                cohortId,
+                timerRunId
+        );
+
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{timerRunId}/discard")

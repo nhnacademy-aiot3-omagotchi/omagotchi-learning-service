@@ -5,16 +5,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.port.TimerRunQueryRepository;
 import site.omagotchi.learningservice.study.application.port.TimerRunRepository;
 import site.omagotchi.learningservice.study.application.result.TimerStateResult;
+import site.omagotchi.learningservice.study.domain.StudyRecord;
+import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
 import site.omagotchi.learningservice.study.domain.TimerEndReason;
 import site.omagotchi.learningservice.study.domain.TimerRun;
 import site.omagotchi.learningservice.study.domain.TimerTimePolicy;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,6 +31,7 @@ public class TimerCommandService {
     private final CohortAccessService cohortAccessService;
     private final TimerRunRepository timerRunRepository;
     private final TimerRunQueryRepository timerRunQueryRepository;
+    private final StudyRecordRepository studyRecordRepository;
     private final StudyWriteLock studyWriteLock;
     private final Clock clock;
     private final TimerTimePolicy timerTimePolicy;
@@ -82,8 +88,7 @@ public class TimerCommandService {
         TimerEndReason endReason = timerRun.stopOrExpire(currentAt, timerTimePolicy);
 
         if (endReason == TimerEndReason.STOP && timerRun.getMeasuredSeconds() > 0L) {
-            // TODO: KST 04:00 경계 분할 및 StudyRecord 저장 로직 추가 필요
-            //  동일 트랜젝션에서 처리해야 함
+            createStudyRecords(timerRun).forEach(studyRecordRepository::save);
         }
         timerRunRepository.end(timerRun);
     }
@@ -119,5 +124,52 @@ public class TimerCommandService {
         }
 
         return timerRun;
+    }
+
+    private List<StudyRecord> createStudyRecords(TimerRun timerRun) {
+        Instant startedAt = timerRun.getStartedAt();
+        Instant endedAt = timerRun.getEndedAt();
+        long measuredSeconds = timerRun.getMeasuredSeconds();
+
+        return StudyTimePolicy.findCrossedAggregationBoundary(startedAt, endedAt)
+                .map(boundary -> createSplitStudyRecords(
+                        timerRun.getCohortMembershipId(),
+                        startedAt,
+                        boundary,
+                        endedAt,
+                        measuredSeconds
+                ))
+                .orElseGet(() -> List.of(StudyRecord.create(
+                        timerRun.getCohortMembershipId(),
+                        startedAt,
+                        endedAt,
+                        measuredSeconds
+                )));
+    }
+
+    private List<StudyRecord> createSplitStudyRecords(
+            Long cohortMembershipId,
+            Instant startedAt,
+            Instant boundary,
+            Instant endedAt,
+            long measuredSeconds
+    ) {
+        long firstChunkSeconds = Duration.between(startedAt, boundary).getSeconds();
+        long secondChunkSeconds = measuredSeconds - firstChunkSeconds;
+
+        return List.of(
+                StudyRecord.create(
+                        cohortMembershipId,
+                        startedAt,
+                        boundary,
+                        firstChunkSeconds
+                ),
+                StudyRecord.create(
+                        cohortMembershipId,
+                        boundary,
+                        endedAt,
+                        secondChunkSeconds
+                )
+        );
     }
 }

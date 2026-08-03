@@ -18,8 +18,7 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -86,7 +85,7 @@ class TimerControllerTest {
                     .andExpect(jsonPath("$.startedAt").value(STARTED_AT.toString()))
                     .andExpect(jsonPath("$.elapsedSeconds").value(0L));
 
-            verify(timerCommandService).start(COMMAND_ID, USER_ID, COHORT_ID);
+            verify(timerCommandService, times(1)).start(COMMAND_ID, USER_ID, COHORT_ID);
         }
     }
 
@@ -115,7 +114,7 @@ class TimerControllerTest {
                     .andExpect(jsonPath("$.startedAt").value(STARTED_AT.toString()))
                     .andExpect(jsonPath("$.elapsedSeconds").value(125L));
 
-            verify(timerQueryService).getCurrent(USER_ID, COHORT_ID);
+            verify(timerQueryService, times(1)).getCurrent(USER_ID, COHORT_ID);
         }
 
         @Test
@@ -135,7 +134,7 @@ class TimerControllerTest {
                     .andExpect(jsonPath("$.startedAt").value(nullValue()))
                     .andExpect(jsonPath("$.elapsedSeconds").value(0L));
 
-            verify(timerQueryService).getCurrent(USER_ID, COHORT_ID);
+            verify(timerQueryService, times(1)).getCurrent(USER_ID, COHORT_ID);
         }
     }
 
@@ -155,7 +154,7 @@ class TimerControllerTest {
                             .header("X-Command-Id", COMMAND_ID))
                     .andExpect(status().isNoContent());
 
-            verify(timerCommandService).discard(
+            verify(timerCommandService, times(1)).discard(
                     COMMAND_ID,
                     USER_ID,
                     COHORT_ID,

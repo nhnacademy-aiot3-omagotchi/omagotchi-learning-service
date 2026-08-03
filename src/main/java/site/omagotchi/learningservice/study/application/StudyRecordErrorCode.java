@@ -22,6 +22,11 @@ public enum StudyRecordErrorCode implements ErrorCode {
             "STUDY_RECORD_AGGREGATION_BOUNDARY_CROSSED",
             "공부 기록이 날짜 경계와 겹칩니다."
     ),
+    ACTIVE_TIMER_CONFLICT(
+            ErrorType.CONFLICT,
+            "STUDY_RECORD_ACTIVE_TIMER_CONFLICT",
+            "타이머가 실행 중일 때는 수동으로 공부 기록을 추가하거나 변경할 수 없습니다."
+    ),
     VERSION_CONFLICT(
             ErrorType.CONFLICT,
             "STUDY_RECORD_VERSION_CONFLICT",

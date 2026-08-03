@@ -11,6 +11,7 @@ import site.omagotchi.learningservice.study.application.command.UpdateStudyRecor
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
+import site.omagotchi.learningservice.study.application.port.TimerRunQueryRepository;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.StudyRecord;
 import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
@@ -29,6 +30,7 @@ public class StudyRecordCommandService {
     private final CohortAccessService cohortAccessService;
     private final StudyRecordRepository studyRecordRepository;
     private final StudyRecordQueryRepository studyRecordQueryRepository;
+    private final TimerRunQueryRepository timerRunQueryRepository;
     private final Clock clock;
     private final StudyWriteLock studyWriteLock;
 
@@ -52,6 +54,9 @@ public class StudyRecordCommandService {
 
         // cohortMembershipId 단위 transaction-scoped advisory lock 획득
         studyWriteLock.acquire(cohortMembershipId);
+
+        // 실행 중인 타이머가 있는지 검증
+        validateNoActiveTimer(cohortMembershipId);
 
         // 오버랩 검증
         validateNoExistingRecordOverlap(
@@ -89,6 +94,9 @@ public class StudyRecordCommandService {
 
         // cohortMembershipId 단위 transaction-scoped advisory lock 획득
         studyWriteLock.acquire(cohortMembershipId);
+
+        // 실행 중인 타이머가 있는지 검증
+        validateNoActiveTimer(cohortMembershipId);
 
         // 인증된 소속이 소유한 활성 기록만 수정 대상으로 조회
         StudyRecord entity = studyRecordQueryRepository
@@ -151,6 +159,13 @@ public class StudyRecordCommandService {
     }
 
     // ===== Private Methods =====
+
+    private void validateNoActiveTimer(Long cohortMembershipId) {
+        timerRunQueryRepository.findActiveByCohortMembershipId(cohortMembershipId)
+                .ifPresent(timer -> {
+                    throw new BusinessException(StudyRecordErrorCode.ACTIVE_TIMER_CONFLICT);
+                });
+    }
 
     private void validateTimeRange(Instant startInstant, Instant endInstant) {
         // startTime < endTime 검증

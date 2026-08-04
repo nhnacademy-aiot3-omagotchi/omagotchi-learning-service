@@ -53,6 +53,9 @@ management:
     health:
       show-details: never
 
+timer:
+  max-duration: ${TIMER_MAX_DURATION:PT12H}
+
 telegram:
   bot:
     username: ${TELEGRAM_BOT_USERNAME:omagotchi_bot}

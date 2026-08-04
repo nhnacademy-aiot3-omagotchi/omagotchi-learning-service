@@ -5,8 +5,17 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.study.application.StudyRecordCommandService;
 import site.omagotchi.learningservice.study.application.StudyRecordQueryService;
@@ -29,13 +38,13 @@ import java.util.UUID;
 public class StudyRecordController {
 
     private static final String COMMAND_ID_HEADER = "X-Command-Id";
-    private static final String RESOURCE_VERSION_HEADER = "X-RESOURCE-VERSION";
+    private static final String EXPECTED_VERSION_HEADER = "If-Match";
 
     private final StudyRecordCommandService studyRecordCommandService;
     private final StudyRecordQueryService studyRecordQueryService;
 
     @GetMapping("/study-records/{studyRecordId}")
-    public ResponseEntity<StudyRecordResponse> getStudyRecord(
+    public ResponseEntity<StudyRecordResponse> get(
             JwtAuthenticationToken authentication,
             @PathVariable Long cohortId,
             @PathVariable UUID studyRecordId
@@ -55,7 +64,7 @@ public class StudyRecordController {
             JwtAuthenticationToken authentication,
             @PathVariable Long cohortId,
             @RequestParam("date")
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate aggregationDate
+            @DateTimeFormat(pattern = "uuuu-MM-dd") LocalDate aggregationDate
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         DailyStudyRecordsResult result = studyRecordQueryService.getDailyRecords(
@@ -85,7 +94,7 @@ public class StudyRecordController {
     }
 
     @PostMapping("/study-records")
-    public ResponseEntity<StudyRecordResponse> createStudyRecord(
+    public ResponseEntity<StudyRecordResponse> create(
             JwtAuthenticationToken authentication,
             @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @PathVariable Long cohortId,
@@ -103,7 +112,7 @@ public class StudyRecordController {
     }
 
     @PutMapping("/study-records/{studyRecordId}")
-    public ResponseEntity<StudyRecordResponse> updateStudyRecord(
+    public ResponseEntity<StudyRecordResponse> update(
             JwtAuthenticationToken authentication,
             @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @PathVariable Long cohortId,
@@ -123,10 +132,10 @@ public class StudyRecordController {
     }
 
     @DeleteMapping("/study-records/{studyRecordId}")
-    public ResponseEntity<Void> deleteStudyRecord(
+    public ResponseEntity<Void> delete(
             JwtAuthenticationToken authentication,
             @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
-            @RequestHeader(RESOURCE_VERSION_HEADER) Long expectedVersion,
+            @RequestHeader(EXPECTED_VERSION_HEADER) Long expectedVersion,
             @PathVariable Long cohortId,
             @PathVariable UUID studyRecordId
     ) {

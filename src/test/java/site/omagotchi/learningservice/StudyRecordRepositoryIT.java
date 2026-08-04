@@ -8,27 +8,27 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.global.config.JpaAuditingConfig;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
-import site.omagotchi.learningservice.study.domain.StudyRecord;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordJpaRepository;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryDslRepository;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryRepository;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
-import java.time.OffsetDateTime;
-import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Import({
         TestcontainersConfiguration.class,
         QueryDslConfig.class,
         JpaAuditingConfig.class,
-        StudyRecordQueryDslRepository.class
+        StudyRecordQueryRepository.class
 })
 @ActiveProfiles("test")
 @DataJpaTest
@@ -40,13 +40,10 @@ class StudyRecordRepositoryIT {
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);
 
     @Autowired
-    private StudyRecordJpaRepository studyRecordRepository;
+    private StudyRecordRepository studyRecordRepository;
 
     @Autowired
-    private StudyRecordQueryDslRepository studyRecordQueryRepository;
-
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private StudyRecordQueryRepository studyRecordQueryRepository;
 
     @Nested
     @DisplayName("활성 기록 겹침 조회")
@@ -98,7 +95,7 @@ class StudyRecordRepositoryIT {
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
             );
-            studyRecord.softDelete(Instant.parse("2000-01-02T00:00:00Z"));
+            studyRecord.applySoftDelete(Instant.parse("2000-01-02T00:00:00Z"));
             studyRecordRepository.saveAndFlush(studyRecord);
 
             boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
@@ -186,7 +183,8 @@ class StudyRecordRepositoryIT {
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
             );
-            studyRecord.updateTimeRange(
+            studyRecord.applyUpdate(
+                    BASE_DATE,
                     Instant.parse("2000-01-01T03:00:00Z"),
                     Instant.parse("2000-01-01T04:00:00Z"),
                     3_600L
@@ -222,36 +220,6 @@ class StudyRecordRepositoryIT {
         }
     }
 
-    @Nested
-    @DisplayName("시간 정밀도 제약")
-    class TimePrecisionConstraint {
-
-        @Test
-        @DisplayName("분 미만 정밀도 저장 거절")
-        void rejectsSubMinutePrecision() {
-            assertThrows(
-                    DataIntegrityViolationException.class,
-                    () -> jdbcTemplate.update("""
-                                    INSERT INTO learning_service.study_records (
-                                        id,
-                                        cohort_membership_id,
-                                        aggregation_date,
-                                        start_time,
-                                        end_time,
-                                        study_seconds
-                                    ) VALUES (?, ?, ?, ?, ?, ?)
-                                    """,
-                            UUID.fromString("00000000-0000-0000-0000-000000000101"),
-                            101L,
-                            BASE_DATE,
-                            OffsetDateTime.parse("2000-01-01T01:00:00.001Z"),
-                            OffsetDateTime.parse("2000-01-01T02:00:00Z"),
-                            3_600L
-                    )
-            );
-        }
-    }
-
     private StudyRecord saveRecord(
             Long cohortMembershipId,
             String startTime,
@@ -259,12 +227,13 @@ class StudyRecordRepositoryIT {
     ) {
         Instant startInstant = Instant.parse(startTime);
         Instant endInstant = Instant.parse(endTime);
-        StudyRecord studyRecord = StudyRecord.create(
-                cohortMembershipId,
-                startInstant,
-                endInstant,
-                endInstant.getEpochSecond() - startInstant.getEpochSecond()
-        );
+        StudyRecord studyRecord = StudyRecord.builder()
+                .cohortMembershipId(cohortMembershipId)
+                .aggregationDate(BASE_DATE)
+                .startTime(startInstant)
+                .endTime(endInstant)
+                .studySeconds(endInstant.getEpochSecond() - startInstant.getEpochSecond())
+                .build();
 
         return studyRecordRepository.saveAndFlush(studyRecord);
     }

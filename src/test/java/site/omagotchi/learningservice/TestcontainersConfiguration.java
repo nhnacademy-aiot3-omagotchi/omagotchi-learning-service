@@ -12,10 +12,10 @@ import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 @Import(TestJwtKeyConfig.class)
 public class TestcontainersConfiguration {
 
-    @Bean
-    @ServiceConnection
-    PostgreSQLContainer postgresContainer() {
-        return new PostgreSQLContainer(DockerImageName.parse("postgres:18.1"));
-    }
+	@Bean
+	@ServiceConnection
+	PostgreSQLContainer postgresContainer() {
+		return new PostgreSQLContainer(DockerImageName.parse("postgres:18.1"));
+	}
 
 }

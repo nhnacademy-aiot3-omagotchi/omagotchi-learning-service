@@ -1,6 +1,6 @@
 package site.omagotchi.learningservice.study.application.result;
 
-import site.omagotchi.learningservice.study.domain.StudyRecord;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
 
 import java.time.Instant;
 import java.time.LocalDate;

@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.attendance.application;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -21,8 +22,8 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.global.util.DateTimeProvider;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -66,7 +67,7 @@ class AttendanceServiceTest {
     private PresenceIntervalRepository presenceIntervalRepository;
 
     @Mock
-    private Clock clock;
+    private DateTimeProvider dateTimeProvider;
 
     @InjectMocks
     private AttendanceService attendanceService;
@@ -77,7 +78,8 @@ class AttendanceServiceTest {
         Instant checkInAt = Instant.parse("2026-07-29T00:00:00Z");
         givenActiveMembership();
         given(attendancePolicyRepository.findById(COHORT_ID)).willReturn(Optional.of(policy()));
-        given(clock.instant()).willReturn(checkInAt);
+        given(dateTimeProvider.currentInstant()).willReturn(checkInAt);
+        given(dateTimeProvider.calculateAggregationDate(checkInAt)).willReturn(ATTENDANCE_DATE);
         given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
                 .willReturn(Optional.empty());
         given(attendanceRecordRepository.save(any(AttendanceRecord.class)))
@@ -98,7 +100,8 @@ class AttendanceServiceTest {
         Instant checkInAt = Instant.parse("2026-07-29T00:30:00Z");
         givenActiveMembership();
         given(attendancePolicyRepository.findById(COHORT_ID)).willReturn(Optional.of(policy()));
-        given(clock.instant()).willReturn(checkInAt);
+        given(dateTimeProvider.currentInstant()).willReturn(checkInAt);
+        given(dateTimeProvider.calculateAggregationDate(checkInAt)).willReturn(ATTENDANCE_DATE);
         given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
                 .willReturn(Optional.empty());
         given(attendanceRecordRepository.save(any(AttendanceRecord.class)))
@@ -116,7 +119,8 @@ class AttendanceServiceTest {
         Instant checkInAt = Instant.parse("2026-07-29T00:00:00Z");
         givenActiveMembership();
         given(attendancePolicyRepository.findById(COHORT_ID)).willReturn(Optional.of(policy()));
-        given(clock.instant()).willReturn(checkInAt);
+        given(dateTimeProvider.currentInstant()).willReturn(checkInAt);
+        given(dateTimeProvider.calculateAggregationDate(checkInAt)).willReturn(ATTENDANCE_DATE);
         AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
         record.checkIn(checkInAt, AttendanceStatus.PENDING, 0);
         given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
@@ -139,7 +143,8 @@ class AttendanceServiceTest {
         AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
         record.checkIn(checkInAt, AttendanceStatus.PENDING, 0);
         givenActiveMembership();
-        given(clock.instant()).willReturn(checkOutAt);
+        given(dateTimeProvider.currentInstant()).willReturn(checkOutAt);
+        given(dateTimeProvider.calculateAggregationDate(checkOutAt)).willReturn(ATTENDANCE_DATE);
         given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
                 .willReturn(Optional.of(record));
         given(attendancePolicyRepository.findById(COHORT_ID)).willReturn(Optional.of(policy()));

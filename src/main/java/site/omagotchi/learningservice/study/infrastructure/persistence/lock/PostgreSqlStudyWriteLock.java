@@ -5,8 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.study.application.StudyRecordErrorCode;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
+import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
 
 import java.sql.SQLException;
 

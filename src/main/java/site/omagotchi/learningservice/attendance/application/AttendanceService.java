@@ -21,9 +21,8 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
+import site.omagotchi.learningservice.global.util.DateTimeProvider;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -46,15 +45,15 @@ public class AttendanceService {
     private final AttendanceRecordRepository attendanceRecordRepository;
     private final AttendanceChangeLogRepository attendanceChangeLogRepository;
     private final PresenceIntervalRepository presenceIntervalRepository;
-    private final Clock clock;
+    private final DateTimeProvider dateTimeProvider;
 
     // 출석 기록 결과 -> 출석(기수 Id, 유저 Id)
     @Transactional
     public AttendanceRecordResult checkIn(Long cohortId, UUID userId) {
         CohortMembership membership = cohortAccessService.requireActiveMembership(cohortId, userId);
         CohortAttendancePolicy policy = requirePolicy(cohortId);
-        Instant now = clock.instant();
-        LocalDate attendanceDate = StudyTimePolicy.aggregationDate(now);
+        Instant now = dateTimeProvider.currentInstant();
+        var attendanceDate = dateTimeProvider.calculateAggregationDate(now);
 
         AttendanceRecord record = attendanceRecordRepository
                 .findByCohortMembershipIdAndAttendanceDate(membership.getId(), attendanceDate)
@@ -85,8 +84,8 @@ public class AttendanceService {
     @Transactional
     public AttendanceRecordResult checkOut(Long cohortId, UUID userId) {
         CohortMembership membership = cohortAccessService.requireActiveMembership(cohortId, userId);
-        Instant now = clock.instant();
-        LocalDate attendanceDate = StudyTimePolicy.aggregationDate(now);
+        Instant now = dateTimeProvider.currentInstant();
+        var attendanceDate = dateTimeProvider.calculateAggregationDate(now);
 
         AttendanceRecord record = attendanceRecordRepository
                 .findByCohortMembershipIdAndAttendanceDate(membership.getId(), attendanceDate)

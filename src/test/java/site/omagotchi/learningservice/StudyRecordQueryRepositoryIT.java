@@ -10,10 +10,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.global.config.JpaAuditingConfig;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
-import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
-import site.omagotchi.learningservice.study.domain.StudyRecord;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordJpaRepository;
-import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryDslRepository;
+import site.omagotchi.learningservice.study.domain.entity.StudyRecord;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordQueryRepository;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordRepository;
+import site.omagotchi.learningservice.study.infrastructure.persistence.repository.projection.DailyStudySeconds;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
         TestcontainersConfiguration.class,
         QueryDslConfig.class,
         JpaAuditingConfig.class,
-        StudyRecordQueryDslRepository.class
+        StudyRecordQueryRepository.class
 })
 @ActiveProfiles("test")
 @DataJpaTest
@@ -39,10 +39,10 @@ class StudyRecordQueryRepositoryIT {
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);
 
     @Autowired
-    private StudyRecordJpaRepository studyRecordRepository;
+    private StudyRecordRepository studyRecordRepository;
 
     @Autowired
-    private StudyRecordQueryDslRepository studyRecordQueryRepository;
+    private StudyRecordQueryRepository studyRecordQueryRepository;
 
     @Nested
     @DisplayName("활성 기록 단건 조회")
@@ -53,6 +53,7 @@ class StudyRecordQueryRepositoryIT {
         void returnsActiveRecordOwnedByMembership() {
             StudyRecord studyRecord = saveRecord(
                     COHORT_MEMBERSHIP_ID,
+                    BASE_DATE,
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
             );
@@ -77,30 +78,35 @@ class StudyRecordQueryRepositoryIT {
         void returnsOnlyMatchingActiveRecordsInTimeOrder() {
             StudyRecord later = saveRecord(
                     COHORT_MEMBERSHIP_ID,
+                    BASE_DATE,
                     "2000-01-01T03:00:00Z",
                     "2000-01-01T04:00:00Z"
             );
             StudyRecord earlier = saveRecord(
                     COHORT_MEMBERSHIP_ID,
+                    BASE_DATE,
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
             );
             saveRecord(
                     2L,
+                    BASE_DATE,
                     "2000-01-01T05:00:00Z",
                     "2000-01-01T06:00:00Z"
             );
             saveRecord(
                     COHORT_MEMBERSHIP_ID,
+                    BASE_DATE.plusDays(1),
                     "2000-01-02T01:00:00Z",
                     "2000-01-02T02:00:00Z"
             );
             StudyRecord deleted = saveRecord(
                     COHORT_MEMBERSHIP_ID,
+                    BASE_DATE,
                     "2000-01-01T07:00:00Z",
                     "2000-01-01T08:00:00Z"
             );
-            deleted.softDelete(Instant.parse("2000-01-03T00:00:00Z"));
+            deleted.applySoftDelete(Instant.parse("2000-01-03T00:00:00Z"));
             studyRecordRepository.saveAndFlush(deleted);
 
             List<StudyRecord> result = studyRecordQueryRepository.findDailyRecords(
@@ -125,18 +131,20 @@ class StudyRecordQueryRepositoryIT {
         void returnsEmptyListWhenNoActiveRecordExistsInRequestedDateRange() {
             saveRecord(
                     COHORT_MEMBERSHIP_ID,
+                    BASE_DATE.minusDays(1),
                     "1999-12-31T01:00:00Z",
                     "1999-12-31T02:00:00Z"
             );
             StudyRecord deleted = saveRecord(
                     COHORT_MEMBERSHIP_ID,
+                    BASE_DATE,
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
             );
-            deleted.softDelete(Instant.parse("2000-01-02T00:00:00Z"));
+            deleted.applySoftDelete(Instant.parse("2000-01-02T00:00:00Z"));
             studyRecordRepository.saveAndFlush(deleted);
 
-            List<DailyStudySecondsResult> result = studyRecordQueryRepository.findDailyStudySeconds(
+            List<DailyStudySeconds> result = studyRecordQueryRepository.findDailyStudySeconds(
                     COHORT_MEMBERSHIP_ID,
                     BASE_DATE,
                     BASE_DATE.plusDays(1)
@@ -150,63 +158,71 @@ class StudyRecordQueryRepositoryIT {
         void sumsOnlyActiveRecordsInRequestedDateRange() {
             saveRecord(
                     COHORT_MEMBERSHIP_ID,
+                    BASE_DATE,
                     "2000-01-01T01:00:00Z",
                     "2000-01-01T02:00:00Z"
             );
             saveRecord(
                     COHORT_MEMBERSHIP_ID,
+                    BASE_DATE,
                     "2000-01-01T03:00:00Z",
                     "2000-01-01T05:00:00Z"
             );
             saveRecord(
                     COHORT_MEMBERSHIP_ID,
+                    BASE_DATE.plusDays(1),
                     "2000-01-02T01:00:00Z",
                     "2000-01-02T01:30:00Z"
             );
             saveRecord(
                     2L,
+                    BASE_DATE,
                     "2000-01-01T06:00:00Z",
                     "2000-01-01T07:00:00Z"
             );
             StudyRecord deleted = saveRecord(
                     COHORT_MEMBERSHIP_ID,
+                    BASE_DATE.plusDays(1),
                     "2000-01-02T02:00:00Z",
                     "2000-01-02T03:00:00Z"
             );
-            deleted.softDelete(Instant.parse("2000-01-03T00:00:00Z"));
+            deleted.applySoftDelete(Instant.parse("2000-01-03T00:00:00Z"));
             studyRecordRepository.saveAndFlush(deleted);
             saveRecord(
                     COHORT_MEMBERSHIP_ID,
+                    BASE_DATE.plusDays(2),
                     "2000-01-03T01:00:00Z",
                     "2000-01-03T02:00:00Z"
             );
 
-            List<DailyStudySecondsResult> result = studyRecordQueryRepository.findDailyStudySeconds(
+            List<DailyStudySeconds> result = studyRecordQueryRepository.findDailyStudySeconds(
                     COHORT_MEMBERSHIP_ID,
                     BASE_DATE,
                     BASE_DATE.plusDays(1)
             );
 
             assertEquals(List.of(
-                    new DailyStudySecondsResult(BASE_DATE, 10_800L),
-                    new DailyStudySecondsResult(BASE_DATE.plusDays(1), 1_800L)
+                    new DailyStudySeconds(BASE_DATE, 10_800L),
+                    new DailyStudySeconds(BASE_DATE.plusDays(1), 1_800L)
             ), result);
         }
     }
 
     private StudyRecord saveRecord(
             Long cohortMembershipId,
+            LocalDate aggregationDate,
             String startTime,
             String endTime
     ) {
         Instant startInstant = Instant.parse(startTime);
         Instant endInstant = Instant.parse(endTime);
-        StudyRecord studyRecord = StudyRecord.create(
-                cohortMembershipId,
-                startInstant,
-                endInstant,
-                endInstant.getEpochSecond() - startInstant.getEpochSecond()
-        );
+        StudyRecord studyRecord = StudyRecord.builder()
+                .cohortMembershipId(cohortMembershipId)
+                .aggregationDate(aggregationDate)
+                .startTime(startInstant)
+                .endTime(endInstant)
+                .studySeconds(endInstant.getEpochSecond() - startInstant.getEpochSecond())
+                .build();
 
         return studyRecordRepository.saveAndFlush(studyRecord);
     }

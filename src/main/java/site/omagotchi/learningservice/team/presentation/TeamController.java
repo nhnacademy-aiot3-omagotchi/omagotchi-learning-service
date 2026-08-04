@@ -27,7 +27,7 @@ import java.util.UUID;
  * JWT 인증이 붙으면 이 파라미터는 {@code @AuthenticationPrincipal}로 교체된다.</p>
  */
 @RestController
-@RequestMapping("/api/teams")
+@RequestMapping("/api/v1/teams")
 @RequiredArgsConstructor
 public class TeamController {
 
@@ -70,9 +70,9 @@ public class TeamController {
      * <p>응답에는 내부 식별자(user_id, cohort_membership_id)가 없다. 팀원은 팀 모듈이
      * 소유한 {@code memberId}로 식별되며, 제외 요청에 그 값을 그대로 쓰면 된다.</p>
      */
-    @GetMapping("/{teamId}")
+    @GetMapping("/{team-id}")
     public TeamDetailResponse getTeam(
-            @PathVariable Long teamId,
+            @PathVariable("team-id") Long teamId,
             @RequestHeader("X-User-Id") UUID userId
     ) {
         return teamService.getTeam(teamId, userId);
@@ -85,10 +85,10 @@ public class TeamController {
      * 서버가 팀의 기수로 대상의 활성 멤버십을 역조회한다 — 그 조회가 실패하는 것이
      * 곧 기수 불일치(GR-22)다.</p>
      */
-    @PostMapping("/{teamId}/members")
+    @PostMapping("/{team-id}/members")
     @ResponseStatus(HttpStatus.CREATED)
     public void addMember(
-            @PathVariable Long teamId,
+            @PathVariable("team-id") Long teamId,
             @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody AddTeamMemberRequest request
             ) {
@@ -104,11 +104,11 @@ public class TeamController {
      * <p>MASTER 본인은 제외 대상이 될 수 없다(400). 마스터가 팀을 떠나려면 위임 후 탈퇴,
      * 또는 단독일 때 탈퇴(=팀 해체)를 거쳐야 한다.</p>
      */
-    @DeleteMapping("/{teamId}/members/{memberId}")
+    @DeleteMapping("/{team-id}/members/{member-id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void kickMember(
-            @PathVariable Long teamId,
-            @PathVariable Long memberId,
+            @PathVariable("team-id") Long teamId,
+            @PathVariable("member-id") Long memberId,
             @RequestHeader("X-User-Id") UUID userId
     ) {
         teamMemberService.kickMember(teamId, memberId, userId);
@@ -123,10 +123,10 @@ public class TeamController {
      * <p>{@code DELETE /members/me}를 쓰지 않는 이유는 memberId가 Long이라
      * "me" 리터럴이 경로 변환에서 깨지기 때문이다.</p>
      */
-    @PostMapping("/{teamId}/leave")
+    @PostMapping("/{team-id}/leave")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void leave(
-            @PathVariable Long teamId,
+            @PathVariable("team-id") Long teamId,
             @RequestHeader("X-User-Id") UUID userId
     ) {
         teamMemberService.leave(teamId, userId);

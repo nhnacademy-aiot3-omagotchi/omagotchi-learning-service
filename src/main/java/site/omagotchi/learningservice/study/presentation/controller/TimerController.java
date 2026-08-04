@@ -3,7 +3,9 @@ package site.omagotchi.learningservice.study.presentation.controller;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
+import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.study.application.TimerCommandService;
 import site.omagotchi.learningservice.study.application.TimerQueryService;
 import site.omagotchi.learningservice.study.application.result.TimerStateResult;
@@ -17,7 +19,6 @@ import java.util.UUID;
 @RequestMapping("/api/v1/cohorts/{cohortId}/timer")
 public class TimerController {
 
-    private static final String USER_ID_HEADER = "X-User-Id";
     private static final String COMMAND_ID_HEADER = "X-Command-Id";
 
     private final TimerCommandService timerCommandService;
@@ -27,13 +28,14 @@ public class TimerController {
 
     @PostMapping("/start")
     public ResponseEntity<StartTimerResponse> startTimer(
-            @RequestHeader(USER_ID_HEADER) UUID userId,
+            JwtAuthenticationToken authentication,
             @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @PathVariable Long cohortId
     ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
         TimerStateResult result = timerCommandService.start(
                 commandId,
-                userId,
+                user.userId(),
                 cohortId
         );
 
@@ -43,24 +45,26 @@ public class TimerController {
 
     @GetMapping
     public ResponseEntity<CurrentTimerResponse> getCurrentTimer(
-            @RequestHeader(USER_ID_HEADER) UUID userId,
+            JwtAuthenticationToken authentication,
             @PathVariable Long cohortId
     ) {
-        TimerStateResult result = timerQueryService.getCurrent(userId, cohortId);
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        TimerStateResult result = timerQueryService.getCurrent(user.userId(), cohortId);
 
         return ResponseEntity.ok(CurrentTimerResponse.from(result));
     }
 
     @PostMapping("/{timerRunId}/stop")
     public ResponseEntity<Void> stopTimer(
-            @RequestHeader(USER_ID_HEADER) UUID userId,
+            JwtAuthenticationToken authentication,
             @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @PathVariable Long cohortId,
             @PathVariable UUID timerRunId
     ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
         timerCommandService.stop(
                 commandId,
-                userId,
+                user.userId(),
                 cohortId,
                 timerRunId
         );
@@ -70,14 +74,15 @@ public class TimerController {
 
     @PostMapping("/{timerRunId}/discard")
     public ResponseEntity<Void> discardTimer(
-            @RequestHeader(USER_ID_HEADER) UUID userId,
+            JwtAuthenticationToken authentication,
             @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @PathVariable Long cohortId,
             @PathVariable UUID timerRunId
     ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
         timerCommandService.discard(
                 commandId,
-                userId,
+                user.userId(),
                 cohortId,
                 timerRunId
         );

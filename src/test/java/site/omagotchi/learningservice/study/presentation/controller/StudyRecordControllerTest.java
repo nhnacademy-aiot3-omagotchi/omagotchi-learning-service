@@ -9,8 +9,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.http.MediaType;
@@ -88,7 +86,7 @@ class StudyRecordControllerTest {
                             COHORT_ID,
                             STUDY_RECORD_ID
                     )
-                            .header("X-User-Id", USER_ID))
+                            .principal(authentication()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.id").value(STUDY_RECORD_ID.toString()));
         }
@@ -255,14 +253,14 @@ class StudyRecordControllerTest {
         @DisplayName("정상 처리")
         void createsStudyRecord() throws Exception {
             StudyRecordResult result = studyRecordResult();
-            given(studyRecordCommandService.create(eq(COMMAND_ID), eq(USER_ID), eq(COHORT_ID), any()))
+            given(studyRecordCommandService.create(eq(COMMAND_ID), any(), any(), any()))
                     .willReturn(result);
 
             mockMvc.perform(post(
                             "/api/v1/cohorts/{cohortId}/study-records",
                             COHORT_ID
                     )
-                            .header("X-User-Id", USER_ID)
+                            .principal(authentication())
                             .header("X-Command-Id", COMMAND_ID)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
@@ -289,7 +287,7 @@ class StudyRecordControllerTest {
                             "/api/v1/cohorts/{cohortId}/study-records",
                             COHORT_ID
                     )
-                            .header("X-User-Id", USER_ID)
+                            .principal(authentication())
                             .header("X-Command-Id", COMMAND_ID)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
@@ -328,7 +326,7 @@ class StudyRecordControllerTest {
                             COHORT_ID,
                             STUDY_RECORD_ID
                     )
-                            .header("X-User-Id", USER_ID)
+                            .principal(authentication())
                             .header("X-Command-Id", COMMAND_ID)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
@@ -364,7 +362,7 @@ class StudyRecordControllerTest {
                             COHORT_ID,
                             STUDY_RECORD_ID
                     )
-                            .header("X-User-Id", USER_ID)
+                            .principal(authentication())
                             .header("X-Command-Id", COMMAND_ID)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
@@ -395,7 +393,7 @@ class StudyRecordControllerTest {
                             COHORT_ID,
                             STUDY_RECORD_ID
                     )
-                            .header("X-User-Id", USER_ID)
+                            .principal(authentication())
                             .header("X-Command-Id", COMMAND_ID)
                             .header("X-RESOURCE-VERSION", EXPECTED_VERSION))
                     .andExpect(status().isNoContent());

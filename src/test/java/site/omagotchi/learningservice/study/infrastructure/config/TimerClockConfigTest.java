@@ -11,7 +11,7 @@ import java.time.Instant;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @DisplayName("타이머 시간 설정")
-class TimerTimeConfigTest {
+class TimerClockConfigTest {
 
     private static final Instant STARTED_AT = Instant.parse("2000-01-01T00:00:00Z");
 

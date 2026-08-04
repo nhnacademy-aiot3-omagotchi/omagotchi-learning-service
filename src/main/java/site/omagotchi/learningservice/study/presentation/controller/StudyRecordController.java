@@ -86,7 +86,7 @@ public class StudyRecordController {
 
     @PostMapping("/study-records")
     public ResponseEntity<StudyRecordResponse> createStudyRecord(
-            @RequestHeader(USER_ID_HEADER) UUID userId,
+            JwtAuthenticationToken authentication,
             @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @PathVariable Long cohortId,
             @Valid @RequestBody CreateStudyRecordRequest request

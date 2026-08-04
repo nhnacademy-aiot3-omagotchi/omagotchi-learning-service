@@ -44,6 +44,11 @@ public interface CohortMembershipRepository extends
 
     List<CohortMembership> findByUserIdOrderByRequestedAtDesc(UUID userId);
 
+    Optional<CohortMembership> findFirstByUserIdAndStatusAndEndedAtIsNullOrderByRequestedAtDesc(
+            UUID userId,
+            CohortMembershipStatus status
+    );
+
     List<CohortMembership> findByCohortIdAndStatusOrderByRequestedAtAsc(
             Long cohortId,
             CohortMembershipStatus status

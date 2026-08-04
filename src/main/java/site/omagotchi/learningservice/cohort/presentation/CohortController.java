@@ -113,6 +113,15 @@ public class CohortController {
         return membershipService.join(request.toCommand(), user.userId());
     }
 
+    @PostMapping("/applications")
+    public CohortMembershipResponse apply(
+            JwtAuthenticationToken authentication,
+            @Valid @RequestBody CreateJoinRequest request
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        return membershipService.join(request.toCommand(), user.userId());
+    }
+
     @GetMapping("/join-requests/me")
     public List<CohortMembershipResponse> getMyJoinRequests(
             JwtAuthenticationToken authentication

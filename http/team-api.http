@@ -1,4 +1,4 @@
-@baseUrl = http://localhost:8084/api
+@baseUrl = http://localhost:8084/api/v1
 
 ### cohort 1에만 ACTIVE 멤버십. 1번에서 팀을 만들고 이후 마스터 역할을 계속 맡는다.
 @master = 11111111-1111-1111-1111-111111111111

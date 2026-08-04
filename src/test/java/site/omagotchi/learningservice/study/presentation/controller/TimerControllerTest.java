@@ -12,6 +12,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.study.application.TimerCommandService;
 import site.omagotchi.learningservice.study.application.TimerQueryService;
 import site.omagotchi.learningservice.study.application.result.TimerStateResult;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -76,7 +78,7 @@ class TimerControllerTest {
                             "/api/v1/cohorts/{cohortId}/timer/start",
                             COHORT_ID
                     )
-                            .header("X-User-Id", USER_ID)
+                            .principal(authentication())
                             .header("X-Command-Id", COMMAND_ID))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.resultCode").value("TIMER_STARTED"))
@@ -107,7 +109,7 @@ class TimerControllerTest {
                             "/api/v1/cohorts/{cohortId}/timer",
                             COHORT_ID
                     )
-                            .header("X-User-Id", USER_ID))
+                            .principal(authentication()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.state").value("RUNNING"))
                     .andExpect(jsonPath("$.timerRunId").value(TIMER_RUN_ID.toString()))
@@ -127,7 +129,7 @@ class TimerControllerTest {
                             "/api/v1/cohorts/{cohortId}/timer",
                             COHORT_ID
                     )
-                            .header("X-User-Id", USER_ID))
+                            .principal(authentication()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.state").value("STOPPED"))
                     .andExpect(jsonPath("$.timerRunId").value(nullValue()))
@@ -150,7 +152,7 @@ class TimerControllerTest {
                             COHORT_ID,
                             TIMER_RUN_ID
                     )
-                            .header("X-User-Id", USER_ID)
+                            .principal(authentication())
                             .header("X-Command-Id", COMMAND_ID))
                     .andExpect(status().isNoContent());
 
@@ -175,7 +177,7 @@ class TimerControllerTest {
                             COHORT_ID,
                             TIMER_RUN_ID
                     )
-                            .header("X-User-Id", USER_ID)
+                            .principal(authentication())
                             .header("X-Command-Id", COMMAND_ID))
                     .andExpect(status().isNoContent());
 
@@ -186,5 +188,17 @@ class TimerControllerTest {
                     TIMER_RUN_ID
             );
         }
+    }
+
+    private JwtAuthenticationToken authentication() {
+        Instant now = Instant.now();
+        Jwt jwt = Jwt.withTokenValue("test-token")
+                .header("alg", "RS256")
+                .subject(USER_ID.toString())
+                .claim("role", "USER")
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(300))
+                .build();
+        return new JwtAuthenticationToken(jwt);
     }
 }

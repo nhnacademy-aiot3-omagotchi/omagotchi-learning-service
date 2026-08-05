@@ -34,6 +34,7 @@ class SpaceListResponseTest {
                 SpaceUsageStatus.OCCUPIED,
                 expiresAt,
                 1800L,
+                true,
                 21L,
                 31L,
                 occupierUserId,
@@ -50,6 +51,7 @@ class SpaceListResponseTest {
         assertThat(response.cohortId()).isEqualTo(11L);
         assertThat(response.occupancyExpiresAt()).isEqualTo(expiresAt);
         assertThat(response.remainingTimeSeconds()).isEqualTo(1800L);
+        assertThat(response.occupiedBySameCohort()).isTrue();
         assertThat(response.occupancyCohortId()).isEqualTo(21L);
         assertThat(response.occupierMembershipId()).isEqualTo(31L);
         assertThat(response.occupierUserId()).isEqualTo(occupierUserId);

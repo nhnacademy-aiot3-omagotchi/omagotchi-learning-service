@@ -94,7 +94,11 @@ class SpaceApiIntegrationTest {
                 .andExpect(jsonPath(
                         "$[?(@.spaceId == %d)].remainingTimeSeconds"
                                 .formatted(spaceId)
-                ).value(contains((Object) null)));
+                ).value(contains((Object) null)))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupiedBySameCohort"
+                                .formatted(spaceId)
+                ).value(contains(false)));
     }
 
     @Test
@@ -140,7 +144,27 @@ class SpaceApiIntegrationTest {
                 .andExpect(jsonPath(
                         "$[?(@.spaceId == %d)].remainingTimeSeconds"
                                 .formatted(spaceId)
-                ).value(contains(1800)));
+                ).value(contains(1800)))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupiedBySameCohort"
+                                .formatted(spaceId)
+                ).value(contains(false)))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupancyCohortId"
+                                .formatted(spaceId)
+                ).value(contains((Object) null)))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupierMembershipId"
+                                .formatted(spaceId)
+                ).value(contains((Object) null)))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupierUserId"
+                                .formatted(spaceId)
+                ).value(contains((Object) null)))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].participantUserIds"
+                                .formatted(spaceId)
+                ).value(contains((Object) null)));
     }
 
     @Test
@@ -164,6 +188,14 @@ class SpaceApiIntegrationTest {
                 .andExpect(jsonPath(
                         "$[?(@.spaceId == %d)].status".formatted(spaceId)
                 ).value(contains("OCCUPIED")))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupiedBySameCohort"
+                                .formatted(spaceId)
+                ).value(contains(true)))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].remainingTimeSeconds"
+                                .formatted(spaceId)
+                ).value(contains(1800)))
                 .andExpect(jsonPath(
                         "$[?(@.spaceId == %d)].occupancyCohortId"
                                 .formatted(spaceId)
@@ -201,6 +233,10 @@ class SpaceApiIntegrationTest {
                 .andExpect(jsonPath(
                         "$[?(@.spaceId == %d)].status".formatted(spaceId)
                 ).value(contains("OCCUPIED")))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupiedBySameCohort"
+                                .formatted(spaceId)
+                ).value(contains(false)))
                 .andExpect(jsonPath(
                         "$[?(@.spaceId == %d)].occupancyExpiresAt"
                                 .formatted(spaceId)
@@ -252,7 +288,47 @@ class SpaceApiIntegrationTest {
                 ).value(contains("시설 점검")))
                 .andExpect(jsonPath(
                         "$[?(@.spaceId == %d)].status".formatted(spaceId)
-                ).value(contains("UNAVAILABLE")));
+                ).value(contains("UNAVAILABLE")))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupiedBySameCohort"
+                                .formatted(spaceId)
+                ).value(contains(false)));
+    }
+
+    @Test
+    void labAndStudyRemainNotApplicableAndNotOccupiedBySameCohort()
+            throws Exception {
+        Long labId = insertTypedSpace(
+                "통합 조회 실습실",
+                "LAB",
+                "ACTIVE",
+                null,
+                null
+        );
+        Long studyId = insertTypedSpace(
+                "통합 조회 학습 공간",
+                "STUDY",
+                "ACTIVE",
+                null,
+                null
+        );
+
+        mockMvc.perform(get("/api/spaces"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].status".formatted(labId)
+                ).value(contains("NOT_APPLICABLE")))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupiedBySameCohort"
+                                .formatted(labId)
+                ).value(contains(false)))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].status".formatted(studyId)
+                ).value(contains("NOT_APPLICABLE")))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupiedBySameCohort"
+                                .formatted(studyId)
+                ).value(contains(false)));
     }
 
     @Test
@@ -1120,7 +1196,11 @@ class SpaceApiIntegrationTest {
                 .andExpect(jsonPath(
                         "$[?(@.spaceId == %d)].occupancyExpiresAt"
                                 .formatted(spaceId)
-                ).value(contains((Object) null)));
+                ).value(contains((Object) null)))
+                .andExpect(jsonPath(
+                        "$[?(@.spaceId == %d)].occupiedBySameCohort"
+                                .formatted(spaceId)
+                ).value(contains(false)));
     }
 
     private Long insertSpace(

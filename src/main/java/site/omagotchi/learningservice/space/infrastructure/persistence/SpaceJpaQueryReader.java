@@ -168,6 +168,7 @@ public class SpaceJpaQueryReader implements SpaceQueryPort {
                 status,
                 occupancyExpiresAt,
                 remainingTimeSeconds,
+                canViewOccupancyDetails,
                 canViewOccupancyDetails
                         ? occupancy.getOccupierCohortId()
                         : null,

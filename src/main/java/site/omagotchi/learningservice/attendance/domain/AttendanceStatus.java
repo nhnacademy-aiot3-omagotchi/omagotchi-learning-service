@@ -9,5 +9,6 @@ public enum AttendanceStatus {
     LATE, // 지각
     ABSENT, // 결석
     LEFT_EARLY, // 조퇴
+    LATE_LEFT_EARLY, // 지각 + 조퇴
     MISSING_CHECK_OUT // 퇴실 체크 깜빡함
 }

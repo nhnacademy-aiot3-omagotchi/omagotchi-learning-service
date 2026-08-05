@@ -6,6 +6,8 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.command.ChangeAttendanceStatusCommand;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordResult;
 import site.omagotchi.learningservice.attendance.domain.AttendanceChangeLog;
+import site.omagotchi.learningservice.attendance.domain.AttendanceDecision;
+import site.omagotchi.learningservice.attendance.domain.AttendanceDecisionPolicy;
 import site.omagotchi.learningservice.attendance.domain.AttendanceErrorCode;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
@@ -23,11 +25,7 @@ import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepo
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.util.DateTimeProvider;
 
-import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -56,19 +54,14 @@ public class AttendanceService {
         var attendanceDate = dateTimeProvider.calculateAggregationDate(now);
 
         AttendanceRecord record = attendanceRecordRepository
-                .findByCohortMembershipIdAndAttendanceDate(membership.getId(), attendanceDate)
+                .findWithLockByCohortMembershipIdAndAttendanceDate(membership.getId(), attendanceDate)
                 .orElseGet(() -> AttendanceRecord.start(membership.getId(), attendanceDate));
 
         if (record.getCheckedInAt() != null) {
-            throw new BusinessException(AttendanceErrorCode.ATTENDANCE_ALREADY_CHECKED_IN);
+            return AttendanceRecordResult.from(record);
         }
-        // 지각 몇분 계산 로직
-        int lateMinutes = calculateLateMinutes(policy, now);
-        record.checkIn(
-                now,
-                lateMinutes > 0 ? AttendanceStatus.LATE : AttendanceStatus.PENDING,
-                lateMinutes
-        );
+        AttendanceDecision decision = AttendanceDecisionPolicy.decideCheckIn(policy, now);
+        record.checkIn(now, decision.status(), decision.lateMinutes());
 
         AttendanceRecord savedRecord = attendanceRecordRepository.save(record);
         presenceIntervalRepository.save(PresenceInterval.start(
@@ -88,20 +81,26 @@ public class AttendanceService {
         var attendanceDate = dateTimeProvider.calculateAggregationDate(now);
 
         AttendanceRecord record = attendanceRecordRepository
-                .findByCohortMembershipIdAndAttendanceDate(membership.getId(), attendanceDate)
+                .findWithLockByCohortMembershipIdAndAttendanceDate(membership.getId(), attendanceDate)
                 .orElseThrow(() -> new BusinessException(AttendanceErrorCode.ATTENDANCE_RECORD_NOT_FOUND));
 
         if (record.getCheckedInAt() == null) {
             throw new BusinessException(AttendanceErrorCode.ATTENDANCE_CHECK_IN_REQUIRED);
         }
         if (record.getCheckedOutAt() != null) {
-            throw new BusinessException(AttendanceErrorCode.ATTENDANCE_ALREADY_CHECKED_OUT);
+            return AttendanceRecordResult.from(record);
         }
 
         CohortAttendancePolicy policy = requirePolicy(cohortId);
-        int earlyLeaveMinutes = calculateEarlyLeaveMinutes(policy, now);
-        AttendanceStatus status = resolveCompletedStatus(record.getLateMinutes(), earlyLeaveMinutes);
-        record.checkOut(now, status, earlyLeaveMinutes);
+        List<PresenceInterval> intervals = presenceIntervalRepository.findByAttendanceIdOrderByStartedAtAsc(record.getId());
+        AttendanceDecision decision = AttendanceDecisionPolicy.decide(
+                policy,
+                record.getCheckedInAt(),
+                now,
+                intervals
+        );
+        record.checkOut(now, decision.status(), decision.earlyLeaveMinutes());
+        record.applyDecision(decision);
         presenceIntervalRepository.findFirstByAttendanceIdAndEndedAtIsNullOrderByStartedAtDesc(record.getId())
                 .ifPresent(interval -> interval.end(now));
 
@@ -169,31 +168,5 @@ public class AttendanceService {
     private CohortAttendancePolicy requirePolicy(Long cohortId) {
         return attendancePolicyRepository.findById(cohortId)
                 .orElseThrow(() -> new BusinessException(AttendanceErrorCode.ATTENDANCE_POLICY_NOT_FOUND));
-    }
-
-    private int calculateLateMinutes(CohortAttendancePolicy policy, Instant checkedInAt) {
-        LocalTime localTime = checkedInAt.atZone(ZoneId.of(policy.getTimezone())).toLocalTime();
-        if (!localTime.isAfter(policy.getScheduledStartTime())) {
-            return 0;
-        }
-        return (int) Duration.between(policy.getScheduledStartTime(), localTime).toMinutes();
-    }
-
-    private int calculateEarlyLeaveMinutes(CohortAttendancePolicy policy, Instant checkedOutAt) {
-        LocalTime localTime = checkedOutAt.atZone(ZoneId.of(policy.getTimezone())).toLocalTime();
-        if (!localTime.isBefore(policy.getScheduledEndTime())) {
-            return 0;
-        }
-        return (int) Duration.between(localTime, policy.getScheduledEndTime()).toMinutes();
-    }
-
-    private AttendanceStatus resolveCompletedStatus(int lateMinutes, int earlyLeaveMinutes) {
-        if (lateMinutes > 0) {
-            return AttendanceStatus.LATE;
-        }
-        if (earlyLeaveMinutes > 0) {
-            return AttendanceStatus.LEFT_EARLY;
-        }
-        return AttendanceStatus.PRESENT;
     }
 }

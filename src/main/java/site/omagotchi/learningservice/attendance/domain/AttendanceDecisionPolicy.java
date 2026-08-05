@@ -55,14 +55,14 @@ public class AttendanceDecisionPolicy {
         if (!checkedInTime.isAfter(policy.getScheduledStartTime())) {
             return 0;
         }
-        return (int) Duration.between(policy.getScheduledStartTime(), checkedInTime).toMinutes();
+        return ceilToMinutes(Duration.between(policy.getScheduledStartTime(), checkedInTime));
     }
 
     private static int calculateEarlyLeaveMinutes(CohortAttendancePolicy policy, LocalTime checkedOutTime) {
         if (!checkedOutTime.isBefore(policy.getScheduledEndTime())) {
             return 0;
         }
-        return (int) Duration.between(checkedOutTime, policy.getScheduledEndTime()).toMinutes();
+        return ceilToMinutes(Duration.between(checkedOutTime, policy.getScheduledEndTime()));
     }
 
     private static boolean hasInvalidAway(
@@ -90,8 +90,16 @@ public class AttendanceDecisionPolicy {
         if (!returnedAt.isBefore(policy.getScheduledEndTime())) {
             return true;
         }
-        long awayMinutes = Duration.between(interval.getStartedAt(), interval.getEndedAt()).toMinutes();
+        int awayMinutes = ceilToMinutes(Duration.between(interval.getStartedAt(), interval.getEndedAt()));
         return awayMinutes > policy.getAllowedAwayMinutes();
+    }
+
+    private static int ceilToMinutes(Duration duration) {
+        long seconds = duration.getSeconds();
+        if (duration.getNano() > 0) {
+            seconds++;
+        }
+        return Math.toIntExact((seconds + 59) / 60);
     }
 
     private static AttendanceStatus resolveStatus(int lateMinutes, int earlyLeaveMinutes) {

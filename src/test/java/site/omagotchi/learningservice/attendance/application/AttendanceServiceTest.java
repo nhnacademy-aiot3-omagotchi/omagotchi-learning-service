@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.attendance.application;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -34,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -89,6 +91,15 @@ class AttendanceServiceTest {
         assertEquals(AttendanceStatus.PENDING, result.finalStatus());
         assertEquals(checkInAt, result.checkedInAt());
         assertEquals(0, result.lateMinutes());
+        InOrder inOrder = inOrder(membershipRepository, attendanceRecordRepository);
+        inOrder.verify(membershipRepository).findWithLockByIdAndStatus(
+                MEMBERSHIP_ID,
+                CohortMembershipStatus.ACTIVE
+        );
+        inOrder.verify(attendanceRecordRepository).findWithLockByCohortMembershipIdAndAttendanceDate(
+                MEMBERSHIP_ID,
+                ATTENDANCE_DATE
+        );
         verify(presenceIntervalRepository).save(any());
     }
 
@@ -212,6 +223,8 @@ class AttendanceServiceTest {
     private void givenActiveMembership() {
         given(cohortAccessService.requireActiveMembership(COHORT_ID, USER_ID))
                 .willReturn(activeMembership());
+        given(membershipRepository.findWithLockByIdAndStatus(MEMBERSHIP_ID, CohortMembershipStatus.ACTIVE))
+                .willReturn(Optional.of(activeMembership()));
     }
 
     private CohortMembership activeMembership() {

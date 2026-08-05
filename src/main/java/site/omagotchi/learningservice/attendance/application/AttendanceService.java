@@ -18,6 +18,7 @@ import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecord
 import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
+import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
@@ -51,6 +52,7 @@ public class AttendanceService {
     @Transactional
     public AttendanceRecordResult checkIn(Long cohortId, UUID userId) {
         CohortMembership membership = cohortAccessService.requireActiveMembership(cohortId, userId);
+        lockActiveMembership(membership.getId());
         CohortAttendancePolicy policy = requirePolicy(cohortId);
         Instant now = clock.instant();
         LocalDate attendanceDate = StudyTimePolicy.aggregationDate(now);
@@ -79,6 +81,7 @@ public class AttendanceService {
     @Transactional
     public AttendanceRecordResult checkOut(Long cohortId, UUID userId) {
         CohortMembership membership = cohortAccessService.requireActiveMembership(cohortId, userId);
+        lockActiveMembership(membership.getId());
         Instant now = clock.instant();
         LocalDate attendanceDate = StudyTimePolicy.aggregationDate(now);
 
@@ -170,5 +173,10 @@ public class AttendanceService {
     private CohortAttendancePolicy requirePolicy(Long cohortId) {
         return attendancePolicyRepository.findById(cohortId)
                 .orElseThrow(() -> new BusinessException(AttendanceErrorCode.ATTENDANCE_POLICY_NOT_FOUND));
+    }
+
+    private void lockActiveMembership(Long membershipId) {
+        membershipRepository.findWithLockByIdAndStatus(membershipId, CohortMembershipStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_MEMBERSHIP_NOT_FOUND));
     }
 }

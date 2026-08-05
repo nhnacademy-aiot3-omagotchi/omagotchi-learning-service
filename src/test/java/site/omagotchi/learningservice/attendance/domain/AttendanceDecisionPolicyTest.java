@@ -89,6 +89,36 @@ class AttendanceDecisionPolicyTest {
     }
 
     @Test
+    @DisplayName("1초 지각은 1분 지각")
+    void lateOneMinuteWhenCheckInOneSecondAfterStart() {
+        AttendanceDecision decision = AttendanceDecisionPolicy.decideCheckIn(
+                policy(60),
+                time("09:00:01")
+        );
+
+        assertAll(
+                () -> assertEquals(AttendanceStatus.LATE, decision.status()),
+                () -> assertEquals(1, decision.lateMinutes())
+        );
+    }
+
+    @Test
+    @DisplayName("1초 조퇴는 1분 조퇴")
+    void leftEarlyOneMinuteWhenCheckOutOneSecondBeforeEnd() {
+        AttendanceDecision decision = AttendanceDecisionPolicy.decide(
+                policy(60),
+                time("08:50"),
+                time("17:59:59"),
+                List.of()
+        );
+
+        assertAll(
+                () -> assertEquals(AttendanceStatus.LEFT_EARLY, decision.status()),
+                () -> assertEquals(1, decision.earlyLeaveMinutes())
+        );
+    }
+
+    @Test
     @DisplayName("부재 후 18 이전 제한시간 내 복귀하고 18 이후 퇴실하면 출석")
     void presentWhenAwayReturnsBeforeEndWithinAllowedMinutes() {
         AttendanceDecision decision = AttendanceDecisionPolicy.decide(
@@ -181,6 +211,7 @@ class AttendanceDecisionPolicyTest {
     }
 
     private Instant time(String value) {
-        return Instant.parse("2026-07-29T%s:00+09:00".formatted(value));
+        String localTime = value.length() == 5 ? value + ":00" : value;
+        return Instant.parse("2026-07-29T%s+09:00".formatted(localTime));
     }
 }

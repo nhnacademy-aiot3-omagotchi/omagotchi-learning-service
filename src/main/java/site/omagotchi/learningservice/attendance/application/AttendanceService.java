@@ -23,9 +23,11 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.global.util.DateTimeProvider;
+import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -43,15 +45,15 @@ public class AttendanceService {
     private final AttendanceRecordRepository attendanceRecordRepository;
     private final AttendanceChangeLogRepository attendanceChangeLogRepository;
     private final PresenceIntervalRepository presenceIntervalRepository;
-    private final DateTimeProvider dateTimeProvider;
+    private final Clock clock;
 
     // 출석 기록 결과 -> 출석(기수 Id, 유저 Id)
     @Transactional
     public AttendanceRecordResult checkIn(Long cohortId, UUID userId) {
         CohortMembership membership = cohortAccessService.requireActiveMembership(cohortId, userId);
         CohortAttendancePolicy policy = requirePolicy(cohortId);
-        Instant now = dateTimeProvider.currentInstant();
-        var attendanceDate = dateTimeProvider.calculateAggregationDate(now);
+        Instant now = clock.instant();
+        LocalDate attendanceDate = StudyTimePolicy.aggregationDate(now);
 
         AttendanceRecord record = attendanceRecordRepository
                 .findWithLockByCohortMembershipIdAndAttendanceDate(membership.getId(), attendanceDate)
@@ -77,8 +79,8 @@ public class AttendanceService {
     @Transactional
     public AttendanceRecordResult checkOut(Long cohortId, UUID userId) {
         CohortMembership membership = cohortAccessService.requireActiveMembership(cohortId, userId);
-        Instant now = dateTimeProvider.currentInstant();
-        var attendanceDate = dateTimeProvider.calculateAggregationDate(now);
+        Instant now = clock.instant();
+        LocalDate attendanceDate = StudyTimePolicy.aggregationDate(now);
 
         AttendanceRecord record = attendanceRecordRepository
                 .findWithLockByCohortMembershipIdAndAttendanceDate(membership.getId(), attendanceDate)

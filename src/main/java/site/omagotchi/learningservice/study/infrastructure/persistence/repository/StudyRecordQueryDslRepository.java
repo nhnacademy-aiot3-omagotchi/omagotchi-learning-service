@@ -1,0 +1,160 @@
+package site.omagotchi.learningservice.study.infrastructure.persistence.repository;
+
+import com.querydsl.core.types.Projections;
+import com.querydsl.core.types.dsl.BooleanExpression;
+import com.querydsl.core.types.dsl.NumberExpression;
+import com.querydsl.jpa.impl.JPAQueryFactory;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Repository;
+import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
+import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
+import site.omagotchi.learningservice.study.domain.QStudyRecord;
+import site.omagotchi.learningservice.study.domain.StudyRecord;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * 공부 기록의 복합 조회를 QueryDSL로 제공한다.
+ *
+ * <p>활성 기록은 {@code deletedAt IS NULL}인 기록을 의미한다.</p>
+ */
+@Repository
+@RequiredArgsConstructor
+public class StudyRecordQueryDslRepository implements StudyRecordQueryRepository {
+
+    private static final QStudyRecord studyRecord = QStudyRecord.studyRecord;
+
+    private final JPAQueryFactory queryFactory;
+
+    /*
+     * SELECT sr.*
+     * FROM learning_service.study_records sr
+     * WHERE sr.id = :studyRecordId
+     *   AND sr.cohort_membership_id = :cohortMembershipId
+     *   AND sr.deleted_at IS NULL;
+     */
+    @Override
+    public Optional<StudyRecord> findActiveByIdAndCohortMembershipId(
+            UUID studyRecordId,
+            Long cohortMembershipId
+    ) {
+        StudyRecord result = queryFactory
+                .selectFrom(studyRecord)
+                .where(
+                        studyRecord.id.eq(studyRecordId),
+                        activeRecordOfMembership(cohortMembershipId)
+                )
+                .fetchOne();
+
+        return Optional.ofNullable(result);
+    }
+
+    /*
+     * SELECT 1
+     * FROM learning_service.study_records sr
+     * WHERE sr.cohort_membership_id = :cohortMembershipId
+     *   AND sr.deleted_at IS NULL
+     *   AND sr.start_time < :endTime
+     *   AND sr.end_time > :startTime
+     *   AND sr.id <> :excludedStudyRecordId -- excludedStudyRecordId가 null이 아닐 때만 추가
+     * FETCH FIRST 1 ROW ONLY;
+     */
+    @Override
+    public boolean existsActiveOverlap(
+            Long cohortMembershipId,
+            Instant startTime,
+            Instant endTime,
+            UUID excludedStudyRecordId
+    ) {
+        Integer result = queryFactory
+                .selectOne()
+                .from(studyRecord)
+                .where(
+                        activeRecordOfMembership(cohortMembershipId),
+                        studyRecord.startTime.lt(endTime),
+                        studyRecord.endTime.gt(startTime),
+                        excludeStudyRecord(excludedStudyRecordId)
+                )
+                .fetchFirst();
+
+        return result != null;
+    }
+
+    /*
+     * SELECT sr.*
+     * FROM learning_service.study_records sr
+     * WHERE sr.cohort_membership_id = :cohortMembershipId
+     *   AND sr.deleted_at IS NULL
+     *   AND sr.aggregation_date = :aggregationDate
+     * ORDER BY sr.start_time ASC,
+     *          sr.id ASC;
+     */
+    @Override
+    public List<StudyRecord> findDailyRecords(
+            Long cohortMembershipId,
+            LocalDate aggregationDate
+    ) {
+        return queryFactory
+                .selectFrom(studyRecord)
+                .where(
+                        activeRecordOfMembership(cohortMembershipId),
+                        studyRecord.aggregationDate.eq(aggregationDate)
+                )
+                .orderBy(
+                        studyRecord.startTime.asc(),
+                        studyRecord.id.asc()
+                )
+                .fetch();
+    }
+
+    /*
+     * SELECT sr.aggregation_date,
+     *        COALESCE(SUM(sr.study_seconds), 0) AS total_study_seconds
+     * FROM learning_service.study_records sr
+     * WHERE sr.cohort_membership_id = :cohortMembershipId
+     *   AND sr.deleted_at IS NULL
+     *   AND sr.aggregation_date BETWEEN :startDate AND :endDateInclusive
+     * GROUP BY sr.aggregation_date
+     * ORDER BY sr.aggregation_date ASC;
+     */
+    @Override
+    public List<DailyStudySecondsResult> findDailyStudySeconds(
+            Long cohortMembershipId,
+            LocalDate startDate,
+            LocalDate endDateInclusive
+    ) {
+        NumberExpression<Long> totalStudySeconds = studyRecord.studySeconds
+                .sumLong()
+                .coalesce(0L);
+
+        return queryFactory
+                .select(Projections.constructor(
+                        DailyStudySecondsResult.class,
+                        studyRecord.aggregationDate,
+                        totalStudySeconds
+                ))
+                .from(studyRecord)
+                .where(
+                        activeRecordOfMembership(cohortMembershipId),
+                        studyRecord.aggregationDate.between(startDate, endDateInclusive)
+                )
+                .groupBy(studyRecord.aggregationDate)
+                .orderBy(studyRecord.aggregationDate.asc())
+                .fetch();
+    }
+
+    private BooleanExpression activeRecordOfMembership(Long cohortMembershipId) {
+        return studyRecord.cohortMembershipId.eq(cohortMembershipId)
+                .and(studyRecord.deletedAt.isNull());
+    }
+
+    private BooleanExpression excludeStudyRecord(UUID excludedStudyRecordId) {
+        return excludedStudyRecordId == null
+                ? null
+                : studyRecord.id.ne(excludedStudyRecordId);
+    }
+}

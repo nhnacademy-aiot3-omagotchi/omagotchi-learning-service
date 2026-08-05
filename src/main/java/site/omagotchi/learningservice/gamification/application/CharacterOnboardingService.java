@@ -1,0 +1,50 @@
+package site.omagotchi.learningservice.gamification.application;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.gamification.application.command.CreateUserCharacterCommand;
+import site.omagotchi.learningservice.gamification.application.result.UserCharacterResult;
+import site.omagotchi.learningservice.gamification.domain.CharacterNicknameValidator;
+import site.omagotchi.learningservice.gamification.domain.GameCharacter;
+import site.omagotchi.learningservice.gamification.domain.GamificationErrorCode;
+import site.omagotchi.learningservice.gamification.domain.UserCharacter;
+import site.omagotchi.learningservice.gamification.infrastructure.GameCharacterRepository;
+import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;
+import site.omagotchi.learningservice.global.exception.BusinessException;
+
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class CharacterOnboardingService {
+
+    private final GameCharacterRepository gameCharacterRepository;
+    private final UserCharacterRepository userCharacterRepository;
+
+    @Transactional
+    public UserCharacterResult createRepresentativeCharacter(UUID userId, CreateUserCharacterCommand command) {
+        if (userCharacterRepository.existsByUserIdAndRepresentativeTrue(userId)) {
+            throw new BusinessException(GamificationErrorCode.REPRESENTATIVE_CHARACTER_ALREADY_EXISTS);
+        }
+        GameCharacter gameCharacter = gameCharacterRepository.findByIdAndActiveTrue(command.gameCharacterId())
+                .orElseThrow(() -> new BusinessException(GamificationErrorCode.GAME_CHARACTER_NOT_FOUND));
+
+        String nickname = normalizeNickname(command.nickname());
+        UserCharacter userCharacter = userCharacterRepository.save(UserCharacter.representative(
+                userId,
+                gameCharacter.getId(),
+                nickname
+        ));
+        return UserCharacterResult.from(userCharacter, gameCharacter);
+    }
+
+    private String normalizeNickname(String nickname) {
+        try {
+            return CharacterNicknameValidator.normalize(nickname);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(GamificationErrorCode.INVALID_CHARACTER_NICKNAME, exception);
+        }
+    }
+}

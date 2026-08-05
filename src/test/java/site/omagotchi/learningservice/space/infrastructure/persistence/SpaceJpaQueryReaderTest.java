@@ -70,8 +70,10 @@ class SpaceJpaQueryReaderTest {
                 .isEqualTo(SpaceOperationalStatus.ACTIVE);
         assertThat(item.status())
                 .isEqualTo(SpaceUsageStatus.AVAILABLE);
+        assertThat(item.occupiedBySameCohort()).isFalse();
         assertThat(item.occupancyExpiresAt()).isNull();
         assertThat(item.remainingTimeSeconds()).isNull();
+        assertNoOccupancyDetails(item);
     }
 
     @Test
@@ -99,6 +101,7 @@ class SpaceJpaQueryReaderTest {
                 .isEqualTo(NOW.plusMinutes(30));
         assertThat(item.remainingTimeSeconds()).isEqualTo(1800L);
         assertThat(item.remainingTimeSeconds()).isNotNegative();
+        assertThat(item.occupiedBySameCohort()).isFalse();
     }
 
     @Test
@@ -134,7 +137,12 @@ class SpaceJpaQueryReaderTest {
         SpaceListResult otherCohort = adapter
                 .findAllSpacesWithStatus(Set.of(22L), NOW)
                 .getFirst();
+        SpaceListResult anonymous = adapter
+                .findAllSpacesWithStatus(Set.of(), NOW)
+                .getFirst();
 
+        assertThat(sameCohort.occupiedBySameCohort()).isTrue();
+        assertThat(sameCohort.remainingTimeSeconds()).isEqualTo(1800L);
         assertThat(sameCohort.occupancyCohortId()).isEqualTo(21L);
         assertThat(sameCohort.occupierMembershipId()).isEqualTo(31L);
         assertThat(sameCohort.occupierUserId()).isEqualTo(occupierUserId);
@@ -142,11 +150,19 @@ class SpaceJpaQueryReaderTest {
                 .containsExactly(participantUserId);
         assertThat(otherCohort.status())
                 .isEqualTo(SpaceUsageStatus.OCCUPIED);
+        assertThat(otherCohort.occupiedBySameCohort()).isFalse();
         assertThat(otherCohort.occupancyExpiresAt()).isNotNull();
+        assertThat(otherCohort.remainingTimeSeconds()).isEqualTo(1800L);
         assertThat(otherCohort.occupancyCohortId()).isNull();
         assertThat(otherCohort.occupierMembershipId()).isNull();
         assertThat(otherCohort.occupierUserId()).isNull();
         assertThat(otherCohort.participantUserIds()).isNull();
+        assertThat(anonymous.occupiedBySameCohort()).isFalse();
+        assertThat(anonymous.remainingTimeSeconds()).isEqualTo(1800L);
+        assertThat(anonymous.occupancyCohortId()).isNull();
+        assertThat(anonymous.occupierMembershipId()).isNull();
+        assertThat(anonymous.occupierUserId()).isNull();
+        assertThat(anonymous.participantUserIds()).isNull();
     }
 
     @Test
@@ -170,10 +186,12 @@ class SpaceJpaQueryReaderTest {
                 .isEqualTo(SpaceOperationalStatus.INACTIVE);
         assertThat(item.status())
                 .isEqualTo(SpaceUsageStatus.UNAVAILABLE);
+        assertThat(item.occupiedBySameCohort()).isFalse();
         assertThat(item.inactiveReason()).isEqualTo("시설 점검");
         assertThat(item.cohortId()).isEqualTo(11L);
         assertThat(item.occupancyExpiresAt()).isNull();
         assertThat(item.remainingTimeSeconds()).isNull();
+        assertNoOccupancyDetails(item);
     }
 
     @Test
@@ -208,7 +226,10 @@ class SpaceJpaQueryReaderTest {
         when(spaceRepository.findAllByDeletedAtIsNullOrderByIdAsc())
                 .thenReturn(List.of());
 
-        assertThat(adapter.findAllSpacesWithStatus(Set.of(), NOW)).isEmpty();
+        assertThat(adapter.findAllSpacesWithStatus(
+                Set.of(),
+                NOW
+        )).isEmpty();
 
         verify(spaceRepository)
                 .findAllByDeletedAtIsNullOrderByIdAsc();
@@ -244,8 +265,17 @@ class SpaceJpaQueryReaderTest {
                 .isEqualTo(operationalStatus);
         assertThat(item.status())
                 .isEqualTo(SpaceUsageStatus.NOT_APPLICABLE);
+        assertThat(item.occupiedBySameCohort()).isFalse();
         assertThat(item.occupancyExpiresAt()).isNull();
         assertThat(item.remainingTimeSeconds()).isNull();
+        assertNoOccupancyDetails(item);
+    }
+
+    private void assertNoOccupancyDetails(SpaceListResult item) {
+        assertThat(item.occupancyCohortId()).isNull();
+        assertThat(item.occupierMembershipId()).isNull();
+        assertThat(item.occupierUserId()).isNull();
+        assertThat(item.participantUserIds()).isNull();
     }
 
     private void stubSpaces(

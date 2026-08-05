@@ -61,7 +61,12 @@ class SpaceQueryControllerTest {
                         11L,
                         SpaceUsageStatus.OCCUPIED,
                         expiresAt,
-                        1800L
+                        1800L,
+                        false,
+                        null,
+                        null,
+                        null,
+                        null
                 )
         ));
 
@@ -79,7 +84,9 @@ class SpaceQueryControllerTest {
                 .andExpect(jsonPath("$[0].occupancyExpiresAt")
                         .value("2026-07-27T15:00:00+09:00"))
                 .andExpect(jsonPath("$[0].remainingTimeSeconds")
-                        .value(1800));
+                        .value(1800))
+                .andExpect(jsonPath("$[0].occupiedBySameCohort")
+                        .value(false));
 
         verify(spaceQueryService).getSpaceList(null);
     }

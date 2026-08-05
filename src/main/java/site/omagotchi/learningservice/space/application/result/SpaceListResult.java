@@ -24,6 +24,7 @@ public record SpaceListResult(
         SpaceUsageStatus status,
         ZonedDateTime occupancyExpiresAt,
         Long remainingTimeSeconds,
+        boolean occupiedBySameCohort,
         Long occupancyCohortId,
         Long occupierMembershipId,
         UUID occupierUserId,
@@ -46,6 +47,7 @@ public record SpaceListResult(
                 spaceId, name, spaceType, capacity,
                 operationalStatus, inactiveReason, cohortId, status,
                 occupancyExpiresAt, remainingTimeSeconds,
+                false,
                 null, null, null, null
         );
     }
@@ -70,6 +72,7 @@ public record SpaceListResult(
                 status,
                 occupancyExpiresAt,
                 remainingTimeSeconds,
+                false,
                 null,
                 null,
                 null,

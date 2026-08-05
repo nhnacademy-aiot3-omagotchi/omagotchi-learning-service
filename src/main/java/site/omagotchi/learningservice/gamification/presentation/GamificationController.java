@@ -1,17 +1,22 @@
 package site.omagotchi.learningservice.gamification.presentation;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import site.omagotchi.learningservice.gamification.application.DailyQuestService;
+import site.omagotchi.learningservice.gamification.application.GamificationProgressionService;
 import site.omagotchi.learningservice.gamification.presentation.response.DailyQuestResponse;
+import site.omagotchi.learningservice.gamification.presentation.response.GamificationProgressionResponse;
 import site.omagotchi.learningservice.gamification.presentation.response.HomeResponse;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -20,6 +25,7 @@ import java.util.List;
 public class GamificationController {
 
     private final DailyQuestService dailyQuestService;
+    private final GamificationProgressionService gamificationProgressionService;
 
     @GetMapping("/home")
     public HomeResponse getHome(JwtAuthenticationToken authentication) {
@@ -33,6 +39,20 @@ public class GamificationController {
         return dailyQuestService.getOrCreateDailyQuests(user.userId()).stream()
                 .map(DailyQuestResponse::from)
                 .toList();
+    }
+
+    @GetMapping("/progression")
+    public GamificationProgressionResponse getProgression(
+            @RequestParam Long cohortId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate aggregationDate,
+            JwtAuthenticationToken authentication
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        return GamificationProgressionResponse.from(gamificationProgressionService.getProgression(
+                user.userId(),
+                cohortId,
+                aggregationDate
+        ));
     }
 
     @PostMapping("/quests/{userDailyQuestId}/claim")

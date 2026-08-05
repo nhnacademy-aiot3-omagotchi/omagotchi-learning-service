@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -17,6 +19,8 @@ public interface UserCharacterRepository extends JpaRepository<UserCharacter, Lo
     Optional<UserCharacter> findFirstByUserIdAndRepresentativeTrueOrderByIdAsc(UUID userId);
 
     boolean existsByUserIdAndRepresentativeTrue(UUID userId);
+
+    List<UserCharacter> findByUserIdInAndRepresentativeTrue(Collection<UUID> userIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select c from UserCharacter c where c.id = :id")

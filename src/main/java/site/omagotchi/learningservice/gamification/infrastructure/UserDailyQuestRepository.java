@@ -24,6 +24,13 @@ public interface UserDailyQuestRepository extends JpaRepository<UserDailyQuest, 
 
     Optional<UserDailyQuest> findByUserIdAndQuestDateAndCode(UUID userId, LocalDate questDate, String code);
 
+    List<UserDailyQuest> findByUserIdAndQuestDateBetweenAndCodeOrderByQuestDateAsc(
+            UUID userId,
+            LocalDate startDate,
+            LocalDate endDate,
+            String code
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select q from UserDailyQuest q where q.id = :id")
     Optional<UserDailyQuest> findWithLockById(Long id);

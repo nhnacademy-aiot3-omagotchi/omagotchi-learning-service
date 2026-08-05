@@ -37,6 +37,7 @@ public class XpRewardService {
             XpSourceType sourceType,
             String sourceId
     ) {
+        // 같은 원본 이벤트로 보상이 두 번 나가지 않도록 원장 기준으로 먼저 방지
         return xpTransactionRepository.findBySourceTypeAndSourceId(sourceType, sourceId)
                 .map(transaction -> XpRewardResult.from(
                         transaction,
@@ -53,6 +54,7 @@ public class XpRewardService {
             String sourceId
     ) {
         UserCharacter representative = characterGrowthService.requireRepresentativeCharacter(userId);
+        // EXP와 레벨은 user_character 한 행에 모이므로 지급 시점에 잠금
         UserCharacter character = userCharacterRepository.findWithLockById(representative.getId())
                 .orElseThrow(() -> new BusinessException(GamificationErrorCode.REPRESENTATIVE_CHARACTER_NOT_FOUND));
         AdvancementStage previousStage = character.getAdvancementStage();
@@ -67,6 +69,7 @@ public class XpRewardService {
 
         List<LevelPolicy> policies = characterGrowthService.requireLevelPolicies();
         LevelState levelState = character.addXp(amount, policies);
+        // 한 번에 여러 전직 구간을 넘는 보상도 빠진 이력 없이 남김
         saveAdvancementHistories(character, previousStage, levelState, transaction.getId());
 
         return XpRewardResult.from(transaction, levelState);

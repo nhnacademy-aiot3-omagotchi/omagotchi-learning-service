@@ -77,6 +77,7 @@ public class DailyQuestService {
 
     @Transactional
     public DailyQuestResult claim(UUID userId, Long userDailyQuestId) {
+        // 보상 수령과 상태 변경이 겹치지 않도록 퀘스트 행을 먼저 잠금
         UserDailyQuest quest = userDailyQuestRepository.findWithLockById(userDailyQuestId)
                 .orElseThrow(() -> new BusinessException(GamificationErrorCode.DAILY_QUEST_NOT_FOUND));
         if (!quest.getUserId().equals(userId)) {
@@ -84,6 +85,7 @@ public class DailyQuestService {
         }
         LocalDate today = dateTimeProvider.currentAggregationDate();
         if (quest.getQuestDate().isBefore(today)) {
+            // 날짜가 지난 일일 보상은 여기서 수령 불가로 끊음
             quest.expire();
             throw new BusinessException(GamificationErrorCode.DAILY_QUEST_EXPIRED);
         }
@@ -95,6 +97,7 @@ public class DailyQuestService {
         }
 
         quest.claim(dateTimeProvider.currentInstant());
+        // 수령 상태 변경, 원장 생성, EXP 지급이 같은 트랜잭션에서 끝나야 함
         xpRewardService.reward(
                 userId,
                 quest.getRewardXp(),
@@ -139,6 +142,7 @@ public class DailyQuestService {
     }
 
     private void createDailyQuestsIfAbsent(UUID userId, LocalDate questDate) {
+        // 같은 날짜 슬롯이 이미 있으면 기본 5개를 다시 만들지 않음
         if (userDailyQuestRepository.existsByUserIdAndQuestDate(userId, questDate)) {
             return;
         }
@@ -151,6 +155,7 @@ public class DailyQuestService {
     private List<QuestTemplate> dailyTemplates() {
         List<QuestTemplate> activeTemplates = questTemplateRepository.findByActiveTrueOrderByDisplayOrderAsc();
         if (activeTemplates.isEmpty()) {
+            // 운영 템플릿이 비어도 오늘 퀘스트 화면은 기본 슬롯으로 유지
             return defaultTemplates();
         }
 

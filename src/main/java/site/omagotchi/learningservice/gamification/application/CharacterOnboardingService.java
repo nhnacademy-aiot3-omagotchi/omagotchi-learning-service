@@ -25,6 +25,7 @@ public class CharacterOnboardingService {
 
     @Transactional
     public UserCharacterResult createRepresentativeCharacter(UUID userId, CreateUserCharacterCommand command) {
+        // 성장 상태는 대표 캐릭터 하나를 기준으로 잡아서 온보딩 중복 생성을 먼저 끊음
         if (userCharacterRepository.existsByUserIdAndRepresentativeTrue(userId)) {
             throw new BusinessException(GamificationErrorCode.REPRESENTATIVE_CHARACTER_ALREADY_EXISTS);
         }
@@ -44,6 +45,7 @@ public class CharacterOnboardingService {
         try {
             return CharacterNicknameValidator.normalize(nickname);
         } catch (IllegalArgumentException exception) {
+            // 도메인 검증 실패를 API 응답 계약이 있는 오류로 바꿔서 밖으로 내보냄
             throw new BusinessException(GamificationErrorCode.INVALID_CHARACTER_NICKNAME, exception);
         }
     }

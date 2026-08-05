@@ -21,6 +21,6 @@ public class CharacterNicknameValidator {
     }
 
     private static void validatePolicy(String nickname) {
-        // 금칙어와 이모지 정책은 여기에서 확장한다.
+        // 금칙어와 이모지 정책은 nickname 정규화 흐름 안에서만 늘림
     }
 }

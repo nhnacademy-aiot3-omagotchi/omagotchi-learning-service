@@ -47,10 +47,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @Import({
         TestcontainersConfiguration.class,
-        SpaceApiIntegrationTest.FixedClockConfiguration.class
+        SpaceIT.FixedClockConfiguration.class
 })
 @Transactional
-class SpaceApiIntegrationTest {
+class SpaceIT {
 
     private static final UUID MANAGER_ID = UUID.fromString(
             "00000000-0000-0000-0000-000000000092"

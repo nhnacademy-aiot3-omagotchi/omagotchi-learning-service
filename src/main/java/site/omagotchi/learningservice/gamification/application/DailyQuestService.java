@@ -85,8 +85,7 @@ public class DailyQuestService {
         }
         LocalDate today = dateTimeProvider.currentAggregationDate();
         if (quest.getQuestDate().isBefore(today)) {
-            // 날짜가 지난 일일 보상은 여기서 수령 불가로 끊음
-            quest.expire();
+            // 지난 날짜 보상은 수령 불가. 상태 전환은 expirePastQuests가 담당한다.
             throw new BusinessException(GamificationErrorCode.DAILY_QUEST_EXPIRED);
         }
         if (quest.getStatus() == QuestStatus.CLAIMED) {

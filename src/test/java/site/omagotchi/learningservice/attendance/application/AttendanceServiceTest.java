@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.attendance.application;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -34,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -78,7 +80,7 @@ class AttendanceServiceTest {
         givenActiveMembership();
         given(attendancePolicyRepository.findById(COHORT_ID)).willReturn(Optional.of(policy()));
         given(clock.instant()).willReturn(checkInAt);
-        given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
+        given(attendanceRecordRepository.findWithLockByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
                 .willReturn(Optional.empty());
         given(attendanceRecordRepository.save(any(AttendanceRecord.class)))
                 .willAnswer(invocation -> savedRecord(invocation.getArgument(0)));
@@ -89,6 +91,15 @@ class AttendanceServiceTest {
         assertEquals(AttendanceStatus.PENDING, result.finalStatus());
         assertEquals(checkInAt, result.checkedInAt());
         assertEquals(0, result.lateMinutes());
+        InOrder inOrder = inOrder(membershipRepository, attendanceRecordRepository);
+        inOrder.verify(membershipRepository).findWithLockByIdAndStatus(
+                MEMBERSHIP_ID,
+                CohortMembershipStatus.ACTIVE
+        );
+        inOrder.verify(attendanceRecordRepository).findWithLockByCohortMembershipIdAndAttendanceDate(
+                MEMBERSHIP_ID,
+                ATTENDANCE_DATE
+        );
         verify(presenceIntervalRepository).save(any());
     }
 
@@ -99,7 +110,7 @@ class AttendanceServiceTest {
         givenActiveMembership();
         given(attendancePolicyRepository.findById(COHORT_ID)).willReturn(Optional.of(policy()));
         given(clock.instant()).willReturn(checkInAt);
-        given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
+        given(attendanceRecordRepository.findWithLockByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
                 .willReturn(Optional.empty());
         given(attendanceRecordRepository.save(any(AttendanceRecord.class)))
                 .willAnswer(invocation -> savedRecord(invocation.getArgument(0)));
@@ -111,24 +122,24 @@ class AttendanceServiceTest {
     }
 
     @Test
-    @DisplayName("중복 체크인 예외")
-    void throwsWhenAlreadyCheckedIn() {
+    @DisplayName("중복 체크인은 기존 기록을 반환")
+    void returnsExistingRecordWhenAlreadyCheckedIn() {
         Instant checkInAt = Instant.parse("2026-07-29T00:00:00Z");
         givenActiveMembership();
         given(attendancePolicyRepository.findById(COHORT_ID)).willReturn(Optional.of(policy()));
         given(clock.instant()).willReturn(checkInAt);
         AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
         record.checkIn(checkInAt, AttendanceStatus.PENDING, 0);
-        given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
+        given(attendanceRecordRepository.findWithLockByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
                 .willReturn(Optional.of(record));
 
-        BusinessException exception = assertThrows(
-                BusinessException.class,
-                () -> attendanceService.checkIn(COHORT_ID, USER_ID)
-        );
+        var result = attendanceService.checkIn(COHORT_ID, USER_ID);
 
-        assertSame(AttendanceErrorCode.ATTENDANCE_ALREADY_CHECKED_IN, exception.getErrorCode());
-        verify(attendanceRecordRepository).findByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE);
+        assertEquals(checkInAt, result.checkedInAt());
+        verify(attendanceRecordRepository).findWithLockByCohortMembershipIdAndAttendanceDate(
+                MEMBERSHIP_ID,
+                ATTENDANCE_DATE
+        );
     }
 
     @Test
@@ -140,15 +151,37 @@ class AttendanceServiceTest {
         record.checkIn(checkInAt, AttendanceStatus.PENDING, 0);
         givenActiveMembership();
         given(clock.instant()).willReturn(checkOutAt);
-        given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
+        given(attendanceRecordRepository.findWithLockByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
                 .willReturn(Optional.of(record));
         given(attendancePolicyRepository.findById(COHORT_ID)).willReturn(Optional.of(policy()));
+        given(presenceIntervalRepository.findByAttendanceIdOrderByStartedAtAsc(any())).willReturn(java.util.List.of());
         given(attendanceRecordRepository.save(record)).willReturn(record);
 
         var result = attendanceService.checkOut(COHORT_ID, USER_ID);
 
         assertEquals(AttendanceStatus.PRESENT, result.autoStatus());
         assertEquals(checkOutAt, result.checkedOutAt());
+    }
+
+    @Test
+    @DisplayName("중복 체크아웃은 기존 기록을 반환")
+    void returnsExistingRecordWhenAlreadyCheckedOut() {
+        Instant checkInAt = Instant.parse("2026-07-29T00:00:00Z");
+        Instant checkOutAt = Instant.parse("2026-07-29T09:00:00Z");
+        AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
+        record.checkIn(checkInAt, AttendanceStatus.PENDING, 0);
+        record.checkOut(checkOutAt, AttendanceStatus.PRESENT, 0);
+        givenActiveMembership();
+        given(clock.instant()).willReturn(checkOutAt.plusSeconds(60));
+        given(attendanceRecordRepository.findWithLockByCohortMembershipIdAndAttendanceDate(
+                MEMBERSHIP_ID,
+                ATTENDANCE_DATE
+        )).willReturn(Optional.of(record));
+
+        var result = attendanceService.checkOut(COHORT_ID, USER_ID);
+
+        assertEquals(checkOutAt, result.checkedOutAt());
+        assertEquals(AttendanceStatus.PRESENT, result.autoStatus());
     }
 
     @Test
@@ -190,6 +223,8 @@ class AttendanceServiceTest {
     private void givenActiveMembership() {
         given(cohortAccessService.requireActiveMembership(COHORT_ID, USER_ID))
                 .willReturn(activeMembership());
+        given(membershipRepository.findWithLockByIdAndStatus(MEMBERSHIP_ID, CohortMembershipStatus.ACTIVE))
+                .willReturn(Optional.of(activeMembership()));
     }
 
     private CohortMembership activeMembership() {

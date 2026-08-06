@@ -7,15 +7,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import site.omagotchi.learningservice.gamification.domain.UserCharacter;
-import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;
+import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+import site.omagotchi.learningservice.gamification.application.result.RepresentativeCharacterResult;
+import site.omagotchi.learningservice.ranking.application.port.RankingSnapshotPort;
+import site.omagotchi.learningservice.ranking.application.port.StudyTimeRankingQueryPort;
+import site.omagotchi.learningservice.ranking.application.result.StudyTimeRankingResult;
 import site.omagotchi.learningservice.ranking.domain.RankingPeriod;
 import site.omagotchi.learningservice.ranking.domain.RankingSnapshot;
 import site.omagotchi.learningservice.ranking.domain.RankingSnapshotEntry;
-import site.omagotchi.learningservice.ranking.infrastructure.RankingSnapshotEntryRepository;
-import site.omagotchi.learningservice.ranking.infrastructure.RankingSnapshotRepository;
-import site.omagotchi.learningservice.ranking.infrastructure.StudyTimeRankingRow;
-import site.omagotchi.learningservice.ranking.infrastructure.StudyTimeRankingRepository;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -33,29 +32,26 @@ import static org.mockito.Mockito.when;
 class RankingSnapshotServiceTest {
 
     @Mock
-    private RankingSnapshotRepository rankingSnapshotRepository;
+    private RankingSnapshotPort rankingSnapshotPort;
 
     @Mock
-    private RankingSnapshotEntryRepository rankingSnapshotEntryRepository;
+    private StudyTimeRankingQueryPort studyTimeRankingQueryPort;
 
     @Mock
-    private StudyTimeRankingRepository studyTimeRankingRepository;
-
-    @Mock
-    private UserCharacterRepository userCharacterRepository;
+    private CharacterGrowthService characterGrowthService;
 
     @Test
     @DisplayName("같은 기간 snapshot은 다시 만들지 않는다")
     void reusesExistingSnapshot() {
         RankingSnapshot snapshot = snapshot(1L);
-        when(rankingSnapshotRepository.insertIfAbsent(
+        when(rankingSnapshotPort.insertIfAbsent(
                 1L,
-                RankingPeriod.DAILY.name(),
+                RankingPeriod.DAILY,
                 LocalDate.of(2026, 8, 5),
                 LocalDate.of(2026, 8, 5),
                 LocalDate.of(2026, 8, 5)
         )).thenReturn(0);
-        when(rankingSnapshotRepository.findByCohortIdAndPeriodAndBaseDate(
+        when(rankingSnapshotPort.findByCohortIdAndPeriodAndBaseDate(
                 1L,
                 RankingPeriod.DAILY,
                 LocalDate.of(2026, 8, 5)
@@ -65,8 +61,8 @@ class RankingSnapshotServiceTest {
         RankingSnapshot result = service.getOrCreate(1L, RankingPeriod.DAILY, LocalDate.of(2026, 8, 5));
 
         assertEquals(1L, result.getId());
-        verify(studyTimeRankingRepository, never()).findStudySeconds(any(), any(), any());
-        verify(rankingSnapshotEntryRepository, never()).saveAll(any());
+        verify(studyTimeRankingQueryPort, never()).findStudySeconds(any(), any(), any());
+        verify(rankingSnapshotPort, never()).saveEntries(any());
     }
 
     @Test
@@ -75,21 +71,20 @@ class RankingSnapshotServiceTest {
         UUID rankedUserId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         UUID userWithoutCharacterId = UUID.fromString("00000000-0000-0000-0000-000000000002");
         RankingSnapshot snapshot = snapshot(1L);
-        UserCharacter character = UserCharacter.representative(rankedUserId, 1L, "야간반장");
-        ReflectionTestUtils.setField(character, "id", 10L);
-        when(rankingSnapshotRepository.insertIfAbsent(
+        RepresentativeCharacterResult character = new RepresentativeCharacterResult(rankedUserId, 10L, "야간반장");
+        when(rankingSnapshotPort.insertIfAbsent(
                 1L,
-                RankingPeriod.DAILY.name(),
+                RankingPeriod.DAILY,
                 LocalDate.of(2026, 8, 5),
                 LocalDate.of(2026, 8, 5),
                 LocalDate.of(2026, 8, 5)
         )).thenReturn(1);
-        when(rankingSnapshotRepository.findByCohortIdAndPeriodAndBaseDate(
+        when(rankingSnapshotPort.findByCohortIdAndPeriodAndBaseDate(
                 1L,
                 RankingPeriod.DAILY,
                 LocalDate.of(2026, 8, 5)
         )).thenReturn(Optional.of(snapshot));
-        when(studyTimeRankingRepository.findStudySeconds(
+        when(studyTimeRankingQueryPort.findStudySeconds(
                 1L,
                 LocalDate.of(2026, 8, 5),
                 LocalDate.of(2026, 8, 5)
@@ -97,39 +92,28 @@ class RankingSnapshotServiceTest {
                 studyRow(rankedUserId, 28_800),
                 studyRow(userWithoutCharacterId, 21_600)
         ));
-        when(userCharacterRepository.findByUserIdInAndRepresentativeTrue(any())).thenReturn(List.of(character));
+        when(characterGrowthService.findRepresentativeCharacters(any())).thenReturn(List.of(character));
         RankingSnapshotService service = service();
 
         service.getOrCreate(1L, RankingPeriod.DAILY, LocalDate.of(2026, 8, 5));
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<RankingSnapshotEntry>> captor = ArgumentCaptor.forClass(List.class);
-        verify(rankingSnapshotEntryRepository).saveAll(captor.capture());
+        verify(rankingSnapshotPort).saveEntries(captor.capture());
         assertEquals(1, captor.getValue().size());
         assertEquals(10L, captor.getValue().getFirst().getUserCharacterId());
     }
 
     private RankingSnapshotService service() {
         return new RankingSnapshotService(
-                rankingSnapshotRepository,
-                rankingSnapshotEntryRepository,
-                studyTimeRankingRepository,
-                userCharacterRepository
+                rankingSnapshotPort,
+                studyTimeRankingQueryPort,
+                characterGrowthService
         );
     }
 
-    private StudyTimeRankingRow studyRow(UUID userId, long studySeconds) {
-        return new StudyTimeRankingRow() {
-            @Override
-            public UUID getUserId() {
-                return userId;
-            }
-
-            @Override
-            public long getStudySeconds() {
-                return studySeconds;
-            }
-        };
+    private StudyTimeRankingResult studyRow(UUID userId, long studySeconds) {
+        return new StudyTimeRankingResult(userId, studySeconds);
     }
 
     private RankingSnapshot snapshot(Long id) {

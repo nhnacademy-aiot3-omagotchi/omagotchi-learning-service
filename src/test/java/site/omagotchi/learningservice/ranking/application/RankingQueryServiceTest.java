@@ -6,15 +6,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import site.omagotchi.learningservice.gamification.domain.UserCharacter;
-import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;
+import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+import site.omagotchi.learningservice.gamification.application.result.RepresentativeCharacterResult;
 import site.omagotchi.learningservice.global.util.DateTimeProvider;
+import site.omagotchi.learningservice.ranking.application.port.RankingSnapshotPort;
 import site.omagotchi.learningservice.ranking.domain.RankingDateRange;
 import site.omagotchi.learningservice.ranking.domain.RankingPeriod;
 import site.omagotchi.learningservice.ranking.domain.RankingRankedEntry;
 import site.omagotchi.learningservice.ranking.domain.RankingSnapshot;
 import site.omagotchi.learningservice.ranking.domain.RankingSnapshotEntry;
-import site.omagotchi.learningservice.ranking.infrastructure.RankingSnapshotEntryRepository;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -37,10 +37,10 @@ class RankingQueryServiceTest {
     private RankingSnapshotService rankingSnapshotService;
 
     @Mock
-    private RankingSnapshotEntryRepository rankingSnapshotEntryRepository;
+    private RankingSnapshotPort rankingSnapshotPort;
 
     @Mock
-    private UserCharacterRepository userCharacterRepository;
+    private CharacterGrowthService characterGrowthService;
 
     @Mock
     private DateTimeProvider dateTimeProvider;
@@ -49,23 +49,22 @@ class RankingQueryServiceTest {
     @DisplayName("top10, myRank, generatedAt을 함께 반환한다")
     void returnsTop10AndMyRank() {
         RankingSnapshot snapshot = snapshot();
-        UserCharacter myCharacter = UserCharacter.representative(USER_ID, 1L, "나");
-        ReflectionTestUtils.setField(myCharacter, "id", 11L);
+        RepresentativeCharacterResult myCharacter = new RepresentativeCharacterResult(USER_ID, 11L, "나");
         List<RankingSnapshotEntry> entries = java.util.stream.IntStream.rangeClosed(1, 11)
                 .mapToObj(rank -> entry(rank, rank == 11 ? USER_ID : UUID.randomUUID()))
                 .toList();
         when(rankingSnapshotService.getOrCreate(1L, RankingPeriod.DAILY, LocalDate.of(2026, 8, 5)))
                 .thenReturn(snapshot);
-        when(rankingSnapshotEntryRepository.findBySnapshotIdOrderByRankAscStudySecondsDescUserCharacterIdAsc(1L))
+        when(rankingSnapshotPort.findEntries(1L))
                 .thenReturn(entries);
-        when(userCharacterRepository.findFirstByUserIdAndRepresentativeTrueOrderByIdAsc(USER_ID))
+        when(characterGrowthService.findRepresentativeCharacter(USER_ID))
                 .thenReturn(Optional.of(myCharacter));
-        when(rankingSnapshotEntryRepository.findBySnapshotIdAndUserCharacterId(1L, 11L))
+        when(rankingSnapshotPort.findEntry(1L, 11L))
                 .thenReturn(Optional.of(entries.get(10)));
         RankingQueryService service = new RankingQueryService(
                 rankingSnapshotService,
-                rankingSnapshotEntryRepository,
-                userCharacterRepository,
+                rankingSnapshotPort,
+                characterGrowthService,
                 dateTimeProvider
         );
 

@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.gamification.application.result.CharacterGrowthResult;
+import site.omagotchi.learningservice.gamification.application.result.RepresentativeCharacterResult;
 import site.omagotchi.learningservice.gamification.domain.GamificationErrorCode;
 import site.omagotchi.learningservice.gamification.domain.LevelPolicy;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
@@ -11,7 +12,9 @@ import site.omagotchi.learningservice.gamification.infrastructure.LevelPolicyRep
 import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -25,6 +28,18 @@ public class CharacterGrowthService {
     public UserCharacter requireRepresentativeCharacter(UUID userId) {
         return userCharacterRepository.findFirstByUserIdAndRepresentativeTrueOrderByIdAsc(userId)
                 .orElseThrow(() -> new BusinessException(GamificationErrorCode.REPRESENTATIVE_CHARACTER_NOT_FOUND));
+    }
+
+    public Optional<RepresentativeCharacterResult> findRepresentativeCharacter(UUID userId) {
+        return userCharacterRepository.findFirstByUserIdAndRepresentativeTrueOrderByIdAsc(userId)
+                .map(RepresentativeCharacterResult::from);
+    }
+
+    public List<RepresentativeCharacterResult> findRepresentativeCharacters(Collection<UUID> userIds) {
+        return userCharacterRepository.findByUserIdInAndRepresentativeTrue(userIds)
+                .stream()
+                .map(RepresentativeCharacterResult::from)
+                .toList();
     }
 
     public CharacterGrowthResult getGrowth(UUID userId) {

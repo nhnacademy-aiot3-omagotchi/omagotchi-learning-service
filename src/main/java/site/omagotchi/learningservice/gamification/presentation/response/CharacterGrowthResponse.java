@@ -4,7 +4,6 @@ import site.omagotchi.learningservice.gamification.application.result.CharacterG
 import site.omagotchi.learningservice.gamification.domain.AdvancementStage;
 
 public record CharacterGrowthResponse(
-        Long userCharacterId,
         String nickname,
         String displayName,
         long totalXp,
@@ -16,7 +15,6 @@ public record CharacterGrowthResponse(
 
     public static CharacterGrowthResponse from(CharacterGrowthResult result) {
         return new CharacterGrowthResponse(
-                result.userCharacterId(),
                 result.nickname(),
                 result.displayName(),
                 result.totalXp(),

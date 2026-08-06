@@ -9,7 +9,8 @@ ALTER TABLE learning_service.attendance_records
             'LEFT_EARLY',
             'LATE_LEFT_EARLY',
             'MISSING_CHECK_OUT'
-        ));
+        ))
+         NOT VALID;
 
 ALTER TABLE learning_service.attendance_records
     DROP CONSTRAINT ck_attendance_records_final_status,
@@ -22,7 +23,8 @@ ALTER TABLE learning_service.attendance_records
             'LEFT_EARLY',
             'LATE_LEFT_EARLY',
             'MISSING_CHECK_OUT'
-        ));
+        ))
+         NOT VALID;
 
 ALTER TABLE learning_service.attendance_change_logs
     DROP CONSTRAINT ck_attendance_change_logs_previous_status,
@@ -35,7 +37,8 @@ ALTER TABLE learning_service.attendance_change_logs
             'LEFT_EARLY',
             'LATE_LEFT_EARLY',
             'MISSING_CHECK_OUT'
-        ));
+        ))
+         NOT VALID;
 
 ALTER TABLE learning_service.attendance_change_logs
     DROP CONSTRAINT ck_attendance_change_logs_next_status,
@@ -48,4 +51,5 @@ ALTER TABLE learning_service.attendance_change_logs
             'LEFT_EARLY',
             'LATE_LEFT_EARLY',
             'MISSING_CHECK_OUT'
-        ));
+        ))
+         NOT VALID;

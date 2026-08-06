@@ -17,7 +17,18 @@ CREATE TABLE learning_service.timer_runs (
                 ended_at IS NULL
                 OR ended_at = date_trunc('second', ended_at)
             )
-        )
+        ),
+    CONSTRAINT ck_timer_runs_time_range
+        CHECK (
+            ended_at IS NULL
+                OR ended_at >= started_at
+            ),
+
+    CONSTRAINT ck_timer_runs_measured_seconds
+        CHECK (
+            measured_seconds IS NULL
+                OR measured_seconds >= 0
+            )
 );
 
 CREATE UNIQUE INDEX uq_timer_runs_active_membership

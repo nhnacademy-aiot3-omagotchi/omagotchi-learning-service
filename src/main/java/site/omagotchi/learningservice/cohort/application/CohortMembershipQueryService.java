@@ -3,7 +3,7 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.cohort.application.dto.result.CohortMembershipView;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 

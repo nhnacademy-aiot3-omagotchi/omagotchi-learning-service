@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.cohort.application.dto.result;
+package site.omagotchi.learningservice.cohort.application.result;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import site.omagotchi.learningservice.cohort.domain.CohortAuditLog;

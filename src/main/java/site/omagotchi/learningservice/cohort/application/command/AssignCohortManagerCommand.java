@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.cohort.application.dto.command;
+package site.omagotchi.learningservice.cohort.application.command;
 
 import java.util.UUID;
 

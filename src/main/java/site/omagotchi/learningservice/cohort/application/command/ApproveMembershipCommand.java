@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.cohort.application.dto.command;
+package site.omagotchi.learningservice.cohort.application.command;
 
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 

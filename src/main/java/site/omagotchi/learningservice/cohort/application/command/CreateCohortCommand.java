@@ -1,11 +1,11 @@
-package site.omagotchi.learningservice.cohort.application.dto.command;
+package site.omagotchi.learningservice.cohort.application.command;
 
 import java.time.LocalDate;
 
 /**
- * 기수 기본 정보 수정 명령
+ * 새 기수 생성 기본 정보 명령
  */
-public record UpdateCohortCommand(
+public record CreateCohortCommand(
         String name,
         String description,
         LocalDate startDate,

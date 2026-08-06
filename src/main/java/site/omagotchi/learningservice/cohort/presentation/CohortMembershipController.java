@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import site.omagotchi.learningservice.cohort.application.dto.result.CohortMembershipResponse;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipResponse;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
 import site.omagotchi.learningservice.cohort.presentation.dto.request.ApproveMembershipRequest;
 import site.omagotchi.learningservice.cohort.presentation.dto.request.RejectMembershipRequest;

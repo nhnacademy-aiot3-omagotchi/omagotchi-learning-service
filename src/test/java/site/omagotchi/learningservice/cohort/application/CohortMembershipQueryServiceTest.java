@@ -7,7 +7,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import site.omagotchi.learningservice.cohort.application.dto.result.CohortMembershipView;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;

@@ -2,7 +2,7 @@ package site.omagotchi.learningservice.cohort.presentation.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import site.omagotchi.learningservice.cohort.application.dto.command.CreateCohortCommand;
+import site.omagotchi.learningservice.cohort.application.command.CreateCohortCommand;
 
 import java.time.LocalDate;
 

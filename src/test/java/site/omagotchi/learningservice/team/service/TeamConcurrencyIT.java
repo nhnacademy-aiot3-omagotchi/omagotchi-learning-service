@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("test")
 @Import({TestcontainersConfiguration.class, TeamTestFixture.class})
-class TeamConcurrencyTest {
+class TeamConcurrencyIT {
 
     @Autowired
     TeamTestFixture fixture;

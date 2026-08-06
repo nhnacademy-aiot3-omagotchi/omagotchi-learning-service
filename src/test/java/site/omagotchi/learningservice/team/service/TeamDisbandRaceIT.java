@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @SpringBootTest
 @ActiveProfiles("test")
 @Import({TestcontainersConfiguration.class, TeamTestFixture.class})
-class TeamDisbandRaceTest {
+class TeamDisbandRaceIT {
 
     @Autowired
     TeamTestFixture fixture;

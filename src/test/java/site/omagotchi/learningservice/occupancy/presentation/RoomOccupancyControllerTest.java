@@ -34,7 +34,7 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standal
  */
 class RoomOccupancyControllerTest {
 
-    private static final String PATH = "/api/spaces/1/occupancies";
+    private static final String PATH = "/api/v1/spaces/1/occupancies";
     private static final UUID USER_ID = UUID.fromString("11111111-2222-3333-4444-555555555555");
     private static final OffsetDateTime STARTED_AT =
             OffsetDateTime.of(2026, 7, 24, 10, 0, 0, 0, ZoneOffset.ofHours(9));

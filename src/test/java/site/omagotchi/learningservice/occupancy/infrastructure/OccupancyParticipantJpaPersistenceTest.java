@@ -15,6 +15,7 @@ import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -107,6 +108,22 @@ class OccupancyParticipantJpaPersistenceTest {
 
         assertThat(occupancyParticipantJpaPersistence.countActiveByOccupancyId(OCCUPANCY_ID))
                 .isEqualTo(3L);
+    }
+
+    /**
+     * 활성 필터가 붙으면 안 된다. 재합류는 기존 행의 {@code left_at}을 되돌리는 방식이라
+     * 이미 이탈한 행도 찾아야 하고, 못 찾으면 INSERT로 흘러
+     * {@code uq_occupancy_participants_pair} 위반이 된다.
+     */
+    @Test
+    @DisplayName("참여자 조회는 이탈한 행도 찾는다.")
+    void test6() {
+        OccupancyParticipant left = participant();
+        left.leave(NOW.plusMinutes(10));
+        given(participantJpaRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, USER_ID))
+                .willReturn(Optional.of(left));
+
+        assertThat(occupancyParticipantJpaPersistence.find(OCCUPANCY_ID, USER_ID)).contains(left);
     }
 
     private OccupancyParticipant participant() {

@@ -51,8 +51,57 @@ class OccupancyParticipantTest {
     }
 
     @Test
-    @DisplayName("참여에 필요한 값이 비어 있으면 만들 수 없다.")
+    @DisplayName("이탈하면 이탈 시각이 기록된다.")
     void test3() {
+        OccupancyParticipant participant = join();
+
+        assertThat(participant.leave(JOINED_AT.plusMinutes(30))).isTrue();
+
+        assertThat(participant.getLeftAt()).isEqualTo(JOINED_AT.plusMinutes(30));
+        assertThat(participant.isActive()).isFalse();
+    }
+
+    /**
+     * 최초 이탈 시각이 참여 구간의 끝이다. 덮어쓰면 그 사람이 실제보다 오래 있었던 것으로
+     * 기록되므로, 두 번째 호출은 아무것도 바꾸지 않고 {@code false}를 돌려준다.
+     */
+    @Test
+    @DisplayName("이미 이탈했으면 이탈 시각을 덮어쓰지 않는다.")
+    void test4() {
+        OccupancyParticipant participant = join();
+        participant.leave(JOINED_AT.plusMinutes(30));
+
+        assertThat(participant.leave(JOINED_AT.plusHours(2))).isFalse();
+
+        assertThat(participant.getLeftAt()).isEqualTo(JOINED_AT.plusMinutes(30));
+    }
+
+    /** 재합류마다 joinedAt을 앞당기면 이 사람이 회의에 처음 들어온 시각을 잃는다. */
+    @Test
+    @DisplayName("재합류하면 최초 참여 시각을 유지한 채 이탈 시각만 지워진다.")
+    void test5() {
+        OccupancyParticipant participant = join();
+        participant.leave(JOINED_AT.plusMinutes(30));
+
+        participant.rejoin();
+
+        assertThat(participant.getLeftAt()).isNull();
+        assertThat(participant.isActive()).isTrue();
+        assertThat(participant.getJoinedAt()).isEqualTo(JOINED_AT);
+    }
+
+    @Test
+    @DisplayName("이탈 시각 없이는 이탈할 수 없다.")
+    void test6() {
+        OccupancyParticipant participant = join();
+
+        assertThatThrownBy(() -> participant.leave(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    @DisplayName("참여에 필요한 값이 비어 있으면 만들 수 없다.")
+    void test7() {
         assertThatThrownBy(() -> OccupancyParticipant.join(null, 10L, USER_ID, JOINED_AT))
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> OccupancyParticipant.join(100L, null, USER_ID, JOINED_AT))

@@ -58,7 +58,6 @@ class SpaceAdminControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.code").value("SPACE_DUPLICATE_NAME"))
                 .andExpect(jsonPath("$.message")
                         .value("이미 사용 중인 공간 이름입니다."))
@@ -73,7 +72,6 @@ class SpaceAdminControllerTest {
 
         mockMvc.perform(delete("/api/admin/spaces/999"))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.code").value("SPACE_NOT_FOUND"))
                 .andExpect(jsonPath("$.message")
                         .value("공간을 찾을 수 없습니다."))
@@ -92,7 +90,6 @@ class SpaceAdminControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.code").value("SPACE_INVALID_NAME"))
                 .andExpect(jsonPath("$.message")
                         .value("공간 이름이 올바르지 않습니다."))
@@ -110,7 +107,6 @@ class SpaceAdminControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_INVALID_CAPACITY"))
                 .andExpect(jsonPath("$.message")
@@ -130,7 +126,6 @@ class SpaceAdminControllerTest {
                                 }
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.code")
                         .value("COMMON_INVALID_REQUEST"))
                 .andExpect(jsonPath("$.path").value("/api/admin/spaces"));

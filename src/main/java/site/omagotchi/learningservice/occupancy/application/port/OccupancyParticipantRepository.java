@@ -41,5 +41,5 @@ public interface OccupancyParticipantRepository {
      * 활성만 조회하면 재합류가 INSERT로 흘러
      * {@code uq_occupancy_participants_pair} 위반이 된다.</p>
      */
-    Optional<OccupancyParticipant> find(Long occupancyId, UUID userId);
+    Optional<OccupancyParticipant> findByOccupancyIdAndUserId(Long occupancyId, UUID userId);
 }

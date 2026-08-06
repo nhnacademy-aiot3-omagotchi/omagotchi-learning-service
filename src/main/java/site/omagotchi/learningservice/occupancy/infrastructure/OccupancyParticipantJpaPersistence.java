@@ -37,7 +37,7 @@ public class OccupancyParticipantJpaPersistence implements OccupancyParticipantR
     }
 
     @Override
-    public Optional<OccupancyParticipant> find(Long occupancyId, UUID userId) {
+    public Optional<OccupancyParticipant> findByOccupancyIdAndUserId(Long occupancyId, UUID userId) {
         return participantJpaRepository.findByOccupancyIdAndUserId(occupancyId, userId);
     }
 }

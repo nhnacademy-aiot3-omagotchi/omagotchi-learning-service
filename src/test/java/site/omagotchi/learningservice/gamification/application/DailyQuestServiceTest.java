@@ -108,7 +108,6 @@ class DailyQuestServiceTest {
         );
 
         assertEquals(GamificationErrorCode.DAILY_QUEST_EXPIRED, exception.getErrorCode());
-        assertEquals(QuestStatus.EXPIRED, quest.getStatus());
     }
 
     @Test

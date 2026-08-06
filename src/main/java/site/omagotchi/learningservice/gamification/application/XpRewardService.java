@@ -57,6 +57,14 @@ public class XpRewardService {
         // EXP와 레벨은 user_character 한 행에 모이므로 지급 시점에 잠금
         UserCharacter character = userCharacterRepository.findWithLockById(representative.getId())
                 .orElseThrow(() -> new BusinessException(GamificationErrorCode.REPRESENTATIVE_CHARACTER_NOT_FOUND));
+        List<LevelPolicy> policies = characterGrowthService.requireLevelPolicies();
+        XpTransaction existingTransaction = xpTransactionRepository
+                .findBySourceTypeAndSourceId(sourceType, sourceId)
+                .orElse(null);
+        if (existingTransaction != null) {
+            return XpRewardResult.from(existingTransaction, character.levelState(policies));
+        }
+
         AdvancementStage previousStage = character.getAdvancementStage();
 
         XpTransaction transaction = xpTransactionRepository.save(XpTransaction.create(
@@ -67,7 +75,6 @@ public class XpRewardService {
                 amount
         ));
 
-        List<LevelPolicy> policies = characterGrowthService.requireLevelPolicies();
         LevelState levelState = character.addXp(amount, policies);
         // 한 번에 여러 전직 구간을 넘는 보상도 빠진 이력 없이 남김
         saveAdvancementHistories(character, previousStage, levelState, transaction.getId());

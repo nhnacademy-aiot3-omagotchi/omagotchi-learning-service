@@ -22,6 +22,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -115,6 +116,46 @@ class XpRewardServiceTest {
 
         verify(advancementHistoryRepository).save(any());
         assertEquals(AdvancementStage.FIRST, character.getAdvancementStage());
+    }
+
+    @Test
+    @DisplayName("잠금 후 기존 원장이 있으면 중복 지급하지 않는다")
+    void doesNotRewardWhenTransactionExistsAfterLock() {
+        UserCharacter character = UserCharacter.representative(USER_ID, 1L, "야간반장");
+        ReflectionTestUtils.setField(character, "id", 7L);
+        XpTransaction existingTransaction = XpTransaction.create(
+                USER_ID,
+                7L,
+                XpSourceType.DAILY_QUEST,
+                "10",
+                100
+        );
+        ReflectionTestUtils.setField(existingTransaction, "id", 20L);
+        List<LevelPolicy> policies = List.of(
+                LevelPolicy.create(1, 0),
+                LevelPolicy.create(2, 100)
+        );
+
+        XpRewardService service = new XpRewardService(
+                userCharacterRepository,
+                xpTransactionRepository,
+                advancementHistoryRepository,
+                characterGrowthService
+        );
+        when(xpTransactionRepository.findBySourceTypeAndSourceId(XpSourceType.DAILY_QUEST, "10"))
+                .thenReturn(Optional.empty(), Optional.of(existingTransaction));
+        when(characterGrowthService.requireRepresentativeCharacter(USER_ID)).thenReturn(character);
+        when(userCharacterRepository.findWithLockById(7L)).thenReturn(Optional.of(character));
+        when(characterGrowthService.requireLevelPolicies()).thenReturn(policies);
+
+        var result = service.reward(USER_ID, 100, XpSourceType.DAILY_QUEST, "10");
+
+        assertAll(
+                () -> assertEquals(20L, result.transactionId()),
+                () -> assertEquals(100, result.amount()),
+                () -> assertEquals(0, character.getTotalXp())
+        );
+        verify(xpTransactionRepository, never()).save(any(XpTransaction.class));
     }
 
     private List<LevelPolicy> levelPoliciesTo10() {

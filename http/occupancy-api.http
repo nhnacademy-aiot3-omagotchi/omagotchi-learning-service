@@ -20,8 +20,11 @@
 ###   (cohort_id, user_id, role, status, processed_at, processed_by_user_id)
 ### VALUES
 ###   (1, '88888888-8888-8888-8888-888888888888', 'STUDENT', 'ACTIVE', now(), gen_random_uuid()),
-###   (1, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'STUDENT', 'ACTIVE', now(), gen_random_uuid());
+###   (1, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'STUDENT', 'ACTIVE', now(), gen_random_uuid()),
+###   (1, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'STUDENT', 'ACTIVE', now(), gen_random_uuid()),
+###   (1, 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'STUDENT', 'ACTIVE', now(), gen_random_uuid());
 ### -- 99999999-...는 아무 행도 만들지 않는다 (비재실 케이스용)
+### -- bbbbbbbb-...(occupier2), cccccccc-...(occupier3)는 참여자 관리 시나리오(9번 이후) 전용이다
 ###
 ### -- 회의실·연구실 직접 INSERT (관리자 API는 status 기본값이 INACTIVE라 활성화 API가 없다)
 ### INSERT INTO learning_service.spaces
@@ -30,17 +33,20 @@
 ###   (1, '회의실 A', 'MEETING', 4, 'ACTIVE'),
 ###   (2, '회의실 B', 'MEETING', 4, 'ACTIVE'),
 ###   (3, '연구실 A', 'LAB', 20, 'ACTIVE'),
-###   (4, '회의실 C', 'MEETING', 4, 'INACTIVE');
+###   (4, '회의실 C', 'MEETING', 4, 'INACTIVE'),
+###   (5, '회의실 D', 'MEETING', 1, 'ACTIVE');
+### -- 회의실 D는 정원 1명이다 — 점유자 혼자로 이미 정원이 차므로 정원 초과(16번) 검증용이다
 ###
 ### -- id를 명시해 넣으면 시퀀스가 올라가지 않아 앱이 다음 공간을 만들 때 PK 충돌이 난다.
 ### SELECT setval(
 ###   pg_get_serial_sequence('learning_service.cohorts', 'id'),
-###   (SELECT MAX(id) FROM learning_service.cohorts)
-### );
+             ###   (SELECT MAX(id) FROM learning_service.cohorts)
+             ### );
 ### SELECT setval(
-###   pg_get_serial_sequence('learning_service.spaces', 'id'),
-###   (SELECT MAX(id) FROM learning_service.spaces)
-### );
+                   ###   pg_get_serial_sequence('learning_service.spaces', 'id'),
+                   ###   ()
+                       ### );SELECT MAX(id) FROM learning_service.spaces
+###
 ###
 ### 확인: 요청이 403 OCCUPANCY_NOT_PRESENT로 실패하면 대개 이 준비가 덜 된 것이다.
 ### SELECT id, user_id, status FROM learning_service.cohort_memberships ORDER BY id;
@@ -52,80 +58,70 @@
 
 @occupier = 88888888-8888-8888-8888-888888888888
 @otherOccupier = aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+@occupier2 = bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+@occupier3 = cccccccc-cccc-cccc-cccc-cccccccccccc
 @absentUser = 99999999-9999-9999-9999-999999999999
 
-### SecurityConfig가 anyRequest().authenticated()라 /api/spaces/**도 Bearer JWT가 먼저 필요하다.
+### SecurityConfig가 anyRequest().authenticated()라 /api/v1/spaces/**도 Bearer JWT가 먼저 필요하다.
 ### occupancy는 아직 X-User-Id 임시 방식이라(TODO, RoomOccupancyController 참고) JWT의 sub는
 ### 안 쓴다 — 필터 통과용과 실제 점유자 식별용이 분리되어 있으니 아래 X-User-Id 값만 맞으면 된다.
 ### 이 토큰은 로컬 secrets/jwt-private.pem으로 서명했고 secrets/jwt-public.pem으로 검증되니
 ### .env에 JWT_PUBLIC_KEY_LOCATION=file:./secrets/jwt-public.pem이 설정된 상태여야 통과한다.
 ### exp가 지나면(발급 후 24시간) 401 UNAUTHENTICATED로 바뀌니 그때는 새로 발급해야 한다.
-@token = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiIzZjU0NmE3Ni0zZTliLTQyNmMtOGE3OC1kNGYzMGY4ZThhMjciLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NTc0NzA1MCwiZXhwIjoxNzg1ODMzNDUwLCJqdGkiOiIwNWY3M2YyNC04YzQwLTQ2ZjMtYTQ3OC0zOTY2ZWY4OTViYWMifQ.jpF8CW9VuJ9KyM4zzf54oUUqKDyDzUgBTKGSB86fT7F0wJzAV3v5eJl9a8CrQccfydNtbv8PERfKIbmxIvts2ubXJOntcXuHdU4yBWZdC0Ybfq0PLKmfZerhEOi_aPGPYmCJXYVxXBP6voOso2EApxV1DPoYKNbqWeDfRPHBdybPami4GJb6nLK2W4n6md5qergRGzek1sO88GWj9bJ3mILeDjmW49QLEcHPdMl6B5R63vIAjbJru7Rtp6FdTzgKlLIFtWjrJhhhiaDlPW3R0yndY1ciQi_o-3GP8QtDbujq8LRE1tsjgGppBNXtchBe2xWbXhm5fCGlrru_br_4FQ
+### 새 토큰 발급: scripts/issue-test-jwt.sh --sub 3f546a76-3e9b-426c-8a78-d4f30f8e8a27
+@token = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiIzZjU0NmE3Ni0zZTliLTQyNmMtOGE3OC1kNGYzMGY4ZThhMjciLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NTkxOTAwNSwiZXhwIjoxNzg2MDA1NDA1LCJqdGkiOiI3OWMyMDg4Ny0xYThjLTQ5MjgtOTE4Zi02NDNjOTlmZWUwODgifQ.Ohn2qVKWJskU80a-OFlC406TOKn2yh8B6lc2p7pzU0192liR-XsWvWSb4-E87PyimA3gFalfW5gsNPaCf_ydNk1bR8NPHzKnZuKj8rs-sCxh5jpPnc2WJ3gwvWYYbQ4kIcDOn4wa9Z28dp5mKHl0stQ71jg6-8L_qd_Xw8A4IyhmHeUaauZPdCEZw2X6GzaazCcghHncq7sKDfFubItA7LjOgGepdo9KXOrN9RWJqs4PZ75u1U1XA0VPCLcLzGfha8k0Ui2MEDFL98k-Ex67a9gVlVPtvLvDfVOdOvjyX2VYhMcJs0hndMWsuPGPtJAy9kMWqvfbxxOHdgg2Zd55Pw
 
 
-### =========================================================
 ### 1. 점유 성공
 ### 기대: 201 Created
 ### room_occupancies 1행(ACTIVE) + occupancy_participants 1행이 같은 트랜잭션으로 생긴다 (MR-27)
-### =========================================================
-POST {{baseUrl}}/api/spaces/1/occupancies
+POST {{baseUrl}}/api/v1/spaces/1/occupancies
 Authorization: Bearer {{token}}
 X-User-Id: {{occupier}}
 
 
-### =========================================================
 ### 2. 존재하지 않는 공간 점유
 ### 기대: 404 Not Found / OCCUPANCY_SPACE_NOT_FOUND
-### =========================================================
-POST {{baseUrl}}/api/spaces/999999/occupancies
+POST {{baseUrl}}/api/v1/spaces/999999/occupancies
 Authorization: Bearer {{token}}
 X-User-Id: {{occupier}}
 
 
-### =========================================================
 ### 3. LAB 공간 점유 시도 (MR-20)
 ### 기대: 400 Bad Request / OCCUPANCY_NOT_MEETING_ROOM
-### =========================================================
-POST {{baseUrl}}/api/spaces/3/occupancies
+POST {{baseUrl}}/api/v1/spaces/3/occupancies
 Authorization: Bearer {{token}}
 X-User-Id: {{occupier}}
 
 
-### =========================================================
 ### 4. 비활성 공간 점유 시도 (RM-13)
 ### 기대: 400 Bad Request / OCCUPANCY_SPACE_INACTIVE
-### =========================================================
-POST {{baseUrl}}/api/spaces/4/occupancies
+POST {{baseUrl}}/api/v1/spaces/4/occupancies
 Authorization: Bearer {{token}}
 X-User-Id: {{occupier}}
 
 
-### =========================================================
+
 ### 5. 비재실 사용자의 점유 시도 (MR-22)
 ### 기대: 403 Forbidden / OCCUPANCY_NOT_PRESENT
 ### absentUser는 ACTIVE cohort_membership이 없어 StubPresenceReader가 재실 아님으로 판정한다
-### =========================================================
-POST {{baseUrl}}/api/spaces/2/occupancies
+POST {{baseUrl}}/api/v1/spaces/2/occupancies
 Authorization: Bearer {{token}}
 X-User-Id: {{absentUser}}
 
 
-### =========================================================
 ### 6. 이미 사용 중인 회의실 재점유 시도 (MR-08, MR-09)
 ### 사전: 1번이 성공해 회의실 A(spaceId=1)가 이미 ACTIVE 상태여야 한다
 ### 기대: 409 Conflict / OCCUPANCY_ROOM_ALREADY_OCCUPIED
-### =========================================================
-POST {{baseUrl}}/api/spaces/1/occupancies
+POST {{baseUrl}}/api/v1/spaces/1/occupancies
 Authorization: Bearer {{token}}
 X-User-Id: {{otherOccupier}}
 
 
-### =========================================================
 ### 7. 이미 점유 중인 사용자의 다른 회의실 점유 시도 (MR-10)
 ### 사전: 1번이 성공해 occupier가 이미 spaceId=1을 점유 중이어야 한다
 ### 기대: 409 Conflict / OCCUPANCY_ALREADY_OCCUPYING
-### =========================================================
-POST {{baseUrl}}/api/spaces/2/occupancies
+POST {{baseUrl}}/api/v1/spaces/2/occupancies
 Authorization: Bearer {{token}}
 X-User-Id: {{occupier}}
 
@@ -136,5 +132,153 @@ X-User-Id: {{occupier}}
 ### 주의: MissingRequestHeaderException 핸들러가 GlobalExceptionHandler에 없어서
 ###       공통 응답 형식({status, code, message, path})이 아니라 Spring 기본 응답이 온다.
 ### =========================================================
-POST {{baseUrl}}/api/spaces/2/occupancies
+POST {{baseUrl}}/api/v1/spaces/2/occupancies
 Authorization: Bearer {{token}}
+
+
+### =========================================================
+### 회의 참여자 관리 API (MR-19, MR-28~MR-31, MR-33)
+### 대상의 멤버십도 재실 구간에서 도출한다 — 요청 본문은 targetUserId 하나뿐이다.
+### 9번부터는 사전 준비의 1번 시나리오(occupier가 spaceId=1을 점유 중)에 이어진다.
+### =========================================================
+
+### 9. 참여자 추가 성공 (MR-19, MR-28)
+### 기대: 201 Created. occupancy_participants에 otherOccupier 행이 생긴다
+POST {{baseUrl}}/api/v1/spaces/1/occupancies/participants
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier}}
+Content-Type: application/json
+
+{
+  "targetUserId": "{{otherOccupier}}"
+}
+
+
+### 10. 비재실 사용자 추가 시도 (MR-19)
+### 기대: 403 Forbidden / OCCUPANCY_TARGET_NOT_PRESENT
+POST {{baseUrl}}/api/v1/spaces/1/occupancies/participants
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier}}
+Content-Type: application/json
+
+{
+  "targetUserId": "{{absentUser}}"
+}
+
+
+### 11. 점유자 아닌 사람의 추가 시도 (MR-29)
+### 기대: 403 Forbidden / OCCUPANCY_NOT_OCCUPIER
+### absentUser는 spaceId=1의 점유자가 아니다 — 대상이 누구든 권한 검증이 먼저 막는다
+POST {{baseUrl}}/api/v1/spaces/1/occupancies/participants
+Authorization: Bearer {{token}}
+X-User-Id: {{absentUser}}
+Content-Type: application/json
+
+{
+  "targetUserId": "{{otherOccupier}}"
+}
+
+
+### 12. 활성 점유가 없는 공간에 참여자 추가 시도
+### 기대: 409 Conflict / OCCUPANCY_ENDED
+### spaceId=2는 아직 아무도 점유하지 않았다 (5·7·8번 시도가 전부 실패로 끝났다)
+POST {{baseUrl}}/api/v1/spaces/2/occupancies/participants
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier}}
+Content-Type: application/json
+
+{
+  "targetUserId": "{{otherOccupier}}"
+}
+
+
+### 13. [준비] occupier2가 회의실 B(spaceId=2) 점유 시작
+### 기대: 201 Created — 14번의 전제 조건이다
+POST {{baseUrl}}/api/v1/spaces/2/occupancies
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier2}}
+
+
+### 14. 이미 다른 회의에 참여 중인 사용자 추가 시도 (MR-30)
+### 기대: 409 Conflict / OCCUPANCY_ALREADY_PARTICIPATING
+### otherOccupier는 9번에서 이미 spaceId=1의 활성 참여자다
+POST {{baseUrl}}/api/v1/spaces/2/occupancies/participants
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier2}}
+Content-Type: application/json
+
+{
+  "targetUserId": "{{otherOccupier}}"
+}
+
+
+### 15. [준비] occupier3가 정원 1명인 회의실 D(spaceId=5) 점유 시작
+### 기대: 201 Created — 점유자 본인만으로 이미 정원이 찬다 (16번의 전제 조건)
+POST {{baseUrl}}/api/v1/spaces/5/occupancies
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier3}}
+
+
+### 16. 정원 초과 참여자 추가 시도 (MR-28)
+### 기대: 409 Conflict / OCCUPANCY_CAPACITY_EXCEEDED
+POST {{baseUrl}}/api/v1/spaces/5/occupancies/participants
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier3}}
+Content-Type: application/json
+
+{
+  "targetUserId": "{{otherOccupier}}"
+}
+
+
+### 17. 점유자의 참여자 제외 성공 (MR-31)
+### 기대: 204 No Content. otherOccupier의 spaceId=1 참여 행에 left_at이 찍힌다
+DELETE {{baseUrl}}/api/v1/spaces/1/occupancies/participants/{{otherOccupier}}
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier}}
+
+
+### 18. 점유자 본인 제외·이탈 시도 (MR-31)
+### 기대: 400 Bad Request / OCCUPANCY_OCCUPIER_CANNOT_LEAVE
+### 점유자는 이 경로로 나갈 수 없다 — 반납으로만 종료할 수 있다
+DELETE {{baseUrl}}/api/v1/spaces/1/occupancies/participants/{{occupier}}
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier}}
+
+
+### 19. 참여한 적 없는 사용자 제외 시도
+### 기대: 404 Not Found / OCCUPANCY_PARTICIPANT_NOT_FOUND
+### occupier2는 spaceId=1에 참여한 적이 없다 (13번에서 spaceId=2를 점유했을 뿐이다).
+DELETE {{baseUrl}}/api/v1/spaces/1/occupancies/participants/{{occupier2}}
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier}}
+
+
+### 20. [준비] otherOccupier 재합류
+### 기대: 201 Created. 새 행이 아니라 17번에서 만든 기존 행의 left_at이 복원된다 (결정 #30)
+POST {{baseUrl}}/api/v1/spaces/1/occupancies/participants
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier}}
+Content-Type: application/json
+
+{
+  "targetUserId": "{{otherOccupier}}"
+}
+
+
+### 21. 권한 없는 제3자의 제외 시도 (MR-31)
+### 기대: 403 Forbidden / OCCUPANCY_NOT_OCCUPIER
+### absentUser는 spaceId=1의 점유자도, 대상 본인도 아니다
+DELETE {{baseUrl}}/api/v1/spaces/1/occupancies/participants/{{otherOccupier}}
+Authorization: Bearer {{token}}
+X-User-Id: {{absentUser}}
+
+
+### 22. 본인 이탈 성공 (MR-31)
+### 기대: 204 No Content
+DELETE {{baseUrl}}/api/v1/spaces/1/occupancies/participants/{{otherOccupier}}
+Authorization: Bearer {{token}}
+X-User-Id: {{otherOccupier}}
+
+### 미포함: DIFFERENT_COHORT(MR-33)는 대상이 점유자와 다른 기수 소속이어야 재현되는데,
+### 이 사전 준비는 단일 기수(id=1)만 만들므로 두 번째 기수·멤버십 세트를 별도로 넣어야 한다.

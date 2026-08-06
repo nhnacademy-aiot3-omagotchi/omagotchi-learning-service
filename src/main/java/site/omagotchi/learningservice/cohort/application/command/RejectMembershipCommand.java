@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.cohort.application.dto.command;
+package site.omagotchi.learningservice.cohort.application.command;
 
 /**
  * 기수 참가 신청 거절 사유 명령

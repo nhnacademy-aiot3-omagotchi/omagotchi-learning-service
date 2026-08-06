@@ -73,7 +73,7 @@ public class SpaceCommandService {
             UUID actorUserId,
             String globalRole
     ) {
-        Space existingSpace = findSpace(spaceId);
+        Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
         requireSpaceManager(existingSpace, actorUserId, globalRole, false);
 
@@ -151,7 +151,7 @@ public class SpaceCommandService {
             UUID actorUserId,
             String globalRole
     ) {
-        Space existingSpace = findSpace(spaceId);
+        Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
         requireSpaceManager(existingSpace, actorUserId, globalRole, true);
 
@@ -164,6 +164,8 @@ public class SpaceCommandService {
             );
         }
 
+        ensureNoActiveOccupancy(spaceId, now);
+
         Space deletedSpace =
                 existingSpace.delete(now);
 
@@ -175,7 +177,7 @@ public class SpaceCommandService {
             UUID actorUserId,
             String globalRole
     ) {
-        Space existingSpace = findSpace(spaceId);
+        Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
         requireSpaceManager(existingSpace, actorUserId, globalRole, false);
         ZonedDateTime now = ZonedDateTime.now(clock);
@@ -193,7 +195,7 @@ public class SpaceCommandService {
             UUID actorUserId,
             String globalRole
     ) {
-        Space existingSpace = findSpace(spaceId);
+        Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
         requireSpaceManager(existingSpace, actorUserId, globalRole, false);
         ZonedDateTime now = ZonedDateTime.now(clock);
@@ -208,9 +210,9 @@ public class SpaceCommandService {
             );
         }
 
-        Space deactivatedSpace = existingSpace.deactivate(reason, now);
-
         ensureNoActiveOccupancy(spaceId, now);
+
+        Space deactivatedSpace = existingSpace.deactivate(reason, now);
 
         return spaceRepository.save(deactivatedSpace);
     }
@@ -280,18 +282,6 @@ public class SpaceCommandService {
         return spaceRepository.save(existingSpace.unassignCohort(
                 ZonedDateTime.now(clock)
         ));
-    }
-
-    private Space findSpace(
-            Long spaceId
-    ) {
-        return spaceRepository
-                .findById(spaceId)
-                .orElseThrow(
-                        () -> new BusinessException(
-                                SpaceErrorCode.NOT_FOUND
-                        )
-                );
     }
 
     private Space findSpaceForUpdate(Long spaceId) {

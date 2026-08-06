@@ -131,7 +131,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsDuplicateNameOnUpdate() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(existingSpace()));
         when(spaceRepository.existsActiveByNameAndIdNot("회의실 B", 1L))
                 .thenReturn(true);
@@ -151,7 +151,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsUpdatingMissingSpace() {
-        when(spaceRepository.findById(999L))
+        when(spaceRepository.findByIdForUpdate(999L))
                 .thenReturn(Optional.empty());
 
         assertBusinessError(
@@ -169,7 +169,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsDeletingMissingSpace() {
-        when(spaceRepository.findById(999L))
+        when(spaceRepository.findByIdForUpdate(999L))
                 .thenReturn(Optional.empty());
 
         assertBusinessError(
@@ -180,7 +180,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsActivatingMissingSpace() {
-        when(spaceRepository.findById(999L))
+        when(spaceRepository.findByIdForUpdate(999L))
                 .thenReturn(Optional.empty());
 
         assertBusinessError(
@@ -191,7 +191,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsDeactivatingMissingSpace() {
-        when(spaceRepository.findById(999L))
+        when(spaceRepository.findByIdForUpdate(999L))
                 .thenReturn(Optional.empty());
 
         assertBusinessError(
@@ -293,7 +293,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void updatesSpaceWithoutChangingExistingBehavior() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(existingSpace()));
         when(spaceRepository.existsActiveByNameAndIdNot("회의실 B", 1L))
                 .thenReturn(false);
@@ -314,11 +314,13 @@ class SpaceCommandServiceTest {
         assertThat(updated.getCapacity()).isEqualTo(12);
         assertThat(updated.getCohortId()).isEqualTo(42L);
         verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
+        verify(spaceRepository).findByIdForUpdate(1L);
+        verify(spaceRepository, never()).findById(1L);
     }
 
     @Test
     void deletesSpaceWithoutChangingExistingBehavior() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(existingSpace()));
         when(spaceRepository.save(any(Space.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -330,11 +332,13 @@ class SpaceCommandServiceTest {
         assertThat(captor.getValue().isDeleted()).isTrue();
         assertThat(captor.getValue().getCohortId()).isEqualTo(42L);
         verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
+        verify(spaceRepository).findByIdForUpdate(1L);
+        verify(spaceRepository, never()).findById(1L);
     }
 
     @Test
     void activatesInactiveSpaceAndClearsInactiveReason() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(space(
                         SpaceOperationalStatus.INACTIVE,
                         " 정기 점검 ",
@@ -351,11 +355,13 @@ class SpaceCommandServiceTest {
         assertThat(activated.getUpdatedAt())
                 .isEqualTo(ZonedDateTime.ofInstant(NOW, SEOUL));
         verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
+        verify(spaceRepository).findByIdForUpdate(1L);
+        verify(spaceRepository, never()).findById(1L);
     }
 
     @Test
     void rejectsActivatingAlreadyActiveSpace() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(space(
                         SpaceOperationalStatus.ACTIVE,
                         null,
@@ -370,7 +376,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsActivatingDeletedSpace() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(space(
                         SpaceOperationalStatus.INACTIVE,
                         null,
@@ -385,7 +391,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsDeactivatingDeletedSpace() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(space(
                         SpaceOperationalStatus.INACTIVE,
                         null,
@@ -400,7 +406,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsDeletingDeletedSpace() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(space(
                         SpaceOperationalStatus.INACTIVE,
                         null,
@@ -415,7 +421,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void deactivatesActiveSpaceWithNormalizedReason() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(space(
                         SpaceOperationalStatus.ACTIVE,
                         null,
@@ -433,11 +439,13 @@ class SpaceCommandServiceTest {
                 .isEqualTo(SpaceOperationalStatus.INACTIVE);
         assertThat(deactivated.getInactiveReason()).isEqualTo("냉방 점검");
         verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
+        verify(spaceRepository).findByIdForUpdate(1L);
+        verify(spaceRepository, never()).findById(1L);
     }
 
     @Test
     void rejectsDeactivatingAlreadyInactiveSpace() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(existingSpace()));
 
         assertBusinessError(
@@ -448,7 +456,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsBlankInactiveReason() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(space(
                         SpaceOperationalStatus.ACTIVE,
                         null,
@@ -463,7 +471,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsDeactivationWhenActiveOccupancyExists() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(space(
                         SpaceOperationalStatus.ACTIVE,
                         null,
@@ -478,11 +486,12 @@ class SpaceCommandServiceTest {
                 SpaceErrorCode.ACTIVE_OCCUPANCY_EXISTS,
                 () -> spaceCommandService.deactivate(1L, "점검")
         );
+        verify(spaceRepository, never()).save(any(Space.class));
     }
 
     @Test
     void allowsInactiveCapacityReduction() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(existingSpace()));
         when(spaceRepository.save(any(Space.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -501,7 +510,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsActiveCapacityReduction() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(space(
                         SpaceOperationalStatus.ACTIVE,
                         null,
@@ -523,7 +532,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsTypeChangeWhenActiveOccupancyExists() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(existingSpace()));
         when(spaceOccupancyQueryPort.existsActiveOccupancy(
                 any(Long.class),
@@ -545,7 +554,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void doesNotQueryOccupancyWhenTypeIsUnchanged() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(space(
                         SpaceOperationalStatus.ACTIVE,
                         null,
@@ -573,7 +582,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void activeTypeChangeFailsBeforeOccupancyQueryOrSave() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(space(
                         SpaceOperationalStatus.ACTIVE,
                         null,
@@ -600,23 +609,40 @@ class SpaceCommandServiceTest {
     }
 
     @Test
-    void deleteDoesNotQueryActiveOccupancy() {
-        when(spaceRepository.findById(1L))
+    void deletesInactiveSpaceAfterCheckingActiveOccupancy() {
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(existingSpace()));
         when(spaceRepository.save(any(Space.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         spaceCommandService.delete(1L);
 
-        verify(spaceOccupancyQueryPort, never()).existsActiveOccupancy(
+        verify(spaceOccupancyQueryPort).existsActiveOccupancy(
                 any(Long.class),
                 any(ZonedDateTime.class)
         );
     }
 
     @Test
+    void rejectsDeletingSpaceWhenActiveOccupancyExists() {
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(existingSpace()));
+        when(spaceOccupancyQueryPort.existsActiveOccupancy(
+                any(Long.class),
+                any(ZonedDateTime.class)
+        )).thenReturn(true);
+
+        assertBusinessError(
+                SpaceErrorCode.ACTIVE_OCCUPANCY_EXISTS,
+                () -> spaceCommandService.delete(1L)
+        );
+
+        verify(spaceRepository, never()).save(any(Space.class));
+    }
+
+    @Test
     void rejectsChangingDeletedSpace() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(space(
                         SpaceOperationalStatus.INACTIVE,
                         null,
@@ -638,7 +664,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsDeletingUnmanagedSpace() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(unmanagedInactiveSpace()));
 
         assertBusinessError(
@@ -649,7 +675,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsChangingAssignedLabTypeWithSpecificError() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(assignedLab()));
 
         assertBusinessError(
@@ -667,7 +693,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void deletesAssignedInactiveLab() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(assignedLab()));
         when(spaceRepository.save(any(Space.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -679,7 +705,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsNullTypeFromDirectServiceCall() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(existingSpace()));
 
         assertBusinessError(
@@ -697,7 +723,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsInvalidNameFromDirectServiceCall() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(existingSpace()));
 
         assertBusinessError(
@@ -715,7 +741,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsInvalidCapacityFromDirectServiceCall() {
-        when(spaceRepository.findById(1L))
+        when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(existingSpace()));
 
         assertBusinessError(

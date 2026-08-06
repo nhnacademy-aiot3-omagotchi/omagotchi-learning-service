@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.SpaceCommandService;
+import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
+import site.omagotchi.learningservice.space.domain.SpaceType;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -507,13 +509,137 @@ class SpaceIT {
             assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
             start.countDown();
 
-            assertThat(List.of(first.get(), second.get()))
+            assertThat(List.of(
+                    first.get(10, TimeUnit.SECONDS),
+                    second.get(10, TimeUnit.SECONDS)
+            ))
                     .containsExactlyInAnyOrder(
                             "SUCCESS",
                             "SPACE_LAB_ALREADY_ASSIGNED"
                     );
             assertThat(readCohortId(labId))
                     .isIn(firstCohortId, secondCohortId);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void deleteAndActivateDoNotCreateDeletedActiveSpace()
+            throws Exception {
+        Long cohortId = insertCohortWithManager(UUID.randomUUID());
+        Long spaceId = insertTypedSpace(
+                "통합 삭제 활성화 경쟁 " + UUID.randomUUID(),
+                "MEETING",
+                "INACTIVE",
+                cohortId,
+                null
+        );
+        UUID systemAdminId = UUID.randomUUID();
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            Future<String> deletion = executor.submit(() ->
+                    deleteAfterSignal(
+                            spaceId,
+                            systemAdminId,
+                            ready,
+                            start
+                    ));
+            Future<String> activation = executor.submit(() ->
+                    activateAfterSignal(
+                            spaceId,
+                            systemAdminId,
+                            ready,
+                            start
+                    ));
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            String deleteResult = deletion.get(10, TimeUnit.SECONDS);
+            String activateResult = activation.get(10, TimeUnit.SECONDS);
+            SpaceRow finalState = readSpaceRow(spaceId);
+
+            if ("DELETE_SUCCESS".equals(deleteResult)) {
+                assertThat(activateResult)
+                        .isEqualTo("SPACE_ALREADY_DELETED");
+                assertThat(finalState.status()).isEqualTo("INACTIVE");
+                assertThat(finalState.deletedAt()).isNotNull();
+            } else {
+                assertThat(deleteResult)
+                        .isEqualTo("SPACE_ACTIVE_DELETE_NOT_ALLOWED");
+                assertThat(activateResult).isEqualTo("ACTIVATE_SUCCESS");
+                assertThat(finalState.status()).isEqualTo("ACTIVE");
+                assertThat(finalState.deletedAt()).isNull();
+            }
+
+            assertThat(finalState.status().equals("ACTIVE")
+                    && finalState.deletedAt() != null).isFalse();
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void deleteAndUpdateDoNotReviveDeletedSpace()
+            throws Exception {
+        Long cohortId = insertCohortWithManager(UUID.randomUUID());
+        String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
+        String originalName = "삭제수정-" + uniqueSuffix;
+        String updatedName = originalName + "-수정";
+        Long spaceId = insertTypedSpace(
+                originalName,
+                "MEETING",
+                "INACTIVE",
+                cohortId,
+                null
+        );
+        UUID systemAdminId = UUID.randomUUID();
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try {
+            Future<String> deletion = executor.submit(() ->
+                    deleteAfterSignal(
+                            spaceId,
+                            systemAdminId,
+                            ready,
+                            start
+                    ));
+            Future<String> update = executor.submit(() ->
+                    updateAfterSignal(
+                            spaceId,
+                            updatedName,
+                            systemAdminId,
+                            ready,
+                            start
+                    ));
+
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+
+            String deleteResult = deletion.get(10, TimeUnit.SECONDS);
+            String updateResult = update.get(10, TimeUnit.SECONDS);
+            SpaceRow finalState = readSpaceRow(spaceId);
+
+            assertThat(deleteResult).isEqualTo("DELETE_SUCCESS");
+            assertThat(updateResult)
+                    .isIn("UPDATE_SUCCESS", "SPACE_ALREADY_DELETED");
+            assertThat(finalState.deletedAt()).isNotNull();
+
+            if ("UPDATE_SUCCESS".equals(updateResult)) {
+                assertThat(finalState.name()).isEqualTo(updatedName);
+            } else {
+                assertThat(finalState.name()).isEqualTo(originalName);
+            }
         } finally {
             executor.shutdownNow();
         }
@@ -879,7 +1005,7 @@ class SpaceIT {
     }
 
     @Test
-    void deletesInactiveSpaceEvenWhenActiveOccupancyExists()
+    void rejectsDeletingInactiveSpaceWhenActiveOccupancyExists()
             throws Exception {
         Long spaceId = insertSpace(
                 "통합 점유 중 비활성 공간 삭제",
@@ -899,14 +1025,11 @@ class SpaceIT {
                         "/api/admin/spaces/{space-id}",
                         spaceId
                 ).header("X-User-Id", MANAGER_ID))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code")
+                        .value("SPACE_ACTIVE_OCCUPANCY_EXISTS"));
 
-        OffsetDateTime deletedAt = jdbcTemplate.queryForObject("""
-                SELECT deleted_at
-                FROM learning_service.spaces
-                WHERE id = ?
-                """, OffsetDateTime.class, spaceId);
-        assertThat(deletedAt).isEqualTo(OFFSET_NOW);
+        assertThat(readSpaceRow(spaceId).deletedAt()).isNull();
     }
 
     @Test
@@ -1424,6 +1547,24 @@ class SpaceIT {
                 """, Long.class, spaceId);
     }
 
+    private SpaceRow readSpaceRow(Long spaceId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT name, status, deleted_at
+                FROM learning_service.spaces
+                WHERE id = ?
+                """,
+                (resultSet, rowNumber) -> new SpaceRow(
+                        resultSet.getString("name"),
+                        resultSet.getString("status"),
+                        resultSet.getObject(
+                                "deleted_at",
+                                OffsetDateTime.class
+                        )
+                ),
+                spaceId
+        );
+    }
+
     private String assignAfterSignal(
             Long spaceId,
             Long cohortId,
@@ -1444,6 +1585,81 @@ class SpaceIT {
                     "SYSTEM_ADMIN"
             );
             return "SUCCESS";
+        } catch (BusinessException exception) {
+            return exception.getErrorCode().code();
+        }
+    }
+
+    private String deleteAfterSignal(
+            Long spaceId,
+            UUID actorUserId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) throws InterruptedException {
+        ready.countDown();
+        if (!start.await(5, TimeUnit.SECONDS)) {
+            return "START_TIMEOUT";
+        }
+
+        try {
+            spaceCommandService.delete(
+                    spaceId,
+                    actorUserId,
+                    "SYSTEM_ADMIN"
+            );
+            return "DELETE_SUCCESS";
+        } catch (BusinessException exception) {
+            return exception.getErrorCode().code();
+        }
+    }
+
+    private String activateAfterSignal(
+            Long spaceId,
+            UUID actorUserId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) throws InterruptedException {
+        ready.countDown();
+        if (!start.await(5, TimeUnit.SECONDS)) {
+            return "START_TIMEOUT";
+        }
+
+        try {
+            spaceCommandService.activate(
+                    spaceId,
+                    actorUserId,
+                    "SYSTEM_ADMIN"
+            );
+            return "ACTIVATE_SUCCESS";
+        } catch (BusinessException exception) {
+            return exception.getErrorCode().code();
+        }
+    }
+
+    private String updateAfterSignal(
+            Long spaceId,
+            String name,
+            UUID actorUserId,
+            CountDownLatch ready,
+            CountDownLatch start
+    ) throws InterruptedException {
+        ready.countDown();
+        if (!start.await(5, TimeUnit.SECONDS)) {
+            return "START_TIMEOUT";
+        }
+
+        try {
+            spaceCommandService.update(
+                    spaceId,
+                    new UpdateSpaceCommand(
+                            name,
+                            SpaceType.MEETING,
+                            8
+                    ),
+                    actorUserId,
+                    "SYSTEM_ADMIN"
+            );
+            return "UPDATE_SUCCESS";
         } catch (BusinessException exception) {
             return exception.getErrorCode().code();
         }
@@ -1505,6 +1721,13 @@ class SpaceIT {
             Long membershipId,
             UUID occupierUserId,
             UUID participantUserId
+    ) {
+    }
+
+    private record SpaceRow(
+            String name,
+            String status,
+            OffsetDateTime deletedAt
     ) {
     }
 

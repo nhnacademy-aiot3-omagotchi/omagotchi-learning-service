@@ -69,4 +69,35 @@ public class OccupancyParticipant {
     public boolean isActive() {
         return leftAt == null;
     }
+
+    /**
+     * 이탈·제외를 기록한다 (MR-31, MR-32).
+     *
+     * <p>행을 지우지 않고 {@code leftAt}만 찍는 것이 구간 모델의 요점이다. 이미 이탈한
+     * 행에 다시 찍지 않는 것도 중요하다 — 최초 이탈 시각이 참여 구간의 끝이고, 덮어쓰면
+     * 그 사람이 실제보다 오래 있었던 것으로 기록된다.</p>
+     *
+     * @return 이번 호출로 이탈 처리됐으면 {@code true}, 이미 이탈한 상태였으면 {@code false}
+     */
+    public boolean leave(OffsetDateTime leftAt) {
+        if (this.leftAt != null) {
+            return false;
+        }
+        this.leftAt = Objects.requireNonNull(leftAt, "이탈 시각은 필수");
+        return true;
+    }
+
+    /**
+     * 재합류한다 (결정 #30).
+     *
+     * <p>새 행을 만들지 않고 기존 행의 {@code leftAt}을 되돌린다.
+     * {@code uq_occupancy_participants_pair}가 점유당 사람 1행이라 새 행은 애초에 들어가지
+     * 않으며, 행을 지우고 다시 넣으면 참여 이력이 사라진다.</p>
+     *
+     * <p>{@code joinedAt}을 갱신하지 않는 것은 의도다 — 이 사람이 이 회의에 처음 들어온
+     * 시각이 최초 참여 시각이고, 재합류마다 앞당기면 참여 구간의 시작을 잃는다.</p>
+     */
+    public void rejoin() {
+        this.leftAt = null;
+    }
 }

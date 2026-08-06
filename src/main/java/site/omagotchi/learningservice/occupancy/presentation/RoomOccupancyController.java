@@ -25,7 +25,7 @@ import java.util.UUID;
  * JWT 인증이 붙으면 {@code TeamController}와 함께 {@code @AuthenticationPrincipal}로 교체한다.</p>
  */
 @RestController
-@RequestMapping("/api/spaces/{spaceId}/occupancies")
+@RequestMapping("/api/v1/spaces/{space-id}/occupancies")
 @RequiredArgsConstructor
 public class RoomOccupancyController {
 
@@ -39,7 +39,7 @@ public class RoomOccupancyController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public RoomOccupancyResponse start(
-            @PathVariable Long spaceId,
+            @PathVariable("space-id") Long spaceId,
             @RequestHeader("X-User-Id") UUID userId
     ) {
         return RoomOccupancyResponse.from(roomOccupancyService.start(spaceId, userId));

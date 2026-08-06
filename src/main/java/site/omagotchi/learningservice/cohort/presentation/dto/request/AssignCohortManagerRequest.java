@@ -1,7 +1,7 @@
 package site.omagotchi.learningservice.cohort.presentation.dto.request;
 
 import jakarta.validation.constraints.NotNull;
-import site.omagotchi.learningservice.cohort.application.dto.command.AssignCohortManagerCommand;
+import site.omagotchi.learningservice.cohort.application.command.AssignCohortManagerCommand;
 
 import java.util.UUID;
 

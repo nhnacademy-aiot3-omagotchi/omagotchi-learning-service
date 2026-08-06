@@ -55,7 +55,7 @@ class RoomOccupancyTest {
     @Test
     @DisplayName("기본 점유 시간은 2시간이다.")
     void test4() {
-        assertThat(Duration.ofHours(2)).isEqualTo(RoomOccupancy.DEFAULT_DURATION);
+        assertThat(RoomOccupancy.DEFAULT_DURATION).isEqualTo(Duration.ofHours(2));
     }
 
     /**

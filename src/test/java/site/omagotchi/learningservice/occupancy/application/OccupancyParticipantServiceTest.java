@@ -11,7 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
-import site.omagotchi.learningservice.cohort.application.dto.result.CohortMembershipView;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
@@ -34,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -100,7 +101,8 @@ class OccupancyParticipantServiceTest {
     @DisplayName("참여자를 추가하면 재실 구간의 멤버십으로 행이 생성된다.")
     void test1() {
         givenAddableTarget();
-        given(participantRepository.find(OCCUPANCY_ID, TARGET_USER_ID)).willReturn(Optional.empty());
+        given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
+                .willReturn(Optional.empty());
 
         occupancyParticipantService.add(SPACE_ID, TARGET_USER_ID, OCCUPIER_USER_ID);
 
@@ -126,7 +128,8 @@ class OccupancyParticipantServiceTest {
         givenAddableTarget();
         OccupancyParticipant left = participant();
         left.leave(now().minusMinutes(10));
-        given(participantRepository.find(OCCUPANCY_ID, TARGET_USER_ID)).willReturn(Optional.of(left));
+        given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
+                .willReturn(Optional.of(left));
 
         occupancyParticipantService.add(SPACE_ID, TARGET_USER_ID, OCCUPIER_USER_ID);
 
@@ -169,6 +172,27 @@ class OccupancyParticipantServiceTest {
                 OccupancyErrorCode.DIFFERENT_COHORT,
                 () -> occupancyParticipantService.add(SPACE_ID, TARGET_USER_ID, OCCUPIER_USER_ID)
         );
+    }
+
+    /**
+     * 원인이 점유자 자신에게 있으므로 대상을 아무리 바꿔도 벗어날 수 없다.
+     * {@code DIFFERENT_COHORT}로 던지면 지원 요청에서 원인을 오인하게 되므로 구분한다.
+     */
+    @Test
+    @DisplayName("점유자의 멤버십이 활성이 아니면 대상과 무관하게 전용 코드로 실패한다.")
+    void test22() {
+        givenActiveOccupancy();
+        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room()));
+        given(cohortMembershipQueryService.findActiveMembership(OCCUPIER_MEMBERSHIP_ID))
+                .willReturn(Optional.empty());
+
+        assertBusinessError(
+                OccupancyErrorCode.OCCUPIER_MEMBERSHIP_INACTIVE,
+                () -> occupancyParticipantService.add(SPACE_ID, TARGET_USER_ID, OCCUPIER_USER_ID)
+        );
+
+        verify(presenceReader, never()).findOpenPresence(TARGET_USER_ID);
+        verify(participantRepository, never()).save(any(OccupancyParticipant.class));
     }
 
     @Test
@@ -247,13 +271,61 @@ class OccupancyParticipantServiceTest {
         verify(participantRepository, never()).save(any(OccupancyParticipant.class));
     }
 
+    /**
+     * 좌석을 새로 쓰지 않는 요청이 정원 검사에 걸리면 안 된다. 걸리면 같은 요청의 결과가
+     * 잔여 좌석이라는 무관한 상태에 따라 갈리고, 클라이언트는 자리를 비워도 해결되지 않는
+     * 409를 받는다.
+     */
+    @Test
+    @DisplayName("정원이 꽉 차 있어도 이미 참여 중인 사용자의 재추가는 성공한다.")
+    void test23() {
+        givenAddableTarget();
+        given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
+                .willReturn(Optional.of(participant()));   // 이탈하지 않은 활성 참여자
+
+        // 정원이 꽉 찬 상태를 만들어 둔다. lenient인 것이 요점이다 —
+        // 올바른 구현은 이 값을 보지도 않으므로 아래 verify가 그것을 고정한다.
+        lenient().when(participantRepository.countActiveByOccupancyId(OCCUPANCY_ID))
+                .thenReturn((long) CAPACITY);
+
+        occupancyParticipantService.add(SPACE_ID, TARGET_USER_ID, OCCUPIER_USER_ID);
+
+        // 좌석을 소비하지 않으므로 정원을 세지도 않는다.
+        verify(participantRepository, never()).countActiveByOccupancyId(any());
+        verify(participantRepository, never()).save(any(OccupancyParticipant.class));
+    }
+
+    /**
+     * [대조군] 같은 "기존 행이 있다"라도 이탈한 사람은 좌석을 새로 소비하므로 정원 검사를
+     * 거쳐야 한다. test23과 이 테스트의 차이는 기존 행의 활성 여부뿐이다.
+     */
+    @Test
+    @DisplayName("이탈했던 사용자의 재합류는 정원이 꽉 차 있으면 거부된다.")
+    void test24() {
+        givenAddableTarget();
+        OccupancyParticipant left = participant();
+        left.leave(now().minusMinutes(10));
+        given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
+                .willReturn(Optional.of(left));
+        given(participantRepository.countActiveByOccupancyId(OCCUPANCY_ID))
+                .willReturn((long) CAPACITY);
+
+        assertBusinessError(
+                OccupancyErrorCode.CAPACITY_EXCEEDED,
+                () -> occupancyParticipantService.add(SPACE_ID, TARGET_USER_ID, OCCUPIER_USER_ID)
+        );
+
+        assertThat(left.isActive()).isFalse();   // 복원되지 않았다
+    }
+
     @Test
     @DisplayName("잔여 1석이면 추가에 성공한다.")
     void test10() {
         givenAddableTarget();
         given(participantRepository.countActiveByOccupancyId(OCCUPANCY_ID))
                 .willReturn((long) CAPACITY - 1);
-        given(participantRepository.find(OCCUPANCY_ID, TARGET_USER_ID)).willReturn(Optional.empty());
+        given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
+                .willReturn(Optional.empty());
 
         occupancyParticipantService.add(SPACE_ID, TARGET_USER_ID, OCCUPIER_USER_ID);
 
@@ -268,7 +340,8 @@ class OccupancyParticipantServiceTest {
     @DisplayName("정원 카운트는 점유 행 락을 잡은 뒤에 한다.")
     void test11() {
         givenAddableTarget();
-        given(participantRepository.find(OCCUPANCY_ID, TARGET_USER_ID)).willReturn(Optional.empty());
+        given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
+                .willReturn(Optional.empty());
 
         occupancyParticipantService.add(SPACE_ID, TARGET_USER_ID, OCCUPIER_USER_ID);
 
@@ -302,7 +375,7 @@ class OccupancyParticipantServiceTest {
                 () -> occupancyParticipantService.remove(SPACE_ID, TARGET_USER_ID, TARGET_USER_ID)
         );
 
-        verify(participantRepository, never()).find(any(), any());
+        verify(participantRepository, never()).findByOccupancyIdAndUserId(any(), any());
     }
 
     // ────────────────────────────── 이탈·제외 ──────────────────────────────
@@ -312,7 +385,7 @@ class OccupancyParticipantServiceTest {
     void test12() {
         givenLockedOccupancy();
         OccupancyParticipant participant = participant();
-        given(participantRepository.find(OCCUPANCY_ID, TARGET_USER_ID))
+        given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
                 .willReturn(Optional.of(participant));
 
         occupancyParticipantService.remove(SPACE_ID, TARGET_USER_ID, TARGET_USER_ID);
@@ -326,7 +399,7 @@ class OccupancyParticipantServiceTest {
     void test13() {
         givenLockedOccupancy();
         OccupancyParticipant participant = participant();
-        given(participantRepository.find(OCCUPANCY_ID, TARGET_USER_ID))
+        given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
                 .willReturn(Optional.of(participant));
 
         occupancyParticipantService.remove(SPACE_ID, TARGET_USER_ID, OCCUPIER_USER_ID);
@@ -376,7 +449,8 @@ class OccupancyParticipantServiceTest {
     @DisplayName("참여자가 아닌 사람은 이탈할 수 없다.")
     void test17() {
         givenLockedOccupancy();
-        given(participantRepository.find(OCCUPANCY_ID, TARGET_USER_ID)).willReturn(Optional.empty());
+        given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
+                .willReturn(Optional.empty());
 
         assertBusinessError(
                 OccupancyErrorCode.PARTICIPANT_NOT_FOUND,
@@ -395,7 +469,7 @@ class OccupancyParticipantServiceTest {
         OccupancyParticipant participant = participant();
         OffsetDateTime firstLeftAt = now().minusMinutes(30);
         participant.leave(firstLeftAt);
-        given(participantRepository.find(OCCUPANCY_ID, TARGET_USER_ID))
+        given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
                 .willReturn(Optional.of(participant));
 
         occupancyParticipantService.remove(SPACE_ID, TARGET_USER_ID, TARGET_USER_ID);
@@ -407,7 +481,7 @@ class OccupancyParticipantServiceTest {
     @DisplayName("이탈도 점유 행 락을 잡은 뒤에 처리한다.")
     void test19() {
         givenLockedOccupancy();
-        given(participantRepository.find(OCCUPANCY_ID, TARGET_USER_ID))
+        given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
                 .willReturn(Optional.of(participant()));
 
         occupancyParticipantService.remove(SPACE_ID, TARGET_USER_ID, TARGET_USER_ID);
@@ -415,7 +489,7 @@ class OccupancyParticipantServiceTest {
         InOrder order = inOrder(occupancyRepository, participantRepository);
         order.verify(occupancyRepository).findActiveSummaryBySpaceId(SPACE_ID);
         order.verify(occupancyRepository).lockById(OCCUPANCY_ID);
-        order.verify(participantRepository).find(OCCUPANCY_ID, TARGET_USER_ID);
+        order.verify(participantRepository).findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID);
     }
 
     // ────────────────────────────── 헬퍼 ──────────────────────────────

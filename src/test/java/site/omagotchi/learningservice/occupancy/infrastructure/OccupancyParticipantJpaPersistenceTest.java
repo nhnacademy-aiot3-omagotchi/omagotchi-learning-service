@@ -123,7 +123,9 @@ class OccupancyParticipantJpaPersistenceTest {
         given(participantJpaRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, USER_ID))
                 .willReturn(Optional.of(left));
 
-        assertThat(occupancyParticipantJpaPersistence.find(OCCUPANCY_ID, USER_ID)).contains(left);
+        assertThat(occupancyParticipantJpaPersistence
+                .findByOccupancyIdAndUserId(OCCUPANCY_ID, USER_ID))
+                .contains(left);
     }
 
     private OccupancyParticipant participant() {

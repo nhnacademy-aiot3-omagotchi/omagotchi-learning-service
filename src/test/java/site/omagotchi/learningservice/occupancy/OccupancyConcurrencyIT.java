@@ -270,7 +270,9 @@ class OccupancyConcurrencyIT {
                 }));
             }
 
-            ready.await(30, TimeUnit.SECONDS);
+            assertThat(ready.await(30, TimeUnit.SECONDS))
+                    .as("모든 스레드가 출발선에 도달해야 동시성 경로를 검증할 수 있다")
+                    .isTrue();
             start.countDown();
 
             for (Future<Throwable> future : futures) {

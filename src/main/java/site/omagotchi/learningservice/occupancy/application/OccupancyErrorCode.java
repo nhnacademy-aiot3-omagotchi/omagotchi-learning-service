@@ -52,7 +52,9 @@ public enum OccupancyErrorCode implements ErrorCode {
     OCCUPANCY_ENDED(ErrorType.CONFLICT, "OCCUPANCY_ENDED",
             "이미 종료된 점유입니다."),
     CAPACITY_EXCEEDED(ErrorType.CONFLICT, "OCCUPANCY_CAPACITY_EXCEEDED",
-            "회의실 정원을 초과했습니다.");                                    // MR-28
+            "회의실 정원을 초과했습니다."),                                    // MR-28
+    OCCUPIER_MEMBERSHIP_INACTIVE(ErrorType.CONFLICT, "OCCUPANCY_OCCUPIER_MEMBERSHIP_INACTIVE",
+            "점유자의 기수 소속이 유효하지 않아 참여자를 추가할 수 없습니다.");   // MR-33, 대상이 아니라 점유자 쪽 원인
 
     // 재실 조회 자체의 실패(명세서 02, 503)에는 전용 코드를 두지 않는다.
     // BusinessException은 ErrorType.INTERNAL을 전달할 수 없고(의도된 가드), 이 실패는

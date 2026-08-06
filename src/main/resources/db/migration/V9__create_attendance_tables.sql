@@ -10,7 +10,7 @@ CREATE TABLE learning_service.attendance_records (
     early_leave_minutes INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    version SMALLINT NOT NULL DEFAULT 0,
+    version BIGINT NOT NULL DEFAULT 0,
 
     CONSTRAINT fk_attendance_records_membership
         FOREIGN KEY (cohort_membership_id)

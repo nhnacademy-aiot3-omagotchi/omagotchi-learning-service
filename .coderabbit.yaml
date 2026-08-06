@@ -58,12 +58,9 @@ reviews:
   pre_merge_checks:
     docstrings:
       mode: off
-
-  title:
-    mode: "warning"
-    requirements: "무엇을 왜 바꿨는지 드러나게. 예: feat(space): 실습실 배정 API 추가"
-
-
+    title:
+      mode: "warning"
+      requirements: "무엇을 왜 바꿨는지 드러나게. 예: feat(space): 실습실 배정 API 추가"
 
   # AI 에이전트로 수정할 일이 많으면 true로 되돌리세요
   enable_prompt_for_ai_agents: false # 프롬프트 추천 안함

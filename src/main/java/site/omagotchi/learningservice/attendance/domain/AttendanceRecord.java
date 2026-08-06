@@ -62,7 +62,7 @@ public class AttendanceRecord {
 
     @Version
     @Column(nullable = false)
-    private Short version;
+    private Long version;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -104,6 +104,13 @@ public class AttendanceRecord {
         this.autoStatus = autoStatus;
         this.finalStatus = autoStatus;
         this.earlyLeaveMinutes = earlyLeaveMinutes;
+    }
+
+    public void applyDecision(AttendanceDecision decision) {
+        this.autoStatus = decision.status();
+        this.finalStatus = decision.status();
+        this.lateMinutes = decision.lateMinutes();
+        this.earlyLeaveMinutes = decision.earlyLeaveMinutes();
     }
 
     public void markAbsent() {

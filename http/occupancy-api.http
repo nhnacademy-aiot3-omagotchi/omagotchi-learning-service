@@ -40,13 +40,11 @@
 ### -- id를 명시해 넣으면 시퀀스가 올라가지 않아 앱이 다음 공간을 만들 때 PK 충돌이 난다.
 ### SELECT setval(
 ###   pg_get_serial_sequence('learning_service.cohorts', 'id'),
-             ###   (SELECT MAX(id) FROM learning_service.cohorts)
-             ### );
-### SELECT setval(
-                   ###   pg_get_serial_sequence('learning_service.spaces', 'id'),
-                   ###   ()
-                       ### );SELECT MAX(id) FROM learning_service.spaces
+###   (SELECT MAX(id) FROM learning_service.cohorts));
 ###
+### SELECT setval(
+###   pg_get_serial_sequence('learning_service.spaces', 'id'),
+###   (SELECT MAX(id) FROM learning_service.spaces));
 ###
 ### 확인: 요청이 403 OCCUPANCY_NOT_PRESENT로 실패하면 대개 이 준비가 덜 된 것이다.
 ### SELECT id, user_id, status FROM learning_service.cohort_memberships ORDER BY id;

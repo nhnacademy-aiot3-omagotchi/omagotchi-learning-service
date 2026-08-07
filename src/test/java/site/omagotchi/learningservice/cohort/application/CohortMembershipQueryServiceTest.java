@@ -9,13 +9,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
+import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -85,6 +88,86 @@ class CohortMembershipQueryServiceTest {
 
         verify(membershipRepository, never())
                 .findByIdAndStatus(null, CohortMembershipStatus.ACTIVE);
+    }
+
+    // ────────────────── 팀 파트 소비처 (기수 지정·전체·배치) ──────────────────
+
+    @Test
+    @DisplayName("기수와 계정으로 활성 소속을 찾는다.")
+    void test5() {
+        given(membershipRepository.findFirstByCohortIdAndUserIdAndStatusOrderByRequestedAtDesc(
+                COHORT_ID, USER_ID, CohortMembershipStatus.ACTIVE))
+                .willReturn(Optional.of(activeMembership()));
+
+        assertThat(cohortMembershipQueryService.findActiveMembership(COHORT_ID, USER_ID))
+                .contains(new CohortMembershipView(MEMBERSHIP_ID, COHORT_ID, USER_ID));
+    }
+
+    /** 팀 생성은 "소속 없음"을 403으로 옮긴다 — 여기서 404를 던지면 그 구분이 무너진다. */
+    @Test
+    @DisplayName("해당 기수 소속이 없으면 예외 대신 빈 값을 돌려준다.")
+    void test6() {
+        given(membershipRepository.findFirstByCohortIdAndUserIdAndStatusOrderByRequestedAtDesc(
+                COHORT_ID, USER_ID, CohortMembershipStatus.ACTIVE))
+                .willReturn(Optional.empty());
+
+        assertThat(cohortMembershipQueryService.findActiveMembership(COHORT_ID, USER_ID)).isEmpty();
+    }
+
+    /** 매니저·멘토는 여러 기수를 담당할 수 있어 복수 건이 정상이다 (COH-F-17). */
+    @Test
+    @DisplayName("활성 소속 전체를 돌려준다.")
+    void test7() {
+        given(membershipRepository.findByUserIdOrderByRequestedAtDesc(USER_ID))
+                .willReturn(List.of(activeMembership(), otherCohortMembership()));
+
+        assertThat(cohortMembershipQueryService.findActiveMemberships(USER_ID))
+                .containsExactly(
+                        new CohortMembershipView(MEMBERSHIP_ID, COHORT_ID, USER_ID),
+                        new CohortMembershipView(20L, 4L, USER_ID));
+    }
+
+    /**
+     * 리포지토리 조회에 status 필터가 없어 서비스가 걸러야 한다. 이게 빠지면 종료·대기
+     * 소속까지 세어 팀 생성이 "기수를 지정하라"(400)로 잘못 분기한다.
+     */
+    @Test
+    @DisplayName("활성이 아닌 소속은 제외한다.")
+    void test8() {
+        CohortMembership pending = CohortMembership.pending(9L, USER_ID, CohortMembershipRole.STUDENT);
+        ReflectionTestUtils.setField(pending, "id", 30L);
+        given(membershipRepository.findByUserIdOrderByRequestedAtDesc(USER_ID))
+                .willReturn(List.of(activeMembership(), pending));
+
+        assertThat(cohortMembershipQueryService.findActiveMemberships(USER_ID))
+                .containsExactly(new CohortMembershipView(MEMBERSHIP_ID, COHORT_ID, USER_ID));
+    }
+
+    /** 팀원이 몇 명이든 호출은 1회여야 한다 — 반복문 안 단건 조회는 N+1이 된다. */
+    @Test
+    @DisplayName("멤버십 식별자를 계정 식별자로 일괄 변환한다.")
+    void test9() {
+        given(membershipRepository.findAllById(List.of(MEMBERSHIP_ID, 20L)))
+                .willReturn(List.of(activeMembership(), otherCohortMembership()));
+
+        assertThat(cohortMembershipQueryService.findUserIds(List.of(MEMBERSHIP_ID, 20L)))
+                .containsOnlyKeys(MEMBERSHIP_ID, 20L)
+                .containsValue(USER_ID);
+    }
+
+    @Test
+    @DisplayName("빈 목록이면 조회하지 않는다.")
+    void test10() {
+        assertThat(cohortMembershipQueryService.findUserIds(List.of())).isEmpty();
+
+        verify(membershipRepository, never()).findAllById(any());
+    }
+
+    private CohortMembership otherCohortMembership() {
+        CohortMembership membership =
+                CohortMembership.activeManager(4L, USER_ID, UUID.randomUUID());
+        ReflectionTestUtils.setField(membership, "id", 20L);
+        return membership;
     }
 
     private CohortMembership activeMembership() {

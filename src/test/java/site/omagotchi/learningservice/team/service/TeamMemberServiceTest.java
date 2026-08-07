@@ -9,7 +9,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.team.application.port.AccountReader;
-import site.omagotchi.learningservice.team.application.port.MembershipReader;
+import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.team.application.TeamAccessSupport;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamMembership;
@@ -39,7 +40,7 @@ class TeamMemberServiceTest {
     TeamMemberRepository teamMemberRepository;
 
     @Mock
-    MembershipReader membershipReader;
+    CohortMembershipQueryService cohortMembershipQueryService;
 
     @Mock
     AccountReader accountReader;
@@ -98,13 +99,13 @@ class TeamMemberServiceTest {
     @DisplayName("정상 요청이면 팀원이 추가된다.")
     void test3() {
         UUID targetUserId = UUID.randomUUID();
-        TeamMembership targetMembership = new TeamMembership(20L, 1L, targetUserId);
+        CohortMembershipView targetMembership = new CohortMembershipView(20L, 1L, targetUserId);
 
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.ACTIVE);
-        given(membershipReader.findActive(1L, targetUserId)).willReturn(Optional.of(targetMembership));
+        given(cohortMembershipQueryService.findActiveMembership(1L, targetUserId)).willReturn(Optional.of(targetMembership));
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
         given(teamMemberRepository.countByTeamId(1L)).willReturn(3L);
 
@@ -125,7 +126,7 @@ class TeamMemberServiceTest {
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.ACTIVE);
-        given(membershipReader.findActive(1L, targetUserId)).willReturn(Optional.empty());
+        given(cohortMembershipQueryService.findActiveMembership(1L, targetUserId)).willReturn(Optional.empty());
 
         AddTeamMemberRequest request = new AddTeamMemberRequest(targetUserId);
 
@@ -175,13 +176,13 @@ class TeamMemberServiceTest {
     @DisplayName("정원이 가득 차면 팀원을 추가할 수 없다.")
     void test7() {
         UUID targetUserId = UUID.randomUUID();
-        TeamMembership targetMembership = new TeamMembership(20L, 1L, targetUserId);
+        CohortMembershipView targetMembership = new CohortMembershipView(20L, 1L, targetUserId);
 
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.ACTIVE);
-        given(membershipReader.findActive(1L, targetUserId)).willReturn(Optional.of(targetMembership));
+        given(cohortMembershipQueryService.findActiveMembership(1L, targetUserId)).willReturn(Optional.of(targetMembership));
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
         given(teamMemberRepository.countByTeamId(1L)).willReturn(8L);
 

@@ -14,7 +14,8 @@ import site.omagotchi.learningservice.team.application.dto.command.CreateTeamReq
 import site.omagotchi.learningservice.team.application.dto.result.TeamDetailResponse;
 import site.omagotchi.learningservice.team.application.dto.result.TeamResponse;
 import site.omagotchi.learningservice.team.application.port.AccountReader;
-import site.omagotchi.learningservice.team.application.port.MembershipReader;
+import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.domain.TeamMember;
@@ -47,7 +48,7 @@ class TeamServiceTest {
     TeamAccessSupport teamAccessSupport;
 
     @Mock
-    MembershipReader membershipReader;
+    CohortMembershipQueryService cohortMembershipQueryService;
 
     @Mock
     AccountReader accountReader;
@@ -137,7 +138,7 @@ class TeamServiceTest {
         given(teamAccessSupport.requireMembership(teamId, 10L)).willReturn(masterMember);
         given(teamMemberRepository.findByTeamIdOrderByJoinedAtAsc(teamId))
                 .willReturn(List.of(normalMember, masterMember));
-        given(membershipReader.findUserIds(any()))
+        given(cohortMembershipQueryService.findUserIds(any()))
                 .willReturn(Map.of(10L, masterUserId, 20L, memberUserId));
         given(accountReader.findDisplayNames(any()))
                 .willReturn(Map.of(masterUserId, "마스터닉네임", memberUserId, "멤버닉네임"));
@@ -172,9 +173,9 @@ class TeamServiceTest {
     @Test
     @DisplayName("소속된 팀 목록을 반환한다. (GR-06)")
     void test6() {
-        TeamMembership m1 = new TeamMembership(10L, 1L, userId);
-        TeamMembership m2 = new TeamMembership(20L, 2L, userId);
-        given(membershipReader.findActiveAll(userId)).willReturn(List.of(m1, m2));
+        CohortMembershipView m1 = new CohortMembershipView(10L, 1L, userId);
+        CohortMembershipView m2 = new CohortMembershipView(20L, 2L, userId);
+        given(cohortMembershipQueryService.findActiveMemberships(userId)).willReturn(List.of(m1, m2));
 
         TeamMember tm1 = createMember(1L, 100L, 10L, TeamMemberRole.MASTER, OffsetDateTime.now());
         TeamMember tm2 = createMember(2L, 200L, 20L, TeamMemberRole.MASTER, OffsetDateTime.now());
@@ -194,7 +195,7 @@ class TeamServiceTest {
     @Test
     @DisplayName("활성 멤버십이 없으면 빈 목록을 반환한다.")
     void test7() {
-        given(membershipReader.findActiveAll(userId)).willReturn(List.of());
+        given(cohortMembershipQueryService.findActiveMemberships(userId)).willReturn(List.of());
 
         List<TeamResponse> result = teamService.getMyTeams(userId);
 
@@ -206,8 +207,8 @@ class TeamServiceTest {
     @Test
     @DisplayName("멤버십은 있지만 소속된 팀이 없으면 빈 목록을 반환한다.")
     void test8() {
-        TeamMembership m1 = new TeamMembership(10L, 1L, userId);
-        given(membershipReader.findActiveAll(userId)).willReturn(List.of(m1));
+        CohortMembershipView m1 = new CohortMembershipView(10L, 1L, userId);
+        given(cohortMembershipQueryService.findActiveMemberships(userId)).willReturn(List.of(m1));
         given(teamMemberRepository.findByCohortMembershipIdIn(List.of(10L))).willReturn(List.of());
 
         List<TeamResponse> result = teamService.getMyTeams(userId);

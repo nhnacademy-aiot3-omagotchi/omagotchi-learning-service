@@ -137,13 +137,6 @@ public class OccupancyTestFixture {
         return spaceRepository.save(space).getId();
     }
 
-    /** 회의실이 아닌 공간. 유형 검증(MR-20)에 쓴다. */
-    public Long createLab(String name, int capacity) {
-        ZonedDateTime now = ZonedDateTime.now(SEOUL);
-        Space space = Space.create(name, SpaceType.LAB, capacity, now).activate(now);
-        return spaceRepository.save(space).getId();
-    }
-
     /**
      * 만들어진 멤버십의 두 얼굴.
      *

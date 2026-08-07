@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.space.application.SpaceCommandService;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
 import site.omagotchi.learningservice.space.presentation.request.AssignLabCohortRequest;
@@ -38,7 +39,7 @@ public class SpaceAdminController {
     public CreateSpaceResponse create(
             @RequestHeader("X-User-Id") UUID userId,
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER")
-            String globalRole,
+            GlobalRole globalRole,
             @Valid
             @RequestBody
             CreateSpaceRequest request
@@ -57,7 +58,7 @@ public class SpaceAdminController {
             @PathVariable("space-id") Long spaceId,
             @RequestHeader("X-User-Id") UUID userId,
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER")
-            String globalRole,
+            GlobalRole globalRole,
             @Valid
             @RequestBody
             UpdateSpaceRequest request
@@ -84,7 +85,7 @@ public class SpaceAdminController {
             @PathVariable("space-id") Long spaceId,
             @RequestHeader("X-User-Id") UUID userId,
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER")
-            String globalRole
+            GlobalRole globalRole
     ) {
         return SpaceStatusResponse.from(
                 spaceCommandService.activate(spaceId, userId, globalRole)
@@ -96,7 +97,7 @@ public class SpaceAdminController {
             @PathVariable("space-id") Long spaceId,
             @RequestHeader("X-User-Id") UUID userId,
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER")
-            String globalRole,
+            GlobalRole globalRole,
             @Valid @RequestBody DeactivateSpaceRequest request
     ) {
         return SpaceStatusResponse.from(
@@ -115,7 +116,7 @@ public class SpaceAdminController {
             @PathVariable("space-id") Long spaceId,
             @RequestHeader("X-User-Id") UUID userId,
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER")
-            String globalRole
+            GlobalRole globalRole
     ) {
         spaceCommandService.delete(spaceId, userId, globalRole);
     }
@@ -125,7 +126,7 @@ public class SpaceAdminController {
             @PathVariable("space-id") Long spaceId,
             @RequestHeader("X-User-Id") UUID userId,
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER")
-            String globalRole,
+            GlobalRole globalRole,
             @Valid @RequestBody AssignLabCohortRequest request
     ) {
         return SpaceCohortResponse.from(
@@ -143,7 +144,7 @@ public class SpaceAdminController {
             @PathVariable("space-id") Long spaceId,
             @RequestHeader("X-User-Id") UUID userId,
             @RequestHeader(value = "X-Global-Role", defaultValue = "USER")
-            String globalRole
+            GlobalRole globalRole
     ) {
         return SpaceCohortResponse.from(
                 spaceCommandService.unassignCohort(

@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.SpaceCommandService;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
@@ -1582,7 +1583,7 @@ class SpaceIT {
                     spaceId,
                     cohortId,
                     actorUserId,
-                    "SYSTEM_ADMIN"
+                    GlobalRole.SYSTEM_ADMIN
             );
             return "SUCCESS";
         } catch (BusinessException exception) {
@@ -1605,7 +1606,7 @@ class SpaceIT {
             spaceCommandService.delete(
                     spaceId,
                     actorUserId,
-                    "SYSTEM_ADMIN"
+                    GlobalRole.SYSTEM_ADMIN
             );
             return "DELETE_SUCCESS";
         } catch (BusinessException exception) {
@@ -1628,7 +1629,7 @@ class SpaceIT {
             spaceCommandService.activate(
                     spaceId,
                     actorUserId,
-                    "SYSTEM_ADMIN"
+                    GlobalRole.SYSTEM_ADMIN
             );
             return "ACTIVATE_SUCCESS";
         } catch (BusinessException exception) {
@@ -1657,7 +1658,7 @@ class SpaceIT {
                             8
                     ),
                     actorUserId,
-                    "SYSTEM_ADMIN"
+                    GlobalRole.SYSTEM_ADMIN
             );
             return "UPDATE_SUCCESS";
         } catch (BusinessException exception) {

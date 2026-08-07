@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
@@ -842,7 +843,7 @@ class SpaceCommandServiceTest {
     void rejectsUnassigningUnassignedLabForSystemAdmin() {
         when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(lab(null, null)));
-        when(cohortAccessPort.isSystemAdmin("SYSTEM_ADMIN"))
+        when(cohortAccessPort.isSystemAdmin(GlobalRole.SYSTEM_ADMIN))
                 .thenReturn(true);
 
         assertBusinessError(
@@ -947,18 +948,27 @@ class SpaceCommandServiceTest {
         }
 
         private Space create(CreateSpaceCommand command) {
-            return delegate.create(command, ACTOR_USER_ID, "USER");
+            return delegate.create(command, ACTOR_USER_ID, GlobalRole.USER);
         }
 
         private Space update(
                 Long spaceId,
                 UpdateSpaceCommand command
         ) {
-            return delegate.update(spaceId, command, ACTOR_USER_ID, "USER");
+            return delegate.update(
+                    spaceId,
+                    command,
+                    ACTOR_USER_ID,
+                    GlobalRole.USER
+            );
         }
 
         private Space activate(Long spaceId) {
-            return delegate.activate(spaceId, ACTOR_USER_ID, "USER");
+            return delegate.activate(
+                    spaceId,
+                    ACTOR_USER_ID,
+                    GlobalRole.USER
+            );
         }
 
         private Space deactivate(
@@ -969,12 +979,12 @@ class SpaceCommandServiceTest {
                     spaceId,
                     reason,
                     ACTOR_USER_ID,
-                    "USER"
+                    GlobalRole.USER
             );
         }
 
         private void delete(Long spaceId) {
-            delegate.delete(spaceId, ACTOR_USER_ID, "USER");
+            delegate.delete(spaceId, ACTOR_USER_ID, GlobalRole.USER);
         }
 
         private Space assignCohort(Long spaceId, Long cohortId) {
@@ -982,7 +992,7 @@ class SpaceCommandServiceTest {
                     spaceId,
                     cohortId,
                     ACTOR_USER_ID,
-                    "USER"
+                    GlobalRole.USER
             );
         }
 
@@ -990,7 +1000,7 @@ class SpaceCommandServiceTest {
             return delegate.unassignCohort(
                     spaceId,
                     ACTOR_USER_ID,
-                    "USER"
+                    GlobalRole.USER
             );
         }
 
@@ -998,7 +1008,7 @@ class SpaceCommandServiceTest {
             return delegate.unassignCohort(
                     spaceId,
                     ACTOR_USER_ID,
-                    "SYSTEM_ADMIN"
+                    GlobalRole.SYSTEM_ADMIN
             );
         }
     }

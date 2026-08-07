@@ -8,6 +8,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPort;
 
@@ -30,7 +31,7 @@ public class SpaceCohortAccessReader implements SpaceCohortAccessPort {
     }
 
     @Override
-    public boolean isSystemAdmin(String globalRole) {
+    public boolean isSystemAdmin(GlobalRole globalRole) {
         try {
             cohortAccessService.requireSystemAdmin(globalRole);
             return true;

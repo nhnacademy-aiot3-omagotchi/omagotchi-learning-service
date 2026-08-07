@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.space.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
@@ -32,7 +33,7 @@ public class SpaceCommandService {
     public Space create(
             CreateSpaceCommand command,
             UUID actorUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         Long cohortId = resolveCreationCohortId(
                 command.cohortId(),
@@ -71,7 +72,7 @@ public class SpaceCommandService {
             Long spaceId,
             UpdateSpaceCommand command,
             UUID actorUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
@@ -149,7 +150,7 @@ public class SpaceCommandService {
     public void delete(
             Long spaceId,
             UUID actorUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
@@ -175,7 +176,7 @@ public class SpaceCommandService {
     public Space activate(
             Long spaceId,
             UUID actorUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
@@ -193,7 +194,7 @@ public class SpaceCommandService {
             Long spaceId,
             String reason,
             UUID actorUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
@@ -221,7 +222,7 @@ public class SpaceCommandService {
             Long spaceId,
             Long cohortId,
             UUID actorUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
@@ -256,7 +257,7 @@ public class SpaceCommandService {
     public Space unassignCohort(
             Long spaceId,
             UUID actorUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
@@ -312,7 +313,7 @@ public class SpaceCommandService {
     private void requireSpaceManager(
             Space space,
             UUID actorUserId,
-            String globalRole,
+            GlobalRole globalRole,
             boolean deleteCommand
     ) {
         if (space.getCohortId() == null) {
@@ -337,7 +338,7 @@ public class SpaceCommandService {
     private Long resolveCreationCohortId(
             Long requestedCohortId,
             UUID actorUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         if (requestedCohortId == null) {
             List<Long> managedCohortIds = cohortAccessPort
@@ -370,7 +371,7 @@ public class SpaceCommandService {
     private void requireCohortManager(
             Long cohortId,
             UUID actorUserId,
-            String globalRole
+            GlobalRole globalRole
     ) {
         if (cohortAccessPort.isSystemAdmin(globalRole)) {
             return;

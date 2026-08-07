@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.occupancy.presentation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
 import site.omagotchi.learningservice.occupancy.presentation.response.RoomOccupancyResponse;
 
@@ -30,6 +31,7 @@ import java.util.UUID;
 public class RoomOccupancyController {
 
     private final RoomOccupancyService roomOccupancyService;
+    private final RoomOccupancyLifecycleService roomOccupancyLifecycleService;
 
     /**
      * 점유 시작 (MR-01).
@@ -43,5 +45,39 @@ public class RoomOccupancyController {
             @RequestHeader("X-User-Id") UUID userId
     ) {
         return RoomOccupancyResponse.from(roomOccupancyService.start(spaceId, userId));
+    }
+
+    /**
+     * 연장 (MR-06).
+     *
+     * <p>상태 전이라 경로 마지막이 동사형이다 (09-rest-api-convention). 200에 본문을
+     * 싣는 것은 클라이언트가 새 {@code expiresAt}과 {@code remainingSeconds}로 타이머를
+     * 다시 맞춰야 하기 때문이다.</p>
+     *
+     * @return 200. 너무 이르거나 횟수를 다 썼으면 409
+     */
+    @PostMapping("/extend")
+    public RoomOccupancyResponse extend(
+            @PathVariable("space-id") Long spaceId,
+            @RequestHeader("X-User-Id") UUID userId
+    ) {
+        return RoomOccupancyResponse.from(roomOccupancyLifecycleService.extend(spaceId, userId));
+    }
+
+    /**
+     * 반납 (MR-14).
+     *
+     * <p>{@code DELETE}가 아닌 이유는 점유 행이 사라지지 않기 때문이다 — 종료 상태로
+     * 전이할 뿐 행은 통계 원천으로 보존된다.</p>
+     *
+     * @return 204. 이미 종료된 점유면 409
+     */
+    @PostMapping("/release")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void release(
+            @PathVariable("space-id") Long spaceId,
+            @RequestHeader("X-User-Id") UUID userId
+    ) {
+        roomOccupancyLifecycleService.release(spaceId, userId);
     }
 }

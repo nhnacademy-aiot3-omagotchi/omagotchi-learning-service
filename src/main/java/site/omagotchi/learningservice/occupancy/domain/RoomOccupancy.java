@@ -45,6 +45,25 @@ public class RoomOccupancy {
      */
     public static final Duration DEFAULT_DURATION = Duration.ofHours(2);
 
+    /** 1회 연장으로 늘어나는 시간 (MR-06). */
+    public static final Duration EXTENSION_UNIT = Duration.ofMinutes(30);
+
+    /**
+     * 연장 가능 시점 — 만료 이 시간 전부터 허용한다 (MR-06).
+     *
+     * <p>{@link #EXTENSION_UNIT}과 값이 같은 것은 우연이다. 하나는 "얼마나 늘어나는가",
+     * 다른 하나는 "언제부터 누를 수 있는가"라 정책이 따로 움직일 수 있으므로 상수를 나눈다.</p>
+     */
+    public static final Duration EXTENSION_WINDOW = Duration.ofMinutes(30);
+
+    /**
+     * 최대 연장 횟수 (MR-06). 기본 2시간 + 30분 × 2 = 최대 3시간.
+     *
+     * <p>{@code ck_room_occupancies_extension_count CHECK (extension_count BETWEEN 0 AND 2)}와
+     * 같은 값이어야 한다. 여기만 늘리면 3회째 연장이 애플리케이션은 통과하고 DB에서 터진다.</p>
+     */
+    public static final short MAX_EXTENSION_COUNT = 2;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -125,5 +144,67 @@ public class RoomOccupancy {
         long seconds = Duration.between(now, expiresAt).toSeconds();
 
         return Math.max(seconds, 0L);
+    }
+
+    /**
+     * 지금 연장할 수 있는 시점인가 (MR-06).
+     *
+     * <p>너무 이른 연장을 막는 것이 목적이다. 점유하자마자 최대치까지 늘려 두면 실제로
+     * 쓰지 않는 시간이 선점되므로, 만료가 임박했을 때만 허용한다.</p>
+     *
+     * <p>이미 만료된 시각도 이 조건은 통과한다 — {@link #isExpiredAt(OffsetDateTime)}과
+     * 함께 확인해야 한다. 두 조건을 하나로 합치지 않는 이유는 거부 사유가 달라
+     * ("아직 이르다" vs "이미 끝났다") 오류 코드가 갈리기 때문이다.</p>
+     */
+    public boolean isWithinExtensionWindow(OffsetDateTime now) {
+        return !now.isBefore(expiresAt.minus(EXTENSION_WINDOW));
+    }
+
+    /** 연장 횟수가 남았는가 (MR-06). {@code ck_room_occupancies_extension_count}가 최종 방어선이다. */
+    public boolean hasRemainingExtension() {
+        return extensionCount < MAX_EXTENSION_COUNT;
+    }
+
+    /**
+     * 만료를 30분 미룬다 (MR-06, MR-12).
+     *
+     * <p><b>가산 기준은 {@code now}가 아니라 {@code expiresAt}이다.</b> {@code now} 기준으로
+     * 더하면 늦게 연장할수록 총 사용 시간이 짧아져, 만료 직전까지 기다리는 쪽이 손해를 보는
+     * 역전이 생긴다. 언제 누르든 결과가 같아야 한다.</p>
+     *
+     * <p>{@code reminderSentAt}을 되돌리는 것이 함께 있어야 한다 (MR-12). 같은 트랜잭션에서
+     * NULL로 만들어야 새 만료 시각을 기준으로 임박 알림이 다시 나간다 — 남겨두면 연장한
+     * 점유는 두 번 다시 알림을 받지 못한다.</p>
+     *
+     * <p>호출 전에 {@link #isWithinExtensionWindow}, {@link #hasRemainingExtension},
+     * {@link #isExpiredAt}을 모두 확인해야 한다. 이 메서드는 검사하지 않는다 — 조건을
+     * 오류 코드로 옮기는 것은 Application의 책임이다.</p>
+     */
+    public void extend() {
+        this.expiresAt = expiresAt.plus(EXTENSION_UNIT);
+        this.extensionCount++;
+        this.reminderSentAt = null;
+    }
+
+    /**
+     * 점유를 반납한다 (MR-14).
+     *
+     * <p>{@code status}와 {@code endedAt}을 반드시 함께 세팅한다 —
+     * {@code ck_room_occupancies_end}가 {@code (status = 'ACTIVE') = (ended_at IS NULL)}을
+     * 강제하므로 한쪽만 바꾸면 커밋이 거부된다.</p>
+     *
+     * <p>종료 상태는 최종 상태이며 재전이가 없다. 이미 끝난 점유에 다시 호출하면 아무것도
+     * 바꾸지 않고 {@code false}를 돌려준다 — 스케줄러가 EXPIRED로 바꾼 직후 도착한 반납
+     * 요청이 종료 사유를 RELEASED로 덮어쓰면 통계가 틀어진다.</p>
+     *
+     * @return 이번 호출로 반납됐으면 {@code true}, 이미 종료된 상태였으면 {@code false}
+     */
+    public boolean release(OffsetDateTime endedAt) {
+        if (!isActive()) {
+            return false;
+        }
+        this.status = OccupancyStatus.RELEASED;
+        this.endedAt = Objects.requireNonNull(endedAt, "종료 시각은 필수");
+        return true;
     }
 }

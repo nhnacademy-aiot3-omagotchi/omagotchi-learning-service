@@ -101,7 +101,7 @@ public class StudyRecord {
         }
 
         if (!startTime.isBefore(endTime)) {
-            throw new IllegalArgumentException("시작 시각이 종료 시각보다 빠릅니다.");
+            throw new IllegalArgumentException("종료 시각이 시작 시각보다 빠릅니다.");
         }
         if (StudyTimePolicy.crossesAggregationBoundary(startTime, endTime)) {
             throw new IllegalArgumentException("공부 기록이 집계 경계와 겹쳐있습니다.");

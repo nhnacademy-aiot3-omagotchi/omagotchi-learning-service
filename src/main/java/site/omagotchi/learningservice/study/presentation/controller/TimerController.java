@@ -24,8 +24,6 @@ public class TimerController {
     private final TimerCommandService timerCommandService;
     private final TimerQueryService timerQueryService;
 
-    // TODO: command_receipts 구현 후 쓰기 호출의 commandId와 영수증 처리를 연결한다.
-
     @PostMapping("/start")
     public ResponseEntity<StartTimerResponse> startTimer(
             JwtAuthenticationToken authentication,

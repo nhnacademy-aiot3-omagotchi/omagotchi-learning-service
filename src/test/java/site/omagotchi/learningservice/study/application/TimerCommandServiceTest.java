@@ -76,6 +76,9 @@ class TimerCommandServiceTest {
     @Mock
     private Clock clock;
 
+    @Mock
+    private CommandReceiptService commandReceiptService;
+
     private TimerCommandService timerCommandService;
 
     @BeforeEach
@@ -87,8 +90,20 @@ class TimerCommandServiceTest {
                 studyRecordRepository,
                 studyWriteLock,
                 clock,
-                TIME_POLICY
+                TIME_POLICY,
+                commandReceiptService
         );
+        lenient().when(commandReceiptService.execute(
+                anyLong(),
+                any(UUID.class),
+                anyString(),
+                anyString(),
+                any(Class.class),
+                any()
+        )).thenAnswer(invocation -> {
+            java.util.function.Supplier<CommandReceiptService.CommandResult<?>> supplier = invocation.getArgument(5);
+            return supplier.get();
+        });
     }
 
     @Nested
@@ -116,9 +131,21 @@ class TimerCommandServiceTest {
                     COHORT_ID
             );
 
-            // advisory lock에 의한 순서 보장 검증 (잠금 -> 조회 -> 저장)
-            InOrder inOrder = inOrder(studyWriteLock, timerRunQueryRepository, timerRunRepository);
+            InOrder inOrder = inOrder(
+                    studyWriteLock,
+                    commandReceiptService,
+                    timerRunQueryRepository,
+                    timerRunRepository
+            );
             inOrder.verify(studyWriteLock).acquire(COHORT_MEMBERSHIP_ID);
+            inOrder.verify(commandReceiptService).execute(
+                    eq(COHORT_MEMBERSHIP_ID),
+                    eq(COMMAND_ID),
+                    eq("TIMER_START"),
+                    eq(""),
+                    eq(TimerStateResult.class),
+                    any()
+            );
             inOrder.verify(timerRunQueryRepository).findActiveByCohortMembershipId(COHORT_MEMBERSHIP_ID);
 
             ArgumentCaptor<TimerRun> captor = ArgumentCaptor.forClass(TimerRun.class);
@@ -308,7 +335,6 @@ class TimerCommandServiceTest {
             ArgumentCaptor<StudyRecord> captor = ArgumentCaptor.forClass(StudyRecord.class);
             verify(studyRecordRepository).save(captor.capture());
             StudyRecord saved = captor.getValue();
-
             assertAll(
                     () -> assertEquals(boundary, timerRun.getEndedAt()),
                     () -> assertEquals(LocalDate.parse("2000-01-01"), saved.getAggregationDate()),
@@ -337,6 +363,7 @@ class TimerCommandServiceTest {
             ArgumentCaptor<StudyRecord> captor = ArgumentCaptor.forClass(StudyRecord.class);
             verify(studyRecordRepository).save(captor.capture());
             StudyRecord saved = captor.getValue();
+
             assertAll(
                     () -> assertEquals(STARTED_AT, saved.getStartTime()),
                     () -> assertEquals(STARTED_AT.plusSeconds(3_660), saved.getEndTime()),
@@ -588,7 +615,8 @@ class TimerCommandServiceTest {
                 studyRecordRepository,
                 studyWriteLock,
                 configuredClock,
-                TIME_POLICY
+                TIME_POLICY,
+                commandReceiptService
         );
     }
 

@@ -1,5 +1,7 @@
 package site.omagotchi.learningservice.space.application.port;
 
+import site.omagotchi.learningservice.global.auth.GlobalRole;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -10,7 +12,7 @@ public interface SpaceCohortAccessPort {
 
     boolean exists(Long cohortId);
 
-    boolean isSystemAdmin(String globalRole);
+    boolean isSystemAdmin(GlobalRole globalRole);
 
     boolean isActiveManager(Long cohortId, UUID userId);
 

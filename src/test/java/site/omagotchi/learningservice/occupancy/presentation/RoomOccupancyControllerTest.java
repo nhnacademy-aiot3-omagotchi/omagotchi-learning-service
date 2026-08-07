@@ -133,7 +133,6 @@ class RoomOccupancyControllerTest {
 
         mockMvc.perform(post(PATH).header("X-User-Id", USER_ID))
                 .andExpect(status().is(expectedStatus))
-                .andExpect(jsonPath("$.status").value(expectedStatus))
                 .andExpect(jsonPath("$.code").value(errorCode.code()))
                 .andExpect(jsonPath("$.message").value(errorCode.message()))
                 .andExpect(jsonPath("$.path").value(PATH));

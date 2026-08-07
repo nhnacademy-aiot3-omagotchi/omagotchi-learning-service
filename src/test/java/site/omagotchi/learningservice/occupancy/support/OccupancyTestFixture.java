@@ -6,7 +6,7 @@ import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
-import site.omagotchi.learningservice.space.application.port.out.SpaceRepository;
+import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceType;
 
@@ -70,16 +70,16 @@ public class OccupancyTestFixture {
      * <p>{@code Space.create}는 비활성으로 만들므로 반드시 {@code activate}를 거친다 —
      * 비활성 공간은 점유가 400으로 거부된다(RM-13).</p>
      */
-    public Long createMeetingRoom(String name, int capacity) {
+    public Long createMeetingRoom(Long cohortId, String name, int capacity) {
         ZonedDateTime now = ZonedDateTime.now(SEOUL);
-        Space space = Space.create(name, SpaceType.MEETING, capacity, now).activate(now);
+        Space space = Space.create(name, SpaceType.MEETING, capacity, cohortId, now).activate(now);
         return spaceRepository.save(space).getId();
     }
 
     /** 회의실이 아닌 공간. 유형 검증(MR-20)에 쓴다. */
-    public Long createLab(String name, int capacity) {
+    public Long createLab(Long cohortId, String name, int capacity) {
         ZonedDateTime now = ZonedDateTime.now(SEOUL);
-        Space space = Space.create(name, SpaceType.LAB, capacity, now).activate(now);
+        Space space = Space.create(name, SpaceType.LAB, capacity, cohortId, now).activate(now);
         return spaceRepository.save(space).getId();
     }
 

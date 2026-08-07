@@ -64,7 +64,7 @@ class OccupancyConcurrencyIT {
     @DisplayName("같은 회의실에 20명이 동시에 점유를 요청하면 1명만 성공한다.")
     void test1() throws Exception {
         Long cohortId = fixture.createCohort("동시점유 기수");
-        Long spaceId = fixture.createMeetingRoom("동시점유 회의실", 30);
+        Long spaceId = fixture.createMeetingRoom(cohortId, "동시점유 회의실", 30);
 
         List<UUID> users = new ArrayList<>();
         for (int i = 0; i < THREADS; i++) {
@@ -89,7 +89,7 @@ class OccupancyConcurrencyIT {
     @DisplayName("동시 점유에서 밀린 요청은 모두 사용 중(409)으로 응답한다.")
     void test2() throws Exception {
         Long cohortId = fixture.createCohort("409 기수");
-        Long spaceId = fixture.createMeetingRoom("409 회의실", 30);
+        Long spaceId = fixture.createMeetingRoom(cohortId, "409 회의실", 30);
 
         List<UUID> users = new ArrayList<>();
         for (int i = 0; i < THREADS; i++) {
@@ -118,8 +118,8 @@ class OccupancyConcurrencyIT {
         fixture.createActiveMember(firstCohortId, managerUserId);
         fixture.createActiveMember(secondCohortId, managerUserId);
 
-        Long firstRoomId = fixture.createMeetingRoom("다기수 회의실 A", 8);
-        Long secondRoomId = fixture.createMeetingRoom("다기수 회의실 B", 8);
+        Long firstRoomId = fixture.createMeetingRoom(firstCohortId, "다기수 회의실 A", 8);
+        Long secondRoomId = fixture.createMeetingRoom(secondCohortId, "다기수 회의실 B", 8);
 
         roomOccupancyService.start(firstRoomId, managerUserId);
 
@@ -141,8 +141,8 @@ class OccupancyConcurrencyIT {
         UUID firstUserId = fixture.createActiveMember(firstCohortId).userId();
         UUID secondUserId = fixture.createActiveMember(secondCohortId).userId();
 
-        Long firstRoomId = fixture.createMeetingRoom("MR-35 회의실 A", 8);
-        Long secondRoomId = fixture.createMeetingRoom("MR-35 회의실 B", 8);
+        Long firstRoomId = fixture.createMeetingRoom(firstCohortId, "MR-35 회의실 A", 8);
+        Long secondRoomId = fixture.createMeetingRoom(secondCohortId, "MR-35 회의실 B", 8);
 
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -175,7 +175,7 @@ class OccupancyConcurrencyIT {
     @DisplayName("잔여 1석에 여러 명이 동시에 추가돼도 정원을 넘지 않는다.")
     void test5() throws Exception {
         Long cohortId = fixture.createCohort("정원 기수");
-        Long spaceId = fixture.createMeetingRoom("정원 회의실", 2);
+        Long spaceId = fixture.createMeetingRoom(cohortId, "정원 회의실", 2);
 
         UUID occupierUserId = fixture.createActiveMember(cohortId).userId();
         roomOccupancyService.start(spaceId, occupierUserId);   // 점유자가 1석을 차지한다
@@ -205,7 +205,7 @@ class OccupancyConcurrencyIT {
     void test6() {
         Long occupierCohortId = fixture.createCohort("MR-33 3기");
         Long otherCohortId = fixture.createCohort("MR-33 4기");
-        Long spaceId = fixture.createMeetingRoom("MR-33 회의실", 8);
+        Long spaceId = fixture.createMeetingRoom(occupierCohortId, "MR-33 회의실", 8);
 
         UUID occupierUserId = fixture.createActiveMember(occupierCohortId).userId();
         UUID otherCohortUserId = fixture.createActiveMember(otherCohortId).userId();
@@ -229,7 +229,7 @@ class OccupancyConcurrencyIT {
     @DisplayName("이탈 후 재합류하면 새 행 없이 기존 행이 재사용된다.")
     void test7() {
         Long cohortId = fixture.createCohort("재합류 기수");
-        Long spaceId = fixture.createMeetingRoom("재합류 회의실", 8);
+        Long spaceId = fixture.createMeetingRoom(cohortId, "재합류 회의실", 8);
 
         UUID occupierUserId = fixture.createActiveMember(cohortId).userId();
         UUID participantUserId = fixture.createActiveMember(cohortId).userId();

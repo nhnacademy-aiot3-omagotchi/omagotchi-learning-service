@@ -4,9 +4,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.attendance.application.AttendancePresenceQueryService;
+import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
-import site.omagotchi.learningservice.occupancy.application.port.PresenceReader;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.port.SpaceReader;
 import site.omagotchi.learningservice.occupancy.application.result.RoomOccupancyResult;
@@ -39,7 +40,7 @@ import java.util.UUID;
 public class RoomOccupancyService {
 
     private final SpaceReader spaceReader;
-    private final PresenceReader presenceReader;
+    private final AttendancePresenceQueryService attendancePresenceQueryService;
     private final RoomOccupancyRepository occupancyRepository;
     private final OccupancyParticipantRepository participantRepository;
     private final Clock clock;
@@ -70,7 +71,7 @@ public class RoomOccupancyService {
             throw new BusinessException(OccupancyErrorCode.SPACE_INACTIVE);        // RM-13
         }
 
-        PresenceReader.PresenceContext presence = findOpenPresence(userId);        // MR-22
+        OpenPresenceView presence = findOpenPresence(userId);                      // MR-22
 
         // ── 락 구간 ──────────────────────────────────────────────
         // 활성 조건을 쿼리에 넣지 않고 락 획득 후 확인한다. 그래야 "비활성화 커밋 직후
@@ -132,8 +133,8 @@ public class RoomOccupancyService {
      * 유지되면서(요청 실패), {@code GlobalExceptionHandler}가 스택 트레이스를 한 번
      * 남기고 500으로 옮긴다.</p>
      */
-    private PresenceReader.PresenceContext findOpenPresence(UUID userId) {
-        return presenceReader.findOpenPresence(userId)
+    private OpenPresenceView findOpenPresence(UUID userId) {
+        return attendancePresenceQueryService.findOpenPresence(userId)
                 .orElseThrow(() -> new BusinessException(OccupancyErrorCode.NOT_PRESENT));
     }
 }

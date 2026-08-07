@@ -10,8 +10,9 @@ import site.omagotchi.learningservice.team.application.dto.result.TeamMemberResp
 import site.omagotchi.learningservice.team.application.dto.result.TeamResponse;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
+import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.team.application.port.AccountReader;
-import site.omagotchi.learningservice.team.application.port.MembershipReader;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.application.port.TeamRepository;
 
@@ -41,7 +42,7 @@ public class TeamService {
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final TeamAccessSupport accessSupport;
-    private final MembershipReader membershipReader;
+    private final CohortMembershipQueryService cohortMembershipQueryService;
     private final AccountReader accountReader;
 
     /**
@@ -94,8 +95,8 @@ public class TeamService {
      * 여러 기수를 담당하는 매니저·멘토는 기수별로 하나씩, 복수 건이 정상이다.
      */
     public List<TeamResponse> getMyTeams(UUID userId) {
-        List<Long> membershipIds = membershipReader.findActiveAll(userId).stream()
-                .map(TeamMembership::id)
+        List<Long> membershipIds = cohortMembershipQueryService.findActiveMemberships(userId).stream()
+                .map(CohortMembershipView::membershipId)
                 .toList();
         if (membershipIds.isEmpty()) {
             return List.of();
@@ -135,7 +136,7 @@ public class TeamService {
                 .map(TeamMember::getCohortMembershipId)
                 .toList();
 
-        Map<Long, UUID> userIdsByMembership = membershipReader.findUserIds(membershipIds);
+        Map<Long, UUID> userIdsByMembership = cohortMembershipQueryService.findUserIds(membershipIds);
         Map<UUID, String> displayNames = accountReader.findDisplayNames(userIdsByMembership.values());
 
         return members.stream()

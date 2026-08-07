@@ -2,10 +2,11 @@ package site.omagotchi.learningservice.team.application;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
-import site.omagotchi.learningservice.team.application.port.MembershipReader;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.application.port.TeamRepository;
 
@@ -22,7 +23,7 @@ public class TeamAccessSupport {
 
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
-    private final MembershipReader membershipReader;
+    private final CohortMembershipQueryService cohortMembershipQueryService;
 
     /**
      * 팀 생성 요청자의 대상 기수를 확정한다 (RM-28).
@@ -32,20 +33,20 @@ public class TeamAccessSupport {
      */
     public TeamMembership resolveMembershipForCreate(Long cohortId, UUID userId) {
         if (cohortId != null) {
-            return membershipReader.findActive(cohortId, userId)
-                    .orElseThrow(() -> new BusinessException(TeamErrorCode.COHORT_ACCESS_DENIED));
+            return requireActiveMembership(cohortId, userId);
         }
 
         // 학생은 활성 맴버십 1개지만 매니저, 멘토는 여러 기수를 동시에 담당할 수 있어
         // 서버가 "요청자의 기수"를 단정할 수 없다. 이때만 클라이언트에 지정을 요구한다.
-        List<TeamMembership> memberships = membershipReader.findActiveAll(userId);
+        List<CohortMembershipView> memberships =
+                cohortMembershipQueryService.findActiveMemberships(userId);
         if (memberships.isEmpty()) {
             throw new BusinessException(TeamErrorCode.COHORT_ACCESS_DENIED);
         }
         if (memberships.size() > 1) {
             throw new BusinessException(TeamErrorCode.COHORT_REQUIRED);
         }
-        return memberships.getFirst();
+        return toTeamMembership(memberships.getFirst());
     }
 
     /**
@@ -54,8 +55,20 @@ public class TeamAccessSupport {
      * 기수가 종료돼 멤버십이 ENDED가 되면 MASTER였어도 여기서 막힌다.
      */
     public TeamMembership requireActiveMembership(Long cohortId, UUID userId) {
-        return membershipReader.findActive(cohortId, userId)
+        return cohortMembershipQueryService.findActiveMembership(cohortId, userId)
+                .map(TeamAccessSupport::toTeamMembership)
                 .orElseThrow(() -> new BusinessException(TeamErrorCode.COHORT_ACCESS_DENIED));
+    }
+
+    /**
+     * 기수 파트의 공개 계약을 팀의 표현으로 옮긴다.
+     *
+     * <p>필드가 같아 그대로 써도 되지만 경계에서 한 번 변환한다. {@code TeamMembership}은
+     * "팀이 아는 멤버십"이라는 의미를 갖고 있고(status가 없는 이유가 그 javadoc에 있다),
+     * 기수 파트가 {@code CohortMembershipView}에 필드를 늘려도 팀 코드가 흔들리지 않는다.</p>
+     */
+    private static TeamMembership toTeamMembership(CohortMembershipView view) {
+        return new TeamMembership(view.membershipId(), view.cohortId(), view.userId());
     }
 
     /**

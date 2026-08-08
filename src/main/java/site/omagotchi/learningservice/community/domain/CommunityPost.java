@@ -83,6 +83,41 @@ public class CommunityPost {
         return post;
     }
 
+    public void update(String title, String content) {
+        requireActive();
+        this.title = requireTitle(title);
+        this.content = requireContent(content);
+    }
+
+    public void delete(Instant deletedAt) {
+        requireActive();
+        if (deletedAt == null) {
+            throw new IllegalArgumentException("삭제 시각은 필수입니다.");
+        }
+        this.deletedAt = deletedAt;
+    }
+
+    public void changePinned(boolean pinned) {
+        requireActive();
+        this.pinned = pinned;
+    }
+
+    public boolean isNotice() {
+        return type == CommunityPostType.NOTICE;
+    }
+
+    public boolean isFree() {
+        return type == CommunityPostType.FREE;
+    }
+
+    public boolean isGlobal() {
+        return scope == CommunityPostScope.GLOBAL;
+    }
+
+    public boolean isCohortScoped() {
+        return scope == CommunityPostScope.COHORT;
+    }
+
     private static CommunityPostType requireType(CommunityPostType type) {
         if (type == null) {
             throw new IllegalArgumentException("게시글 유형은 필수입니다.");
@@ -134,5 +169,11 @@ public class CommunityPost {
             throw new IllegalArgumentException("기수 공개 게시글은 기수가 필요합니다.");
         }
         return cohortId;
+    }
+
+    private void requireActive() {
+        if (deletedAt != null) {
+            throw new IllegalStateException("삭제된 게시글은 변경할 수 없습니다.");
+        }
     }
 }

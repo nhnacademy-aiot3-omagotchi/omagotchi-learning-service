@@ -16,6 +16,16 @@ public enum CommunityErrorCode implements ErrorCode {
             ErrorType.INVALID_INPUT,
             "COMMUNITY_INVALID_PAGE_REQUEST",
             "페이지 요청값이 올바르지 않습니다."
+    ),
+    INVALID_POST_REQUEST(
+            ErrorType.INVALID_INPUT,
+            "COMMUNITY_INVALID_POST_REQUEST",
+            "게시글 요청값이 올바르지 않습니다."
+    ),
+    POST_ACCESS_DENIED(
+            ErrorType.AUTHORIZATION,
+            "COMMUNITY_POST_ACCESS_DENIED",
+            "게시글 권한이 없습니다."
     );
 
     private final ErrorType type;

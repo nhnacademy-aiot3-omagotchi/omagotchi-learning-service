@@ -49,7 +49,10 @@ class CommunityPostQueryJpaAdapterTest {
         stubQuery(countQuery);
         when(listQuery.getResultList()).thenReturn(List.of());
         when(countQuery.getSingleResult()).thenReturn(0L);
-        CommunityPostQueryJpaAdapter adapter = new CommunityPostQueryJpaAdapter(entityManager);
+        CommunityPostQueryJpaAdapter adapter = new CommunityPostQueryJpaAdapter(
+                entityManager,
+                mock(CommunityPostAttachmentRepository.class)
+        );
 
         adapter.findVisiblePosts(new CommunityPostSearchCondition(
                 USER_ID,

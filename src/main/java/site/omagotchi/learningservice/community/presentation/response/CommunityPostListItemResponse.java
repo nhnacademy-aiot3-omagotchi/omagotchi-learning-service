@@ -16,7 +16,8 @@ public record CommunityPostListItemResponse(
         Long cohortId,
         boolean pinned,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        long attachmentCount
 ) {
 
     public static CommunityPostListItemResponse from(CommunityPostListItem item) {
@@ -29,7 +30,8 @@ public record CommunityPostListItemResponse(
                 item.cohortId(),
                 item.pinned(),
                 item.createdAt(),
-                item.updatedAt()
+                item.updatedAt(),
+                item.attachmentCount()
         );
     }
 }

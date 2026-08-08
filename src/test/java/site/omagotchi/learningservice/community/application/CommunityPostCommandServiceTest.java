@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
@@ -13,20 +14,27 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentFile;
 import site.omagotchi.learningservice.community.application.command.CreateCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.command.PinCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.command.UpdateCommunityPostCommand;
+import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentStorage;
+import site.omagotchi.learningservice.community.application.attachment.StoredCommunityAttachment;
 import site.omagotchi.learningservice.community.domain.CommunityErrorCode;
 import site.omagotchi.learningservice.community.domain.CommunityPost;
 import site.omagotchi.learningservice.community.domain.CommunityPostScope;
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
+import site.omagotchi.learningservice.community.infrastructure.CommunityAttachmentProperties;
+import site.omagotchi.learningservice.community.infrastructure.CommunityPostAttachmentRepository;
 import site.omagotchi.learningservice.community.infrastructure.CommunityPostJpaRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -40,6 +48,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.never;
 
 @DisplayName("커뮤니티 게시글 명령 서비스")
 @ExtendWith(MockitoExtension.class)
@@ -53,6 +62,9 @@ class CommunityPostCommandServiceTest {
     private CommunityPostJpaRepository communityPostRepository;
 
     @Mock
+    private CommunityPostAttachmentRepository attachmentRepository;
+
+    @Mock
     private CohortMembershipRepository cohortMembershipRepository;
 
     @Mock
@@ -61,7 +73,17 @@ class CommunityPostCommandServiceTest {
     @Mock
     private CohortAccessService cohortAccessService;
 
+    @Mock
+    private CommunityAttachmentStorage attachmentStorage;
+
     private final Clock clock = Clock.fixed(Instant.parse("2026-08-08T00:00:00Z"), ZoneOffset.UTC);
+    private final CommunityAttachmentProperties attachmentProperties = new CommunityAttachmentProperties(
+            Path.of("data/community-attachments"),
+            org.springframework.util.unit.DataSize.ofMegabytes(5),
+            5,
+            List.of("jpg", "jpeg", "png", "gif"),
+            List.of("image/jpeg", "image/png", "image/gif")
+    );
 
     private CommunityPostCommandService communityPostCommandService;
 
@@ -69,9 +91,12 @@ class CommunityPostCommandServiceTest {
     void setUp() {
         communityPostCommandService = new CommunityPostCommandService(
                 communityPostRepository,
+                attachmentRepository,
                 cohortMembershipRepository,
                 cohortRepository,
                 cohortAccessService,
+                attachmentStorage,
+                attachmentProperties,
                 clock
         );
     }
@@ -84,11 +109,12 @@ class CommunityPostCommandServiceTest {
                 eq(USER_ID),
                 org.mockito.ArgumentMatchers.<java.util.Collection<CohortMembershipStatus>>any()
         )).willReturn(true);
-        given(communityPostRepository.save(any(CommunityPost.class))).willAnswer(invocation -> {
+        given(communityPostRepository.saveAndFlush(any(CommunityPost.class))).willAnswer(invocation -> {
             CommunityPost post = invocation.getArgument(0);
             ReflectionTestUtils.setField(post, "id", 1L);
             return post;
         });
+        given(attachmentRepository.saveAllAndFlush(List.of())).willReturn(List.of());
 
         var result = communityPostCommandService.create(
                 USER_ID,
@@ -121,7 +147,8 @@ class CommunityPostCommandServiceTest {
                 java.util.Set.of(CohortMembershipRole.MANAGER, CohortMembershipRole.MENTOR),
                 CohortMembershipStatus.ACTIVE
         )).willReturn(true);
-        given(communityPostRepository.save(any(CommunityPost.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(communityPostRepository.saveAndFlush(any(CommunityPost.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(attachmentRepository.saveAllAndFlush(List.of())).willReturn(List.of());
 
         var result = communityPostCommandService.create(
                 USER_ID,
@@ -141,7 +168,8 @@ class CommunityPostCommandServiceTest {
     @Test
     @DisplayName("SYSTEM_ADMIN은 GLOBAL NOTICE를 생성한다")
     void createsGlobalNoticeForSystemAdmin() {
-        given(communityPostRepository.save(any(CommunityPost.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(communityPostRepository.saveAndFlush(any(CommunityPost.class))).willAnswer(invocation -> invocation.getArgument(0));
+        given(attachmentRepository.saveAllAndFlush(List.of())).willReturn(List.of());
 
         var result = communityPostCommandService.create(
                 USER_ID,
@@ -160,6 +188,87 @@ class CommunityPostCommandServiceTest {
                 () -> assertEquals(null, result.cohortId())
         );
         verifyNoInteractions(cohortRepository);
+    }
+
+    @Test
+    @DisplayName("첨부파일 metadata 저장 실패 시 저장된 파일을 정리한다")
+    void cleansUpStoredAttachmentWhenMetadataPersistenceFails() {
+        CommunityAttachmentFile attachmentFile = new CommunityAttachmentFile(
+                new MockMultipartFile("attachments", "image.png", "image/png", new byte[]{1}),
+                0
+        );
+        StoredCommunityAttachment storedAttachment = new StoredCommunityAttachment(
+                "2026/08/08/file.png",
+                "image.png",
+                "image/png",
+                1L,
+                0
+        );
+        given(cohortMembershipRepository.existsByCohortIdAndUserIdAndStatusIn(
+                eq(COHORT_ID),
+                eq(USER_ID),
+                org.mockito.ArgumentMatchers.<java.util.Collection<CohortMembershipStatus>>any()
+        )).willReturn(true);
+        given(communityPostRepository.saveAndFlush(any(CommunityPost.class))).willAnswer(invocation -> {
+            CommunityPost post = invocation.getArgument(0);
+            ReflectionTestUtils.setField(post, "id", 1L);
+            return post;
+        });
+        given(attachmentStorage.store(attachmentFile)).willReturn(storedAttachment);
+        given(attachmentRepository.saveAllAndFlush(any())).willThrow(new RuntimeException("metadata failed"));
+
+        assertThrows(
+                RuntimeException.class,
+                () -> communityPostCommandService.create(
+                        USER_ID,
+                        GlobalRole.USER,
+                        new CreateCommunityPostCommand(
+                                CommunityPostType.FREE,
+                                "자유글",
+                                "내용",
+                                CommunityPostScope.COHORT,
+                                COHORT_ID,
+                                List.of(attachmentFile)
+                        )
+                )
+        );
+
+        verify(attachmentStorage).delete("2026/08/08/file.png");
+    }
+
+    @Test
+    @DisplayName("첨부파일 개수 제한을 초과하면 저장하지 않는다")
+    void rejectsTooManyAttachments() {
+        List<CommunityAttachmentFile> attachments = java.util.stream.IntStream.range(0, 6)
+                .mapToObj(index -> new CommunityAttachmentFile(
+                        new MockMultipartFile("attachments", "image" + index + ".png", "image/png", new byte[]{1}),
+                        index
+                ))
+                .toList();
+        given(cohortMembershipRepository.existsByCohortIdAndUserIdAndStatusIn(
+                eq(COHORT_ID),
+                eq(USER_ID),
+                org.mockito.ArgumentMatchers.<java.util.Collection<CohortMembershipStatus>>any()
+        )).willReturn(true);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> communityPostCommandService.create(
+                        USER_ID,
+                        GlobalRole.USER,
+                        new CreateCommunityPostCommand(
+                                CommunityPostType.FREE,
+                                "자유글",
+                                "내용",
+                                CommunityPostScope.COHORT,
+                                COHORT_ID,
+                                attachments
+                        )
+                )
+        );
+
+        assertSame(CommunityErrorCode.INVALID_ATTACHMENT, exception.getErrorCode());
+        verify(attachmentStorage, never()).store(any());
     }
 
     @Test

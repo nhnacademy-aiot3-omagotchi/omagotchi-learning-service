@@ -2,7 +2,10 @@ package site.omagotchi.learningservice.community.presentation.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentFile;
 import site.omagotchi.learningservice.community.application.command.UpdateCommunityPostCommand;
+
+import java.util.List;
 
 public record UpdateCommunityPostRequest(
         @NotBlank(message = "게시글 제목은 필수입니다.")
@@ -16,5 +19,9 @@ public record UpdateCommunityPostRequest(
 
     public UpdateCommunityPostCommand toCommand() {
         return new UpdateCommunityPostCommand(title, content);
+    }
+
+    public UpdateCommunityPostCommand toCommand(List<CommunityAttachmentFile> attachments) {
+        return new UpdateCommunityPostCommand(title, content, attachments, true);
     }
 }

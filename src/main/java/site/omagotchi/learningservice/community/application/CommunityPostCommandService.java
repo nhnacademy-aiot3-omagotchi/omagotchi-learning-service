@@ -9,19 +9,28 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
+import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentFile;
+import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentStorage;
+import site.omagotchi.learningservice.community.application.attachment.StoredCommunityAttachment;
 import site.omagotchi.learningservice.community.application.command.CreateCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.command.PinCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.command.UpdateCommunityPostCommand;
+import site.omagotchi.learningservice.community.application.query.CommunityAttachmentMetadata;
 import site.omagotchi.learningservice.community.application.query.CommunityPostDetail;
 import site.omagotchi.learningservice.community.domain.CommunityErrorCode;
 import site.omagotchi.learningservice.community.domain.CommunityPost;
+import site.omagotchi.learningservice.community.domain.CommunityPostAttachment;
 import site.omagotchi.learningservice.community.domain.CommunityPostScope;
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
+import site.omagotchi.learningservice.community.infrastructure.CommunityAttachmentProperties;
+import site.omagotchi.learningservice.community.infrastructure.CommunityPostAttachmentRepository;
 import site.omagotchi.learningservice.community.infrastructure.CommunityPostJpaRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -36,9 +45,12 @@ public class CommunityPostCommandService {
     );
 
     private final CommunityPostJpaRepository communityPostRepository;
+    private final CommunityPostAttachmentRepository attachmentRepository;
     private final CohortMembershipRepository cohortMembershipRepository;
     private final CohortRepository cohortRepository;
     private final CohortAccessService cohortAccessService;
+    private final CommunityAttachmentStorage attachmentStorage;
+    private final CommunityAttachmentProperties attachmentProperties;
     private final Clock clock;
 
     @Transactional
@@ -48,6 +60,7 @@ public class CommunityPostCommandService {
             CreateCommunityPostCommand command
     ) {
         validateCreatePermission(userId, globalRole, command);
+        validateAttachmentCount(command.attachments());
         CommunityPost post = CommunityPost.create(
                 command.type(),
                 command.title(),
@@ -56,7 +69,13 @@ public class CommunityPostCommandService {
                 command.scope(),
                 command.cohortId()
         );
-        return CommunityPostDetail.from(communityPostRepository.save(post));
+        CommunityPost savedPost = communityPostRepository.saveAndFlush(post);
+        List<CommunityPostAttachment> attachments = replaceAttachmentsWithoutCountValidation(
+                savedPost.getId(),
+                List.of(),
+                command.attachments()
+        );
+        return CommunityPostDetail.from(savedPost, toMetadata(attachments));
     }
 
     @Transactional
@@ -69,14 +88,26 @@ public class CommunityPostCommandService {
         CommunityPost post = findActivePost(postId);
         validateManagePermission(userId, globalRole, post);
         post.update(command.title(), command.content());
-        return CommunityPostDetail.from(post);
+        List<CommunityPostAttachment> attachments = command.replaceAttachments()
+                ? replaceAttachments(
+                post.getId(),
+                attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(post.getId()),
+                command.attachments()
+        )
+                : attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(post.getId());
+        return CommunityPostDetail.from(post, toMetadata(attachments));
     }
 
     @Transactional
     public void delete(UUID userId, GlobalRole globalRole, Long postId) {
         CommunityPost post = findActivePost(postId);
         validateManagePermission(userId, globalRole, post);
+        List<CommunityPostAttachment> attachments = attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(
+                post.getId()
+        );
         post.delete(clock.instant());
+        attachmentRepository.deleteByPostId(post.getId());
+        deleteStoredAttachments(attachments);
     }
 
     @Transactional
@@ -89,7 +120,10 @@ public class CommunityPostCommandService {
         cohortAccessService.requireSystemAdmin(globalRole);
         CommunityPost post = findActivePost(postId);
         post.changePinned(command.pinned());
-        return CommunityPostDetail.from(post);
+        return CommunityPostDetail.from(
+                post,
+                toMetadata(attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(post.getId()))
+        );
     }
 
     private CommunityPost findActivePost(Long postId) {
@@ -180,5 +214,63 @@ public class CommunityPostCommandService {
         if (!cohortRepository.existsById(cohortId)) {
             throw new BusinessException(CohortErrorCode.COHORT_NOT_FOUND);
         }
+    }
+
+    private List<CommunityPostAttachment> replaceAttachments(
+            Long postId,
+            List<CommunityPostAttachment> existingAttachments,
+            List<CommunityAttachmentFile> newAttachments
+    ) {
+        validateAttachmentCount(newAttachments);
+        return replaceAttachmentsWithoutCountValidation(postId, existingAttachments, newAttachments);
+    }
+
+    private List<CommunityPostAttachment> replaceAttachmentsWithoutCountValidation(
+            Long postId,
+            List<CommunityPostAttachment> existingAttachments,
+            List<CommunityAttachmentFile> newAttachments
+    ) {
+        List<StoredCommunityAttachment> storedAttachments = new ArrayList<>();
+        try {
+            for (var attachmentFile : newAttachments) {
+                storedAttachments.add(attachmentStorage.store(attachmentFile));
+            }
+
+            if (!existingAttachments.isEmpty()) {
+                attachmentRepository.deleteByPostId(postId);
+            }
+            List<CommunityPostAttachment> attachments = storedAttachments.stream()
+                    .map(attachment -> CommunityPostAttachment.create(
+                            postId,
+                            attachment.storageKey(),
+                            attachment.originalFileName(),
+                            attachment.contentType(),
+                            attachment.sizeBytes(),
+                            attachment.displayOrder()
+                    ))
+                    .toList();
+            List<CommunityPostAttachment> savedAttachments = attachmentRepository.saveAllAndFlush(attachments);
+            deleteStoredAttachments(existingAttachments);
+            return savedAttachments;
+        } catch (RuntimeException exception) {
+            storedAttachments.forEach(attachment -> attachmentStorage.delete(attachment.storageKey()));
+            throw exception;
+        }
+    }
+
+    private void validateAttachmentCount(List<CommunityAttachmentFile> attachments) {
+        if (attachments.size() > attachmentProperties.maxCount()) {
+            throw new BusinessException(CommunityErrorCode.INVALID_ATTACHMENT);
+        }
+    }
+
+    private List<CommunityAttachmentMetadata> toMetadata(List<CommunityPostAttachment> attachments) {
+        return attachments.stream()
+                .map(CommunityAttachmentMetadata::from)
+                .toList();
+    }
+
+    private void deleteStoredAttachments(List<CommunityPostAttachment> attachments) {
+        attachments.forEach(attachment -> attachmentStorage.delete(attachment.getStorageKey()));
     }
 }

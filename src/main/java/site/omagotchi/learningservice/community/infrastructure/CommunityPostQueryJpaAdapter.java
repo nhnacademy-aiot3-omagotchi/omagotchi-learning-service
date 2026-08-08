@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.community.application.port.CommunityPostQueryPort;
 import site.omagotchi.learningservice.community.application.query.CommunityPostDetail;
+import site.omagotchi.learningservice.community.application.query.CommunityAttachmentMetadata;
 import site.omagotchi.learningservice.community.application.query.CommunityPostListItem;
 import site.omagotchi.learningservice.community.application.query.CommunityPostPage;
 import site.omagotchi.learningservice.community.application.query.CommunityPostSearchCondition;
@@ -41,6 +42,7 @@ public class CommunityPostQueryJpaAdapter implements CommunityPostQueryPort {
             """;
 
     private final EntityManager entityManager;
+    private final CommunityPostAttachmentRepository attachmentRepository;
 
     @Override
     public CommunityPostPage findVisiblePosts(CommunityPostSearchCondition condition) {
@@ -74,23 +76,12 @@ public class CommunityPostQueryJpaAdapter implements CommunityPostQueryPort {
 
     @Override
     public Optional<CommunityPostDetail> findVisiblePost(UUID userId, Long postId) {
-        List<CommunityPostDetail> result = entityManager.createQuery("""
-                        select new site.omagotchi.learningservice.community.application.query.CommunityPostDetail(
-                            post.id,
-                            post.type,
-                            post.title,
-                            post.content,
-                            post.authorUserId,
-                            post.scope,
-                            post.cohortId,
-                            post.pinned,
-                            post.createdAt,
-                            post.updatedAt
-                        )
+        List<CommunityPost> result = entityManager.createQuery("""
+                        select post
                         from CommunityPost post
                         where post.id = :postId
                           and """ + VISIBLE_CONDITION,
-                        CommunityPostDetail.class
+                        CommunityPost.class
                 )
                 .setParameter("postId", postId)
                 .setParameter("userId", userId)
@@ -99,7 +90,9 @@ public class CommunityPostQueryJpaAdapter implements CommunityPostQueryPort {
                 .setParameter("activeStatus", CohortMembershipStatus.ACTIVE)
                 .setHint("org.hibernate.readOnly", true)
                 .getResultList();
-        return result.stream().findFirst();
+        return result.stream()
+                .findFirst()
+                .map(post -> CommunityPostDetail.from(post, findAttachments(post.getId())));
     }
 
     private TypedQuery<CommunityPostListItem> listQuery(String filters) {
@@ -113,7 +106,12 @@ public class CommunityPostQueryJpaAdapter implements CommunityPostQueryPort {
                             post.cohortId,
                             post.pinned,
                             post.createdAt,
-                            post.updatedAt
+                            post.updatedAt,
+                            (
+                                select count(attachment.id)
+                                from CommunityPostAttachment attachment
+                                where attachment.postId = post.id
+                            )
                         )
                         from CommunityPost post
                         where """ + VISIBLE_CONDITION + filters + """
@@ -162,5 +160,12 @@ public class CommunityPostQueryJpaAdapter implements CommunityPostQueryPort {
         if (condition.search() != null) {
             query.setParameter("search", "%" + condition.search().toLowerCase() + "%");
         }
+    }
+
+    private List<CommunityAttachmentMetadata> findAttachments(Long postId) {
+        return attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(postId)
+                .stream()
+                .map(CommunityAttachmentMetadata::from)
+                .toList();
     }
 }

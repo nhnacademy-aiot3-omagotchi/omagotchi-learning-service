@@ -16,8 +16,34 @@ public record CommunityPostListItem(
         Long cohortId,
         boolean pinned,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        long attachmentCount
 ) {
+
+    public CommunityPostListItem(
+            Long postId,
+            CommunityPostType type,
+            String title,
+            UUID authorUserId,
+            CommunityPostScope scope,
+            Long cohortId,
+            boolean pinned,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
+        this(
+                postId,
+                type,
+                title,
+                authorUserId,
+                scope,
+                cohortId,
+                pinned,
+                createdAt,
+                updatedAt,
+                0L
+        );
+    }
 
     public static CommunityPostListItem from(CommunityPost post) {
         return new CommunityPostListItem(
@@ -29,7 +55,8 @@ public record CommunityPostListItem(
                 post.getCohortId(),
                 post.isPinned(),
                 post.getCreatedAt(),
-                post.getUpdatedAt()
+                post.getUpdatedAt(),
+                0L
         );
     }
 }

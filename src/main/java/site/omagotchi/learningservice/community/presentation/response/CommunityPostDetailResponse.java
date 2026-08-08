@@ -5,6 +5,7 @@ import site.omagotchi.learningservice.community.domain.CommunityPostScope;
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record CommunityPostDetailResponse(
@@ -17,7 +18,8 @@ public record CommunityPostDetailResponse(
         Long cohortId,
         boolean pinned,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        List<CommunityPostAttachmentResponse> attachments
 ) {
 
     public static CommunityPostDetailResponse from(CommunityPostDetail detail) {
@@ -31,7 +33,10 @@ public record CommunityPostDetailResponse(
                 detail.cohortId(),
                 detail.pinned(),
                 detail.createdAt(),
-                detail.updatedAt()
+                detail.updatedAt(),
+                detail.attachments().stream()
+                        .map(CommunityPostAttachmentResponse::from)
+                        .toList()
         );
     }
 }

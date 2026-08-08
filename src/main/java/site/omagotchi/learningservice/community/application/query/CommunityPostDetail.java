@@ -5,6 +5,7 @@ import site.omagotchi.learningservice.community.domain.CommunityPostScope;
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record CommunityPostDetail(
@@ -17,10 +18,49 @@ public record CommunityPostDetail(
         Long cohortId,
         boolean pinned,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        List<CommunityAttachmentMetadata> attachments
 ) {
 
+    public CommunityPostDetail(
+            Long postId,
+            CommunityPostType type,
+            String title,
+            String content,
+            UUID authorUserId,
+            CommunityPostScope scope,
+            Long cohortId,
+            boolean pinned,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
+        this(
+                postId,
+                type,
+                title,
+                content,
+                authorUserId,
+                scope,
+                cohortId,
+                pinned,
+                createdAt,
+                updatedAt,
+                List.of()
+        );
+    }
+
+    public CommunityPostDetail {
+        attachments = attachments == null ? List.of() : List.copyOf(attachments);
+    }
+
     public static CommunityPostDetail from(CommunityPost post) {
+        return from(post, List.of());
+    }
+
+    public static CommunityPostDetail from(
+            CommunityPost post,
+            List<CommunityAttachmentMetadata> attachments
+    ) {
         return new CommunityPostDetail(
                 post.getId(),
                 post.getType(),
@@ -31,7 +71,8 @@ public record CommunityPostDetail(
                 post.getCohortId(),
                 post.isPinned(),
                 post.getCreatedAt(),
-                post.getUpdatedAt()
+                post.getUpdatedAt(),
+                List.copyOf(attachments)
         );
     }
 }

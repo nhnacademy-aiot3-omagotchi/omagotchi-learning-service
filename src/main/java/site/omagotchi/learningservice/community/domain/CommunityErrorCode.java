@@ -26,6 +26,16 @@ public enum CommunityErrorCode implements ErrorCode {
             ErrorType.AUTHORIZATION,
             "COMMUNITY_POST_ACCESS_DENIED",
             "게시글 권한이 없습니다."
+    ),
+    INVALID_ATTACHMENT(
+            ErrorType.INVALID_INPUT,
+            "COMMUNITY_INVALID_ATTACHMENT",
+            "첨부파일이 올바르지 않습니다."
+    ),
+    ATTACHMENT_STORAGE_FAILED(
+            ErrorType.INTERNAL,
+            "COMMUNITY_ATTACHMENT_STORAGE_FAILED",
+            "첨부파일 저장에 실패했습니다."
     );
 
     private final ErrorType type;

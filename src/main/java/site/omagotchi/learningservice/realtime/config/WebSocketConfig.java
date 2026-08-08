@@ -9,6 +9,9 @@ import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 import site.omagotchi.learningservice.realtime.application.RealtimeDestinations;
 
+/**
+ * Presence와 향후 realtime 기능이 공유하는 Spring WebSocket/STOMP 기반 설정이다.
+ */
 @Configuration
 @EnableWebSocketMessageBroker
 @RequiredArgsConstructor

@@ -32,6 +32,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * 대표 UserCharacter를 기준으로 닉네임과 게임화 상태를 조합하고,
+ * 학습/출석/승인 기수 요약을 집계하는 애플리케이션 서비스다.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -50,6 +54,9 @@ public class UserProfileService {
     private final CharacterGrowthService characterGrowthService;
     private final DateTimeProvider dateTimeProvider;
 
+    /**
+     * 현재 사용자 프로필에 필요한 데이터를 기존 도메인에서 모아 DTO 결과로 반환한다.
+     */
     public UserProfileResult getMyProfile(UUID userId) {
         Optional<CohortMembership> approvedMembership = findApprovedMembership(userId);
         StudyProfileSummaryResult studySummary = approvedMembership
@@ -80,6 +87,9 @@ public class UserProfileService {
         );
     }
 
+    /**
+     * 닉네임은 별도 설정 테이블 없이 대표 UserCharacter.nickname에 저장한다.
+     */
     @Transactional
     public UserNicknameResult updateNickname(UUID userId, String nickname) {
         String normalizedNickname = normalizeNickname(nickname);

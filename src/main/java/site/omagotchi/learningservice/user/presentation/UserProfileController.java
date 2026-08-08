@@ -14,6 +14,11 @@ import site.omagotchi.learningservice.user.presentation.request.UpdateNicknameRe
 import site.omagotchi.learningservice.user.presentation.response.UserNicknameResponse;
 import site.omagotchi.learningservice.user.presentation.response.UserProfileResponse;
 
+/**
+ * 현재 로그인한 사용자의 프로필 요약과 닉네임 변경 API를 제공한다.
+ *
+ * <p>사용자 식별자는 요청 본문이 아니라 JWT 인증 객체에서만 해석한다.</p>
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/users/me")

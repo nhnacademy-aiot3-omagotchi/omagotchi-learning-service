@@ -19,6 +19,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Redis에 cohort Presence 상태를 저장하고 STOMP topic으로 snapshot 변경을 발행한다.
+ *
+ * <p>Presence는 물리 출석과 별개의 ephemeral 상태이며, WebSocket session TTL과 multi-session set으로 관리한다.</p>
+ */
 @Service
 @RequiredArgsConstructor
 public class CohortPresenceService {
@@ -31,6 +36,9 @@ public class CohortPresenceService {
     private final CohortAccessService cohortAccessService;
     private final PresenceProperties presenceProperties;
 
+    /**
+     * WebSocket CONNECT 성공 시 session hash, user session set, cohort online set을 갱신한다.
+     */
     public void registerSession(String sessionId, AuthenticatedUser user) {
         if (sessionId == null || sessionId.isBlank()) {
             return;
@@ -40,6 +48,7 @@ public class CohortPresenceService {
         String userId = user.userId().toString();
         String cohortId = membership.getCohortId().toString();
 
+        // session hash만 TTL을 갖고, 만료된 hash는 snapshot/cleanup 시 user session set에서 제거한다.
         redisTemplate.opsForHash().putAll(
                 sessionKey(sessionId),
                 Map.of(USER_ID_FIELD, userId, COHORT_ID_FIELD, cohortId)
@@ -62,6 +71,7 @@ public class CohortPresenceService {
             if (!session.userId().equals(user.userId())) {
                 throw new AccessDeniedException("WebSocket session does not belong to the authenticated user");
             }
+            // client payload 없이 Redis에 저장된 cohort와 JWT 사용자를 다시 검증한 뒤 TTL만 연장한다.
             cohortAccessService.requireActiveMembershipId(session.cohortId(), user.userId());
             redisTemplate.expire(sessionKey(sessionId), presenceProperties.sessionTtl());
             redisTemplate.opsForSet().add(userSessionsKey(user.userId().toString()), sessionId);

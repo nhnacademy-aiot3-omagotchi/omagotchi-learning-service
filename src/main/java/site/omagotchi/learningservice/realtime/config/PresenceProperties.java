@@ -4,6 +4,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
 
+/**
+ * Redis Presence의 session TTL 설정이다.
+ */
 @ConfigurationProperties(prefix = "realtime.presence")
 public record PresenceProperties(
         Duration sessionTtl

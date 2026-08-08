@@ -9,6 +9,9 @@ import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.realtime.application.CohortPresenceSnapshot;
 import site.omagotchi.learningservice.realtime.application.CohortPresenceService;
 
+/**
+ * 현재 사용자가 속한 ACTIVE cohort의 Presence 초기 snapshot을 제공한다.
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/cohorts/me/presence")

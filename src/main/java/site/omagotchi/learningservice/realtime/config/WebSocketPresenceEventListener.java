@@ -7,6 +7,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 import site.omagotchi.learningservice.realtime.application.CohortPresenceService;
 
+/**
+ * Spring WebSocket session disconnect event를 Redis Presence cleanup으로 연결한다.
+ */
 @Component
 @RequiredArgsConstructor
 public class WebSocketPresenceEventListener {

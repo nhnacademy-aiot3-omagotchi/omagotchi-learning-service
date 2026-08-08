@@ -13,6 +13,9 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.util.UUID;
 
+/**
+ * 커뮤니티 게시글 조회 조건을 정규화하고, 실제 가시성/검색/페이징 처리는 query port에 위임한다.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)

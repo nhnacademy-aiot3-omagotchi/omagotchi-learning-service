@@ -21,6 +21,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * 커뮤니티 이미지 첨부파일을 로컬 파일시스템에 저장하는 최소 저장소 구현이다.
+ *
+ * <p>클라이언트 파일명은 저장 경로로 사용하지 않고, 확장자와 실제 파일 헤더 기반 MIME을 함께 검증한다.</p>
+ */
 @Component
 @RequiredArgsConstructor
 public class LocalCommunityAttachmentStorage implements CommunityAttachmentStorage {

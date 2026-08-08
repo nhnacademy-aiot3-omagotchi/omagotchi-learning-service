@@ -34,6 +34,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * 커뮤니티 게시글 생성/수정/삭제/고정 정책을 담당한다.
+ *
+ * <p>STUDENT, MENTOR, MANAGER, SYSTEM_ADMIN 권한 차이를 서버의 cohort membership과 JWT role로 검증한다.</p>
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -53,6 +58,10 @@ public class CommunityPostCommandService {
     private final CommunityAttachmentProperties attachmentProperties;
     private final Clock clock;
 
+    /**
+     * 게시글과 첨부파일 메타데이터를 같은 트랜잭션에서 저장하고,
+     * 파일 저장 성공 후 DB 저장이 실패하면 새 파일을 정리한다.
+     */
     @Transactional
     public CommunityPostDetail create(
             UUID userId,

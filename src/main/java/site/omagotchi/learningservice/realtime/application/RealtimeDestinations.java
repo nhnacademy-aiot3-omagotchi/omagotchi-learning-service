@@ -4,6 +4,9 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * WebSocket/STOMP destination 규칙을 한곳에 모아 구독 인가와 발행 대상이 같은 문자열 계약을 사용하게 한다.
+ */
 public final class RealtimeDestinations {
 
     public static final String WEBSOCKET_ENDPOINT = "/ws";

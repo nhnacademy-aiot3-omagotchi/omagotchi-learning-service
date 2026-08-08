@@ -21,6 +21,9 @@ import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.realtime.application.CohortPresenceService;
 
+/**
+ * STOMP CONNECT 프레임의 Bearer JWT를 기존 resource-server 구성으로 검증하고 WebSocket Principal로 연결한다.
+ */
 @Component
 @RequiredArgsConstructor
 public class WebSocketConnectAuthenticationInterceptor implements ChannelInterceptor {
@@ -46,6 +49,7 @@ public class WebSocketConnectAuthenticationInterceptor implements ChannelInterce
         }
 
         accessor.setUser(jwtAuthentication);
+        // CONNECT 시점에만 서버가 JWT 사용자와 현재 ACTIVE cohort를 확정해 Redis Presence 세션을 만든다.
         presenceService.registerSession(accessor.getSessionId(), AuthenticatedUser.from(jwtAuthentication));
         return MessageBuilder.createMessage(message.getPayload(), accessor.getMessageHeaders());
     }

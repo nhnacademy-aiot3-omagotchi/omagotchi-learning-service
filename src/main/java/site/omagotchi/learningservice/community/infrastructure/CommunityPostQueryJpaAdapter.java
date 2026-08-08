@@ -19,10 +19,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * 커뮤니티 목록/상세 조회를 DB 쿼리로 수행하는 JPA 어댑터다.
+ *
+ * <p>GLOBAL/COHORT 가시성, 검색, 타입 필터, 정렬, 페이징을 메모리 필터링 없이 SQL 조건으로 처리한다.</p>
+ */
 @Repository
 @RequiredArgsConstructor
 public class CommunityPostQueryJpaAdapter implements CommunityPostQueryPort {
 
+    // COHORT 게시글은 ACTIVE membership 존재 여부를 EXISTS로 확인해 N+1과 사후 필터링을 피한다.
     private static final String VISIBLE_CONDITION = """
             post.deletedAt is null
             and (

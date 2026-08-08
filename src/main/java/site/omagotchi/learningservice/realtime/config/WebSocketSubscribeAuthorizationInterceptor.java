@@ -18,6 +18,11 @@ import site.omagotchi.learningservice.realtime.application.RealtimeDestinations;
 
 import java.security.Principal;
 
+/**
+ * STOMP SUBSCRIBE 프레임을 서버 측 권한으로 제한한다.
+ *
+ * <p>cohort presence topic은 JWT 사용자에게 해당 cohort의 ACTIVE membership이 있을 때만 허용한다.</p>
+ */
 @Component
 @RequiredArgsConstructor
 public class WebSocketSubscribeAuthorizationInterceptor implements ChannelInterceptor {

@@ -31,6 +31,11 @@ import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import java.util.List;
 import java.util.stream.IntStream;
 
+/**
+ * 사용자와 운영자가 공유하는 커뮤니티 게시글 REST API다.
+ *
+ * <p>읽기/쓰기 모두 동일한 community_posts 데이터를 사용하며, 작성자와 권한은 JWT에서 파생한다.</p>
+ */
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/community/posts")

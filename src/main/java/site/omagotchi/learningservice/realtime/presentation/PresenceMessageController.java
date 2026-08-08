@@ -8,6 +8,9 @@ import org.springframework.stereotype.Controller;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.realtime.application.CohortPresenceService;
 
+/**
+ * STOMP application destination으로 들어오는 Presence heartbeat를 처리한다.
+ */
 @Controller
 @RequiredArgsConstructor
 public class PresenceMessageController {

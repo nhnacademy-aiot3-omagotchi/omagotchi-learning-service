@@ -11,8 +11,6 @@ import java.util.Objects;
 @Getter
 public class Space {
 
-    private static final int MAX_NAME_LENGTH = 50;
-
     private final Long id;
     private final Long cohortId;
     private final String name;
@@ -54,13 +52,16 @@ public class Space {
             ZonedDateTime updatedAt,
             ZonedDateTime deletedAt
     ) {
+        SpaceAttributes attributes = new SpaceAttributes(
+                name,
+                spaceType,
+                capacity
+        );
         this.id = id;
         this.cohortId = cohortId;
-        this.name = validateName(name);
-
-        this.spaceType = validateType(spaceType);
-
-        this.capacity = validateCapacity(capacity);
+        this.name = attributes.name();
+        this.spaceType = attributes.spaceType();
+        this.capacity = attributes.capacity();
 
         this.operationalStatus = Objects.requireNonNull(
                 operationalStatus,
@@ -442,40 +443,6 @@ public class Space {
         if (isDeleted()) {
             throw new IllegalStateException("삭제된 공간은 변경할 수 없습니다.");
         }
-    }
-
-    private static String validateName(String name) {
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("공간 이름은 필수입니다.");
-        }
-
-        String normalizedName = name.trim();
-
-        if (normalizedName.length() > MAX_NAME_LENGTH) {
-            throw new IllegalArgumentException(
-                    "공간 이름은 50자를 초과할 수 없습니다."
-            );
-        }
-
-        return normalizedName;
-    }
-
-    private static Integer validateCapacity(Integer capacity) {
-        if (capacity == null || capacity <= 0) {
-            throw new IllegalArgumentException(
-                    "공간 최대 인원은 양수여야 합니다."
-            );
-        }
-
-        return capacity;
-    }
-
-    private static SpaceType validateType(SpaceType spaceType) {
-        if (spaceType == null) {
-            throw new IllegalArgumentException("공간 유형은 필수입니다.");
-        }
-
-        return spaceType;
     }
 
     private static Long validateCohortId(Long cohortId) {

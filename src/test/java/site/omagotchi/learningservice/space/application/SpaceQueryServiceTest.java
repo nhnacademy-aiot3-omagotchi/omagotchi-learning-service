@@ -22,6 +22,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
@@ -71,6 +72,7 @@ class SpaceQueryServiceTest {
 
         assertThat(actual).isSameAs(expected);
         verify(spaceQueryPort).findAllSpacesWithStatus(Set.of(), SEOUL_NOW);
+        verifyNoInteractions(cohortAccessPort);
         verifyNoMoreInteractions(spaceQueryPort);
     }
 
@@ -82,6 +84,7 @@ class SpaceQueryServiceTest {
         assertThat(spaceQueryService.getSpaceList()).isEmpty();
 
         verify(spaceQueryPort).findAllSpacesWithStatus(Set.of(), SEOUL_NOW);
+        verifyNoInteractions(cohortAccessPort);
         verifyNoMoreInteractions(spaceQueryPort);
     }
 

@@ -43,10 +43,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@WithMockUser
+@WithMockUser(
+        username = "00000000-0000-0000-0000-000000000092",
+        roles = "USER"
+)
 @ActiveProfiles("test")
 @Import({
         TestcontainersConfiguration.class,
@@ -175,6 +180,7 @@ class SpaceIT {
             throws Exception {
         UUID requesterUserId = UUID.randomUUID();
         Long cohortId = insertCohortWithManager(requesterUserId);
+        activateCohort(cohortId);
         Long spaceId = insertSpace(
                 "통합 동일 기수 점유 회의실",
                 "ACTIVE",
@@ -186,7 +192,9 @@ class SpaceIT {
         );
 
         mockMvc.perform(get("/api/spaces")
-                        .header("X-User-Id", requesterUserId))
+                        .with(jwt().jwt(token -> token
+                                .subject(requesterUserId.toString())
+                                .claim("role", "USER"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(
                         "$[?(@.spaceId == %d)].status".formatted(spaceId)
@@ -221,8 +229,10 @@ class SpaceIT {
     void otherCohortRequesterReceivesOccupancyWithoutPersonalDetails()
             throws Exception {
         UUID requesterUserId = UUID.randomUUID();
-        insertCohortWithManager(requesterUserId);
+        Long requesterCohortId = insertCohortWithManager(requesterUserId);
         Long occupierCohortId = insertCohortWithManager(UUID.randomUUID());
+        activateCohort(requesterCohortId);
+        activateCohort(occupierCohortId);
         Long spaceId = insertSpace(
                 "통합 타 기수 점유 회의실",
                 "ACTIVE",
@@ -231,7 +241,9 @@ class SpaceIT {
         insertOccupancyWithDetails(spaceId, occupierCohortId);
 
         mockMvc.perform(get("/api/spaces")
-                        .header("X-User-Id", requesterUserId))
+                        .with(jwt().jwt(token -> token
+                                .subject(requesterUserId.toString())
+                                .claim("role", "USER"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(
                         "$[?(@.spaceId == %d)].status".formatted(spaceId)
@@ -522,6 +534,10 @@ class SpaceIT {
                     .isIn(firstCohortId, secondCohortId);
         } finally {
             executor.shutdownNow();
+            cleanupCommittedFixtures(
+                    List.of(labId),
+                    List.of(firstCohortId, secondCohortId)
+            );
         }
     }
 
@@ -583,6 +599,10 @@ class SpaceIT {
                     && finalState.deletedAt() != null).isFalse();
         } finally {
             executor.shutdownNow();
+            cleanupCommittedFixtures(
+                    List.of(spaceId),
+                    List.of(cohortId)
+            );
         }
     }
 
@@ -643,6 +663,10 @@ class SpaceIT {
             }
         } finally {
             executor.shutdownNow();
+            cleanupCommittedFixtures(
+                    List.of(spaceId),
+                    List.of(cohortId)
+            );
         }
     }
 
@@ -686,7 +710,7 @@ class SpaceIT {
         insertActiveMembership(cohortId, studentId, "STUDENT");
 
         mockMvc.perform(post("/api/admin/spaces")
-                        .header("X-User-Id", studentId)
+                        .with(user(studentId.toString()).roles("USER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest(
                                 "통합 비관리자 생성 차단",
@@ -703,7 +727,7 @@ class SpaceIT {
         Long cohortId = insertManagementCohort();
 
         mockMvc.perform(post("/api/admin/spaces")
-                        .header("X-User-Id", UUID.randomUUID())
+                        .with(user(UUID.randomUUID().toString()).roles("USER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest(
                                 "통합 비소속 생성 차단",
@@ -1177,8 +1201,8 @@ class SpaceIT {
         mockMvc.perform(delete(
                         "/api/admin/spaces/{space-id}/cohort",
                         unassignedLabId
-                ).header("X-User-Id", UUID.randomUUID())
-                        .header("X-Global-Role", "SYSTEM_ADMIN"))
+                ).with(user(UUID.randomUUID().toString())
+                        .roles("SYSTEM_ADMIN")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_LAB_NOT_ASSIGNED"));
@@ -1230,8 +1254,8 @@ class SpaceIT {
         mockMvc.perform(patch(
                         "/api/admin/spaces/{space-id}/activate",
                         seedSpaceId
-                ).header("X-User-Id", UUID.randomUUID())
-                        .header("X-Global-Role", "SYSTEM_ADMIN"))
+                ).with(user(UUID.randomUUID().toString())
+                        .roles("SYSTEM_ADMIN")))
                 .andExpect(status().isOk());
 
         jdbcTemplate.update("""
@@ -1243,8 +1267,8 @@ class SpaceIT {
         mockMvc.perform(delete(
                         "/api/admin/spaces/{space-id}",
                         seedSpaceId
-                ).header("X-User-Id", UUID.randomUUID())
-                        .header("X-Global-Role", "SYSTEM_ADMIN"))
+                ).with(user(UUID.randomUUID().toString())
+                        .roles("SYSTEM_ADMIN")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_UNMANAGED_DELETE_NOT_ALLOWED"));
@@ -1339,6 +1363,27 @@ class SpaceIT {
                 null,
                 deletedAt
         );
+    }
+
+    private void cleanupCommittedFixtures(
+            List<Long> spaceIds,
+            List<Long> cohortIds
+    ) {
+        spaceIds.forEach(spaceId -> jdbcTemplate.update(
+                "DELETE FROM learning_service.spaces WHERE id = ?",
+                spaceId
+        ));
+        cohortIds.forEach(cohortId -> {
+            jdbcTemplate.update(
+                    "DELETE FROM learning_service.cohort_memberships "
+                            + "WHERE cohort_id = ?",
+                    cohortId
+            );
+            jdbcTemplate.update(
+                    "DELETE FROM learning_service.cohorts WHERE id = ?",
+                    cohortId
+            );
+        });
     }
 
     private Long insertTypedSpace(
@@ -1484,6 +1529,14 @@ class SpaceIT {
                 SET cohort_id = ?
                 WHERE id = ?
                 """, cohortId, spaceId);
+    }
+
+    private void activateCohort(Long cohortId) {
+        jdbcTemplate.update("""
+                UPDATE learning_service.cohorts
+                SET status = 'ACTIVE'
+                WHERE id = ?
+                """, cohortId);
     }
 
     private Long insertAssignedLab(String name) {

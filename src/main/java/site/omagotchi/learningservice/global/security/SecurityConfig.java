@@ -43,6 +43,10 @@ public class SecurityConfig {
                                 "/actuator/info"
                         ).permitAll()
                         .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/spaces"
+                        ).permitAll()
+                        .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/cohorts",
                                 "/api/cohorts/*/managers"

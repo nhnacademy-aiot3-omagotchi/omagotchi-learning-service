@@ -3,6 +3,9 @@ package site.omagotchi.learningservice.space.presentation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
@@ -53,7 +56,10 @@ class SpaceAdminControllerTest {
         mockMvc = standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .defaultRequest(get("/")
-                        .header("X-User-Id", USER_ID))
+                        .principal(authentication(
+                                USER_ID,
+                                GlobalRole.USER
+                        )))
                 .build();
     }
 
@@ -283,7 +289,10 @@ class SpaceAdminControllerTest {
                 .andExpect(jsonPath("$.updatedAt").exists());
 
         mockMvc.perform(delete("/api/admin/spaces/1/cohort")
-                        .header("X-Global-Role", "SYSTEM_ADMIN"))
+                        .principal(authentication(
+                                USER_ID,
+                                GlobalRole.SYSTEM_ADMIN
+                        )))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.cohortId").isEmpty());
@@ -371,6 +380,19 @@ class SpaceAdminControllerTest {
                   "cohortId": 42
                 }
                 """;
+    }
+
+    private Authentication authentication(
+            UUID userId,
+            GlobalRole globalRole
+    ) {
+        return new UsernamePasswordAuthenticationToken(
+                userId.toString(),
+                null,
+                java.util.List.of(new SimpleGrantedAuthority(
+                        "ROLE_" + globalRole.name()
+                ))
+        );
     }
 
     private Space space(

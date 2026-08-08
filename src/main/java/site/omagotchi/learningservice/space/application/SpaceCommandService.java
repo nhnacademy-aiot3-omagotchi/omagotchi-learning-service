@@ -11,7 +11,9 @@ import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPo
 import site.omagotchi.learningservice.space.application.port.SpaceOccupancyQueryPort;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
+import site.omagotchi.learningservice.space.domain.SpaceAttributes;
 import site.omagotchi.learningservice.space.domain.SpaceType;
+import site.omagotchi.learningservice.space.domain.SpaceValidationException;
 
 import java.time.Clock;
 import java.time.ZonedDateTime;
@@ -22,8 +24,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class SpaceCommandService {
-
-    private static final int MAX_NAME_LENGTH = 50;
 
     private final SpaceRepository spaceRepository;
     private final SpaceOccupancyQueryPort spaceOccupancyQueryPort;
@@ -41,26 +41,20 @@ public class SpaceCommandService {
                 globalRole
         );
 
-        String normalizedName =
-                normalizeName(command.name());
-
-        if (normalizedName != null
-                && spaceRepository.existsActiveByName(
-                normalizedName
-        )) {
-            throw new BusinessException(SpaceErrorCode.DUPLICATE_NAME);
-        }
-
-        validateSpaceAttributes(
-                normalizedName,
+        SpaceAttributes attributes = validateSpaceAttributes(
+                command.name(),
                 command.spaceType(),
                 command.capacity()
         );
 
+        if (spaceRepository.existsActiveByName(attributes.name())) {
+            throw new BusinessException(SpaceErrorCode.DUPLICATE_NAME);
+        }
+
         Space space = Space.create(
-                normalizedName,
-                command.spaceType(),
-                command.capacity(),
+                attributes.name(),
+                attributes.spaceType(),
+                attributes.capacity(),
                 cohortId,
                 ZonedDateTime.now(clock)
         );
@@ -78,14 +72,16 @@ public class SpaceCommandService {
         ensureNotDeleted(existingSpace);
         requireSpaceManager(existingSpace, actorUserId, globalRole, false);
 
-        String normalizedName =
-                normalizeName(command.name());
+        SpaceAttributes attributes = validateSpaceAttributes(
+                command.name(),
+                command.spaceType(),
+                command.capacity()
+        );
 
         boolean duplicateName =
-                normalizedName != null
-                        && spaceRepository
+                spaceRepository
                         .existsActiveByNameAndIdNot(
-                                normalizedName,
+                                attributes.name(),
                                 spaceId
                         );
 
@@ -93,17 +89,11 @@ public class SpaceCommandService {
             throw new BusinessException(SpaceErrorCode.DUPLICATE_NAME);
         }
 
-        validateSpaceAttributes(
-                normalizedName,
-                command.spaceType(),
-                command.capacity()
-        );
-
         ZonedDateTime now =
                 ZonedDateTime.now(clock);
 
         boolean changesType = existingSpace.getSpaceType()
-                != command.spaceType();
+                != attributes.spaceType();
 
         if (changesType && existingSpace.isActive()) {
             throw new BusinessException(
@@ -117,7 +107,7 @@ public class SpaceCommandService {
             );
         }
 
-        if (command.capacity() < existingSpace.getCapacity()
+        if (attributes.capacity() < existingSpace.getCapacity()
                 && existingSpace.isActive()) {
             throw new BusinessException(
                     SpaceErrorCode.ACTIVE_CAPACITY_REDUCTION_NOT_ALLOWED
@@ -126,15 +116,15 @@ public class SpaceCommandService {
 
         Space updatedSpace = existingSpace
                 .changeName(
-                        normalizedName,
+                        attributes.name(),
                         now
                 )
                 .changeType(
-                        command.spaceType(),
+                        attributes.spaceType(),
                         now
                 )
                 .changeCapacity(
-                        command.capacity(),
+                        attributes.capacity(),
                         now
                 );
 
@@ -400,30 +390,20 @@ public class SpaceCommandService {
         }
     }
 
-    private void validateSpaceAttributes(
+    private SpaceAttributes validateSpaceAttributes(
             String name,
             SpaceType spaceType,
             Integer capacity
     ) {
-        if (name == null || name.isBlank()
-                || name.length() > MAX_NAME_LENGTH) {
-            throw new BusinessException(SpaceErrorCode.INVALID_NAME);
+        try {
+            return new SpaceAttributes(name, spaceType, capacity);
+        } catch (SpaceValidationException exception) {
+            SpaceErrorCode errorCode = switch (exception.attribute()) {
+                case NAME -> SpaceErrorCode.INVALID_NAME;
+                case TYPE -> SpaceErrorCode.INVALID_TYPE;
+                case CAPACITY -> SpaceErrorCode.INVALID_CAPACITY;
+            };
+            throw new BusinessException(errorCode, exception);
         }
-
-        if (spaceType == null) {
-            throw new BusinessException(SpaceErrorCode.INVALID_TYPE);
-        }
-
-        if (capacity == null || capacity <= 0) {
-            throw new BusinessException(SpaceErrorCode.INVALID_CAPACITY);
-        }
-    }
-
-    private String normalizeName(
-            String name
-    ) {
-        return name == null
-                ? null
-                : name.trim();
     }
 }

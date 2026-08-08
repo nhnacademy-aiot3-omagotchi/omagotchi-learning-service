@@ -37,9 +37,10 @@ class SpaceRepositoryQueryContractTest {
                 List.class,
                 OffsetDateTime.class
         );
-        String listQuery = listQueryMethod.getAnnotation(Query.class).value();
+        Query listQuery = listQueryMethod.getAnnotation(Query.class);
 
-        assertThat(listQuery)
+        assertThat(listQuery.nativeQuery()).isTrue();
+        assertThat(listQuery.value())
                 .contains("JOIN learning_service.cohort_memberships")
                 .contains("occupier_membership.id = ro.occupier_membership_id")
                 .contains("occupier_membership.cohort_id")

@@ -79,6 +79,7 @@ class SpaceJpaPersistenceTest {
 
         assertThatThrownBy(() -> adapter.save(space))
                 .isInstanceOf(BusinessException.class)
+                .hasCause(duplicateNameViolation)
                 .satisfies(exception -> assertThat(
                         ((BusinessException) exception).getErrorCode()
                 ).isEqualTo(SpaceErrorCode.DUPLICATE_NAME));

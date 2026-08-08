@@ -74,7 +74,8 @@ public class SpaceJpaPersistence
         } catch (DataIntegrityViolationException exception) {
             if (isActiveSpaceNameUniqueViolation(exception)) {
                 throw new BusinessException(
-                        SpaceErrorCode.DUPLICATE_NAME
+                        SpaceErrorCode.DUPLICATE_NAME,
+                        exception
                 );
             }
 

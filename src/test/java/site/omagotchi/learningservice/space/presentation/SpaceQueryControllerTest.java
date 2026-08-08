@@ -15,16 +15,22 @@ import site.omagotchi.learningservice.space.domain.SpaceUsageStatus;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.UUID;
 
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 
 @WebMvcTest(SpaceQueryController.class)
 @WithMockUser
 class SpaceQueryControllerTest {
+
+    private static final UUID USER_ID = UUID.fromString(
+            "019d2a48-80c0-4d6a-9a15-0b16d2dd74f1"
+    );
 
     @Autowired
     private MockMvc mockMvc;
@@ -89,5 +95,20 @@ class SpaceQueryControllerTest {
                         .value(false));
 
         verify(spaceQueryService).getSpaceList(null);
+    }
+
+    @Test
+    void usesAuthenticatedPrincipalInsteadOfUserHeader() throws Exception {
+        UUID spoofedUserId = UUID.randomUUID();
+        when(spaceQueryService.getSpaceList(USER_ID)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/spaces")
+                        .with(jwt().jwt(token -> token
+                                .subject(USER_ID.toString())
+                                .claim("role", "USER")))
+                        .header("X-User-Id", spoofedUserId))
+                .andExpect(status().isOk());
+
+        verify(spaceQueryService).getSpaceList(USER_ID);
     }
 }

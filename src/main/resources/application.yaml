@@ -78,6 +78,10 @@ community:
       - image/png
       - image/gif
 
+realtime:
+  presence:
+    session-ttl: ${REALTIME_PRESENCE_SESSION_TTL:60s}
+
 auth:
   jwt:
     issuer: ${JWT_ISSUER:https://identity.omagotchi.local}

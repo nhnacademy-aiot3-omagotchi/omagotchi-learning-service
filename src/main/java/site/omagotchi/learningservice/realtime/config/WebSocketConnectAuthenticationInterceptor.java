@@ -16,7 +16,10 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
+import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
+import site.omagotchi.learningservice.realtime.application.CohortPresenceService;
 
 @Component
 @RequiredArgsConstructor
@@ -26,6 +29,7 @@ public class WebSocketConnectAuthenticationInterceptor implements ChannelInterce
 
     private final JwtDecoder jwtDecoder;
     private final JwtAuthenticationConverter jwtAuthenticationConverter;
+    private final CohortPresenceService presenceService;
 
     @Override
     public Message<?> preSend(@NonNull Message<?> message, @NonNull MessageChannel channel) {
@@ -37,11 +41,12 @@ public class WebSocketConnectAuthenticationInterceptor implements ChannelInterce
         String token = bearerToken(accessor);
         Jwt jwt = decode(token);
         Authentication authentication = jwtAuthenticationConverter.convert(jwt);
-        if (authentication == null) {
+        if (!(authentication instanceof JwtAuthenticationToken jwtAuthentication)) {
             throw new BadCredentialsException("Invalid WebSocket authentication");
         }
 
-        accessor.setUser(authentication);
+        accessor.setUser(jwtAuthentication);
+        presenceService.registerSession(accessor.getSessionId(), AuthenticatedUser.from(jwtAuthentication));
         return MessageBuilder.createMessage(message.getPayload(), accessor.getMessageHeaders());
     }
 

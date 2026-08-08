@@ -13,6 +13,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import site.omagotchi.learningservice.realtime.application.CohortPresenceService;
 import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 
 import java.security.Principal;
@@ -28,8 +29,9 @@ class WebSocketConnectAuthenticationInterceptorTest {
 
     private final JwtDecoder jwtDecoder = mock(JwtDecoder.class);
     private final JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
+    private final CohortPresenceService presenceService = mock(CohortPresenceService.class);
     private final WebSocketConnectAuthenticationInterceptor interceptor =
-            new WebSocketConnectAuthenticationInterceptor(jwtDecoder, jwtAuthenticationConverter);
+            new WebSocketConnectAuthenticationInterceptor(jwtDecoder, jwtAuthenticationConverter, presenceService);
     private final MessageChannel channel = mock(MessageChannel.class);
 
     @Test
@@ -51,6 +53,13 @@ class WebSocketConnectAuthenticationInterceptorTest {
         then(principal).isInstanceOf(Authentication.class);
         then(principal.getName()).isEqualTo(TestJwtKeyConfig.USER_ID);
         verify(jwtDecoder).decode("access-token");
+        verify(presenceService).registerSession(
+                "session-1",
+                new site.omagotchi.learningservice.global.auth.AuthenticatedUser(
+                        java.util.UUID.fromString(TestJwtKeyConfig.USER_ID),
+                        site.omagotchi.learningservice.global.auth.GlobalRole.USER
+                )
+        );
     }
 
     @Test
@@ -74,6 +83,7 @@ class WebSocketConnectAuthenticationInterceptorTest {
 
     private Message<byte[]> connectMessage(String authorization) {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
+        accessor.setSessionId("session-1");
         if (authorization != null) {
             accessor.setNativeHeader("Authorization", authorization);
         }

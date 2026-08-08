@@ -52,6 +52,13 @@ public class CohortAccessService {
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
     }
 
+    public CohortMembership requireCurrentActiveMembership(UUID userId) {
+        return membershipRepository.findFirstByUserIdAndStatusAndEndedAtIsNullOrderByRequestedAtDesc(
+                userId,
+                CohortMembershipStatus.ACTIVE
+        ).orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
+    }
+
     /**
      * 사용자가 해당 기수에서 MANAGER 역할의 ACTIVE 소속인지 확인
      * 소속은 있지만 관리자 역할이 아니면 403으로 처리

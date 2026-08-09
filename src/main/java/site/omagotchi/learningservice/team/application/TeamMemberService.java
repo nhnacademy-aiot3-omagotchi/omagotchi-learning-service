@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.team.application.dto.command.AddTeamMemberRequest;
+import site.omagotchi.learningservice.team.application.command.AddTeamMemberRequest;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;

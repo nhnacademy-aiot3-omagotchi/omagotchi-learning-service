@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.team.application.dto.command;
+package site.omagotchi.learningservice.team.application.command;
 
 /**
  * cohortId는 nullable이다 (RM-28).

@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.team.application.dto.result;
+package site.omagotchi.learningservice.team.application.reuslt;
 
 import site.omagotchi.learningservice.team.domain.Team;
 

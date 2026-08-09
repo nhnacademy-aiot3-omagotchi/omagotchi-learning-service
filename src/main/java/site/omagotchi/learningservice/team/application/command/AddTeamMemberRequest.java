@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.team.application.dto.command;
+package site.omagotchi.learningservice.team.application.command;
 
 import jakarta.validation.constraints.NotNull;
 

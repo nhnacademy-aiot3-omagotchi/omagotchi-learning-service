@@ -14,7 +14,7 @@ import site.omagotchi.learningservice.cohort.application.result.CohortMembership
 import site.omagotchi.learningservice.team.application.TeamAccessSupport;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamMembership;
-import site.omagotchi.learningservice.team.application.dto.command.AddTeamMemberRequest;
+import site.omagotchi.learningservice.team.application.command.AddTeamMemberRequest;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.domain.TeamMember;

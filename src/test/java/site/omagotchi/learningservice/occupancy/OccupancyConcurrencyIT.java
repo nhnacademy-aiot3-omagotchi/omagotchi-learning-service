@@ -7,6 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.OccupancyErrorCode;
@@ -14,6 +15,7 @@ import site.omagotchi.learningservice.occupancy.application.OccupancyParticipant
 import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
+import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
 import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 
@@ -31,6 +33,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 
 /**
  * 점유·참여자의 동시성 방어 (MR-08, MR-10, MR-28, MR-35).
@@ -66,6 +71,9 @@ class OccupancyConcurrencyIT {
 
     @Autowired
     JdbcTemplate jdbcTemplate;
+
+    @MockitoSpyBean
+    OccupancyParticipantRepository participantRepository;
 
     /**
      * 락은 1차 필터일 뿐이다. 동시 요청 둘이 나란히 "활성 점유 없음"을 볼 수 있고,
@@ -351,6 +359,43 @@ class OccupancyConcurrencyIT {
                 .isEqualTo(OccupancyErrorCode.OCCUPANCY_ENDED));
     }
 
+    /**
+     * {@code release()}가 상태 변경(도메인 필드 대입)과 참여자 마감(별도 저장소 호출)을
+     * 같은 트랜잭션에서 처리하는지 실제 커밋으로 확인한다.
+     *
+     * <p>도메인 쪽({@code occupancy.release(now)})은 필드 대입일 뿐이라 자체적으로 실패할
+     * 방법이 없다 — 그래서 두 번째 저장소 호출({@code closeAllActiveByOccupancyId})에만
+     * 실패를 주입한다. 이 클래스는 트랜잭션을 롤백하지 않고 같은 컨테이너를 공유하므로,
+     * 예외 이후 실제로 커밋된 DB 상태를 그대로 조회해 원자성을 검증할 수 있다
+     * ({@code TimerCommandServiceIT.rollsBackTimerStopWhenStudyRecordSaveFails}와 같은 패턴).</p>
+     */
+    @Test
+    @DisplayName("참여자 마감이 실패하면 점유 상태 변경도 함께 롤백된다.")
+    void test18() {
+        Long cohortId = fixture.createCohort("반납 롤백 기수");
+        Long spaceId = fixture.createMeetingRoom(cohortId, "반납 롤백 회의실", 8);
+
+        UUID occupierUserId = fixture.createActiveMember(cohortId).userId();
+        UUID participantUserId = fixture.createActiveMember(cohortId).userId();
+
+        roomOccupancyService.start(spaceId, occupierUserId);
+        occupancyParticipantService.add(spaceId, participantUserId, occupierUserId);
+
+        doThrow(new RuntimeException("참여자 마감 실패"))
+                .when(participantRepository).closeAllActiveByOccupancyId(anyLong(), any());
+
+        Throwable thrown = catchThrowable(
+                () -> roomOccupancyLifecycleService.release(spaceId, occupierUserId));
+
+        assertThat(thrown).isInstanceOf(RuntimeException.class);
+
+        // 원자적 롤백 검증 — status·ended_at·참여자 두 명의 left_at이 모두 시도 전 상태여야 한다.
+        assertThat(activeOccupancies(spaceId)).isEqualTo(1);
+        assertThat(occupancyStatus(spaceId)).isEqualTo("ACTIVE");
+        assertThat(occupancyEndedAt(spaceId)).isNull();
+        assertThat(openParticipantRows(spaceId)).isEqualTo(2);
+    }
+
     // ────────────────────────────── 재실 검증 (MR-22, MR-19) ──────────────────────────────
 
     /**
@@ -481,6 +526,20 @@ class OccupancyConcurrencyIT {
     }
 
     // ────────────────────────────── 헬퍼 ──────────────────────────────
+
+    private String occupancyStatus(Long spaceId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT status FROM learning_service.room_occupancies
+                 WHERE space_id = ? AND status = 'ACTIVE'
+                """, String.class, spaceId);
+    }
+
+    private OffsetDateTime occupancyEndedAt(Long spaceId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT ended_at FROM learning_service.room_occupancies
+                 WHERE space_id = ? AND status = 'ACTIVE'
+                """, OffsetDateTime.class, spaceId);
+    }
 
     private Long occupierMembershipId(Long spaceId) {
         return jdbcTemplate.queryForObject("""

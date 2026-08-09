@@ -13,8 +13,8 @@ import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.application.TeamMasterService;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
-import site.omagotchi.learningservice.team.application.dto.command.AddTeamMemberRequest;
-import site.omagotchi.learningservice.team.application.dto.command.CreateTeamRequest;
+import site.omagotchi.learningservice.team.application.command.AddTeamMemberRequest;
+import site.omagotchi.learningservice.team.application.command.CreateTeamRequest;
 import site.omagotchi.learningservice.team.support.TeamTestFixture;
 
 import java.util.ArrayList;

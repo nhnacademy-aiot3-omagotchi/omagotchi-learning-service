@@ -14,7 +14,6 @@ import site.omagotchi.learningservice.cohort.application.result.CohortMembership
 import site.omagotchi.learningservice.team.application.TeamAccessSupport;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamMembership;
-import site.omagotchi.learningservice.team.application.command.AddTeamMemberRequest;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.domain.TeamMember;
@@ -109,7 +108,7 @@ class TeamMemberServiceTest {
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
         given(teamMemberRepository.countByTeamId(1L)).willReturn(3L);
 
-        teamMemberService.addMember(1L, new AddTeamMemberRequest(targetUserId), userId);
+        teamMemberService.addMember(1L, targetUserId, userId);
 
         ArgumentCaptor<TeamMember> captor = ArgumentCaptor.forClass(TeamMember.class);
         verify(teamMemberRepository).save(captor.capture());
@@ -128,9 +127,7 @@ class TeamMemberServiceTest {
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.ACTIVE);
         given(cohortMembershipQueryService.findActiveMembership(1L, targetUserId)).willReturn(Optional.empty());
 
-        AddTeamMemberRequest request = new AddTeamMemberRequest(targetUserId);
-
-        assertThatThrownBy(() -> teamMemberService.addMember(1L, request, userId))
+        assertThatThrownBy(() -> teamMemberService.addMember(1L, targetUserId, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.TARGET_NOT_IN_COHORT);
 
         verify(teamMemberRepository, never()).save(any());
@@ -146,9 +143,7 @@ class TeamMemberServiceTest {
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.WITHDRAWN);
 
-        AddTeamMemberRequest request = new AddTeamMemberRequest(targetUserId);
-
-        assertThatThrownBy(() -> teamMemberService.addMember(1L, request, userId))
+        assertThatThrownBy(() -> teamMemberService.addMember(1L, targetUserId, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.ACCOUNT_WITHDRAWN);
 
         verify(teamMemberRepository, never()).save(any());
@@ -164,9 +159,7 @@ class TeamMemberServiceTest {
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.NOT_FOUND);
 
-        AddTeamMemberRequest request = new AddTeamMemberRequest(targetUserId);
-
-        assertThatThrownBy(() -> teamMemberService.addMember(1L, request, userId))
+        assertThatThrownBy(() -> teamMemberService.addMember(1L, targetUserId, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.ACCOUNT_NOT_FOUND);
 
         verify(teamMemberRepository, never()).save(any());
@@ -186,9 +179,7 @@ class TeamMemberServiceTest {
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
         given(teamMemberRepository.countByTeamId(1L)).willReturn(8L);
 
-        AddTeamMemberRequest request = new AddTeamMemberRequest(targetUserId);
-
-        assertThatThrownBy(() -> teamMemberService.addMember(1L, request, userId))
+        assertThatThrownBy(() -> teamMemberService.addMember(1L, targetUserId, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.CAPACITY_EXCEEDED);
 
         verify(teamMemberRepository, never()).save(any());

@@ -10,8 +10,7 @@ import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
-import site.omagotchi.learningservice.team.application.command.CreateTeamRequest;
-import site.omagotchi.learningservice.team.application.reuslt.TeamResponse;
+import site.omagotchi.learningservice.team.application.result.TeamResult;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.application.port.TeamRepository;
@@ -59,8 +58,8 @@ class TeamNameScopeIT {
         var a = fixture.createActiveMember(cohort1);
         var b = fixture.createActiveMember(cohort2);
 
-        TeamResponse first = teamService.create(new CreateTeamRequest(cohort1, "오마고치"), a.userId());
-        TeamResponse second = teamService.create(new CreateTeamRequest(cohort2, "오마고치"), b.userId());
+        TeamResult first = teamService.create(cohort1, "오마고치", a.userId());
+        TeamResult second = teamService.create(cohort2, "오마고치", b.userId());
 
         assertThat(first.teamId()).isNotEqualTo(second.teamId());
         assertThat(first.name()).isEqualTo(second.name());
@@ -73,12 +72,12 @@ class TeamNameScopeIT {
         var a = fixture.createActiveMember(cohortId);
         var b = fixture.createActiveMember(cohortId);
 
-        teamService.create(new CreateTeamRequest(cohortId, "Omagotchi"), a.userId());
+        teamService.create(cohortId, "Omagotchi", a.userId());
 
-        CreateTeamRequest lowerCased = new CreateTeamRequest(cohortId, "omagotchi");
+        String lowerCased = "omagotchi";
         UUID challenger = b.userId();
 
-        assertThatThrownBy(() -> teamService.create(lowerCased, challenger))
+        assertThatThrownBy(() -> teamService.create(cohortId, lowerCased, challenger))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.DUPLICATE_NAME);
     }
 
@@ -89,12 +88,12 @@ class TeamNameScopeIT {
         var a = fixture.createActiveMember(cohortId);
         var b = fixture.createActiveMember(cohortId);
 
-        teamService.create(new CreateTeamRequest(cohortId, "오마고치"), a.userId());
+        teamService.create(cohortId, "오마고치", a.userId());
 
-        CreateTeamRequest padded = new CreateTeamRequest(cohortId, "   오마고치   ");
+        String padded = "   오마고치   ";
         UUID challenger = b.userId();
 
-        assertThatThrownBy(() -> teamService.create(padded, challenger))
+        assertThatThrownBy(() -> teamService.create(cohortId, padded, challenger))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.DUPLICATE_NAME);
     }
 
@@ -145,14 +144,14 @@ class TeamNameScopeIT {
         Long cohortId = fixture.createCohort("1기");
         var master = fixture.createActiveMember(cohortId);
 
-        TeamResponse before = teamService.create(new CreateTeamRequest(cohortId, "오마고치"), master.userId());
+        TeamResult before = teamService.create(cohortId, "오마고치", master.userId());
 
         // 마스터가 단독 팀원이므로 탈퇴가 곧 팀 소프트 삭제다 (GR-13).
         teamMemberService.leave(before.teamId(), master.userId());
         assertThat(teamJpaRepository.findById(before.teamId()).orElseThrow().isDisbanded()).isTrue();
 
         // 이름 유니크와 1인 1팀 유니크가 둘 다 풀려야 통과한다.
-        TeamResponse after = teamService.create(new CreateTeamRequest(cohortId, "오마고치"), master.userId());
+        TeamResult after = teamService.create(cohortId, "오마고치", master.userId());
 
         assertThat(after.teamId()).isNotEqualTo(before.teamId());
     }
@@ -168,12 +167,12 @@ class TeamNameScopeIT {
         fixture.createActiveMember(cohort1, userId);
         fixture.createActiveMember(cohort2, userId);
 
-        TeamResponse first = teamService.create(new CreateTeamRequest(cohort1, "1기팀"), userId);
-        TeamResponse second = teamService.create(new CreateTeamRequest(cohort2, "2기팀"), userId);
+        TeamResult first = teamService.create(cohort1, "1기팀", userId);
+        TeamResult second = teamService.create(cohort2, "2기팀", userId);
 
         // GR-18은 기수 내 제약이므로 두 건 모두 살아 있어야 한다.
-        List<TeamResponse> myTeams = teamService.getMyTeams(userId);
-        assertThat(myTeams).extracting(TeamResponse::teamId)
+        List<TeamResult> myTeams = teamService.getMyTeams(userId);
+        assertThat(myTeams).extracting(TeamResult::teamId)
                 .containsExactlyInAnyOrder(first.teamId(), second.teamId());
     }
 
@@ -187,7 +186,7 @@ class TeamNameScopeIT {
         fixture.createActiveMember(cohort2, userId);
 
         assertThatThrownBy(() ->
-                teamService.create(new CreateTeamRequest(null, "오마고치"), userId))
+                teamService.create(null, "오마고치", userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.COHORT_REQUIRED);
     }
 }

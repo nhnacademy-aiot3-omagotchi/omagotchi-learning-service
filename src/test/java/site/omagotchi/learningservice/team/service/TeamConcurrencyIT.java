@@ -10,8 +10,6 @@ import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
-import site.omagotchi.learningservice.team.application.command.AddTeamMemberRequest;
-import site.omagotchi.learningservice.team.application.command.CreateTeamRequest;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.support.TeamTestFixture;
 
@@ -46,13 +44,13 @@ class TeamConcurrencyIT {
     void test1() throws Exception {
         Long cohortId = fixture.createCohort("1기");
         var master = fixture.createActiveMember(cohortId);
-        var team = teamService.create(new CreateTeamRequest(cohortId, "오마고치"), master.userId());
+        var team = teamService.create(cohortId, "오마고치", master.userId());
 
         // 마스터 포함 7명까지 채운다
         for (int i = 0; i < 6; i++) {
             var m = fixture.createActiveMember(cohortId);
             teamMemberService.addMember(team.teamId(),
-                    new AddTeamMemberRequest(m.userId()), master.userId());
+                    m.userId(), master.userId());
         }
 
         var a = fixture.createActiveMember(cohortId);
@@ -68,7 +66,7 @@ class TeamConcurrencyIT {
                 try {
                     start.await();
                     teamMemberService.addMember(team.teamId(),
-                            new AddTeamMemberRequest(target.userId()), master.userId());
+                            target.userId(), master.userId());
                     success.incrementAndGet();
                 } catch (BusinessException e) {
                     failure.incrementAndGet();

@@ -13,8 +13,6 @@ import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.application.TeamMasterService;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
-import site.omagotchi.learningservice.team.application.command.AddTeamMemberRequest;
-import site.omagotchi.learningservice.team.application.command.CreateTeamRequest;
 import site.omagotchi.learningservice.team.support.TeamTestFixture;
 
 import java.util.ArrayList;
@@ -180,12 +178,11 @@ class TeamMasterIT {
 
     /** 첫 사람이 MASTER가 되고 나머지는 팀원으로 추가된다. */
     private Long createTeamWith(Long cohortId, String name, TeamTestFixture.Member... members) {
-        Long teamId = teamService.create(
-                new CreateTeamRequest(cohortId, name), members[0].userId()).teamId();
+        Long teamId = teamService.create(cohortId, name, members[0].userId()).teamId();
 
         for (int i = 1; i < members.length; i++) {
             teamMemberService.addMember(
-                    teamId, new AddTeamMemberRequest(members[i].userId()), members[0].userId());
+                    teamId, members[i].userId(), members[0].userId());
         }
         return teamId;
     }

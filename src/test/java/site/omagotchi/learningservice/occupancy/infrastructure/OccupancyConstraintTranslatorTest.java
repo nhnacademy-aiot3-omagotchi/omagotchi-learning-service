@@ -83,6 +83,16 @@ class OccupancyConstraintTranslatorTest {
         assertThat(OccupancyConstraintTranslator.translate(original)).isSameAs(original);
     }
 
+    /** 원본을 cause로 달아야 예상 밖 실패의 스택 트레이스가 최종 경계까지 살아남는다. */
+    @Test
+    @DisplayName("변환한 예외는 원본을 cause로 보존한다.")
+    void test7() {
+        DataIntegrityViolationException original =
+                violation("uq_room_occupancies_one_active_per_space");
+
+        assertThat(OccupancyConstraintTranslator.translate(original)).hasCause(original);
+    }
+
     private void assertTranslatedTo(ErrorCode expectedErrorCode, String constraintName) {
         RuntimeException translated =
                 OccupancyConstraintTranslator.translate(violation(constraintName));

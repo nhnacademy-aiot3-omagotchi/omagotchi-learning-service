@@ -10,9 +10,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.application.*;
-import site.omagotchi.learningservice.team.application.command.CreateTeamRequest;
-import site.omagotchi.learningservice.team.application.reuslt.TeamDetailResponse;
-import site.omagotchi.learningservice.team.application.reuslt.TeamResponse;
+import site.omagotchi.learningservice.team.application.result.TeamDetailResult;
+import site.omagotchi.learningservice.team.application.result.TeamResult;
 import site.omagotchi.learningservice.team.application.port.AccountReader;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
@@ -84,7 +83,7 @@ class TeamServiceTest {
         given(teamMemberRepository.existsByCohortMembershipId(10L)).willReturn(false);
         given(teamRepository.save(any())).willAnswer(invocationOnMock -> invocationOnMock.getArgument(0));
 
-        teamService.create(new CreateTeamRequest(1L, "오마고치"), userId);
+        teamService.create(1L, "오마고치", userId);
 
         ArgumentCaptor<TeamMember> captor = ArgumentCaptor.forClass(TeamMember.class);
         verify(teamMemberRepository).save(captor.capture());
@@ -99,9 +98,7 @@ class TeamServiceTest {
         given(teamRepository.existsActiveByCohortIdAndName(1L, "오마고치")).willReturn(false);
         given(teamMemberRepository.existsByCohortMembershipId(10L)).willReturn(true);
 
-        CreateTeamRequest request = new CreateTeamRequest(1L, "오마고치");
-
-        assertThatThrownBy(() -> teamService.create(request, userId))
+        assertThatThrownBy(() -> teamService.create(1L, "오마고치", userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.ALREADY_IN_TEAM);
     }
 
@@ -111,9 +108,7 @@ class TeamServiceTest {
         given(teamAccessSupport.resolveMembershipForCreate(1L, userId)).willReturn(membership);
         given(teamRepository.existsActiveByCohortIdAndName(1L, "오마고치")).willReturn(true);
 
-        CreateTeamRequest request = new CreateTeamRequest(1L, "오마고치");
-
-        assertThatThrownBy(() -> teamService.create(request, userId))
+        assertThatThrownBy(() -> teamService.create(1L, "오마고치", userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.DUPLICATE_NAME);
 
         verify(teamRepository, never()).save(any());
@@ -143,7 +138,7 @@ class TeamServiceTest {
         given(accountReader.findDisplayNames(any()))
                 .willReturn(Map.of(masterUserId, "마스터닉네임", memberUserId, "멤버닉네임"));
 
-        TeamDetailResponse response = teamService.getTeam(teamId, userId);
+        TeamDetailResult response = teamService.getTeam(teamId, userId);
 
         assertThat(response.memberCount()).isEqualTo(2);
         assertThat(response.members())
@@ -187,9 +182,9 @@ class TeamServiceTest {
         given(teamRepository.findByIdInAndDeletedAtIsNull(List.of(100L, 200L)))
                 .willReturn(List.of(team1, team2));
 
-        List<TeamResponse> result = teamService.getMyTeams(userId);
+        List<TeamResult> result = teamService.getMyTeams(userId);
 
-        assertThat(result).extracting(TeamResponse::teamId).containsExactly(100L, 200L);
+        assertThat(result).extracting(TeamResult::teamId).containsExactly(100L, 200L);
     }
 
     @Test
@@ -197,7 +192,7 @@ class TeamServiceTest {
     void test7() {
         given(cohortMembershipQueryService.findActiveMemberships(userId)).willReturn(List.of());
 
-        List<TeamResponse> result = teamService.getMyTeams(userId);
+        List<TeamResult> result = teamService.getMyTeams(userId);
 
         assertThat(result).isEmpty();
         verify(teamMemberRepository, never()).findByCohortMembershipIdIn(any());
@@ -211,7 +206,7 @@ class TeamServiceTest {
         given(cohortMembershipQueryService.findActiveMemberships(userId)).willReturn(List.of(m1));
         given(teamMemberRepository.findByCohortMembershipIdIn(List.of(10L))).willReturn(List.of());
 
-        List<TeamResponse> result = teamService.getMyTeams(userId);
+        List<TeamResult> result = teamService.getMyTeams(userId);
 
         assertThat(result).isEmpty();
         verify(teamRepository, never()).findByIdInAndDeletedAtIsNull(any());

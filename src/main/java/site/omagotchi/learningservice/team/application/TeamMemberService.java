@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.team.application.command.AddTeamMemberRequest;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
@@ -46,22 +45,25 @@ public class TeamMemberService {
      * <p>
      * 락 전 단계에서 Team을 엔티티로 읽지 않는 것이 핵심이다. 읽어두면 1차 캐시의
      * 인스턴스가 lockActiveTeam의 반환값이 되어 해체 재확인이 락 이전 상태를 본다.
+     *
+     * @param targetUserId 추가할 계정 id. 어느 기수의 멤버십으로 넣을지는 서버가 팀의 기수로 역조회한다
+     * @param userId       요청자 계정 id. 이 팀의 MASTER여야 한다
      */
     @Transactional
-    public void addMember(Long teamId, AddTeamMemberRequest request, UUID userId) {
+    public void addMember(Long teamId, UUID targetUserId, UUID userId) {
         Long cohortId = accessSupport.requireActiveTeamCohortId(teamId);
         TeamMembership requestMembership =
                 accessSupport.requireActiveMembership(cohortId, userId);
         accessSupport.requireMaster(teamId, requestMembership.id());
 
-        validateAccount(request.targetUserId());
+        validateAccount(targetUserId);
 
 
         // GR-22: 팀의 기수로 대상 멤버십을 역조회한다.
         // 조회 방향을 뒤집으면 "대상의 기수 == 팀의 기수" 검증이 조회 결과로 자동 충족된다.
         // team_members에 cohort_id가 없으므로 이 앱 검증이 유일한 방어선이다.
         TeamMembership targetMembership = cohortMembershipQueryService
-                .findActiveMembership(cohortId, request.targetUserId())
+                .findActiveMembership(cohortId, targetUserId)
                 .map(view -> new TeamMembership(view.membershipId(), view.cohortId(), view.userId()))
                 .orElseThrow(() -> new BusinessException(TeamErrorCode.TARGET_NOT_IN_COHORT));
 

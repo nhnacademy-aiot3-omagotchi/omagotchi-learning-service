@@ -49,14 +49,14 @@ public final class OccupancyConstraintTranslator {
 
         String normalized = name.toLowerCase();
         if (normalized.contains(UQ_ONE_ACTIVE_PER_SPACE)) {
-            return new BusinessException(OccupancyErrorCode.ROOM_ALREADY_OCCUPIED);
+            return new BusinessException(OccupancyErrorCode.ROOM_ALREADY_OCCUPIED, exception);
         }
         if (normalized.contains(UQ_ONE_ACTIVE_PER_USER)) {
-            return new BusinessException(OccupancyErrorCode.ALREADY_OCCUPYING);
+            return new BusinessException(OccupancyErrorCode.ALREADY_OCCUPYING, exception);
         }
         if (normalized.contains(UQ_PARTICIPANTS_ONE_ACTIVE)
                 || normalized.contains(UQ_PARTICIPANTS_PAIR)) {
-            return new BusinessException(OccupancyErrorCode.ALREADY_PARTICIPATING);
+            return new BusinessException(OccupancyErrorCode.ALREADY_PARTICIPATING, exception);
         }
         return exception;
     }

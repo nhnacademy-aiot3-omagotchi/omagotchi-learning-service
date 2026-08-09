@@ -3,6 +3,8 @@ package site.omagotchi.learningservice.community.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
@@ -116,7 +118,7 @@ public class CommunityPostCommandService {
         );
         post.delete(clock.instant());
         attachmentRepository.deleteByPostId(post.getId());
-        deleteStoredAttachments(attachments);
+        deleteStoredAttachmentsAfterCommit(attachments);
     }
 
     @Transactional
@@ -259,7 +261,7 @@ public class CommunityPostCommandService {
                     ))
                     .toList();
             List<CommunityPostAttachment> savedAttachments = attachmentRepository.saveAllAndFlush(attachments);
-            deleteStoredAttachments(existingAttachments);
+            deleteStoredAttachmentsAfterCommit(existingAttachments);
             return savedAttachments;
         } catch (RuntimeException exception) {
             storedAttachments.forEach(attachment -> attachmentStorage.delete(attachment.storageKey()));
@@ -281,5 +283,21 @@ public class CommunityPostCommandService {
 
     private void deleteStoredAttachments(List<CommunityPostAttachment> attachments) {
         attachments.forEach(attachment -> attachmentStorage.delete(attachment.getStorageKey()));
+    }
+
+    private void deleteStoredAttachmentsAfterCommit(List<CommunityPostAttachment> attachments) {
+        if (attachments.isEmpty()) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            deleteStoredAttachments(attachments);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                deleteStoredAttachments(attachments);
+            }
+        });
     }
 }

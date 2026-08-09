@@ -133,7 +133,7 @@ public class CommunityPostController {
                 user.userId(),
                 user.globalRole(),
                 postId,
-                request.toCommand(attachmentFiles(attachments))
+                attachments == null ? request.toCommand() : request.toCommand(attachmentFiles(attachments))
         ));
     }
 
@@ -171,7 +171,16 @@ public class CommunityPostController {
             return List.of();
         }
         return IntStream.range(0, files.size())
-                .mapToObj(index -> new CommunityAttachmentFile(files.get(index), index))
+                .mapToObj(index -> {
+                    MultipartFile file = files.get(index);
+                    return new CommunityAttachmentFile(
+                            file.getOriginalFilename(),
+                            file.getContentType(),
+                            file.getSize(),
+                            index,
+                            file::getInputStream
+                    );
+                })
                 .toList();
     }
 }

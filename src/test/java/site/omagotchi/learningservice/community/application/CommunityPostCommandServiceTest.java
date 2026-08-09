@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
@@ -194,8 +193,11 @@ class CommunityPostCommandServiceTest {
     @DisplayName("첨부파일 metadata 저장 실패 시 저장된 파일을 정리한다")
     void cleansUpStoredAttachmentWhenMetadataPersistenceFails() {
         CommunityAttachmentFile attachmentFile = new CommunityAttachmentFile(
-                new MockMultipartFile("attachments", "image.png", "image/png", new byte[]{1}),
-                0
+                "image.png",
+                "image/png",
+                1,
+                0,
+                () -> new java.io.ByteArrayInputStream(new byte[]{1})
         );
         StoredCommunityAttachment storedAttachment = new StoredCommunityAttachment(
                 "2026/08/08/file.png",
@@ -241,8 +243,11 @@ class CommunityPostCommandServiceTest {
     void rejectsTooManyAttachments() {
         List<CommunityAttachmentFile> attachments = java.util.stream.IntStream.range(0, 6)
                 .mapToObj(index -> new CommunityAttachmentFile(
-                        new MockMultipartFile("attachments", "image" + index + ".png", "image/png", new byte[]{1}),
-                        index
+                        "image" + index + ".png",
+                        "image/png",
+                        1,
+                        index,
+                        () -> new java.io.ByteArrayInputStream(new byte[]{1})
                 ))
                 .toList();
         given(cohortMembershipRepository.existsByCohortIdAndUserIdAndStatusIn(

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.realtime.config.PresenceProperties;
 
 import java.time.OffsetDateTime;
@@ -47,6 +48,7 @@ public class CohortPresenceService {
         CohortMembership membership = cohortAccessService.requireCurrentActiveMembership(user.userId());
         String userId = user.userId().toString();
         String cohortId = membership.getCohortId().toString();
+        removeFromPreviousCohortIfChanged(userId, cohortId);
 
         // session hash만 TTL을 갖고, 만료된 hash는 snapshot/cleanup 시 user session set에서 제거한다.
         redisTemplate.opsForHash().putAll(
@@ -56,6 +58,7 @@ public class CohortPresenceService {
         redisTemplate.expire(sessionKey(sessionId), presenceProperties.sessionTtl());
         redisTemplate.opsForSet().add(userSessionsKey(userId), sessionId);
         redisTemplate.opsForValue().set(userPresenceKey(userId), PresenceStatus.ONLINE.name());
+        redisTemplate.opsForValue().set(userCohortKey(userId), cohortId);
         redisTemplate.opsForSet().add(cohortPresenceKey(cohortId), userId);
         broadcastSnapshot(membership.getCohortId());
     }
@@ -96,8 +99,7 @@ public class CohortPresenceService {
         }
 
         if (fallbackUserId != null) {
-            CohortMembership membership = cohortAccessService.requireCurrentActiveMembership(fallbackUserId);
-            removeSession(sessionId, fallbackUserId, membership.getCohortId());
+            removeFallbackSession(sessionId, fallbackUserId);
         }
     }
 
@@ -123,6 +125,7 @@ public class CohortPresenceService {
     private Optional<PresenceUserSnapshot> cleanupAndSnapshotUser(String userId, Long cohortId) {
         if (!hasValidSession(userId)) {
             redisTemplate.opsForValue().set(userPresenceKey(userId), PresenceStatus.OFFLINE.name());
+            redisTemplate.delete(userCohortKey(userId));
             redisTemplate.opsForSet().remove(cohortPresenceKey(cohortId.toString()), userId);
             return Optional.empty();
         }
@@ -157,9 +160,34 @@ public class CohortPresenceService {
 
         if (!hasValidSession(userIdValue)) {
             redisTemplate.opsForValue().set(userPresenceKey(userIdValue), PresenceStatus.OFFLINE.name());
+            redisTemplate.delete(userCohortKey(userIdValue));
             redisTemplate.opsForSet().remove(cohortPresenceKey(cohortId.toString()), userIdValue);
         }
         broadcastSnapshot(cohortId);
+    }
+
+    private void removeFallbackSession(String sessionId, UUID fallbackUserId) {
+        String userId = fallbackUserId.toString();
+        try {
+            CohortMembership membership = cohortAccessService.requireCurrentActiveMembership(fallbackUserId);
+            removeSession(sessionId, fallbackUserId, membership.getCohortId());
+        } catch (BusinessException exception) {
+            redisTemplate.delete(sessionKey(sessionId));
+            redisTemplate.opsForSet().remove(userSessionsKey(userId), sessionId);
+            if (!hasValidSession(userId)) {
+                redisTemplate.opsForValue().set(userPresenceKey(userId), PresenceStatus.OFFLINE.name());
+                redisTemplate.delete(userCohortKey(userId));
+            }
+        }
+    }
+
+    private void removeFromPreviousCohortIfChanged(String userId, String currentCohortId) {
+        String previousCohortId = redisTemplate.opsForValue().get(userCohortKey(userId));
+        if (previousCohortId == null || previousCohortId.equals(currentCohortId)) {
+            return;
+        }
+        redisTemplate.opsForSet().remove(cohortPresenceKey(previousCohortId), userId);
+        broadcastSnapshot(Long.valueOf(previousCohortId));
     }
 
     private Optional<SessionPresence> findSession(String sessionId) {
@@ -189,6 +217,10 @@ public class CohortPresenceService {
 
     private String userPresenceKey(String userId) {
         return "presence:user:" + userId;
+    }
+
+    private String userCohortKey(String userId) {
+        return "presence:user:" + userId + ":cohort";
     }
 
     private String cohortPresenceKey(String cohortId) {

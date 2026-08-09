@@ -40,7 +40,7 @@ class LocalCommunityAttachmentStorageTest {
                 pngBytes()
         );
 
-        var result = storage.store(new CommunityAttachmentFile(file, 0));
+        var result = storage.store(attachmentFile(file, 0));
 
         assertAll(
                 () -> assertTrue(result.storageKey().startsWith("2026/08/08/")),
@@ -58,8 +58,11 @@ class LocalCommunityAttachmentStorageTest {
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> storage().store(new CommunityAttachmentFile(
-                        new MockMultipartFile("attachments", "image.png", "image/png", new byte[0]),
-                        0
+                        "image.png",
+                        "image/png",
+                        0,
+                        0,
+                        () -> new java.io.ByteArrayInputStream(new byte[0])
                 ))
         );
 
@@ -71,7 +74,7 @@ class LocalCommunityAttachmentStorageTest {
     void rejectsDisallowedExtension() {
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> storage().store(new CommunityAttachmentFile(
+                () -> storage().store(attachmentFile(
                         new MockMultipartFile("attachments", "image.webp", "image/webp", pngBytes()),
                         0
                 ))
@@ -85,7 +88,7 @@ class LocalCommunityAttachmentStorageTest {
     void rejectsMismatchedDetectedContentType() {
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> storage().store(new CommunityAttachmentFile(
+                () -> storage().store(attachmentFile(
                         new MockMultipartFile("attachments", "image.jpg", "image/jpeg", pngBytes()),
                         0
                 ))
@@ -99,7 +102,7 @@ class LocalCommunityAttachmentStorageTest {
     void rejectsPathTraversalFilename() {
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> storage().store(new CommunityAttachmentFile(
+                () -> storage().store(attachmentFile(
                         new MockMultipartFile("attachments", "../image.png", "image/png", pngBytes()),
                         0
                 ))
@@ -118,6 +121,16 @@ class LocalCommunityAttachmentStorageTest {
                         List.of("image/jpeg", "image/png", "image/gif")
                 ),
                 clock
+        );
+    }
+
+    private CommunityAttachmentFile attachmentFile(MockMultipartFile file, int displayOrder) {
+        return new CommunityAttachmentFile(
+                file.getOriginalFilename(),
+                file.getContentType(),
+                file.getSize(),
+                displayOrder,
+                file::getInputStream
         );
     }
 

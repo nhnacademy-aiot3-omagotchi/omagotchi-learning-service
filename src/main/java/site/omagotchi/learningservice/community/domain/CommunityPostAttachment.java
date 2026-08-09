@@ -2,24 +2,16 @@ package site.omagotchi.learningservice.community.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 
 @Entity
 @Table(name = "community_post_attachments", schema = "learning_service")
-@Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-@EntityListeners(AuditingEntityListener.class)
 public class CommunityPostAttachment {
 
     @Id
@@ -44,9 +36,11 @@ public class CommunityPostAttachment {
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 
-    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    protected CommunityPostAttachment() {
+    }
 
     public static CommunityPostAttachment create(
             Long postId,
@@ -70,6 +64,45 @@ public class CommunityPostAttachment {
         attachment.sizeBytes = sizeBytes;
         attachment.displayOrder = displayOrder;
         return attachment;
+    }
+
+    @PrePersist
+    void prePersist() {
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public Long getPostId() {
+        return postId;
+    }
+
+    public String getStorageKey() {
+        return storageKey;
+    }
+
+    public String getOriginalFileName() {
+        return originalFileName;
+    }
+
+    public String getContentType() {
+        return contentType;
+    }
+
+    public long getSizeBytes() {
+        return sizeBytes;
+    }
+
+    public int getDisplayOrder() {
+        return displayOrder;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
     }
 
     private static Long requirePostId(Long postId) {

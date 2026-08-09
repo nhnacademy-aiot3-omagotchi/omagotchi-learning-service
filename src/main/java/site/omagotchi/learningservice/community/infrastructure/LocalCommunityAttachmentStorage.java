@@ -2,7 +2,6 @@ package site.omagotchi.learningservice.community.infrastructure;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.web.multipart.MultipartFile;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentFile;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentStorage;
 import site.omagotchi.learningservice.community.application.attachment.StoredCommunityAttachment;
@@ -41,12 +40,11 @@ public class LocalCommunityAttachmentStorage implements CommunityAttachmentStora
 
     @Override
     public StoredCommunityAttachment store(CommunityAttachmentFile attachmentFile) {
-        MultipartFile file = attachmentFile.file();
-        String originalFileName = safeOriginalFileName(file.getOriginalFilename());
+        String originalFileName = safeOriginalFileName(attachmentFile.originalFileName());
         String extension = extension(originalFileName);
         validateExtension(extension);
-        validateSize(file);
-        byte[] header = header(file);
+        validateSize(attachmentFile.sizeBytes());
+        byte[] header = header(attachmentFile);
         String detectedContentType = detectContentType(header);
         validateContentType(detectedContentType, extension);
 
@@ -54,7 +52,7 @@ public class LocalCommunityAttachmentStorage implements CommunityAttachmentStora
         Path targetPath = targetPath(storageKey);
         try {
             Files.createDirectories(targetPath.getParent());
-            try (InputStream inputStream = file.getInputStream()) {
+            try (InputStream inputStream = attachmentFile.openStream()) {
                 Files.copy(inputStream, targetPath);
             }
         } catch (IOException exception) {
@@ -65,7 +63,7 @@ public class LocalCommunityAttachmentStorage implements CommunityAttachmentStora
                 storageKey,
                 originalFileName,
                 detectedContentType,
-                file.getSize(),
+                attachmentFile.sizeBytes(),
                 attachmentFile.displayOrder()
         );
     }
@@ -107,15 +105,15 @@ public class LocalCommunityAttachmentStorage implements CommunityAttachmentStora
         }
     }
 
-    private void validateSize(MultipartFile file) {
-        if (file.isEmpty() || file.getSize() <= 0 || file.getSize() > properties.maxFileSize().toBytes()) {
+    private void validateSize(long sizeBytes) {
+        if (sizeBytes <= 0 || sizeBytes > properties.maxFileSize().toBytes()) {
             throw new BusinessException(CommunityErrorCode.INVALID_ATTACHMENT);
         }
     }
 
-    private byte[] header(MultipartFile file) {
+    private byte[] header(CommunityAttachmentFile file) {
         byte[] header = new byte[12];
-        try (InputStream inputStream = file.getInputStream()) {
+        try (InputStream inputStream = file.openStream()) {
             int read = inputStream.read(header);
             if (read <= 0) {
                 throw new BusinessException(CommunityErrorCode.INVALID_ATTACHMENT);

@@ -40,6 +40,9 @@ CREATE INDEX ix_community_posts_visible_list
     )
     WHERE deleted_at IS NULL;
 
+CREATE INDEX ix_community_posts_cohort
+    ON learning_service.community_posts (cohort_id);
+
 CREATE INDEX ix_community_posts_search
     ON learning_service.community_posts (created_at DESC, id DESC)
     WHERE deleted_at IS NULL;

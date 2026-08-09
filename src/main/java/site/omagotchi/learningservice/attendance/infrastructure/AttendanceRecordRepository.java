@@ -40,4 +40,17 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
             LocalDate attendanceDate,
             List<Long> cohortMembershipIds
     );
+
+    @Query("""
+            select distinct record.attendanceDate
+            from AttendanceRecord record
+            where record.cohortMembershipId = :cohortMembershipId
+              and record.attendanceDate <= :baseDate
+              and record.checkedInAt is not null
+            order by record.attendanceDate desc
+            """)
+    List<LocalDate> findDistinctAttendedDatesOnOrBefore(
+            Long cohortMembershipId,
+            LocalDate baseDate
+    );
 }

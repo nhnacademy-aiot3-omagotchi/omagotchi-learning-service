@@ -124,6 +124,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         }
 
         ApiErrorResponse body = new ApiErrorResponse(
+                springResponse.getStatusCode().value(),
                 errorCode.code(),
                 message,
                 ((ServletWebRequest) request).getRequest().getRequestURI(),
@@ -158,6 +159,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity
                 .status(status)
                 .body(new ApiErrorResponse(
+                        status.value(),
                         errorCode.code(),
                         errorCode.message(),
                         request.getRequestURI(),

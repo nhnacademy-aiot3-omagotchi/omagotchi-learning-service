@@ -176,11 +176,26 @@ public class RoomOccupancy {
      * NULL로 만들어야 새 만료 시각을 기준으로 임박 알림이 다시 나간다 — 남겨두면 연장한
      * 점유는 두 번 다시 알림을 받지 못한다.</p>
      *
-     * <p>호출 전에 {@link #isWithinExtensionWindow}, {@link #hasRemainingExtension},
-     * {@link #isExpiredAt}을 모두 확인해야 한다. 이 메서드는 검사하지 않는다 — 조건을
-     * 오류 코드로 옮기는 것은 Application의 책임이다.</p>
+     * <p>호출 전에 {@link #isWithinExtensionWindow}, {@link #isExpiredAt}을 확인해야
+     * 한다 — "너무 이르다"·"이미 만료됐다"는 정상적인 사용자 흐름에서도 나오는 거부
+     * 사유라 오류 코드로 옮기는 것은 Application의 책임이다. 반면 {@link #isActive()}·
+     * {@link #hasRemainingExtension()}은 이 메서드 스스로 확인한다 — 종료된 점유의
+     * 만료 시각을 미루는 것과 최대 횟수를 넘기는 것은 어떤 호출부를 거치든 성립해서는
+     * 안 되는 불변식이기 때문이다. 특히 전자는 {@code extension_count}와 달리 지켜주는
+     * DB CHECK가 없어 애플리케이션 계층의 사전 검증이 뚫리면 그대로 저장된다.</p>
+     *
+     * @throws IllegalStateException 종료된 점유이거나 연장 횟수를 이미 다 쓴 경우.
+     *                                {@code BusinessException}이 아닌 것이 의도다 — 이
+     *                                예외는 정상 사용자 흐름이 아니라 호출부가 사전
+     *                                검증을 건너뛴 계약 위반을 뜻한다.
      */
     public void extend() {
+        if (!isActive()) {
+            throw new IllegalStateException("종료된 점유는 연장할 수 없습니다.");
+        }
+        if (!hasRemainingExtension()) {
+            throw new IllegalStateException("연장 횟수를 모두 사용했습니다.");
+        }
         this.expiresAt = expiresAt.plus(EXTENSION_UNIT);
         this.extensionCount++;
         this.reminderSentAt = null;

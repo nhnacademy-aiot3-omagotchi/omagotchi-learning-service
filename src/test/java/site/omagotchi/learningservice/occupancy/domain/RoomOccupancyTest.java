@@ -199,6 +199,43 @@ class RoomOccupancyTest {
         assertThat(RoomOccupancy.MAX_EXTENSION_COUNT).isEqualTo((short) 2);
     }
 
+    /**
+     * {@code extension_count}를 지켜주는 {@code ck_room_occupancies_extension_count}가
+     * 있긴 하지만, 그건 커밋 시점 최종 방어선이다. Application의 사전 검증을 우회해
+     * {@code extend()}를 세 번째 호출해도 여기서 막혀야 한다.
+     */
+    @Test
+    @DisplayName("연장 횟수를 다 쓰면 더 이상 연장할 수 없다.")
+    void test19() {
+        RoomOccupancy occupancy = start();
+        occupancy.extend();
+        occupancy.extend();
+
+        assertThatThrownBy(occupancy::extend)
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(occupancy.getExtensionCount()).isEqualTo(RoomOccupancy.MAX_EXTENSION_COUNT);
+        assertThat(occupancy.getExpiresAt()).isEqualTo(EXPIRES_AT.plusHours(1));
+    }
+
+    /**
+     * {@code expires_at}은 {@code extension_count}와 달리 지켜주는 DB CHECK가 없다.
+     * Application의 사전 검증이 뚫리면 종료된 점유의 만료 시각이 그대로 저장되므로,
+     * 이 방어는 도메인 메서드 자신에게만 있다.
+     */
+    @Test
+    @DisplayName("종료된 점유는 연장할 수 없다.")
+    void test20() {
+        RoomOccupancy occupancy = start();
+        occupancy.release(EXPIRES_AT.minusMinutes(10));
+
+        assertThatThrownBy(occupancy::extend)
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(occupancy.getExpiresAt()).isEqualTo(EXPIRES_AT);
+        assertThat(occupancy.getExtensionCount()).isZero();
+    }
+
     // ────────────────────────────── 반납 (MR-14) ──────────────────────────────
 
     /** ck_room_occupancies_end 때문에 status와 ended_at은 반드시 함께 바뀌어야 한다. */

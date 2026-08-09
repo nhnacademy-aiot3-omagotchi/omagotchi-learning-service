@@ -10,6 +10,7 @@ public record CreateSpaceResponse(
         String name,
         SpaceType type,
         Integer capacity,
+        Long cohortId,
         ZonedDateTime createdAt
 ) {
 
@@ -19,6 +20,7 @@ public record CreateSpaceResponse(
                 space.getName(),
                 space.getSpaceType(),
                 space.getCapacity(),
+                space.getCohortId(),
                 space.getCreatedAt()
         );
     }

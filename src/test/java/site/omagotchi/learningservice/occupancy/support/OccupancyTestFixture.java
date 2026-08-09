@@ -8,14 +8,21 @@ import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
 import site.omagotchi.learningservice.attendance.domain.PresenceState;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
 import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
+import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
+import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
+import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
+import site.omagotchi.learningservice.attendance.domain.PresenceState;
+import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
+import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
-import site.omagotchi.learningservice.space.application.port.out.SpaceRepository;
+import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceType;
 
+import java.time.Instant;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -79,9 +86,9 @@ public class OccupancyTestFixture {
     /**
      * 이 멤버십으로 출근시킨다 — 열린 재실 구간을 만든다.
      *
-     * <p>{@code AttendanceService.checkIn}을 부르지 않고 직접 만드는 이유는 그쪽이
-     * 기수 출결 정책({@code cohort_attendance_policies})을 요구하기 때문이다. 점유
-     * 테스트에 필요한 것은 "열린 구간이 있다"는 사실뿐이라 정책까지 세팅하지 않는다.</p>
+     * <p>{@code AttendanceService.checkIn}을 부르지 않는 이유는 그쪽이 기수 출결 정책
+     * ({@code cohort_attendance_policies})을 요구하기 때문이다. 점유 테스트에 필요한 것은
+     * "열린 구간이 있다"는 사실뿐이라 정책까지 세팅하지 않는다.</p>
      */
     public void checkIn(Long membershipId) {
         AttendanceRecord record = AttendanceRecord.start(membershipId, LocalDate.now(SEOUL));
@@ -95,9 +102,8 @@ public class OccupancyTestFixture {
     /**
      * 퇴근시킨다 — 열린 재실 구간을 닫는다. "재실이 아닌 상태"를 만들 때 쓴다.
      *
-     * <p>{@code end()} 뒤에 {@code save}를 부르는 것이 필요하다. 이 픽스처는
-     * {@code @Transactional}이 아니라 조회한 엔티티가 곧바로 준영속이 되고, 그러면
-     * 변경 감지가 동작하지 않아 UPDATE가 나가지 않는다.</p>
+     * <p>{@code end()} 뒤에 {@code save}가 필요하다. 이 픽스처는 {@code @Transactional}이
+     * 아니라 조회한 엔티티가 곧바로 준영속이 되고, 그러면 변경 감지가 동작하지 않는다.</p>
      */
     public void checkOut(Long membershipId) {
         attendanceRecordRepository
@@ -131,9 +137,16 @@ public class OccupancyTestFixture {
      * <p>{@code Space.create}는 비활성으로 만들므로 반드시 {@code activate}를 거친다 —
      * 비활성 공간은 점유가 400으로 거부된다(RM-13).</p>
      */
-    public Long createMeetingRoom(String name, int capacity) {
+    public Long createMeetingRoom(Long cohortId, String name, int capacity) {
         ZonedDateTime now = ZonedDateTime.now(SEOUL);
-        Space space = Space.create(name, SpaceType.MEETING, capacity, now).activate(now);
+        Space space = Space.create(name, SpaceType.MEETING, capacity, cohortId, now).activate(now);
+        return spaceRepository.save(space).getId();
+    }
+
+    /** 회의실이 아닌 공간. 유형 검증(MR-20)에 쓴다. */
+    public Long createLab(Long cohortId, String name, int capacity) {
+        ZonedDateTime now = ZonedDateTime.now(SEOUL);
+        Space space = Space.create(name, SpaceType.LAB, capacity, cohortId, now).activate(now);
         return spaceRepository.save(space).getId();
     }
 

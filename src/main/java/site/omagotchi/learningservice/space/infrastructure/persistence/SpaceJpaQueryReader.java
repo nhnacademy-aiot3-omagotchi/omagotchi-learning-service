@@ -1,15 +1,16 @@
-package site.omagotchi.learningservice.space.infrastructure.persistence.query;
+package site.omagotchi.learningservice.space.infrastructure.persistence;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
-import site.omagotchi.learningservice.space.application.port.out.SpaceQueryPort;
-import site.omagotchi.learningservice.space.application.query.SpaceListItem;
+import site.omagotchi.learningservice.space.application.port.SpaceQueryPort;
+import site.omagotchi.learningservice.space.application.result.SpaceListResult;
 import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
 import site.omagotchi.learningservice.space.domain.SpaceType;
 import site.omagotchi.learningservice.space.domain.SpaceUsageStatus;
-import site.omagotchi.learningservice.space.infrastructure.persistence.entity.RoomOccupancyJpaEntity;
 import site.omagotchi.learningservice.space.infrastructure.persistence.entity.SpaceJpaEntity;
 import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataRoomOccupancyRepository;
+import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataRoomOccupancyRepository.ActiveOccupancyView;
+import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataRoomOccupancyRepository.ActiveParticipantView;
 import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataSpaceRepository;
 
 import java.time.Duration;
@@ -17,10 +18,13 @@ import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Repository
 @RequiredArgsConstructor
-public class SpaceQueryJpaAdapter implements SpaceQueryPort {
+public class SpaceJpaQueryReader implements SpaceQueryPort {
 
     private final SpringDataSpaceRepository spaceRepository;
 
@@ -28,7 +32,8 @@ public class SpaceQueryJpaAdapter implements SpaceQueryPort {
             roomOccupancyRepository;
 
     @Override
-    public List<SpaceListItem> findAllSpacesWithStatus(
+    public List<SpaceListResult> findAllSpacesWithStatus(
+            Set<Long> requesterCohortIds,
             ZonedDateTime now
     ) {
         List<SpaceJpaEntity> spaces =
@@ -43,31 +48,39 @@ public class SpaceQueryJpaAdapter implements SpaceQueryPort {
                 .map(SpaceJpaEntity::getId)
                 .toList();
 
-        List<RoomOccupancyJpaEntity> occupancies =
+        List<ActiveOccupancyView> occupancies =
                 roomOccupancyRepository
                         .findAllActiveBySpaceIds(
                                 spaceIds,
                                 now.toOffsetDateTime()
                         );
 
-        Map<Long, RoomOccupancyJpaEntity>
+        Map<Long, ActiveOccupancyView>
                 occupancyBySpaceId =
                 createOccupancyMap(occupancies);
 
+        Map<Long, List<UUID>> participantsByOccupancyId =
+                findParticipantsByOccupancyId(
+                        occupancies,
+                        requesterCohortIds
+                );
+
         return spaces.stream()
-                .map(space -> toListItem(
+                .map(space -> toListResult(
                         space,
                         occupancyBySpaceId.get(space.getId()),
+                        requesterCohortIds,
+                        participantsByOccupancyId,
                         now
                 ))
                 .toList();
     }
 
-    private Map<Long, RoomOccupancyJpaEntity>
+    private Map<Long, ActiveOccupancyView>
     createOccupancyMap(
-            List<RoomOccupancyJpaEntity> occupancies
+            List<ActiveOccupancyView> occupancies
     ) {
-        Map<Long, RoomOccupancyJpaEntity> result =
+        Map<Long, ActiveOccupancyView> result =
                 new HashMap<>();
 
         /*
@@ -76,7 +89,7 @@ public class SpaceQueryJpaAdapter implements SpaceQueryPort {
          * 혹시 동일 공간에 활성 점유 데이터가 여러 건 있어도
          * 가장 최근 점유 하나만 사용한다.
          */
-        for (RoomOccupancyJpaEntity occupancy : occupancies) {
+        for (ActiveOccupancyView occupancy : occupancies) {
             result.putIfAbsent(
                     occupancy.getSpaceId(),
                     occupancy
@@ -86,9 +99,38 @@ public class SpaceQueryJpaAdapter implements SpaceQueryPort {
         return result;
     }
 
-    private SpaceListItem toListItem(
+    private Map<Long, List<UUID>> findParticipantsByOccupancyId(
+            List<ActiveOccupancyView> occupancies,
+            Set<Long> requesterCohortIds
+    ) {
+        List<Long> occupancyIds = occupancies.stream()
+                .filter(occupancy -> requesterCohortIds.contains(
+                        occupancy.getOccupierCohortId()
+                ))
+                .map(ActiveOccupancyView::getId)
+                .toList();
+
+        if (occupancyIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return roomOccupancyRepository
+                .findAllActiveParticipants(occupancyIds)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        ActiveParticipantView::getOccupancyId,
+                        Collectors.mapping(
+                                ActiveParticipantView::getUserId,
+                                Collectors.toList()
+                        )
+                ));
+    }
+
+    private SpaceListResult toListResult(
             SpaceJpaEntity space,
-            RoomOccupancyJpaEntity occupancy,
+            ActiveOccupancyView occupancy,
+            Set<Long> requesterCohortIds,
+            Map<Long, List<UUID>> participantsByOccupancyId,
             ZonedDateTime now
     ) {
         SpaceUsageStatus status = determineUsageStatus(
@@ -100,9 +142,7 @@ public class SpaceQueryJpaAdapter implements SpaceQueryPort {
                 status != SpaceUsageStatus.OCCUPIED
                         ? null
                         : occupancy.getExpiresAt()
-                        .atZoneSameInstant(
-                                now.getZone()
-                        );
+                        .atZone(now.getZone());
 
         Long remainingTimeSeconds =
                 calculateRemainingTimeSeconds(
@@ -111,7 +151,13 @@ public class SpaceQueryJpaAdapter implements SpaceQueryPort {
                         now
                 );
 
-        return new SpaceListItem(
+        boolean canViewOccupancyDetails =
+                status == SpaceUsageStatus.OCCUPIED
+                && requesterCohortIds.contains(
+                        occupancy.getOccupierCohortId()
+                );
+
+        return new SpaceListResult(
                 space.getId(),
                 space.getName(),
                 space.getSpaceType(),
@@ -121,13 +167,29 @@ public class SpaceQueryJpaAdapter implements SpaceQueryPort {
                 space.getCohortId(),
                 status,
                 occupancyExpiresAt,
-                remainingTimeSeconds
+                remainingTimeSeconds,
+                canViewOccupancyDetails,
+                canViewOccupancyDetails
+                        ? occupancy.getOccupierCohortId()
+                        : null,
+                canViewOccupancyDetails
+                        ? occupancy.getOccupierMembershipId()
+                        : null,
+                canViewOccupancyDetails
+                        ? occupancy.getOccupierUserId()
+                        : null,
+                canViewOccupancyDetails
+                        ? participantsByOccupancyId.getOrDefault(
+                                occupancy.getId(),
+                                List.of()
+                        )
+                        : null
         );
     }
 
     private SpaceUsageStatus determineUsageStatus(
             SpaceJpaEntity space,
-            RoomOccupancyJpaEntity occupancy
+            ActiveOccupancyView occupancy
     ) {
         if (space.getSpaceType() != SpaceType.MEETING) {
             return SpaceUsageStatus.NOT_APPLICABLE;

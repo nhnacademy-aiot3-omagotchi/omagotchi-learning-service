@@ -16,14 +16,18 @@ public record CreateSpaceRequest(
 
         @NotNull
         @Min(1)
-        Integer capacity
+        Integer capacity,
+
+        @Min(1)
+        Long cohortId
 ) {
 
     public CreateSpaceCommand toCommand() {
         return new CreateSpaceCommand(
                 name,
                 type,
-                capacity
+                capacity,
+                cohortId
         );
     }
 }

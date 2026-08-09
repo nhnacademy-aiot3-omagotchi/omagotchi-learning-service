@@ -1,13 +1,13 @@
-package site.omagotchi.learningservice.space.infrastructure.persistence.adapter;
+package site.omagotchi.learningservice.space.infrastructure.persistence;
 
 import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.space.application.port.out.SpaceRepository;
+import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
-import site.omagotchi.learningservice.space.domain.exception.SpaceErrorCode;
+import site.omagotchi.learningservice.space.application.SpaceErrorCode;
 import site.omagotchi.learningservice.space.infrastructure.persistence.entity.SpaceJpaEntity;
 import site.omagotchi.learningservice.space.infrastructure.persistence.mapper.SpacePersistenceMapper;
 import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataSpaceRepository;
@@ -16,7 +16,7 @@ import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
-public class SpaceRepositoryJpaAdapter
+public class SpaceJpaPersistence
         implements SpaceRepository {
 
     private static final String ACTIVE_SPACE_NAME_UNIQUE_INDEX =
@@ -47,11 +47,18 @@ public class SpaceRepositoryJpaAdapter
     }
 
     @Override
-    public Optional<Space> findActiveById(
+    public Optional<Space> findById(
             Long spaceId
     ) {
         return springDataSpaceRepository
-                .findByIdAndDeletedAtIsNull(spaceId)
+                .findById(spaceId)
+                .map(spacePersistenceMapper::toDomain);
+    }
+
+    @Override
+    public Optional<Space> findByIdForUpdate(Long spaceId) {
+        return springDataSpaceRepository
+                .findByIdForUpdate(spaceId)
                 .map(spacePersistenceMapper::toDomain);
     }
 
@@ -67,7 +74,8 @@ public class SpaceRepositoryJpaAdapter
         } catch (DataIntegrityViolationException exception) {
             if (isActiveSpaceNameUniqueViolation(exception)) {
                 throw new BusinessException(
-                        SpaceErrorCode.DUPLICATE_NAME
+                        SpaceErrorCode.DUPLICATE_NAME,
+                        exception
                 );
             }
 

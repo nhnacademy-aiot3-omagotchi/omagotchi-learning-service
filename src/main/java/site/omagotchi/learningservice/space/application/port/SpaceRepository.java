@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.space.application.port.out;
+package site.omagotchi.learningservice.space.application.port;
 
 import site.omagotchi.learningservice.space.domain.Space;
 
@@ -13,7 +13,9 @@ public interface SpaceRepository {
             Long spaceId
     );
 
-    Optional<Space> findActiveById(Long spaceId);
+    Optional<Space> findById(Long spaceId);
+
+    Optional<Space> findByIdForUpdate(Long spaceId);
 
     Space save(Space space);
 }

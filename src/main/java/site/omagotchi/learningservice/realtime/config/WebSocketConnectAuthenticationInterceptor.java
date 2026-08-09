@@ -2,6 +2,7 @@ package site.omagotchi.learningservice.realtime.config;
 
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -32,7 +33,7 @@ public class WebSocketConnectAuthenticationInterceptor implements ChannelInterce
 
     private final JwtDecoder jwtDecoder;
     private final JwtAuthenticationConverter jwtAuthenticationConverter;
-    private final CohortPresenceService presenceService;
+    private final ObjectProvider<CohortPresenceService> presenceServiceProvider;
 
     @Override
     public Message<?> preSend(@NonNull Message<?> message, @NonNull MessageChannel channel) {
@@ -50,7 +51,8 @@ public class WebSocketConnectAuthenticationInterceptor implements ChannelInterce
 
         accessor.setUser(jwtAuthentication);
         // CONNECT 시점에만 서버가 JWT 사용자와 현재 ACTIVE cohort를 확정해 Redis Presence 세션을 만든다.
-        presenceService.registerSession(accessor.getSessionId(), AuthenticatedUser.from(jwtAuthentication));
+        presenceServiceProvider.getObject()
+                .registerSession(accessor.getSessionId(), AuthenticatedUser.from(jwtAuthentication));
         return MessageBuilder.createMessage(message.getPayload(), accessor.getMessageHeaders());
     }
 

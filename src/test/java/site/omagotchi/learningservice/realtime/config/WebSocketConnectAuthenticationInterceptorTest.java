@@ -2,6 +2,7 @@ package site.omagotchi.learningservice.realtime.config;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -30,8 +31,13 @@ class WebSocketConnectAuthenticationInterceptorTest {
     private final JwtDecoder jwtDecoder = mock(JwtDecoder.class);
     private final JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
     private final CohortPresenceService presenceService = mock(CohortPresenceService.class);
+    private final ObjectProvider<CohortPresenceService> presenceServiceProvider = mock(ObjectProvider.class);
     private final WebSocketConnectAuthenticationInterceptor interceptor =
-            new WebSocketConnectAuthenticationInterceptor(jwtDecoder, jwtAuthenticationConverter, presenceService);
+            new WebSocketConnectAuthenticationInterceptor(
+                    jwtDecoder,
+                    jwtAuthenticationConverter,
+                    presenceServiceProvider
+            );
     private final MessageChannel channel = mock(MessageChannel.class);
 
     @Test
@@ -44,6 +50,7 @@ class WebSocketConnectAuthenticationInterceptorTest {
                 .claim("role", "USER")
                 .build();
         when(jwtDecoder.decode("access-token")).thenReturn(jwt);
+        when(presenceServiceProvider.getObject()).thenReturn(presenceService);
 
         // When
         Message<?> result = interceptor.preSend(connectMessage("Bearer access-token"), channel);

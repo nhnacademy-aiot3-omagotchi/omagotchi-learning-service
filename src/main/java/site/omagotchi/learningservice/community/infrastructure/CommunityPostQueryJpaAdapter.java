@@ -86,7 +86,8 @@ public class CommunityPostQueryJpaAdapter implements CommunityPostQueryPort {
                         select post
                         from CommunityPost post
                         where post.id = :postId
-                          and """ + VISIBLE_CONDITION,
+                          and
+                        """ + VISIBLE_CONDITION,
                         CommunityPost.class
                 )
                 .setParameter("postId", postId)
@@ -120,7 +121,9 @@ public class CommunityPostQueryJpaAdapter implements CommunityPostQueryPort {
                             )
                         )
                         from CommunityPost post
-                        where """ + VISIBLE_CONDITION + filters + """
+                        where
+                        """ + VISIBLE_CONDITION + filters + """
+
                         order by post.pinned desc,
                                  post.createdAt desc,
                                  post.id desc
@@ -132,7 +135,8 @@ public class CommunityPostQueryJpaAdapter implements CommunityPostQueryPort {
         return entityManager.createQuery("""
                         select count(post.id)
                         from CommunityPost post
-                        where """ + VISIBLE_CONDITION + filters,
+                        where
+                        """ + VISIBLE_CONDITION + filters,
                 Long.class);
     }
 

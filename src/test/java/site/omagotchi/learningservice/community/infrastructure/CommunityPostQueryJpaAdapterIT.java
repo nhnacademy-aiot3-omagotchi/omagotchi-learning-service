@@ -12,6 +12,7 @@ import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.community.application.query.CommunityPostSearchCondition;
 import site.omagotchi.learningservice.community.domain.CommunityPostScope;
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
+import site.omagotchi.learningservice.global.config.QueryDslConfig;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -23,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Import({
         TestcontainersConfiguration.class,
+        QueryDslConfig.class,
         CommunityPostQueryJpaAdapter.class
 })
 @ActiveProfiles("test")

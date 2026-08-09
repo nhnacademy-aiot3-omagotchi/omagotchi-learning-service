@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import site.omagotchi.learningservice.team.application.TeamMasterService;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
 import site.omagotchi.learningservice.team.application.dto.command.AddTeamMemberRequest;
@@ -33,6 +34,7 @@ public class TeamController {
 
     private final TeamService teamService;
     private final TeamMemberService teamMemberService;
+    private final TeamMasterService teamMasterService;
 
     /**
      * 팀 생성 (GR-01, GR-02).
@@ -130,5 +132,47 @@ public class TeamController {
             @RequestHeader("X-User-Id") UUID userId
     ) {
         teamMemberService.leave(teamId, userId);
+    }
+
+    /**
+     * 마스터 위임 (GR-14, GR-20). MASTER만 수행할 수 있다.
+     *
+     * <p>상태 전이라 경로 마지막이 동사형이다 (09-rest-api-convention). 대상을 경로에 두는
+     * 것은 팀원 제외({@code DELETE /members/{member-id}})와 대칭을 맞추기 위해서다 —
+     * 둘 다 "특정 팀원에게 하는 일"이다.</p>
+     *
+     * <p>{@code memberId}는 {@code team_members.id}다. 팀 상세 조회 응답의 값을 그대로 넣는다.</p>
+     *
+     * @return 204. 자기 자신에게 위임하면 400, 대상이 이 팀 소속이 아니면 404
+     */
+    @PostMapping("/{team-id}/members/{member-id}/delegate")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delegate(
+            @PathVariable("team-id") Long teamId,
+            @PathVariable("member-id") Long memberId,
+            @RequestHeader("X-User-Id") UUID userId
+    ) {
+        teamMasterService.delegate(teamId, memberId, userId);
+    }
+
+    /**
+     * 팀 해체 (GR-19). MASTER만 수행할 수 있다.
+     *
+     * <p>{@code DELETE}인 이유는 클라이언트 입장에서 리소스가 사라지기 때문이다. 실제로는
+     * 팀 소프트 삭제 + 팀원 물리 삭제지만, 목록·상세 조회가 해체된 팀을 걸러내므로
+     * 외부에서는 제거와 구분되지 않는다. 해체 후 같은 이름으로 다시 만들 수도 있다.</p>
+     *
+     * <p>점유 반납을 {@code POST /release}로 한 것과 다른 판단이다 — 점유 행은 종료 후에도
+     * 통계 원천으로 조회되지만, 팀은 조회 경로에서 완전히 빠진다.</p>
+     *
+     * @return 204. MASTER가 아니면 403
+     */
+    @DeleteMapping("/{team-id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void disband(
+            @PathVariable("team-id") Long teamId,
+            @RequestHeader("X-User-Id") UUID userId
+    ) {
+        teamMasterService.disband(teamId, userId);
     }
 }

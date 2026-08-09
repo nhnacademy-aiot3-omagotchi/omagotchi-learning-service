@@ -83,6 +83,13 @@ public interface CohortMembershipRepository extends
             CohortMembershipStatus status
     );
 
+    boolean existsByCohortIdAndUserIdAndRoleInAndStatus(
+            Long cohortId,
+            UUID userId,
+            Collection<CohortMembershipRole> roles,
+            CohortMembershipStatus status
+    );
+
     boolean existsByUserIdAndRoleAndStatusAndEndedAtIsNull(
             UUID userId,
             CohortMembershipRole role,

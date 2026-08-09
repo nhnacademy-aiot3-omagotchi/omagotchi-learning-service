@@ -64,7 +64,8 @@ public class SecurityErrorResponseHandler implements AuthenticationEntryPoint, A
                 response.getStatus(),
                 errorCode.code(),
                 errorCode.message(),
-                path
+                path,
+                null
         );
 
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);

@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.study.application.port;
 
 import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
+import site.omagotchi.learningservice.study.application.result.StudyProfileSummaryResult;
 import site.omagotchi.learningservice.study.domain.StudyRecord;
 
 import java.time.Instant;
@@ -33,4 +34,6 @@ public interface StudyRecordQueryRepository {
             LocalDate startDate,
             LocalDate endDateInclusive
     );
+
+    StudyProfileSummaryResult summarizeActiveRecords(Long cohortMembershipId);
 }

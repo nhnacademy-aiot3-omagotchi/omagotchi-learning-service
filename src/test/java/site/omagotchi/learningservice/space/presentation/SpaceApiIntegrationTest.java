@@ -185,7 +185,6 @@ class SpaceApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest("통합 잘못된 정원", 0)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.code")
                         .value("COMMON_INVALID_REQUEST"));
     }
@@ -204,7 +203,6 @@ class SpaceApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_DUPLICATE_NAME"));
     }

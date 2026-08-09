@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
+import site.omagotchi.learningservice.study.application.result.StudyProfileSummaryResult;
 import site.omagotchi.learningservice.study.domain.QStudyRecord;
 import site.omagotchi.learningservice.study.domain.StudyRecord;
 
@@ -145,6 +146,39 @@ public class StudyRecordQueryDslRepository implements StudyRecordQueryRepository
                 .groupBy(studyRecord.aggregationDate)
                 .orderBy(studyRecord.aggregationDate.asc())
                 .fetch();
+    }
+
+    /*
+     * SELECT COALESCE(SUM(sr.study_seconds), 0) AS total_study_seconds,
+     *        COUNT(sr.id) AS completed_session_count
+     * FROM learning_service.study_records sr
+     * WHERE sr.cohort_membership_id = :cohortMembershipId
+     *   AND sr.deleted_at IS NULL;
+     */
+    @Override
+    public StudyProfileSummaryResult summarizeActiveRecords(Long cohortMembershipId) {
+        NumberExpression<Long> totalStudySeconds = studyRecord.studySeconds
+                .sumLong()
+                .coalesce(0L);
+        NumberExpression<Long> completedSessionCount = studyRecord.id.count();
+
+        var tuple = queryFactory
+                .select(
+                        totalStudySeconds,
+                        completedSessionCount
+                )
+                .from(studyRecord)
+                .where(activeRecordOfMembership(cohortMembershipId))
+                .fetchOne();
+
+        if (tuple == null) {
+            return new StudyProfileSummaryResult(0L, 0L);
+        }
+
+        return new StudyProfileSummaryResult(
+                tuple.get(totalStudySeconds) == null ? 0L : tuple.get(totalStudySeconds),
+                tuple.get(completedSessionCount) == null ? 0L : tuple.get(completedSessionCount)
+        );
     }
 
     private BooleanExpression activeRecordOfMembership(Long cohortMembershipId) {

@@ -127,7 +127,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 springResponse.getStatusCode().value(),
                 errorCode.code(),
                 message,
-                ((ServletWebRequest) request).getRequest().getRequestURI()
+                ((ServletWebRequest) request).getRequest().getRequestURI(),
+                null
         );
         // 요청 URI는 HTML이 아닌 JSON 문자열로 직렬화되므로 XSS 실행 문맥이 아님
         return new ResponseEntity<>(
@@ -161,7 +162,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                         status.value(),
                         errorCode.code(),
                         errorCode.message(),
-                        request.getRequestURI()
+                        request.getRequestURI(),
+                        null
                 ));
     }
 }

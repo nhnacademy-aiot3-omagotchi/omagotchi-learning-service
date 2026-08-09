@@ -1,7 +1,7 @@
 package site.omagotchi.learningservice.cohort.presentation.dto.request;
 
 import jakarta.validation.constraints.NotNull;
-import site.omagotchi.learningservice.cohort.application.dto.command.ChangeCohortStatusCommand;
+import site.omagotchi.learningservice.cohort.application.command.ChangeCohortStatusCommand;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 
 /**

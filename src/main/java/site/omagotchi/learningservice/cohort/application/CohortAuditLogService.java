@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.cohort.application.dto.result.CohortAuditLogResponse;
+import site.omagotchi.learningservice.cohort.application.result.CohortAuditLogResponse;
 import site.omagotchi.learningservice.cohort.domain.CohortAuditLog;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAuditLogRepository;
 

@@ -1,6 +1,8 @@
 package site.omagotchi.learningservice.occupancy.infrastructure;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -27,6 +29,37 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
     boolean existsByOccupierUserIdAndStatus(UUID occupierUserId, OccupancyStatus status);
 
     Optional<RoomOccupancy> findBySpaceIdAndStatus(Long spaceId, OccupancyStatus status);
+
+    /**
+     * 활성 점유의 식별 정보만 읽는다.
+     *
+     * <p>Interface Projection인 것이 요점이다. 닫힌 Projection은 나열한 컬럼만 select하고
+     * 엔티티를 영속성 컨텍스트에 올리지 않으므로, 뒤이은 {@link #findByIdForUpdate}가
+     * 1차 캐시가 아니라 실제 {@code FOR UPDATE} 결과를 돌려준다. 엔티티로 읽으면
+     * 락 후 상태 재확인이 락 이전 스냅샷을 보게 된다.</p>
+     */
+    Optional<ActiveOccupancyProjection> findSummaryBySpaceIdAndStatus(
+            Long spaceId, OccupancyStatus status);
+
+    /**
+     * 점유 행 배타 락.
+     *
+     * <p>{@code status} 조건을 쿼리에 넣지 않는 것이 의도다 — 락을 잡은 뒤 확인해야
+     * 종료 커밋 직후 도착한 요청을 409로 정확히 잡는다 ({@code TeamJpaRepository}의
+     * {@code findByIdForUpdate}와 같은 규약).</p>
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select o from RoomOccupancy o where o.id = :id")
+    Optional<RoomOccupancy> findByIdForUpdate(@Param("id") Long id);
+
+    /** 닫힌 Projection. 필드를 늘리면 select 컬럼이 함께 늘어난다. */
+    interface ActiveOccupancyProjection {
+        Long getId();
+
+        Long getOccupierMembershipId();
+
+        UUID getOccupierUserId();
+    }
 
     /**
      * 만료된 ACTIVE 행 정리.

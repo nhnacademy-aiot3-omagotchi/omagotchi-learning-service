@@ -2,7 +2,11 @@ package site.omagotchi.learningservice.occupancy.application.port;
 
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
+import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
+
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -52,6 +56,23 @@ public interface RoomOccupancyRepository {
 
     /** 활성 점유 단건. 연장·반납(#7)의 진입점이다. */
     Optional<RoomOccupancy> findActiveBySpaceId(Long spaceId);
+
+
+    /**
+     * 여러 공간의 활성 점유를 한 번에 읽는다. 공간 목록의 사용 상태 파생 계산용이다.
+     *
+     * <p><b>배치인 것이 계약의 일부다.</b> 공간이 N개여도 쿼리는 1회여야 한다 —
+     * 목록을 돌며 {@link #findActiveBySpaceId}를 부르면 그대로 N+1이 된다.</p>
+     *
+     * <p>{@code now}로 만료된 행을 걸러내는 것이 중요하다. 유니크 인덱스는 {@code status}만
+     * 보고 {@code expires_at}은 보지 않으므로, 스케줄러(#9)가 아직 쓸어가지 않은 행이
+     * ACTIVE로 남아 있다 — 이 필터가 없으면 목록에 "사용 중"으로 뜨는데 점유는 성공하는
+     * 상태가 보인다.</p>
+     *
+     * <p>공간당 최대 1건이다 — {@code uq_room_occupancies_one_active_per_space}가
+     * 보장한다. 받는 쪽이 중복을 걱정할 필요가 없다.</p>
+     */
+    List<SpaceOccupancyView> findActiveBySpaceIds(Collection<Long> spaceIds, OffsetDateTime now);
 
 
     /**

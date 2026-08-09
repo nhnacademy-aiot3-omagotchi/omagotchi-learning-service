@@ -11,12 +11,16 @@ import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.OccupancyErrorCode;
 import site.omagotchi.learningservice.occupancy.application.OccupancyParticipantService;
+import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
+import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
 import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -56,6 +60,9 @@ class OccupancyConcurrencyIT {
 
     @Autowired
     RoomOccupancyLifecycleService roomOccupancyLifecycleService;
+
+    @Autowired
+    OccupancyQueryService occupancyQueryService;
 
     @Autowired
     JdbcTemplate jdbcTemplate;
@@ -420,6 +427,57 @@ class OccupancyConcurrencyIT {
         roomOccupancyService.start(spaceId, managerUserId);
 
         assertThat(occupierMembershipId(spaceId)).isEqualTo(later.membershipId());
+    }
+
+    // ────────────────── 공간 파트에 제공하는 조회 계약 ──────────────────
+
+    /**
+     * JPQL 생성자 표현식은 컴파일로 검증되지 않는다 — 실제 DB에서 한 번은 돌려봐야
+     * {@code SpaceOccupancyView}의 시그니처가 맞는지 확인된다.
+     */
+    @Test
+    @DisplayName("여러 회의실의 점유 상태를 한 번에 조회한다.")
+    void test16() {
+        Long cohortId = fixture.createCohort("배치 조회 기수");
+        Long occupiedRoomId = fixture.createMeetingRoom("배치 조회 사용중", 8);
+        Long emptyRoomId = fixture.createMeetingRoom("배치 조회 빈방", 8);
+
+        UUID occupierUserId = fixture.createActiveMember(cohortId).userId();
+        roomOccupancyService.start(occupiedRoomId, occupierUserId);
+
+        Map<Long, SpaceOccupancyView> found = occupancyQueryService.findActiveBySpaceIds(
+                List.of(occupiedRoomId, emptyRoomId), OffsetDateTime.now());
+
+        // 빈 방은 키가 없다 — 소비처가 null 여부로 사용 상태를 판단한다.
+        assertThat(found).containsOnlyKeys(occupiedRoomId);
+        assertThat(found.get(occupiedRoomId).expiresAt()).isNotNull();
+    }
+
+    /**
+     * 유니크 인덱스는 {@code status}만 보고 {@code expires_at}은 보지 않는다. 이 필터가
+     * 없으면 목록에는 "사용 중"으로 뜨는데 점유는 성공하는 상태가 사용자에게 보인다.
+     */
+    @Test
+    @DisplayName("만료된 점유는 사용 중으로 세지 않는다.")
+    void test17() {
+        Long cohortId = fixture.createCohort("만료 제외 기수");
+        Long spaceId = fixture.createMeetingRoom("만료 제외 회의실", 8);
+
+        UUID occupierUserId = fixture.createActiveMember(cohortId).userId();
+        roomOccupancyService.start(spaceId, occupierUserId);
+
+        // 스케줄러(#9)가 아직 쓸어가지 않아 status는 ACTIVE인 채로 만료된 상태를 만든다.
+        // started_at도 함께 당긴다 — ck_room_occupancies_period가 expires_at > started_at을 요구한다.
+        jdbcTemplate.update("""
+                UPDATE learning_service.room_occupancies
+                   SET started_at = now() - interval '3 hours',
+                       expires_at = now() - interval '1 minute'
+                 WHERE space_id = ? AND status = 'ACTIVE'
+                """, spaceId);
+
+        assertThat(occupancyQueryService.findActiveBySpaceIds(
+                List.of(spaceId), OffsetDateTime.now())).isEmpty();
+        assertThat(activeOccupancies(spaceId)).isEqualTo(1);   // 행 자체는 그대로다
     }
 
     // ────────────────────────────── 헬퍼 ──────────────────────────────

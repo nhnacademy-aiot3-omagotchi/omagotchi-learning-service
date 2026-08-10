@@ -388,7 +388,6 @@ class SpaceIT {
         Long cohortId = insertManagementCohort();
 
         mockMvc.perform(post("/api/admin/spaces")
-                        .header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest(name, 6, cohortId)))
                 .andExpect(status().isCreated())
@@ -425,7 +424,6 @@ class SpaceIT {
                 """, cohortId);
 
         mockMvc.perform(post("/api/admin/spaces")
-                        .header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -444,7 +442,6 @@ class SpaceIT {
         insertManagementCohort();
 
         mockMvc.perform(post("/api/admin/spaces")
-                        .header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -470,7 +467,6 @@ class SpaceIT {
                 """, firstCohortId, secondCohortId);
 
         mockMvc.perform(post("/api/admin/spaces")
-                        .header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -674,7 +670,6 @@ class SpaceIT {
     void rejectsZeroCapacityWithBadRequest() throws Exception {
         Long cohortId = insertManagementCohort();
         mockMvc.perform(post("/api/admin/spaces")
-                        .header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest("통합 잘못된 정원", 0, cohortId)))
                 .andExpect(status().isBadRequest())
@@ -683,24 +678,30 @@ class SpaceIT {
     }
 
     @Test
-    void rejectsDuplicateNameWithConflict() throws Exception {
-        String name = "통합 중복 회의실";
+    void rejectsDuplicateNameDifferingOnlyByCaseWithConflict() throws Exception {
+        String originalName = "Meeting Room A";
+        String duplicateName = "meeting room a";
         Long cohortId = insertManagementCohort();
-        String request = createRequest(name, 6, cohortId);
 
         mockMvc.perform(post("/api/admin/spaces")
-                        .header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(request))
+                        .content(createRequest(originalName, 6, cohortId)))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/admin/spaces")
-                        .header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(request))
+                        .content(createRequest(duplicateName, 6, cohortId)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_DUPLICATE_NAME"));
+
+        Long activeSpaceCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM learning_service.spaces
+                WHERE LOWER(BTRIM(name)) = LOWER(BTRIM(?))
+                  AND deleted_at IS NULL
+                """, Long.class, originalName);
+        assertThat(activeSpaceCount).isEqualTo(1L);
     }
 
     @Test
@@ -755,7 +756,7 @@ class SpaceIT {
         mockMvc.perform(patch(
                         "/api/admin/spaces/{space-id}/activate",
                         spaceId
-                ).header("X-User-Id", MANAGER_ID))
+                ))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.operationalStatus").value("ACTIVE"))
                 .andExpect(jsonPath("$.inactiveReason").isEmpty());
@@ -773,8 +774,7 @@ class SpaceIT {
         mockMvc.perform(patch(
                         "/api/admin/spaces/{space-id}/deactivate",
                         spaceId
-                ).header("X-User-Id", MANAGER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
+                ).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"inactiveReason":"  냉방 점검  "}
                                 """))
@@ -802,8 +802,7 @@ class SpaceIT {
         mockMvc.perform(patch(
                         "/api/admin/spaces/{space-id}/deactivate",
                         spaceId
-                ).header("X-User-Id", MANAGER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
+                ).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"inactiveReason":"점검"}
                                 """))
@@ -903,7 +902,6 @@ class SpaceIT {
         assignManagementCohort(activeId);
 
         mockMvc.perform(put("/api/admin/spaces/{space-id}", inactiveId)
-                        .header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -918,7 +916,6 @@ class SpaceIT {
                 .andExpect(jsonPath("$.capacity").value(4));
 
         mockMvc.perform(put("/api/admin/spaces/{space-id}", activeId)
-                        .header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -939,8 +936,7 @@ class SpaceIT {
         Long spaceId = insertSpace(name, "INACTIVE", null);
         assignManagementCohort(spaceId);
 
-        mockMvc.perform(delete("/api/admin/spaces/{space-id}", spaceId)
-                        .header("X-User-Id", MANAGER_ID))
+        mockMvc.perform(delete("/api/admin/spaces/{space-id}", spaceId))
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/api/spaces"))
@@ -951,7 +947,6 @@ class SpaceIT {
 
         Long cohortId = insertManagementCohort();
         mockMvc.perform(post("/api/admin/spaces")
-                        .header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest(name, 6, cohortId)))
                 .andExpect(status().isCreated());
@@ -970,7 +965,7 @@ class SpaceIT {
         mockMvc.perform(delete(
                         "/api/admin/spaces/{space-id}",
                         activeSpaceId
-                ).header("X-User-Id", MANAGER_ID))
+                ))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_ACTIVE_DELETE_NOT_ALLOWED"));
@@ -987,8 +982,7 @@ class SpaceIT {
         mockMvc.perform(put(
                         "/api/admin/spaces/{space-id}",
                         otherSpaceId
-                ).header("X-User-Id", MANAGER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
+                ).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "name":"통합 다른 기수 수정 차단",
@@ -1003,7 +997,7 @@ class SpaceIT {
         mockMvc.perform(patch(
                         "/api/admin/spaces/{space-id}/activate",
                         otherSpaceId
-                ).header("X-User-Id", MANAGER_ID))
+                ))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_ACCESS_DENIED"));
@@ -1011,8 +1005,7 @@ class SpaceIT {
         mockMvc.perform(patch(
                         "/api/admin/spaces/{space-id}/deactivate",
                         otherSpaceId
-                ).header("X-User-Id", MANAGER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
+                ).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"inactiveReason":"점검"}
                                 """))
@@ -1023,7 +1016,7 @@ class SpaceIT {
         mockMvc.perform(delete(
                         "/api/admin/spaces/{space-id}",
                         otherSpaceId
-                ).header("X-User-Id", MANAGER_ID))
+                ))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_ACCESS_DENIED"));
@@ -1049,7 +1042,7 @@ class SpaceIT {
         mockMvc.perform(delete(
                         "/api/admin/spaces/{space-id}",
                         spaceId
-                ).header("X-User-Id", MANAGER_ID))
+                ))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_ACTIVE_OCCUPANCY_EXISTS"));
@@ -1071,8 +1064,7 @@ class SpaceIT {
         mockMvc.perform(put(
                         "/api/admin/spaces/{space-id}/cohort",
                         labId
-                ).header("X-User-Id", MANAGER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
+                ).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"cohortId":%d}
                                 """.formatted(cohortId)))
@@ -1086,7 +1078,7 @@ class SpaceIT {
         mockMvc.perform(delete(
                         "/api/admin/spaces/{space-id}/cohort",
                         labId
-                ).header("X-User-Id", MANAGER_ID))
+                ))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cohortId").isEmpty());
 
@@ -1124,8 +1116,7 @@ class SpaceIT {
         mockMvc.perform(put(
                         "/api/admin/spaces/{space-id}/cohort",
                         assignedLabId
-                ).header("X-User-Id", MANAGER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
+                ).contentType(MediaType.APPLICATION_JSON)
                         .content(request))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
@@ -1134,8 +1125,7 @@ class SpaceIT {
         mockMvc.perform(put(
                         "/api/admin/spaces/{space-id}/cohort",
                         meetingId
-                ).header("X-User-Id", MANAGER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
+                ).contentType(MediaType.APPLICATION_JSON)
                         .content(request))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code")
@@ -1144,8 +1134,7 @@ class SpaceIT {
         mockMvc.perform(put(
                         "/api/admin/spaces/{space-id}/cohort",
                         deletedLabId
-                ).header("X-User-Id", MANAGER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
+                ).contentType(MediaType.APPLICATION_JSON)
                         .content(request))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
@@ -1154,8 +1143,7 @@ class SpaceIT {
         mockMvc.perform(put(
                         "/api/admin/spaces/{space-id}/cohort",
                         Long.MAX_VALUE
-                ).header("X-User-Id", MANAGER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
+                ).contentType(MediaType.APPLICATION_JSON)
                         .content(request))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("SPACE_NOT_FOUND"));
@@ -1163,8 +1151,7 @@ class SpaceIT {
         mockMvc.perform(put(
                         "/api/admin/spaces/{space-id}/cohort",
                         assignedLabId
-                ).header("X-User-Id", MANAGER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
+                ).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"cohortId":9223372036854775807}
                                 """))
@@ -1193,7 +1180,7 @@ class SpaceIT {
         mockMvc.perform(delete(
                         "/api/admin/spaces/{space-id}/cohort",
                         meetingId
-                ).header("X-User-Id", MANAGER_ID))
+                ))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_LAB_ONLY_COHORT_ASSIGNMENT"));
@@ -1224,8 +1211,7 @@ class SpaceIT {
         mockMvc.perform(put(
                         "/api/admin/spaces/{space-id}/cohort",
                         labId
-                ).header("X-User-Id", MANAGER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
+                ).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"cohortId":%d}
                                 """.formatted(ownCohortId)))
@@ -1236,7 +1222,7 @@ class SpaceIT {
         mockMvc.perform(delete(
                         "/api/admin/spaces/{space-id}/cohort",
                         labId
-                ).header("X-User-Id", MANAGER_ID))
+                ))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_ACCESS_DENIED"));
@@ -1282,8 +1268,7 @@ class SpaceIT {
                 null
         );
 
-        mockMvc.perform(delete("/api/admin/spaces/{space-id}", spaceId)
-                        .header("X-User-Id", MANAGER_ID))
+        mockMvc.perform(delete("/api/admin/spaces/{space-id}", spaceId))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_UNMANAGED_DELETE_NOT_ALLOWED"));
@@ -1295,7 +1280,6 @@ class SpaceIT {
         Long spaceId = insertAssignedLab("통합 배정 실습실 보호");
 
         mockMvc.perform(put("/api/admin/spaces/{space-id}", spaceId)
-                        .header("X-User-Id", MANAGER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -1309,8 +1293,7 @@ class SpaceIT {
                         "SPACE_ASSIGNED_LAB_TYPE_CHANGE_NOT_ALLOWED"
                 ));
 
-        mockMvc.perform(delete("/api/admin/spaces/{space-id}", spaceId)
-                        .header("X-User-Id", MANAGER_ID))
+        mockMvc.perform(delete("/api/admin/spaces/{space-id}", spaceId))
                 .andExpect(status().isNoContent());
 
         assertThat(jdbcTemplate.queryForObject("""
@@ -1325,8 +1308,7 @@ class SpaceIT {
         mockMvc.perform(patch(
                         "/api/admin/spaces/{space-id}/deactivate",
                         spaceId
-                ).header("X-User-Id", MANAGER_ID)
-                        .contentType(MediaType.APPLICATION_JSON)
+                ).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"inactiveReason":"점검"}
                                 """))

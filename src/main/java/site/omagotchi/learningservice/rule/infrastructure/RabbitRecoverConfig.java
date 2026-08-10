@@ -24,13 +24,14 @@ public class RabbitRecoverConfig {
             MessageProperties properties = message.getMessageProperties();
 
 
-            metrics.countedParked(root);
             log.error("품질 이벤트 처리 실패. traceId={}, routingKey={}",
                     properties.getHeader("traceId"), properties.getReceivedRoutingKey());
 
             //실제로 DLQ로 이관함. 이때 헤더를 추가해줌
             //x-exception-stacktrace, x-exception-message, x-original-exchange, x-original-routingKey
             delegate.recover(message, cause);
+
+            metrics.countedParked(root);
         };
     }
 }

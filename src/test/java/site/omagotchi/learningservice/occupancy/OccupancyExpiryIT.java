@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
+import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
 import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 
@@ -38,6 +39,9 @@ class OccupancyExpiryIT {
 
     @Autowired
     RoomOccupancyService roomOccupancyService;
+
+    @Autowired
+    RoomOccupancyLifecycleService roomOccupancyLifecycleService;
 
     @Autowired
     JdbcTemplate jdbcTemplate;
@@ -101,6 +105,68 @@ class OccupancyExpiryIT {
         assertThat(participantLeftAt(roomId)).isEqualTo(occupancyEndedAt(roomId));
     }
 
+    /**
+     * 스케줄러의 존재 이유 (#9).
+     *
+     * <p>{@code expireStale*}는 누군가 그 공간을 점유하려 하거나 그 계정이 새로 점유할 때만
+     * 돈다. 아무도 오지 않는 방은 만료돼도 ACTIVE로 남아 목록에 "사용 중"으로 뜨고
+     * 참여자도 열린 채다 — 그 상태를 이 경로만이 해소한다.</p>
+     */
+    @Test
+    @DisplayName("아무도 찾지 않는 방도 스케줄러가 정리한다.")
+    void test5() {
+        Long cohortId = fixture.createCohort("만료-스케줄러");
+        OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "만료-스케줄러-1", 8);
+
+        roomOccupancyService.start(roomId, member.userId());
+        expire(roomId);
+
+        roomOccupancyLifecycleService.expireAll();
+
+        assertThat(activeOccupancyRows(roomId)).isZero();
+        assertThat(openParticipantRows(roomId)).isZero();
+        assertThat(participantRows(roomId)).isEqualTo(1);
+    }
+
+    /**
+     * 정리는 재실행이 안전해야 한다 — 실패한 주기를 다음 주기가 그대로 다시 처리한다.
+     *
+     * <p>첫 실행의 건수를 정확히 못 박지 않는 것은 {@code expireAll}이 전역이기 때문이다.
+     * 통합 테스트는 트랜잭션 롤백 없이 컨테이너를 공유하므로 앞선 테스트가 남긴 만료 행이
+     * 함께 정리될 수 있다. 고정할 것은 "두 번째 실행에 남는 것이 없다"이다.</p>
+     */
+    @Test
+    @DisplayName("정리를 두 번 돌려도 두 번째는 대상이 없다.")
+    void test6() {
+        Long cohortId = fixture.createCohort("만료-멱등");
+        OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "만료-멱등-1", 8);
+
+        roomOccupancyService.start(roomId, member.userId());
+        expire(roomId);
+
+        assertThat(roomOccupancyLifecycleService.expireAll()).isGreaterThanOrEqualTo(1);
+        assertThat(roomOccupancyLifecycleService.expireAll()).isZero();
+        assertThat(activeOccupancyRows(roomId)).isZero();
+    }
+
+    /** 아직 만료되지 않은 점유를 쓸어가면 사용 중인 회의가 끊긴다. */
+    @Test
+    @DisplayName("만료되지 않은 점유는 건드리지 않는다.")
+    void test7() {
+        Long cohortId = fixture.createCohort("만료-미도래");
+        OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "만료-미도래-1", 8);
+
+        roomOccupancyService.start(roomId, member.userId());
+
+        roomOccupancyLifecycleService.expireAll();
+
+        assertThat(activeOccupancyRows(roomId)).isEqualTo(1);
+        assertThat(openParticipantRows(roomId)).isEqualTo(1);
+    }
+
     /** 이미 사용 중인 회의실을 뒤늦게 잡을 때도 같은 정리가 일어나야 한다. */
     @Test
     @DisplayName("공간 기준 정리도 참여자를 함께 마감한다.")
@@ -156,6 +222,14 @@ class OccupancyExpiryIT {
                   JOIN learning_service.room_occupancies o ON o.id = p.occupancy_id
                  WHERE o.space_id = ? AND o.status = 'EXPIRED'
                 """, OffsetDateTime.class, spaceId);
+    }
+
+    private int activeOccupancyRows(Long spaceId) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT count(*) FROM learning_service.room_occupancies
+                 WHERE space_id = ? AND status = 'ACTIVE'
+                """, Integer.class, spaceId);
+        return count == null ? 0 : count;
     }
 
     private int participantRows(Long spaceId) {

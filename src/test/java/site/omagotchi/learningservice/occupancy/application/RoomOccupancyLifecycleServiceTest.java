@@ -24,6 +24,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -352,6 +353,66 @@ class RoomOccupancyLifecycleServiceTest {
 
     private OffsetDateTime expiringIn(int minutes) {
         return now().plusMinutes(minutes);
+    }
+
+    /**
+     * 스케줄러가 없으면 아무도 찾지 않는 방이 만료된 채 방치된다 — 목록에 계속
+     * "사용 중"으로 뜨고 참여자도 열린 채다.
+     */
+    @Test
+    @DisplayName("만료 정리는 참여자 마감과 공실 알림을 함께 수행한다.")
+    void test19() {
+        OffsetDateTime endedAt = now().minusMinutes(5);
+        given(occupancyRepository.expireStale(now())).willReturn(List.of(
+                new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt)));
+
+        assertThat(roomOccupancyLifecycleService.expireAll()).isEqualTo(1);
+
+        verify(participantRepository).closeAllActiveByOccupancyId(7L, endedAt);
+        verify(eventPublisher).publishRoomVacated(new RoomVacatedEvent(SPACE_ID, 7L, endedAt));
+    }
+
+    /**
+     * {@code vacatedAt}이 정리 시각이면 "언제 비었는지"가 스케줄러 주기만큼 밀린다.
+     * 늦게 발견했을 뿐 실제로 비워진 것은 만료 시각이다.
+     */
+    @Test
+    @DisplayName("공실 시각은 정리 시각이 아니라 점유의 만료 시각이다.")
+    void test20() {
+        OffsetDateTime endedAt = now().minusMinutes(5);
+        given(occupancyRepository.expireStale(now())).willReturn(List.of(
+                new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt)));
+
+        roomOccupancyLifecycleService.expireAll();
+
+        verify(eventPublisher, never()).publishRoomVacated(
+                new RoomVacatedEvent(SPACE_ID, 7L, now()));
+    }
+
+    @Test
+    @DisplayName("만료된 점유가 없으면 아무것도 하지 않는다.")
+    void test21() {
+        given(occupancyRepository.expireStale(now())).willReturn(List.of());
+
+        assertThat(roomOccupancyLifecycleService.expireAll()).isZero();
+
+        verify(participantRepository, never()).closeAllActiveByOccupancyId(any(), any());
+        verify(eventPublisher, never()).publishRoomVacated(any());
+    }
+
+    /** 여러 방이 동시에 만료되면 각각 따로 알려야 한다 — 대기자는 방마다 다르다. */
+    @Test
+    @DisplayName("여러 점유가 만료되면 방마다 공실을 알린다.")
+    void test22() {
+        OffsetDateTime endedAt = now().minusMinutes(5);
+        given(occupancyRepository.expireStale(now())).willReturn(List.of(
+                new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt),
+                new RoomOccupancyRepository.ExpiredOccupancy(8L, 2L, endedAt)));
+
+        assertThat(roomOccupancyLifecycleService.expireAll()).isEqualTo(2);
+
+        verify(eventPublisher).publishRoomVacated(new RoomVacatedEvent(SPACE_ID, 7L, endedAt));
+        verify(eventPublisher).publishRoomVacated(new RoomVacatedEvent(2L, 8L, endedAt));
     }
 
     private RoomOccupancy occupancy(OffsetDateTime expiresAt) {

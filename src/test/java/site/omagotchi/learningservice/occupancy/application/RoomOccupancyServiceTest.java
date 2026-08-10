@@ -14,6 +14,8 @@ import site.omagotchi.learningservice.attendance.application.AttendancePresenceQ
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
+import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
+import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.port.SpaceReader;
@@ -52,6 +54,7 @@ class RoomOccupancyServiceTest {
     private static final Instant NOW = Instant.parse("2026-07-24T01:00:00Z");
 
     private static final Long SPACE_ID = 1L;
+    private static final Long OTHER_SPACE_ID = 2L;
     private static final Long MEMBERSHIP_ID = 10L;
     private static final Long OCCUPANCY_ID = 100L;
     private static final UUID USER_ID = UUID.randomUUID();
@@ -68,6 +71,9 @@ class RoomOccupancyServiceTest {
     @Mock
     private OccupancyParticipantRepository participantRepository;
 
+    @Mock
+    private OccupancyEventPublisher eventPublisher;
+
     private Clock clock;
     private RoomOccupancyService roomOccupancyService;
 
@@ -79,6 +85,7 @@ class RoomOccupancyServiceTest {
                 attendancePresenceQueryService,
                 occupancyRepository,
                 participantRepository,
+                eventPublisher,
                 clock
         );
     }
@@ -321,9 +328,9 @@ class RoomOccupancyServiceTest {
         givenSavedOccupancy();
         OffsetDateTime endedAt = now().minusMinutes(1);
         given(occupancyRepository.expireStaleBySpaceId(SPACE_ID, now()))
-                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(7L, endedAt)));
+                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt)));
         given(occupancyRepository.expireStaleByUserId(USER_ID, now()))
-                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(8L, endedAt)));
+                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(8L, OTHER_SPACE_ID, endedAt)));
 
         roomOccupancyService.start(SPACE_ID, USER_ID);
 
@@ -342,12 +349,52 @@ class RoomOccupancyServiceTest {
         givenSavedOccupancy();
         OffsetDateTime endedAt = now().minusHours(2);
         given(occupancyRepository.expireStaleBySpaceId(SPACE_ID, now()))
-                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(7L, endedAt)));
+                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt)));
 
         roomOccupancyService.start(SPACE_ID, USER_ID);
 
         verify(participantRepository).closeAllActiveByOccupancyId(7L, endedAt);
         verify(participantRepository, never()).closeAllActiveByOccupancyId(7L, now());
+    }
+
+    /**
+     * 지금 점유하려는 방의 정리는 공실이 아니다.
+     *
+     * <p>발행하면 대기자들이 "비었다"는 알림을 받고 와서 409를 맞는다. 공실 알림은
+     * 일회성 의사표시라({@code notified_at} 소진) 헛된 알림 하나가 그 사람의 신청을
+     * 태워 없앤다 — 다시 신청하기 전까지 진짜 공실을 놓친다.</p>
+     */
+    @Test
+    @DisplayName("점유할 방의 만료 정리는 공실로 알리지 않는다.")
+    void test18() {
+        givenLockedRoom();
+        givenSavedOccupancy();
+        OffsetDateTime endedAt = now().minusMinutes(1);
+        given(occupancyRepository.expireStaleBySpaceId(SPACE_ID, now()))
+                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt)));
+
+        roomOccupancyService.start(SPACE_ID, USER_ID);
+
+        verify(eventPublisher, never()).publishRoomVacated(any());
+    }
+
+    /**
+     * 반면 계정 기준 정리는 다른 방이다. 그 방은 실제로 비었고, 여기서 EXPIRED로
+     * 바꿔버리면 스케줄러가 다시 찾지 못해 알림이 영영 유실된다.
+     */
+    @Test
+    @DisplayName("계정의 다른 방이 만료 정리되면 공실로 알린다.")
+    void test19() {
+        givenLockedRoom();
+        givenSavedOccupancy();
+        OffsetDateTime endedAt = now().minusMinutes(1);
+        given(occupancyRepository.expireStaleByUserId(USER_ID, now()))
+                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(8L, OTHER_SPACE_ID, endedAt)));
+
+        roomOccupancyService.start(SPACE_ID, USER_ID);
+
+        verify(eventPublisher).publishRoomVacated(
+                new RoomVacatedEvent(OTHER_SPACE_ID, 8L, endedAt));
     }
 
     private SpaceReader.MeetingRoom room(boolean meetingRoom, boolean active) {

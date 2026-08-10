@@ -151,7 +151,7 @@ class RoomOccupancyJpaPersistenceTest {
 
         assertThat(roomOccupancyJpaPersistence.expireStaleBySpaceId(SPACE_ID, NOW))
                 .containsExactly(new RoomOccupancyRepository.ExpiredOccupancy(
-                        100L, NOW.minusMinutes(1)));
+                        100L, SPACE_ID, NOW.minusMinutes(1)));
         verify(occupancyJpaRepository).expireStaleBySpaceId(
                 SPACE_ID, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED);
     }
@@ -193,6 +193,11 @@ class RoomOccupancyJpaPersistenceTest {
             @Override
             public Long getOccupancyId() {
                 return occupancyId;
+            }
+
+            @Override
+            public Long getSpaceId() {
+                return SPACE_ID;
             }
 
             @Override

@@ -91,15 +91,42 @@ public class RoomOccupancyJpaPersistence implements RoomOccupancyRepository {
         return occupancyJpaRepository.findByIdForUpdate(occupancyId);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>식별을 UPDATE보다 먼저 하는 것이 핵심이다. 벌크 UPDATE는 무엇을 바꿨는지
+     * 돌려주지 않고, 실행 뒤에는 {@code status='ACTIVE'} 조건이 그 행에 더 이상 맞지 않아
+     * 다시 찾을 수 없다 — 그러면 참여자를 마감할 대상을 잃는다.</p>
+     */
     @Override
-    public int expireStaleBySpaceId(Long spaceId, OffsetDateTime now) {
-        return occupancyJpaRepository.expireStaleBySpaceId(
+    public List<ExpiredOccupancy> expireStaleBySpaceId(Long spaceId, OffsetDateTime now) {
+        List<RoomOccupancyJpaRepository.StaleOccupancyProjection> stale =
+                occupancyJpaRepository.findStaleBySpaceId(spaceId, now, OccupancyStatus.ACTIVE);
+        if (stale.isEmpty()) {
+            return List.of();
+        }
+        occupancyJpaRepository.expireStaleBySpaceId(
                 spaceId, now, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED);
+        return toExpired(stale);
     }
 
     @Override
-    public int expireStaleByUserId(UUID userId, OffsetDateTime now) {
-        return occupancyJpaRepository.expireStaleByUserId(
+    public List<ExpiredOccupancy> expireStaleByUserId(UUID userId, OffsetDateTime now) {
+        List<RoomOccupancyJpaRepository.StaleOccupancyProjection> stale =
+                occupancyJpaRepository.findStaleByUserId(userId, now, OccupancyStatus.ACTIVE);
+        if (stale.isEmpty()) {
+            return List.of();
+        }
+        occupancyJpaRepository.expireStaleByUserId(
                 userId, now, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED);
+        return toExpired(stale);
+    }
+
+    private static List<ExpiredOccupancy> toExpired(
+            List<RoomOccupancyJpaRepository.StaleOccupancyProjection> stale) {
+        return stale.stream()
+                .map(projection -> new ExpiredOccupancy(
+                        projection.getOccupancyId(), projection.getEndedAt()))
+                .toList();
     }
 }

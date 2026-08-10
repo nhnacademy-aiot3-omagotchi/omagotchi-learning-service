@@ -4,6 +4,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -18,6 +19,7 @@ import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -26,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -136,16 +139,67 @@ class RoomOccupancyJpaPersistenceTest {
         assertThat(roomOccupancyJpaPersistence.findActiveBySpaceId(SPACE_ID)).contains(occupancy);
     }
 
+    /**
+     * 정리된 점유를 돌려주는 것이 계약이다. 호출부가 이 값으로 참여자를 마감하며(MR-32),
+     * 빈 목록을 돌려주면 그 참여자들이 열린 채 남아 영구히 다른 회의에 참여할 수 없다.
+     */
     @Test
-    @DisplayName("만료 정리는 ACTIVE를 EXPIRED로 옮기도록 위임한다.")
+    @DisplayName("만료 정리는 ACTIVE를 EXPIRED로 옮기고 정리된 점유를 돌려준다.")
     void test7() {
-        given(occupancyJpaRepository.expireStaleBySpaceId(
-                SPACE_ID, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(1);
-        given(occupancyJpaRepository.expireStaleByUserId(
-                USER_ID, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(2);
+        given(occupancyJpaRepository.findStaleBySpaceId(SPACE_ID, NOW, OccupancyStatus.ACTIVE))
+                .willReturn(List.of(stale(100L, NOW.minusMinutes(1))));
 
-        assertThat(roomOccupancyJpaPersistence.expireStaleBySpaceId(SPACE_ID, NOW)).isEqualTo(1);
-        assertThat(roomOccupancyJpaPersistence.expireStaleByUserId(USER_ID, NOW)).isEqualTo(2);
+        assertThat(roomOccupancyJpaPersistence.expireStaleBySpaceId(SPACE_ID, NOW))
+                .containsExactly(new RoomOccupancyRepository.ExpiredOccupancy(
+                        100L, NOW.minusMinutes(1)));
+        verify(occupancyJpaRepository).expireStaleBySpaceId(
+                SPACE_ID, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED);
+    }
+
+    /**
+     * <b>식별이 UPDATE보다 먼저여야 한다.</b> 벌크 UPDATE는 무엇을 바꿨는지 돌려주지 않고,
+     * 실행 뒤에는 {@code status='ACTIVE'} 조건이 그 행에 맞지 않아 다시 찾을 수 없다.
+     * 순서가 뒤집히면 참여자를 마감할 대상을 통째로 잃는다.
+     */
+    @Test
+    @DisplayName("정리 대상 식별이 상태 변경보다 먼저다.")
+    void test12() {
+        given(occupancyJpaRepository.findStaleByUserId(USER_ID, NOW, OccupancyStatus.ACTIVE))
+                .willReturn(List.of(stale(100L, NOW.minusMinutes(1))));
+
+        roomOccupancyJpaPersistence.expireStaleByUserId(USER_ID, NOW);
+
+        InOrder order = inOrder(occupancyJpaRepository);
+        order.verify(occupancyJpaRepository).findStaleByUserId(USER_ID, NOW, OccupancyStatus.ACTIVE);
+        order.verify(occupancyJpaRepository).expireStaleByUserId(
+                USER_ID, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED);
+    }
+
+    /** 정리할 것이 없으면 UPDATE도 보내지 않는다 — 점유 시작마다 도는 경로다. */
+    @Test
+    @DisplayName("만료된 점유가 없으면 상태 변경을 시도하지 않는다.")
+    void test13() {
+        given(occupancyJpaRepository.findStaleBySpaceId(SPACE_ID, NOW, OccupancyStatus.ACTIVE))
+                .willReturn(List.of());
+
+        assertThat(roomOccupancyJpaPersistence.expireStaleBySpaceId(SPACE_ID, NOW)).isEmpty();
+
+        verify(occupancyJpaRepository, never()).expireStaleBySpaceId(any(), any(), any(), any());
+    }
+
+    private RoomOccupancyJpaRepository.StaleOccupancyProjection stale(
+            Long occupancyId, OffsetDateTime endedAt) {
+        return new RoomOccupancyJpaRepository.StaleOccupancyProjection() {
+            @Override
+            public Long getOccupancyId() {
+                return occupancyId;
+            }
+
+            @Override
+            public OffsetDateTime getEndedAt() {
+                return endedAt;
+            }
+        };
     }
 
     /**

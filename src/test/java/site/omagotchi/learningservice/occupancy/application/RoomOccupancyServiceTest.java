@@ -26,6 +26,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -305,6 +306,48 @@ class RoomOccupancyServiceTest {
         order.verify(occupancyRepository).existsActiveByUserId(USER_ID, now());
         order.verify(occupancyRepository).save(any(RoomOccupancy.class));
         order.verify(participantRepository).save(any(OccupancyParticipant.class));
+    }
+
+    /**
+     * 만료 정리가 점유 행만 EXPIRED로 바꾸고 멈추면 그 참여자들이 열린 채 남는다.
+     * {@code uq_occupancy_participants_one_active}가 계정 기준이라 그 계정은 영구히
+     * 다른 회의에 참여할 수 없고, 점유 시작이 스스로를 참여자로 등록하므로(MR-27)
+     * 새 점유도 409로 막힌다.
+     */
+    @Test
+    @DisplayName("만료 정리된 점유의 참여자를 함께 마감한다.")
+    void test16() {
+        givenLockedRoom();
+        givenSavedOccupancy();
+        OffsetDateTime endedAt = now().minusMinutes(1);
+        given(occupancyRepository.expireStaleBySpaceId(SPACE_ID, now()))
+                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(7L, endedAt)));
+        given(occupancyRepository.expireStaleByUserId(USER_ID, now()))
+                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(8L, endedAt)));
+
+        roomOccupancyService.start(SPACE_ID, USER_ID);
+
+        verify(participantRepository).closeAllActiveByOccupancyId(7L, endedAt);
+        verify(participantRepository).closeAllActiveByOccupancyId(8L, endedAt);
+    }
+
+    /**
+     * 마감 시각은 정리를 수행한 시각이 아니라 점유의 종료 시각이다. 지금 시각을 찍으면
+     * 참여 시간이 실제보다 길게 집계되고, 점유 행의 {@code ended_at}과도 어긋난다.
+     */
+    @Test
+    @DisplayName("참여자 마감 시각은 정리 시각이 아니라 점유의 종료 시각이다.")
+    void test17() {
+        givenLockedRoom();
+        givenSavedOccupancy();
+        OffsetDateTime endedAt = now().minusHours(2);
+        given(occupancyRepository.expireStaleBySpaceId(SPACE_ID, now()))
+                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(7L, endedAt)));
+
+        roomOccupancyService.start(SPACE_ID, USER_ID);
+
+        verify(participantRepository).closeAllActiveByOccupancyId(7L, endedAt);
+        verify(participantRepository, never()).closeAllActiveByOccupancyId(7L, now());
     }
 
     private SpaceReader.MeetingRoom room(boolean meetingRoom, boolean active) {

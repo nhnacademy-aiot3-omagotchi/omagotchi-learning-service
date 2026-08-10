@@ -93,6 +93,48 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
     }
 
     /**
+     * 정리 대상이 될 만료 행을 미리 식별한다.
+     *
+     * <p>벌크 UPDATE가 무엇을 바꿨는지 돌려주지 않기 때문에 필요하다. 참여자 마감(MR-32)은
+     * 점유 식별자와 종료 시각을 알아야 하는데, UPDATE 뒤에는 조건({@code status='ACTIVE'})이
+     * 더 이상 그 행에 맞지 않아 다시 찾을 수 없다.</p>
+     *
+     * <p><b>Projection인 것이 중요하다.</b> 엔티티로 읽으면 그 인스턴스가 1차 캐시에 올라가고,
+     * 뒤이은 벌크 UPDATE가 영속성 컨텍스트를 우회하므로 캐시가 낡은 {@code status}를
+     * 들고 있게 된다.</p>
+     */
+    @Query("""
+                SELECT o.id AS occupancyId, o.expiresAt AS endedAt
+                  FROM RoomOccupancy o
+                 WHERE o.spaceId = :spaceId
+                   AND o.status = :active
+                   AND o.expiresAt <= :now""")
+    List<StaleOccupancyProjection> findStaleBySpaceId(
+            @Param("spaceId") Long spaceId,
+            @Param("now") OffsetDateTime now,
+            @Param("active") OccupancyStatus active
+    );
+
+    @Query("""
+                SELECT o.id AS occupancyId, o.expiresAt AS endedAt
+                  FROM RoomOccupancy o
+                 WHERE o.occupierUserId = :userId
+                   AND o.status = :active
+                   AND o.expiresAt <= :now""")
+    List<StaleOccupancyProjection> findStaleByUserId(
+            @Param("userId") UUID userId,
+            @Param("now") OffsetDateTime now,
+            @Param("active") OccupancyStatus active
+    );
+
+    /** 닫힌 Projection. 필드를 늘리면 select 컬럼이 함께 늘어난다. */
+    interface StaleOccupancyProjection {
+        Long getOccupancyId();
+
+        OffsetDateTime getEndedAt();
+    }
+
+    /**
      * 만료된 ACTIVE 행 정리.
      *
      * <p>{@code endedAt}에 {@code now}가 아니라 {@code expiresAt}을 넣는 것이 요점이다 —
@@ -101,7 +143,8 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
      *
      * <p>벌크 UPDATE는 영속성 컨텍스트를 우회하므로 {@code clearAutomatically}가 필요해 보이지만,
      * 이 호출 시점에는 아직 어떤 점유 엔티티도 로드하지 않았다. 호출 순서를 바꾸면
-     * (예: 활성 점유를 엔티티로 먼저 읽고 정리) 1차 캐시가 낡은 상태를 들고 있게 된다.</p>
+     * (예: 활성 점유를 엔티티로 먼저 읽고 정리) 1차 캐시가 낡은 상태를 들고 있게 된다.
+     * 바로 위 {@code findStale*}가 Projection인 것도 같은 이유다.</p>
      */
     @Modifying
     @Query("""

@@ -138,9 +138,16 @@ public interface RoomOccupancyRepository {
      * <p>{@code ended_at}에 {@code now}가 아니라 {@code expires_at}을 넣는 것이 요점이다 —
      * 실제 종료 시각이 그것이고, {@code ck_room_occupancies_end}도 함께 만족한다.</p>
      *
-     * @return 정리된 행 수
+     * <p><b>정리된 점유를 돌려주는 것이 계약의 일부다.</b> 점유 행만 EXPIRED로 바꾸면
+     * 그 안의 참여자가 열린 채 남고, {@code uq_occupancy_participants_one_active}가 계정
+     * 기준이라 그 사람들이 영구히 다른 회의에 참여할 수 없게 된다 (MR-32). 호출부가
+     * 반환값으로 {@link OccupancyParticipantRepository#closeAllActiveByOccupancyId}를
+     * 이어서 불러야 하며, 두 테이블을 한 Port에서 함께 쓰지 않기 위해 마감은 여기서
+     * 하지 않는다.</p>
+     *
+     * @return 이번 호출로 EXPIRED가 된 점유. 없으면 빈 목록
      */
-    int expireStaleBySpaceId(Long spaceId, OffsetDateTime now);
+    List<ExpiredOccupancy> expireStaleBySpaceId(Long spaceId, OffsetDateTime now);
 
 
     /**
@@ -149,7 +156,20 @@ public interface RoomOccupancyRepository {
      * <p>{@link #expireStaleBySpaceId}와 달리 {@code spaces} 락 밖의 다른 방일 수 있어
      * 완전히 직렬화되지 않는다. 정리에 실패해도 유니크 인덱스가 최종 방어선이므로
      * 정확성은 유지되고, 이 호출은 불필요한 409를 줄이는 최선 노력이다.</p>
+     *
+     * <p>{@link #expireStaleBySpaceId}와 같은 이유로 정리된 점유를 돌려준다.</p>
      */
-    int expireStaleByUserId(UUID userId, OffsetDateTime now);
+    List<ExpiredOccupancy> expireStaleByUserId(UUID userId, OffsetDateTime now);
+
+
+    /**
+     * 만료 정리로 종료된 점유.
+     *
+     * @param endedAt 종료 시각. 정리를 수행한 시각이 아니라 그 점유의 {@code expires_at}이다.
+     *                참여자 {@code left_at}도 같은 값이어야 "회의가 끝난 시각"이 두 테이블에서
+     *                일치한다
+     */
+    record ExpiredOccupancy(Long occupancyId, OffsetDateTime endedAt) {
+    }
 
 }

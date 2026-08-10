@@ -28,6 +28,22 @@ spring:
         default_schema: learning_service
         jdbc:
           time_zone: UTC
+  rabbitmq:
+    listener:
+      simple:
+        missing-queues-fatal: false
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-retries: 3
+          initial-interval: 1000ms
+          multiplier: 2
+          max-interval: 10000ms
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
 
 eureka:
   client:

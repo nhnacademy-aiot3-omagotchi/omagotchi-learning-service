@@ -1,4 +1,7 @@
 @baseUrl = http://localhost:8084
+@managerAccessToken = <USER JWT for cohort manager>
+@sameCohortAccessToken = <USER JWT for same-cohort user>
+@otherCohortAccessToken = <USER JWT for other-cohort user>
 
 ### 공간 API 공통 계약
 ### 요청·응답 type 허용값: LAB, MEETING, STUDY
@@ -10,6 +13,8 @@
 ### - UNAVAILABLE: 비활성 회의실
 ### - NOT_APPLICABLE: 점유 대상이 아닌 LAB 또는 STUDY
 ### occupancyExpiresAt과 remainingTimeSeconds는 OCCUPIED 회의실만 값을 반환한다.
+### occupiedBySameCohort는 OCCUPIED 공간의 점유 기수가 조회자의 활성 기수에
+### 포함될 때만 true이며, 그 외에는 false이다.
 
 ### =========================================================
 ### 1. 공간 등록 성공
@@ -17,6 +22,7 @@
 ### 주의: 이미 "회의실 B"가 등록되어 있으면 중복 오류가 발생할 수 있음
 ### =========================================================
 POST {{baseUrl}}/api/admin/spaces
+Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -34,10 +40,46 @@ Accept: application/json
 ### operationalStatus와 status는 서로 다른 상태이므로 함께 확인한다.
 ### 응답 필드:
 ### spaceId, name, type, capacity, operationalStatus, inactiveReason,
-### cohortId, status, occupancyExpiresAt, remainingTimeSeconds
+### cohortId, status, occupancyExpiresAt, remainingTimeSeconds,
+### occupiedBySameCohort, occupancyCohortId, occupierMembershipId,
+### occupierUserId, participantUserIds
+### 이 요청은 익명 조회이므로 occupiedBySameCohort=false이고
+### occupancyCohortId 및 점유자·참여자 식별 필드는 null이다.
+### 예시: {"status":"OCCUPIED","remainingTimeSeconds":1200,
+### "occupiedBySameCohort":false,"occupancyCohortId":null,
+### "occupierMembershipId":null,"occupierUserId":null,"participantUserIds":null}
 ### =========================================================
 GET {{baseUrl}}/api/spaces
 Accept: application/json
+
+
+### =========================================================
+### 2-1. 같은 기수 사용자 공간 목록 조회
+### 기대 결과: OCCUPIED 회의실의 occupiedBySameCohort=true
+### occupancyCohortId, occupierMembershipId, occupierUserId,
+### participantUserIds가 반환된다.
+### 예시: {"status":"OCCUPIED","remainingTimeSeconds":1200,
+### "occupiedBySameCohort":true,"occupancyCohortId":1,
+### "occupierMembershipId":10,"occupierUserId":"사용자 UUID",
+### "participantUserIds":["참여자 UUID"]}
+### =========================================================
+GET {{baseUrl}}/api/spaces
+Accept: application/json
+Authorization: Bearer {{sameCohortAccessToken}}
+
+
+### =========================================================
+### 2-2. 다른 기수 사용자 공간 목록 조회
+### 기대 결과: OCCUPIED 회의실의 occupiedBySameCohort=false
+### occupancyCohortId, occupierMembershipId, occupierUserId,
+### participantUserIds는 null이고 남은 시간은 반환된다.
+### 예시: {"status":"OCCUPIED","remainingTimeSeconds":1200,
+### "occupiedBySameCohort":false,"occupancyCohortId":null,
+### "occupierMembershipId":null,"occupierUserId":null,"participantUserIds":null}
+### =========================================================
+GET {{baseUrl}}/api/spaces
+Accept: application/json
+Authorization: Bearer {{otherCohortAccessToken}}
 
 
 ### =========================================================
@@ -45,6 +87,7 @@ Accept: application/json
 ### 기대 결과: 201 Created
 ### =========================================================
 POST {{baseUrl}}/api/admin/spaces
+Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -60,6 +103,7 @@ Accept: application/json
 ### 기대 결과: 201 Created
 ### =========================================================
 POST {{baseUrl}}/api/admin/spaces
+Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -85,6 +129,7 @@ Accept: application/json
 ### 기대 결과: 409 Conflict
 ### =========================================================
 POST {{baseUrl}}/api/admin/spaces
+Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -100,6 +145,7 @@ Accept: application/json
 ### 기대 결과: 400 Bad Request
 ### =========================================================
 POST {{baseUrl}}/api/admin/spaces
+Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -115,6 +161,7 @@ Accept: application/json
 ### 기대 결과: 400 Bad Request
 ### =========================================================
 POST {{baseUrl}}/api/admin/spaces
+Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -130,6 +177,7 @@ Accept: application/json
 ### 기대 결과: 400 Bad Request
 ### =========================================================
 POST {{baseUrl}}/api/admin/spaces
+Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -144,6 +192,7 @@ Accept: application/json
 ### 기대 결과: 400 Bad Request
 ### =========================================================
 POST {{baseUrl}}/api/admin/spaces
+Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -159,6 +208,7 @@ Accept: application/json
 ### 현재 허용 타입: LAB, MEETING, STUDY
 ### =========================================================
 POST {{baseUrl}}/api/admin/spaces
+Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -174,6 +224,7 @@ Accept: application/json
 ### 기대 결과: 400 Bad Request
 ### =========================================================
 POST {{baseUrl}}/api/admin/spaces
+Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -189,6 +240,7 @@ Accept: application/json
 ### 기대 결과: 400 Bad Request
 ### =========================================================
 POST {{baseUrl}}/api/admin/spaces
+Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -204,6 +256,7 @@ Accept: application/json
 ### 기대 결과: 400 Bad Request
 ### =========================================================
 POST {{baseUrl}}/api/admin/spaces
+Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
 
@@ -211,3 +264,54 @@ Accept: application/json
   "name": "수용 인원 없는 공간",
   "type": "MEETING"
 }
+
+
+### =========================================================
+### 15. 공간 활성화
+### 기대 결과: 200 OK, operationalStatus=ACTIVE, inactiveReason=null
+### =========================================================
+PATCH {{baseUrl}}/api/admin/spaces/1/activate
+Authorization: Bearer {{managerAccessToken}}
+Accept: application/json
+
+
+### =========================================================
+### 16. 공간 비활성화
+### 기대 결과: 200 OK, operationalStatus=INACTIVE
+### 활성 점유가 있으면 409 SPACE_ACTIVE_OCCUPANCY_EXISTS
+### =========================================================
+PATCH {{baseUrl}}/api/admin/spaces/1/deactivate
+Authorization: Bearer {{managerAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "inactiveReason": "정기 점검"
+}
+
+
+### =========================================================
+### 17. 공간 정보 전체 수정
+### 기대 결과: 200 OK
+### ACTIVE 공간의 정원 축소 또는 유형 변경은 409
+### =========================================================
+PUT {{baseUrl}}/api/admin/spaces/1
+Authorization: Bearer {{managerAccessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "회의실 A-1",
+  "type": "MEETING",
+  "capacity": 12
+}
+
+
+### =========================================================
+### 18. 공간 소프트 삭제
+### 기대 결과: 204 No Content
+### INACTIVE이며 활성 점유가 없는 공간만 삭제 가능
+### =========================================================
+DELETE {{baseUrl}}/api/admin/spaces/1
+Authorization: Bearer {{managerAccessToken}}
+Accept: application/json

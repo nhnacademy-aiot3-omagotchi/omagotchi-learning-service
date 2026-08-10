@@ -10,8 +10,8 @@ import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
-import site.omagotchi.learningservice.team.application.dto.command.AddTeamMemberRequest;
-import site.omagotchi.learningservice.team.application.dto.command.CreateTeamRequest;
+import site.omagotchi.learningservice.team.application.command.AddTeamMemberRequest;
+import site.omagotchi.learningservice.team.application.command.CreateTeamRequest;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.support.TeamTestFixture;
 

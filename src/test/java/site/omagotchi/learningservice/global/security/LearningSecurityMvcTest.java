@@ -12,12 +12,18 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
+import site.omagotchi.learningservice.space.application.SpaceCommandService;
+import site.omagotchi.learningservice.space.application.SpaceQueryService;
+import site.omagotchi.learningservice.space.presentation.SpaceAdminController;
+import site.omagotchi.learningservice.space.presentation.SpaceQueryController;
 import site.omagotchi.learningservice.telegram.application.TelegramUserLinkService;
 import site.omagotchi.learningservice.telegram.application.dto.result.TelegramUserLinkResponse;
 import site.omagotchi.learningservice.telegram.presentation.TelegramController;
 import site.omagotchi.learningservice.telegram.presentation.TelegramWebhookController;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.containsString;
@@ -26,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -34,7 +41,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(controllers = {
         TelegramController.class,
-        TelegramWebhookController.class
+        TelegramWebhookController.class,
+        SpaceAdminController.class,
+        SpaceQueryController.class
 })
 @Import({
         SecurityConfig.class,
@@ -55,6 +64,12 @@ class LearningSecurityMvcTest {
 
     @MockitoBean
     private TelegramUserLinkService telegramUserLinkService;
+
+    @MockitoBean
+    private SpaceCommandService spaceCommandService;
+
+    @MockitoBean
+    private SpaceQueryService spaceQueryService;
 
     @Test
     @DisplayName("Telegram webhook은 Access JWT 없이 호출")
@@ -88,6 +103,18 @@ class LearningSecurityMvcTest {
                 .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"))
                 .andExpect(jsonPath("$.path").value("/api/telegram/link"));
         verifyNoInteractions(telegramUserLinkService);
+    }
+
+    @Test
+    @DisplayName("공간 목록 API는 Access JWT 없이 호출")
+    void permitsAnonymousSpaceList() throws Exception {
+        given(spaceQueryService.getSpaceList(null)).willReturn(List.of());
+
+        mockMvc.perform(get("/api/spaces"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        verify(spaceQueryService).getSpaceList(null);
     }
 
     @Test
@@ -130,6 +157,24 @@ class LearningSecurityMvcTest {
                         containsString("error=\"insufficient_scope\"")
                 ))
                 .andExpect(jsonPath("$.code").value("AUTH_ACCESS_DENIED"));
+    }
+
+    @Test
+    @DisplayName("공간 관리자 API가 위조 Header 대신 JWT 행위자를 사용")
+    void spaceAdminUsesJwtActorInsteadOfSpoofedHeaders() throws Exception {
+        String userToken = TestJwtKeyConfig.issue("USER");
+
+        mockMvc.perform(delete("/api/admin/spaces/1")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken)
+                        .header("X-User-Id", SPOOFED_USER_ID)
+                        .header("X-Global-Role", "SYSTEM_ADMIN"))
+                .andExpect(status().isNoContent());
+
+        verify(spaceCommandService).delete(
+                1L,
+                USER_ID,
+                GlobalRole.USER
+        );
     }
 
     private TelegramUserLinkResponse linkResponse(UUID userId) {

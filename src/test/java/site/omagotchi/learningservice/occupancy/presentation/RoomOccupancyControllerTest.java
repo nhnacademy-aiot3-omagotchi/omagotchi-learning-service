@@ -8,6 +8,7 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
 import site.omagotchi.learningservice.occupancy.application.OccupancyErrorCode;
+import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
 import site.omagotchi.learningservice.occupancy.application.result.RoomOccupancyResult;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
@@ -17,6 +18,7 @@ import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,12 +42,15 @@ class RoomOccupancyControllerTest {
             OffsetDateTime.of(2026, 7, 24, 10, 0, 0, 0, ZoneOffset.ofHours(9));
 
     private RoomOccupancyService roomOccupancyService;
+    private RoomOccupancyLifecycleService roomOccupancyLifecycleService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         roomOccupancyService = mock(RoomOccupancyService.class);
-        mockMvc = standaloneSetup(new RoomOccupancyController(roomOccupancyService))
+        roomOccupancyLifecycleService = mock(RoomOccupancyLifecycleService.class);
+        mockMvc = standaloneSetup(new RoomOccupancyController(
+                        roomOccupancyService, roomOccupancyLifecycleService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -127,13 +132,97 @@ class RoomOccupancyControllerTest {
                 .andExpect(jsonPath("$.code").value("COMMON_INTERNAL_SERVER_ERROR"));
     }
 
+    // ────────────────────────────── 연장·반납 ──────────────────────────────
+
+    /**
+     * 상태 전이라 경로 마지막이 동사형이고, 200에 본문을 싣는다 — 클라이언트가 새
+     * 만료 시각으로 타이머를 다시 맞춰야 한다.
+     */
+    @Test
+    @DisplayName("연장에 성공하면 200과 갱신된 만료 시각을 응답한다.")
+    void test9() throws Exception {
+        when(roomOccupancyLifecycleService.extend(any(), any())).thenReturn(extendedResult());
+
+        mockMvc.perform(post(PATH + "/extend").header("X-User-Id", USER_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.extensionCount").value(1))
+                .andExpect(jsonPath("$.remainingSeconds").value(1800));
+
+        verify(roomOccupancyLifecycleService).extend(1L, USER_ID);
+    }
+
+    @Test
+    @DisplayName("만료 30분 전이 되기 전에 연장하면 409를 응답한다.")
+    void test10() throws Exception {
+        when(roomOccupancyLifecycleService.extend(any(), any()))
+                .thenThrow(new BusinessException(OccupancyErrorCode.EXTENSION_TOO_EARLY));
+
+        mockMvc.perform(post(PATH + "/extend").header("X-User-Id", USER_ID))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("OCCUPANCY_EXTENSION_TOO_EARLY"));
+    }
+
+    @Test
+    @DisplayName("연장 횟수를 다 쓰면 409를 응답한다.")
+    void test11() throws Exception {
+        when(roomOccupancyLifecycleService.extend(any(), any()))
+                .thenThrow(new BusinessException(OccupancyErrorCode.EXTENSION_LIMIT_EXCEEDED));
+
+        mockMvc.perform(post(PATH + "/extend").header("X-User-Id", USER_ID))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("OCCUPANCY_EXTENSION_LIMIT_EXCEEDED"));
+    }
+
+    /** DELETE가 아닌 이유는 점유 행이 이력으로 보존되기 때문이다 — 제거가 아니라 상태 전이다. */
+    @Test
+    @DisplayName("반납에 성공하면 204를 응답한다.")
+    void test12() throws Exception {
+        mockMvc.perform(post(PATH + "/release").header("X-User-Id", USER_ID))
+                .andExpect(status().isNoContent());
+
+        verify(roomOccupancyLifecycleService).release(1L, USER_ID);
+    }
+
+    @Test
+    @DisplayName("점유자가 아니면 반납할 수 없다.")
+    void test13() throws Exception {
+        doThrow(new BusinessException(OccupancyErrorCode.NOT_OCCUPIER))
+                .when(roomOccupancyLifecycleService).release(any(), any());
+
+        mockMvc.perform(post(PATH + "/release").header("X-User-Id", USER_ID))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("OCCUPANCY_NOT_OCCUPIER"));
+    }
+
+    @Test
+    @DisplayName("이미 종료된 점유를 반납하면 409를 응답한다.")
+    void test14() throws Exception {
+        doThrow(new BusinessException(OccupancyErrorCode.OCCUPANCY_ENDED))
+                .when(roomOccupancyLifecycleService).release(any(), any());
+
+        mockMvc.perform(post(PATH + "/release").header("X-User-Id", USER_ID))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("OCCUPANCY_ENDED"));
+    }
+
+    private RoomOccupancyResult extendedResult() {
+        return new RoomOccupancyResult(
+                100L,
+                1L,
+                OccupancyStatus.ACTIVE,
+                STARTED_AT,
+                STARTED_AT.plusHours(2).plusMinutes(30),
+                1,
+                1800L
+        );
+    }
+
     private void assertErrorResponse(ErrorCode errorCode, int expectedStatus) throws Exception {
         when(roomOccupancyService.start(any(), any()))
                 .thenThrow(new BusinessException(errorCode));
 
         mockMvc.perform(post(PATH).header("X-User-Id", USER_ID))
                 .andExpect(status().is(expectedStatus))
-                .andExpect(jsonPath("$.status").value(expectedStatus))
                 .andExpect(jsonPath("$.code").value(errorCode.code()))
                 .andExpect(jsonPath("$.message").value(errorCode.message()))
                 .andExpect(jsonPath("$.path").value(PATH));

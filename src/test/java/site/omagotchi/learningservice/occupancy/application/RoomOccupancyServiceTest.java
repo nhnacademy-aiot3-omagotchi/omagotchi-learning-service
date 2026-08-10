@@ -10,10 +10,11 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import site.omagotchi.learningservice.attendance.application.AttendancePresenceQueryService;
+import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
-import site.omagotchi.learningservice.occupancy.application.port.PresenceReader;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.port.SpaceReader;
 import site.omagotchi.learningservice.occupancy.application.result.RoomOccupancyResult;
@@ -58,7 +59,7 @@ class RoomOccupancyServiceTest {
     private SpaceReader spaceReader;
 
     @Mock
-    private PresenceReader presenceReader;
+    private AttendancePresenceQueryService attendancePresenceQueryService;
 
     @Mock
     private RoomOccupancyRepository occupancyRepository;
@@ -74,7 +75,7 @@ class RoomOccupancyServiceTest {
         clock = Clock.fixed(NOW, SEOUL);
         roomOccupancyService = new RoomOccupancyService(
                 spaceReader,
-                presenceReader,
+                attendancePresenceQueryService,
                 occupancyRepository,
                 participantRepository,
                 clock
@@ -173,7 +174,7 @@ class RoomOccupancyServiceTest {
     @DisplayName("재실이 아니면 점유할 수 없다.")
     void test7() {
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
-        given(presenceReader.findOpenPresence(USER_ID)).willReturn(Optional.empty());
+        given(attendancePresenceQueryService.findOpenPresence(USER_ID)).willReturn(Optional.empty());
 
         assertBusinessError(
                 OccupancyErrorCode.NOT_PRESENT,
@@ -244,7 +245,7 @@ class RoomOccupancyServiceTest {
     @DisplayName("재실 조회 자체가 실패하면 감싸지 않고 그대로 전파한다.")
     void test12() {
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
-        given(presenceReader.findOpenPresence(USER_ID))
+        given(attendancePresenceQueryService.findOpenPresence(USER_ID))
                 .willThrow(new IllegalStateException("출결 모듈 조회 실패"));
 
         assertThatThrownBy(() -> roomOccupancyService.start(SPACE_ID, USER_ID))
@@ -279,9 +280,9 @@ class RoomOccupancyServiceTest {
 
         roomOccupancyService.start(SPACE_ID, USER_ID);
 
-        InOrder order = inOrder(spaceReader, presenceReader);
+        InOrder order = inOrder(spaceReader, attendancePresenceQueryService);
         order.verify(spaceReader).find(SPACE_ID);
-        order.verify(presenceReader).findOpenPresence(USER_ID);
+        order.verify(attendancePresenceQueryService).findOpenPresence(USER_ID);
         order.verify(spaceReader).lock(SPACE_ID);
     }
 
@@ -311,8 +312,8 @@ class RoomOccupancyServiceTest {
     }
 
     private void givenPresent() {
-        given(presenceReader.findOpenPresence(USER_ID))
-                .willReturn(Optional.of(new PresenceReader.PresenceContext(MEMBERSHIP_ID)));
+        given(attendancePresenceQueryService.findOpenPresence(USER_ID))
+                .willReturn(Optional.of(new OpenPresenceView(MEMBERSHIP_ID, NOW)));
     }
 
     /** 락까지 통과하는 회의실. 활성 점유 선검사는 기본값(false)에 맡긴다. */

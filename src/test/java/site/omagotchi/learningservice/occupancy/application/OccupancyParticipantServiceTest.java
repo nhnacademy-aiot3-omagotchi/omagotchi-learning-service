@@ -12,10 +12,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
+import site.omagotchi.learningservice.attendance.application.AttendancePresenceQueryService;
+import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
-import site.omagotchi.learningservice.occupancy.application.port.PresenceReader;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.port.SpaceReader;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
@@ -68,7 +69,7 @@ class OccupancyParticipantServiceTest {
     private SpaceReader spaceReader;
 
     @Mock
-    private PresenceReader presenceReader;
+    private AttendancePresenceQueryService attendancePresenceQueryService;
 
     @Mock
     private CohortMembershipQueryService cohortMembershipQueryService;
@@ -87,7 +88,7 @@ class OccupancyParticipantServiceTest {
         clock = Clock.fixed(NOW, SEOUL);
         occupancyParticipantService = new OccupancyParticipantService(
                 spaceReader,
-                presenceReader,
+                attendancePresenceQueryService,
                 cohortMembershipQueryService,
                 occupancyRepository,
                 participantRepository,
@@ -191,7 +192,7 @@ class OccupancyParticipantServiceTest {
                 () -> occupancyParticipantService.add(SPACE_ID, TARGET_USER_ID, OCCUPIER_USER_ID)
         );
 
-        verify(presenceReader, never()).findOpenPresence(TARGET_USER_ID);
+        verify(attendancePresenceQueryService, never()).findOpenPresence(TARGET_USER_ID);
         verify(participantRepository, never()).save(any(OccupancyParticipant.class));
     }
 
@@ -212,7 +213,7 @@ class OccupancyParticipantServiceTest {
         givenActiveOccupancy();
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
-        given(presenceReader.findOpenPresence(TARGET_USER_ID)).willReturn(Optional.empty());
+        given(attendancePresenceQueryService.findOpenPresence(TARGET_USER_ID)).willReturn(Optional.empty());
 
         assertBusinessError(
                 OccupancyErrorCode.TARGET_NOT_PRESENT,
@@ -345,8 +346,8 @@ class OccupancyParticipantServiceTest {
 
         occupancyParticipantService.add(SPACE_ID, TARGET_USER_ID, OCCUPIER_USER_ID);
 
-        InOrder order = inOrder(presenceReader, occupancyRepository, participantRepository);
-        order.verify(presenceReader).findOpenPresence(TARGET_USER_ID);
+        InOrder order = inOrder(attendancePresenceQueryService, occupancyRepository, participantRepository);
+        order.verify(attendancePresenceQueryService).findOpenPresence(TARGET_USER_ID);
         order.verify(occupancyRepository).lockById(OCCUPANCY_ID);
         order.verify(participantRepository).countActiveByOccupancyId(OCCUPANCY_ID);
         order.verify(participantRepository).save(any(OccupancyParticipant.class));
@@ -521,8 +522,8 @@ class OccupancyParticipantServiceTest {
     }
 
     private void givenTargetPresent() {
-        given(presenceReader.findOpenPresence(TARGET_USER_ID)).willReturn(
-                Optional.of(new PresenceReader.PresenceContext(TARGET_MEMBERSHIP_ID)));
+        given(attendancePresenceQueryService.findOpenPresence(TARGET_USER_ID)).willReturn(
+                Optional.of(new OpenPresenceView(TARGET_MEMBERSHIP_ID, NOW)));
     }
 
     private void givenCohort(Long membershipId, Long cohortId) {

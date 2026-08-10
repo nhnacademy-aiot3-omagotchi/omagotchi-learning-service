@@ -31,17 +31,38 @@ class SpaceRepositoryQueryContractTest {
     @Test
     void activeOccupancyQueryExcludesEndedAndExpiredOccupancies()
             throws Exception {
-        Method method = SpringDataRoomOccupancyRepository.class.getMethod(
+        Method listQueryMethod =
+                SpringDataRoomOccupancyRepository.class.getMethod(
                 "findAllActiveBySpaceIds",
                 List.class,
                 OffsetDateTime.class
         );
-        String query = method.getAnnotation(Query.class).value();
+        Query listQuery = listQueryMethod.getAnnotation(Query.class);
 
-        assertThat(query)
+        assertThat(listQuery.nativeQuery()).isTrue();
+        assertThat(listQuery.value())
+                .contains("JOIN learning_service.cohort_memberships")
+                .contains("occupier_membership.id = ro.occupier_membership_id")
+                .contains("occupier_membership.cohort_id")
                 .contains("ro.status = 'ACTIVE'")
-                .contains("ro.endedAt IS NULL")
-                .contains("ro.expiresAt > :now");
+                .contains("ro.ended_at IS NULL")
+                .contains("ro.expires_at > :now");
+
+        Method existsQueryMethod =
+                SpringDataRoomOccupancyRepository.class.getMethod(
+                        "existsActiveBySpaceId",
+                        Long.class,
+                        OffsetDateTime.class
+                );
+        Query existsQuery = existsQueryMethod.getAnnotation(Query.class);
+
+        assertThat(existsQuery.nativeQuery()).isTrue();
+        assertThat(existsQuery.value())
+                .contains("SELECT EXISTS")
+                .contains("ro.space_id = :spaceId")
+                .contains("ro.status = 'ACTIVE'")
+                .contains("ro.ended_at IS NULL")
+                .contains("ro.expires_at > :now");
     }
 
     private void assertNormalizedActiveNameQuery(

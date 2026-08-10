@@ -4,11 +4,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.attendance.application.AttendancePresenceQueryService;
+import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
-import site.omagotchi.learningservice.occupancy.application.port.PresenceReader;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.port.SpaceReader;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
@@ -42,7 +43,7 @@ import java.util.UUID;
 public class OccupancyParticipantService {
 
     private final SpaceReader spaceReader;
-    private final PresenceReader presenceReader;
+    private final AttendancePresenceQueryService attendancePresenceQueryService;
     private final CohortMembershipQueryService cohortMembershipQueryService;
     private final RoomOccupancyRepository occupancyRepository;
     private final OccupancyParticipantRepository participantRepository;
@@ -84,7 +85,7 @@ public class OccupancyParticipantService {
 
         // 대상의 멤버십은 열린 재실 구간에서 온다 (MR-19). 점유 시작과 같은 규약이며,
         // 요청 본문에 기수나 멤버십을 받지 않는 이유도 같다.
-        PresenceReader.PresenceContext presence = presenceReader.findOpenPresence(targetUserId)
+        OpenPresenceView presence = attendancePresenceQueryService.findOpenPresence(targetUserId)
                 .orElseThrow(() -> new BusinessException(OccupancyErrorCode.TARGET_NOT_PRESENT));
 
         // MR-33. 재실 구간에서 온 "실제로 저장할 멤버십"의 기수를 비교한다.

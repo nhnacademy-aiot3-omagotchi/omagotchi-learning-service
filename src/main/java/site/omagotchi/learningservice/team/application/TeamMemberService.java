@@ -4,11 +4,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.team.application.dto.command.AddTeamMemberRequest;
+import site.omagotchi.learningservice.team.application.command.AddTeamMemberRequest;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
+import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.team.application.port.AccountReader;
-import site.omagotchi.learningservice.team.application.port.MembershipReader;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 
 import java.util.UUID;
@@ -34,7 +34,7 @@ public class TeamMemberService {
 
     private final TeamMemberRepository teamMemberRepository;
     private final TeamAccessSupport accessSupport;
-    private final MembershipReader  membershipReader;
+    private final CohortMembershipQueryService cohortMembershipQueryService;
     private final AccountReader accountReader;
 
 
@@ -60,8 +60,9 @@ public class TeamMemberService {
         // GR-22: 팀의 기수로 대상 멤버십을 역조회한다.
         // 조회 방향을 뒤집으면 "대상의 기수 == 팀의 기수" 검증이 조회 결과로 자동 충족된다.
         // team_members에 cohort_id가 없으므로 이 앱 검증이 유일한 방어선이다.
-        TeamMembership targetMembership = membershipReader
-                .findActive(cohortId, request.targetUserId())
+        TeamMembership targetMembership = cohortMembershipQueryService
+                .findActiveMembership(cohortId, request.targetUserId())
+                .map(view -> new TeamMembership(view.membershipId(), view.cohortId(), view.userId()))
                 .orElseThrow(() -> new BusinessException(TeamErrorCode.TARGET_NOT_IN_COHORT));
 
 

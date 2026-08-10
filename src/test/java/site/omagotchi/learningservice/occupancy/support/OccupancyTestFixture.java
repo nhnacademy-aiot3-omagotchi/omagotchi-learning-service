@@ -2,14 +2,28 @@ package site.omagotchi.learningservice.occupancy.support;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.test.context.TestComponent;
+import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
+import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
+import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
+import site.omagotchi.learningservice.attendance.domain.PresenceState;
+import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
+import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
+import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
+import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
+import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
+import site.omagotchi.learningservice.attendance.domain.PresenceState;
+import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
+import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
-import site.omagotchi.learningservice.space.application.port.out.SpaceRepository;
+import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceType;
 
+import java.time.Instant;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -35,6 +49,8 @@ public class OccupancyTestFixture {
     private final CohortRepository cohortRepository;
     private final CohortMembershipRepository membershipRepository;
     private final SpaceRepository spaceRepository;
+    private final AttendanceRecordRepository attendanceRecordRepository;
+    private final PresenceIntervalRepository presenceIntervalRepository;
 
     public Long createCohort(String name) {
         Cohort cohort = Cohort.create(
@@ -47,8 +63,57 @@ public class OccupancyTestFixture {
         return cohortRepository.save(cohort).getId();
     }
 
+    /**
+     * ACTIVE 멤버십을 만들고 <b>출근 처리까지 한다</b>.
+     *
+     * <p>점유·참여자 추가가 재실을 전제로 하므로(MR-22, MR-19), 멤버십만 만들면 전부
+     * 403 {@code NOT_PRESENT}로 막힌다. 출결 파트가 {@code checkIn}에서 하는 것과 같은
+     * 모양으로 열린 재실 구간({@code ended_at IS NULL})을 하나 만들어 둔다.</p>
+     */
     public Member createActiveMember(Long cohortId) {
         return createActiveMember(cohortId, UUID.randomUUID());
+    }
+
+    /** 재실 없이 멤버십만 만든다. "출석하지 않은 사용자"를 재현할 때 쓴다. */
+    public Member createAbsentMember(Long cohortId) {
+        CohortMembership membership = CohortMembership.activeManager(
+                cohortId, UUID.randomUUID(), UUID.randomUUID()
+        );
+        return new Member(membershipRepository.save(membership).getId(),
+                membership.getUserId());
+    }
+
+    /**
+     * 이 멤버십으로 출근시킨다 — 열린 재실 구간을 만든다.
+     *
+     * <p>{@code AttendanceService.checkIn}을 부르지 않는 이유는 그쪽이 기수 출결 정책
+     * ({@code cohort_attendance_policies})을 요구하기 때문이다. 점유 테스트에 필요한 것은
+     * "열린 구간이 있다"는 사실뿐이라 정책까지 세팅하지 않는다.</p>
+     */
+    public void checkIn(Long membershipId) {
+        AttendanceRecord record = AttendanceRecord.start(membershipId, LocalDate.now(SEOUL));
+        record.checkIn(Instant.now(), AttendanceStatus.PRESENT, 0);
+        Long attendanceId = attendanceRecordRepository.save(record).getId();
+
+        presenceIntervalRepository.save(PresenceInterval.start(
+                attendanceId, PresenceState.PRESENT, null, Instant.now()));
+    }
+
+    /**
+     * 퇴근시킨다 — 열린 재실 구간을 닫는다. "재실이 아닌 상태"를 만들 때 쓴다.
+     *
+     * <p>{@code end()} 뒤에 {@code save}가 필요하다. 이 픽스처는 {@code @Transactional}이
+     * 아니라 조회한 엔티티가 곧바로 준영속이 되고, 그러면 변경 감지가 동작하지 않는다.</p>
+     */
+    public void checkOut(Long membershipId) {
+        attendanceRecordRepository
+                .findByCohortMembershipIdAndAttendanceDate(membershipId, LocalDate.now(SEOUL))
+                .flatMap(record -> presenceIntervalRepository
+                        .findFirstByAttendanceIdAndEndedAtIsNullOrderByStartedAtDesc(record.getId()))
+                .ifPresent(interval -> {
+                    interval.end(Instant.now());
+                    presenceIntervalRepository.save(interval);
+                });
     }
 
     /**
@@ -61,7 +126,9 @@ public class OccupancyTestFixture {
         CohortMembership membership = CohortMembership.activeManager(
                 cohortId, userId, UUID.randomUUID()
         );
-        return new Member(membershipRepository.save(membership).getId(), userId);
+        Long membershipId = membershipRepository.save(membership).getId();
+        checkIn(membershipId);
+        return new Member(membershipId, userId);
     }
 
     /**
@@ -70,16 +137,16 @@ public class OccupancyTestFixture {
      * <p>{@code Space.create}는 비활성으로 만들므로 반드시 {@code activate}를 거친다 —
      * 비활성 공간은 점유가 400으로 거부된다(RM-13).</p>
      */
-    public Long createMeetingRoom(String name, int capacity) {
+    public Long createMeetingRoom(Long cohortId, String name, int capacity) {
         ZonedDateTime now = ZonedDateTime.now(SEOUL);
-        Space space = Space.create(name, SpaceType.MEETING, capacity, now).activate(now);
+        Space space = Space.create(name, SpaceType.MEETING, capacity, cohortId, now).activate(now);
         return spaceRepository.save(space).getId();
     }
 
     /** 회의실이 아닌 공간. 유형 검증(MR-20)에 쓴다. */
-    public Long createLab(String name, int capacity) {
+    public Long createLab(Long cohortId, String name, int capacity) {
         ZonedDateTime now = ZonedDateTime.now(SEOUL);
-        Space space = Space.create(name, SpaceType.LAB, capacity, now).activate(now);
+        Space space = Space.create(name, SpaceType.LAB, capacity, cohortId, now).activate(now);
         return spaceRepository.save(space).getId();
     }
 

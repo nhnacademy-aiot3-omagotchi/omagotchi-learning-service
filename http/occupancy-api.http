@@ -280,3 +280,85 @@ X-User-Id: {{otherOccupier}}
 
 ### 미포함: DIFFERENT_COHORT(MR-33)는 대상이 점유자와 다른 기수 소속이어야 재현되는데,
 ### 이 사전 준비는 단일 기수(id=1)만 만들므로 두 번째 기수·멤버십 세트를 별도로 넣어야 한다.
+
+
+### =========================================================
+### 연장·반납 (MR-06, MR-14)
+### =========================================================
+### 상태 전이라 경로 마지막이 동사형이다 (09-rest-api-convention).
+### 반납이 DELETE가 아닌 이유는 점유 행이 통계 원천으로 보존되기 때문이다.
+
+### 23. 너무 이른 연장 (MR-06)
+### 기대: 409 Conflict / OCCUPANCY_EXTENSION_TOO_EARLY
+### 방금 점유했다면 만료까지 2시간 남아 연장 창(30분 전) 밖이다.
+POST {{baseUrl}}/api/v1/spaces/1/occupancies/extend
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier}}
+
+
+### 24. 타인의 연장 시도 (MR-06)
+### 기대: 403 Forbidden / OCCUPANCY_NOT_OCCUPIER
+POST {{baseUrl}}/api/v1/spaces/1/occupancies/extend
+Authorization: Bearer {{token}}
+X-User-Id: {{absentUser}}
+
+
+### 25. 연장 성공 (MR-06, MR-12)
+### 기대: 200 OK. expiresAt이 +30분, extensionCount가 1, reminderSentAt은 NULL로 리셋
+###
+### 연장 창 안으로 들여보내려면 만료 시각을 당겨야 한다:
+###   UPDATE learning_service.room_occupancies
+###      SET expires_at = now() + interval '20 minutes'
+###    WHERE space_id = 1 AND status = 'ACTIVE';
+###
+### 가산 기준이 now()가 아니라 expires_at이므로, 언제 눌러도 결과는 expires_at + 30분이다.
+POST {{baseUrl}}/api/v1/spaces/1/occupancies/extend
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier}}
+
+
+### 26. 연장 횟수 초과 (MR-06)
+### 기대: 409 Conflict / OCCUPANCY_EXTENSION_LIMIT_EXCEEDED
+### 25번을 두 번 수행한 뒤(그 사이 expires_at을 다시 당겨야 한다) 세 번째로 호출한다.
+### ck_room_occupancies_extension_count가 최종 방어선이라 앱을 뚫어도 DB에서 막힌다.
+POST {{baseUrl}}/api/v1/spaces/1/occupancies/extend
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier}}
+
+
+### 27. 타인의 반납 시도 (MR-14)
+### 기대: 403 Forbidden / OCCUPANCY_NOT_OCCUPIER
+POST {{baseUrl}}/api/v1/spaces/1/occupancies/release
+Authorization: Bearer {{token}}
+X-User-Id: {{absentUser}}
+
+
+### 28. 반납 성공 (MR-14, MR-32)
+### 기대: 204 No Content
+###
+### 확인할 것:
+###   SELECT status, ended_at FROM learning_service.room_occupancies WHERE space_id = 1;
+###     → RELEASED, ended_at 기록됨
+###   SELECT user_id, left_at FROM learning_service.occupancy_participants p
+###     JOIN learning_service.room_occupancies o ON o.id = p.occupancy_id WHERE o.space_id = 1;
+###     → 행이 삭제되지 않고 left_at만 채워진다. 점유자 본인 행도 함께 닫힌다
+POST {{baseUrl}}/api/v1/spaces/1/occupancies/release
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier}}
+
+
+### 29. 이미 반납한 점유를 다시 반납 (MR-14)
+### 기대: 409 Conflict / OCCUPANCY_ENDED
+POST {{baseUrl}}/api/v1/spaces/1/occupancies/release
+Authorization: Bearer {{token}}
+X-User-Id: {{occupier}}
+
+
+### 30. 반납 후 재점유
+### 기대: 201 Created. 부분 유니크가 status='ACTIVE'에만 걸리므로 종료 행은 막지 않는다
+POST {{baseUrl}}/api/v1/spaces/1/occupancies
+Authorization: Bearer {{token}}
+X-User-Id: {{otherOccupier}}
+
+### 참고: 28번의 RoomVacatedEvent는 발행되지만 아직 받는 리스너가 없다.
+### 공실 알림 발송은 알림 파트 소관이라 로그(SpringOccupancyEventPublisher)로만 확인된다.

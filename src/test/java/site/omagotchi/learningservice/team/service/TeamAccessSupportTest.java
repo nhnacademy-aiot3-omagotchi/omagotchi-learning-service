@@ -6,7 +6,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import site.omagotchi.learningservice.team.application.port.MembershipReader;
+import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.team.application.TeamAccessSupport;
 import site.omagotchi.learningservice.team.application.TeamMembership;
 import site.omagotchi.learningservice.team.domain.Team;
@@ -33,7 +34,7 @@ class TeamAccessSupportTest {
     TeamMemberRepository teamMemberRepository;
 
     @Mock
-    MembershipReader membershipReader;
+    CohortMembershipQueryService cohortMembershipQueryService;
 
     @InjectMocks
     TeamAccessSupport teamAccessSupport;
@@ -43,8 +44,8 @@ class TeamAccessSupportTest {
     @Test
     @DisplayName("활성 기수가 하나면 지정하지 않아도 그 기수로 결정")
     void test1() {
-        given(membershipReader.findActiveAll(userId))
-                .willReturn(List.of(new TeamMembership(10L, 1L, userId)));
+        given(cohortMembershipQueryService.findActiveMemberships(userId))
+                .willReturn(List.of(new CohortMembershipView(10L, 1L, userId)));
 
         assertThat(teamAccessSupport.resolveMembershipForCreate(null, userId).cohortId())
                 .isEqualTo(1L);
@@ -53,9 +54,9 @@ class TeamAccessSupportTest {
     @Test
     @DisplayName("활성 기수가 둘 이상이면 대상 기수 지정을 요구")
     void test2() {
-        given(membershipReader.findActiveAll(userId)).willReturn(List.of(
-                new TeamMembership(10L, 1L, userId),
-                new TeamMembership(11L, 2L, userId)
+        given(cohortMembershipQueryService.findActiveMemberships(userId)).willReturn(List.of(
+                new CohortMembershipView(10L, 1L, userId),
+                new CohortMembershipView(11L, 2L, userId)
         ));
 
         assertThatThrownBy(() -> teamAccessSupport.resolveMembershipForCreate(null, userId))
@@ -65,7 +66,7 @@ class TeamAccessSupportTest {
     @Test
     @DisplayName("담당하지 않는 기수를 지정할 경우 거부")
     void test3() {
-        given(membershipReader.findActive(99L, userId)).willReturn(Optional.empty());
+        given(cohortMembershipQueryService.findActiveMembership(99L, userId)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> teamAccessSupport.resolveMembershipForCreate(99L, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.COHORT_ACCESS_DENIED);
@@ -74,16 +75,18 @@ class TeamAccessSupportTest {
     @Test
     @DisplayName("활성 멤버십이 있으면 그대로 반환한다.")
     void test4() {
-        TeamMembership membership = new TeamMembership(10L, 1L, userId);
-        given(membershipReader.findActive(1L, userId)).willReturn(Optional.of(membership));
+        given(cohortMembershipQueryService.findActiveMembership(1L, userId))
+                .willReturn(Optional.of(new CohortMembershipView(10L, 1L, userId)));
 
-        assertThat(teamAccessSupport.requireActiveMembership(1L, userId)).isEqualTo(membership);
+        // 기수 파트의 View가 팀의 TeamMembership으로 변환돼 나오는지까지 고정한다.
+        assertThat(teamAccessSupport.requireActiveMembership(1L, userId))
+                .isEqualTo(new TeamMembership(10L, 1L, userId));
     }
 
     @Test
     @DisplayName("활성 멤버십이 없으면 거부한다.")
     void test5() {
-        given(membershipReader.findActive(1L, userId)).willReturn(Optional.empty());
+        given(cohortMembershipQueryService.findActiveMembership(1L, userId)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> teamAccessSupport.requireActiveMembership(1L, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.COHORT_ACCESS_DENIED);

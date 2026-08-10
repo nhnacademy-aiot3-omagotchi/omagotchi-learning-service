@@ -4,7 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import site.omagotchi.learningservice.team.domain.TeamMember;
+import site.omagotchi.learningservice.team.domain.TeamMemberRole;
 
 import java.util.Collection;
 import java.util.List;
@@ -71,5 +73,35 @@ public class TeamMemberJpaPersistence implements TeamMemberRepository {
     @Override
     public List<TeamMember> findByTeamIdOrderByJoinedAtAsc(Long teamId) {
         return teamMemberJpaRepository.findByTeamIdOrderByJoinedAtAsc(teamId);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>트랜잭션 밖에서 부르면 락이 즉시 해제되어 아무것도 보장하지 못하므로 조용히
+     * 통과시키지 않고 명시적으로 막는다 ({@code RoomOccupancyJpaPersistence#lockById}와 같은 방어).</p>
+     */
+    @Override
+    public List<TeamMember> lockAllByTeamId(Long teamId) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException(
+                    "팀원 행 락은 트랜잭션 안에서만 획득할 수 있습니다. teamId=" + teamId);
+        }
+        return teamMemberJpaRepository.findAllByTeamIdForUpdate(teamId);
+    }
+
+    @Override
+    public List<TeamMember> findSuccessorCandidates(Long teamId, Long excludedMemberId) {
+        return teamMemberJpaRepository.findSuccessorCandidates(teamId, excludedMemberId);
+    }
+
+    @Override
+    public void deleteByTeamId(Long teamId) {
+        teamMemberJpaRepository.deleteByTeamId(teamId);
+    }
+
+    @Override
+    public long countByTeamIdAndRole(Long teamId, TeamMemberRole role) {
+        return teamMemberJpaRepository.countByTeamIdAndRole(teamId, role);
     }
 }

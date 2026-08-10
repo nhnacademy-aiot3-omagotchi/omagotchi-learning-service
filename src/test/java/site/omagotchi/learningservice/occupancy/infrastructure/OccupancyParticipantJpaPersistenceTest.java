@@ -128,6 +128,18 @@ class OccupancyParticipantJpaPersistenceTest {
                 .contains(left);
     }
 
+    /** 반납·강제 종료·만료가 공유하는 마무리다 (MR-32). 삭제가 아니라 시각 기록이어야 한다. */
+    @Test
+    @DisplayName("참여자 일괄 마감을 종료 시각과 함께 위임한다.")
+    void test7() {
+        given(participantJpaRepository.closeAllActiveByOccupancyId(OCCUPANCY_ID, NOW))
+                .willReturn(3);
+
+        assertThat(occupancyParticipantJpaPersistence
+                .closeAllActiveByOccupancyId(OCCUPANCY_ID, NOW))
+                .isEqualTo(3);
+    }
+
     private OccupancyParticipant participant() {
         return OccupancyParticipant.join(OCCUPANCY_ID, 10L, USER_ID, NOW);
     }

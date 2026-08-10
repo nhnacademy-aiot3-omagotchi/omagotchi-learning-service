@@ -2,16 +2,12 @@ package site.omagotchi.learningservice.team.support;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.test.context.TestComponent;
-import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
@@ -65,28 +61,6 @@ public class TeamTestFixture {
         CohortMembership membership = CohortMembership.activeManager(
                 cohortId, userId, UUID.randomUUID()
         );
-        Long membershipId = membershipRepository.save(membership).getId();
-        return new Member(membershipId, userId);
-    }
-
-    /**
-     * 역할이 실제로 필요한 테스트용. 승인 메서드가 없어 리플렉션으로 상태를 올린다.
-     * TODO: cohort 파트에 approve() 가 생기면 교체한다.
-     */
-    public Member createActiveMember(Long cohortId, CohortMembershipRole role) {
-        UUID userId = UUID.randomUUID();
-        CohortMembership membership = CohortMembership.pending(cohortId, userId, role);
-        ReflectionTestUtils.setField(membership, "status", CohortMembershipStatus.ACTIVE);
-        ReflectionTestUtils.setField(membership, "processedAt", OffsetDateTime.now());
-
-        Long membershipId = membershipRepository.save(membership).getId();
-        return new Member(membershipId, userId);
-    }
-
-    /** PENDING 멤버십. 승인 대기 중인 사람이 팀을 만들 수 없는지 검증할 때 쓴다. */
-    public Member createPendingMember(Long cohortId, CohortMembershipRole role) {
-        UUID userId = UUID.randomUUID();
-        CohortMembership membership = CohortMembership.pending(cohortId, userId, role);
         Long membershipId = membershipRepository.save(membership).getId();
         return new Member(membershipId, userId);
     }

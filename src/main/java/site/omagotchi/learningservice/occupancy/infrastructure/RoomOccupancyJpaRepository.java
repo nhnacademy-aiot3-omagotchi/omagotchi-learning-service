@@ -6,10 +6,13 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -51,6 +54,25 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from RoomOccupancy o where o.id = :id")
     Optional<RoomOccupancy> findByIdForUpdate(@Param("id") Long id);
+
+    /**
+     * 여러 공간의 활성 점유를 배치로 읽는다 (공간 목록의 사용 상태 계산용).
+     *
+     * <p>{@code expiresAt > now} 조건이 스케줄러 공백을 메운다 — 만료됐지만 아직
+     * ACTIVE인 행을 "사용 중"으로 보여주지 않는다.</p>
+     */
+    @Query("""
+                SELECT new site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView(
+                           o.spaceId, o.expiresAt)
+                  FROM RoomOccupancy o
+                 WHERE o.spaceId IN :spaceIds
+                   AND o.status = :active
+                   AND o.expiresAt > :now""")
+    List<SpaceOccupancyView> findActiveBySpaceIds(
+            @Param("spaceIds") Collection<Long> spaceIds,
+            @Param("now") OffsetDateTime now,
+            @Param("active") OccupancyStatus active
+    );
 
     /** 닫힌 Projection. 필드를 늘리면 select 컬럼이 함께 늘어난다. */
     interface ActiveOccupancyProjection {

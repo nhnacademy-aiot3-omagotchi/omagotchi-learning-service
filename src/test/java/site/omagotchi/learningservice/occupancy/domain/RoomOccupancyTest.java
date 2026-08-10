@@ -124,6 +124,157 @@ class RoomOccupancyTest {
                 .isInstanceOf(NullPointerException.class);
     }
 
+    // ────────────────────────────── 연장 (MR-06, MR-12) ──────────────────────────────
+
+    @Test
+    @DisplayName("연장 가능 시점은 만료 30분 전부터다.")
+    void test10() {
+        RoomOccupancy occupancy = start();
+
+        assertThat(occupancy.isWithinExtensionWindow(EXPIRES_AT.minusMinutes(31))).isFalse();
+        assertThat(occupancy.isWithinExtensionWindow(EXPIRES_AT.minusMinutes(30))).isTrue();
+        assertThat(occupancy.isWithinExtensionWindow(EXPIRES_AT.minusMinutes(29))).isTrue();
+    }
+
+    /**
+     * 가산 기준이 {@code now}가 아니라 {@code expiresAt}인 것을 고정한다. {@code now}
+     * 기준이면 늦게 누를수록 총 사용 시간이 짧아져 만료 직전까지 기다린 쪽이 손해를 본다.
+     */
+    @Test
+    @DisplayName("연장 결과는 언제 눌렀는지와 무관하게 만료 시각의 30분 뒤다.")
+    void test11() {
+        RoomOccupancy early = start();
+        RoomOccupancy late = start();
+
+        early.extend();
+        late.extend();
+
+        assertThat(early.getExpiresAt()).isEqualTo(EXPIRES_AT.plusMinutes(30));
+        assertThat(late.getExpiresAt()).isEqualTo(EXPIRES_AT.plusMinutes(30));
+    }
+
+    @Test
+    @DisplayName("연장하면 횟수가 하나 늘어난다.")
+    void test12() {
+        RoomOccupancy occupancy = start();
+
+        occupancy.extend();
+
+        assertThat(occupancy.getExtensionCount()).isEqualTo((short) 1);
+    }
+
+    /** 남겨두면 연장한 점유는 두 번 다시 임박 알림을 받지 못한다 (MR-12). */
+    @Test
+    @DisplayName("연장하면 임박 알림 발송 기록이 지워진다.")
+    void test13() {
+        RoomOccupancy occupancy = start();
+        ReflectionTestUtils.setField(occupancy, "reminderSentAt", EXPIRES_AT.minusMinutes(10));
+
+        occupancy.extend();
+
+        assertThat(occupancy.getReminderSentAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("연장은 두 번까지만 남아 있다.")
+    void test14() {
+        RoomOccupancy occupancy = start();
+
+        assertThat(occupancy.hasRemainingExtension()).isTrue();
+        occupancy.extend();
+        assertThat(occupancy.hasRemainingExtension()).isTrue();
+        occupancy.extend();
+        assertThat(occupancy.hasRemainingExtension()).isFalse();
+
+        assertThat(occupancy.getExtensionCount()).isEqualTo(RoomOccupancy.MAX_EXTENSION_COUNT);
+        assertThat(occupancy.getExpiresAt()).isEqualTo(EXPIRES_AT.plusHours(1));
+    }
+
+    /** 여기 값이 DB CHECK 제약과 어긋나면 3회째 연장이 앱은 통과하고 DB에서 터진다. */
+    @Test
+    @DisplayName("연장 상수는 30분 단위·최대 2회다.")
+    void test15() {
+        assertThat(RoomOccupancy.EXTENSION_UNIT).isEqualTo(Duration.ofMinutes(30));
+        assertThat(RoomOccupancy.EXTENSION_WINDOW).isEqualTo(Duration.ofMinutes(30));
+        assertThat(RoomOccupancy.MAX_EXTENSION_COUNT).isEqualTo((short) 2);
+    }
+
+    /**
+     * {@code extension_count}를 지켜주는 {@code ck_room_occupancies_extension_count}가
+     * 있긴 하지만, 그건 커밋 시점 최종 방어선이다. Application의 사전 검증을 우회해
+     * {@code extend()}를 세 번째 호출해도 여기서 막혀야 한다.
+     */
+    @Test
+    @DisplayName("연장 횟수를 다 쓰면 더 이상 연장할 수 없다.")
+    void test19() {
+        RoomOccupancy occupancy = start();
+        occupancy.extend();
+        occupancy.extend();
+
+        assertThatThrownBy(occupancy::extend)
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(occupancy.getExtensionCount()).isEqualTo(RoomOccupancy.MAX_EXTENSION_COUNT);
+        assertThat(occupancy.getExpiresAt()).isEqualTo(EXPIRES_AT.plusHours(1));
+    }
+
+    /**
+     * {@code expires_at}은 {@code extension_count}와 달리 지켜주는 DB CHECK가 없다.
+     * Application의 사전 검증이 뚫리면 종료된 점유의 만료 시각이 그대로 저장되므로,
+     * 이 방어는 도메인 메서드 자신에게만 있다.
+     */
+    @Test
+    @DisplayName("종료된 점유는 연장할 수 없다.")
+    void test20() {
+        RoomOccupancy occupancy = start();
+        occupancy.release(EXPIRES_AT.minusMinutes(10));
+
+        assertThatThrownBy(occupancy::extend)
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(occupancy.getExpiresAt()).isEqualTo(EXPIRES_AT);
+        assertThat(occupancy.getExtensionCount()).isZero();
+    }
+
+    // ────────────────────────────── 반납 (MR-14) ──────────────────────────────
+
+    /** ck_room_occupancies_end 때문에 status와 ended_at은 반드시 함께 바뀌어야 한다. */
+    @Test
+    @DisplayName("반납하면 상태와 종료 시각이 함께 기록된다.")
+    void test16() {
+        RoomOccupancy occupancy = start();
+
+        assertThat(occupancy.release(EXPIRES_AT.minusMinutes(10))).isTrue();
+
+        assertThat(occupancy.getStatus()).isEqualTo(OccupancyStatus.RELEASED);
+        assertThat(occupancy.getEndedAt()).isEqualTo(EXPIRES_AT.minusMinutes(10));
+        assertThat(occupancy.isActive()).isFalse();
+    }
+
+    /**
+     * 스케줄러가 EXPIRED로 바꾼 직후 도착한 반납이 종료 사유를 덮어쓰면 통계가 틀어진다.
+     * 종료 상태는 최종 상태이며 재전이가 없다.
+     */
+    @Test
+    @DisplayName("이미 종료된 점유는 반납해도 상태가 바뀌지 않는다.")
+    void test17() {
+        RoomOccupancy occupancy = start();
+        ReflectionTestUtils.setField(occupancy, "status", OccupancyStatus.EXPIRED);
+        ReflectionTestUtils.setField(occupancy, "endedAt", EXPIRES_AT);
+
+        assertThat(occupancy.release(EXPIRES_AT.plusMinutes(5))).isFalse();
+
+        assertThat(occupancy.getStatus()).isEqualTo(OccupancyStatus.EXPIRED);
+        assertThat(occupancy.getEndedAt()).isEqualTo(EXPIRES_AT);
+    }
+
+    @Test
+    @DisplayName("종료 시각 없이는 반납할 수 없다.")
+    void test18() {
+        assertThatThrownBy(() -> start().release(null))
+                .isInstanceOf(NullPointerException.class);
+    }
+
     private RoomOccupancy start() {
         return RoomOccupancy.start(1L, 10L, USER_ID, STARTED_AT, EXPIRES_AT);
     }

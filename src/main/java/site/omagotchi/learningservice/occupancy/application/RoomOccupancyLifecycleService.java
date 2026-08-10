@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.occupancy.application;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
@@ -121,9 +122,14 @@ public class RoomOccupancyLifecycleService {
      * 전달되지 않는다 (MR-03).</p>
      *
      * <p><b>이 Method에 트랜잭션이 없는 것이 의도다.</b> 명세서 03이 "한 건의 실패가 나머지를
-     * 막지 않도록 건별로 처리한다"고 정했고, 여기에 {@code @Transactional}을 붙이면
-     * {@link OccupancyExpiration}의 {@code REQUIRES_NEW}가 매 건 바깥 트랜잭션을 중단시켰다
-     * 재개하는 낭비가 된다. 조회는 단일 SELECT라 트랜잭션이 필요 없다.</p>
+     * 막지 않도록 건별로 처리한다"고 정했고, 트랜잭션이 있으면 {@link OccupancyExpiration}의
+     * {@code REQUIRES_NEW}가 매 건 바깥 트랜잭션을 중단시켰다 재개하는 낭비가 되고, 조회 한 번을
+     * 위해 커넥션을 후보 전체 처리가 끝날 때까지 붙들게 된다. 조회는 단일 SELECT라 트랜잭션이
+     * 필요 없다.</p>
+     *
+     * <p>{@code Propagation.NOT_SUPPORTED}를 명시하는 것이 핵심이다. 클래스 레벨
+     * {@code @Transactional(readOnly = true)}는 Method에 별도 선언이 없으면 그대로 상속되므로,
+     * 여기 명시하지 않으면 이 문서가 말하는 "트랜잭션 없음"이 실제로는 성립하지 않는다.</p>
      *
      * <p>건별 실패를 여기서 잡아 다음 건으로 넘어간다. 실패한 건은 상태가 그대로 ACTIVE라
      * 다음 주기가 다시 집어 간다 — 전이가 조건부({@code status='ACTIVE' AND expires_at <= now})라
@@ -135,6 +141,7 @@ public class RoomOccupancyLifecycleService {
      *
      * @return 이번 실행으로 실제 종료된 점유 수. 조회된 후보 수보다 적을 수 있다
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int expireAll() {
         OffsetDateTime now = OffsetDateTime.now(clock);
         List<RoomOccupancyRepository.ExpiredOccupancy> candidates = occupancyRepository.findStale(now);

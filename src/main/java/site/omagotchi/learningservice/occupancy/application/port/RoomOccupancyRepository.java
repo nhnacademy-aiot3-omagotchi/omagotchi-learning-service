@@ -163,16 +163,41 @@ public interface RoomOccupancyRepository {
 
 
     /**
-     * 만료된 ACTIVE 행을 공간·계정 구분 없이 전부 정리한다 (스케줄러 #9).
+     * 만료됐지만 아직 ACTIVE인 행을 공간·계정 구분 없이 찾는다 (스케줄러 #9).
      *
      * <p>{@link #expireStaleBySpaceId}·{@link #expireStaleByUserId}가 <b>대체하지 못하는</b>
      * 경로다. 저 둘은 누군가 그 공간을 점유하려 하거나 그 계정이 새로 점유할 때만 돌아서,
      * 아무도 오지 않는 방은 만료돼도 계속 ACTIVE로 남는다 — 공간 목록에 "사용 중"으로
      * 뜨고 참여자도 열린 채다.</p>
      *
-     * <p>한 번에 도는 양은 스케줄러 주기 사이에 만료된 점유뿐이라 크지 않다.</p>
+     * <p><b>찾기만 하고 바꾸지 않는다.</b> 상태 전이는 {@link #expire}가 건별로 한다 —
+     * 명세서 03이 "한 건의 실패가 나머지를 막지 않도록 건별로 처리한다"고 정했고,
+     * 한 UPDATE로 묶으면 그 격리가 성립하지 않는다.</p>
      */
-    List<ExpiredOccupancy> expireStale(OffsetDateTime now);
+    List<ExpiredOccupancy> findStale(OffsetDateTime now);
+
+
+    /**
+     * 점유 한 건을 EXPIRED로 전이한다 (스케줄러 #9).
+     *
+     * <p>조건이 {@code status = 'ACTIVE' AND expires_at <= now}인 것이 핵심이다.
+     * 조회와 전이 사이에 벌어진 일을 이 조건이 걸러낸다.</p>
+     * <ul>
+     *   <li><b>연장</b>: {@code expires_at}이 미래로 밀려 조건에 맞지 않는다 — 사용 중인
+     *       회의가 스케줄러에 끊기지 않는다 (명세서 03 §5 "만료와 연장 경합")</li>
+     *   <li><b>반납·강제 종료</b>: {@code status}가 이미 ACTIVE가 아니라 종료 사유를
+     *       EXPIRED로 덮어쓰지 않는다</li>
+     *   <li><b>다른 인스턴스가 먼저 처리</b>: 같은 이유로 0행이 된다. 행 락으로 직렬화되므로
+     *       둘 중 하나만 {@code true}를 받아 <b>공실 알림이 중복 발행되지 않는다</b></li>
+     * </ul>
+     *
+     * <p>{@code endedAt}을 인자로 받지 않고 그 행의 {@code expires_at}을 쓰는 것이 요점이다 —
+     * 실제 종료 시각이 그것이고, {@code ck_room_occupancies_end}도 함께 만족한다.</p>
+     *
+     * @return 이번 호출로 전이됐으면 {@code true}. {@code false}면 위 사유 중 하나이며
+     *         <b>참여자 마감도 이벤트 발행도 하면 안 된다</b>
+     */
+    boolean expire(Long occupancyId, OffsetDateTime now);
 
 
     /**

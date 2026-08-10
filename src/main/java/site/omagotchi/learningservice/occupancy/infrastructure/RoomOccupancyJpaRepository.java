@@ -194,15 +194,27 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
             @Param("expired") OccupancyStatus expired
     );
 
-    /** 만료된 ACTIVE 행 전부 정리 (스케줄러 #9). 조건은 위 둘에서 필터만 뺀 것이다. */
+    /**
+     * 점유 한 건만 EXPIRED로 전이한다 (스케줄러 #9).
+     *
+     * <p>조건에 {@code expiresAt <= now}가 남아 있는 것이 핵심이다. 조회 시점에는 만료였어도
+     * 그 사이 점유자가 연장했으면 조건에 맞지 않아 0행이 되고, 사용 중인 회의가 스케줄러에
+     * 끊기지 않는다. {@code status} 조건은 반납·강제 종료가 이미 찍은 종료 사유를
+     * EXPIRED로 덮어쓰지 않게 한다.</p>
+     *
+     * <p>영향 행 수를 그대로 돌려주는 것이 계약이다 — 호출부가 이 값으로 참여자 마감과
+     * 이벤트 발행 여부를 정한다.</p>
+     */
     @Modifying
     @Query("""
                 UPDATE RoomOccupancy o
                 SET o.status = :expired, o.endedAt = o.expiresAt
-                WHERE o.status = :active
+                WHERE o.id = :id
+                AND o.status = :active
                 AND o.expiresAt <= :now
                 """)
-    int expireStale(
+    int expireById(
+            @Param("id") Long id,
             @Param("now") OffsetDateTime now,
             @Param("active") OccupancyStatus active,
             @Param("expired") OccupancyStatus expired

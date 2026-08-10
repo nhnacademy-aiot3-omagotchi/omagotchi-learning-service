@@ -123,14 +123,20 @@ public class RoomOccupancyJpaPersistence implements RoomOccupancyRepository {
     }
 
     @Override
-    public List<ExpiredOccupancy> expireStale(OffsetDateTime now) {
-        List<RoomOccupancyJpaRepository.StaleOccupancyProjection> stale =
-                occupancyJpaRepository.findStale(now, OccupancyStatus.ACTIVE);
-        if (stale.isEmpty()) {
-            return List.of();
-        }
-        occupancyJpaRepository.expireStale(now, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED);
-        return toExpired(stale);
+    public List<ExpiredOccupancy> findStale(OffsetDateTime now) {
+        return toExpired(occupancyJpaRepository.findStale(now, OccupancyStatus.ACTIVE));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>영향 행 수를 {@code boolean}으로 좁히는 것이 의도다. 조건부 UPDATE의 결과는
+     * "내가 전이시켰는가" 하나뿐이고, 이 Method가 단건이라 1 아니면 0이다.</p>
+     */
+    @Override
+    public boolean expire(Long occupancyId, OffsetDateTime now) {
+        return occupancyJpaRepository.expireById(
+                occupancyId, now, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED) > 0;
     }
 
     private static List<ExpiredOccupancy> toExpired(

@@ -41,6 +41,7 @@ public class RoomOccupancyLifecycleService {
     private final RoomOccupancyRepository occupancyRepository;
     private final OccupancyParticipantRepository participantRepository;
     private final OccupancyEventPublisher eventPublisher;
+    private final OccupancyExpiration occupancyExpiration;
     private final Clock clock;
 
     /**
@@ -119,40 +120,42 @@ public class RoomOccupancyLifecycleService {
      * 여기서 발행하지 않으면 "2시간 다 써서 비었다"는 가장 흔한 공실이 아무에게도
      * 전달되지 않는다 (MR-03).</p>
      *
-     * <p>한 트랜잭션으로 묶는 것이 의도다. 중간에 실패하면 전부 롤백되고 다음 주기가 같은
-     * 대상을 다시 처리한다 — 상태 전이가 조건부({@code status='ACTIVE'})라 재실행이 안전하고,
-     * 한 건 때문에 나머지가 영구히 방치되는 것보다 낫다.</p>
+     * <p><b>이 Method에 트랜잭션이 없는 것이 의도다.</b> 명세서 03이 "한 건의 실패가 나머지를
+     * 막지 않도록 건별로 처리한다"고 정했고, 여기에 {@code @Transactional}을 붙이면
+     * {@link OccupancyExpiration}의 {@code REQUIRES_NEW}가 매 건 바깥 트랜잭션을 중단시켰다
+     * 재개하는 낭비가 된다. 조회는 단일 SELECT라 트랜잭션이 필요 없다.</p>
      *
-     * <p><b>인스턴스가 여럿이면 같은 점유를 두 번 처리할 수 있다.</b> 상태 전이 자체는
-     * 조건부라 두 번째 UPDATE가 0행이지만, 이벤트는 조회 결과를 기준으로 발행하므로 중복
-     * 발행이 가능하다. 리스너가 {@code occupancyId}로 중복을 판별하고
-     * {@code uq_vacancy_alerts_waiting}이 소진된 신청을 다시 잡지 않아 실제 피해는 없다.
-     * 단일 인스턴스를 벗어나면 {@code FOR UPDATE SKIP LOCKED}를 검토한다.</p>
+     * <p>건별 실패를 여기서 잡아 다음 건으로 넘어간다. 실패한 건은 상태가 그대로 ACTIVE라
+     * 다음 주기가 다시 집어 간다 — 전이가 조건부({@code status='ACTIVE' AND expires_at <= now})라
+     * 재실행이 안전하다.</p>
      *
-     * @return 이번 실행으로 종료된 점유 수
+     * <p>조회 결과가 곧 종료 건수는 아니다. 조회와 전이 사이에 연장·반납이 일어나거나 다른
+     * 인스턴스가 먼저 처리하면 그 건은 건너뛴다 — 판정은 전부
+     * {@link RoomOccupancyRepository#expire}의 조건이 한다.</p>
+     *
+     * @return 이번 실행으로 실제 종료된 점유 수. 조회된 후보 수보다 적을 수 있다
      */
-    @Transactional
     public int expireAll() {
         OffsetDateTime now = OffsetDateTime.now(clock);
-        List<RoomOccupancyRepository.ExpiredOccupancy> expired = occupancyRepository.expireStale(now);
+        List<RoomOccupancyRepository.ExpiredOccupancy> candidates = occupancyRepository.findStale(now);
 
-        for (RoomOccupancyRepository.ExpiredOccupancy occupancy : expired) {
-            // 점유가 끝나면 그 안의 참여도 끝난다 (MR-32). 열어 두면
-            // uq_occupancy_participants_one_active가 계정 기준이라 그 사람들이 영구히
-            // 다른 회의에 참여할 수 없다.
-            participantRepository.closeAllActiveByOccupancyId(
-                    occupancy.occupancyId(), occupancy.endedAt());
-
-            // vacatedAt이 now가 아니라 종료 시각이다. 스케줄러 주기만큼 늦게 발견했을 뿐
-            // 실제로 비워진 것은 expires_at 시점이다.
-            eventPublisher.publishRoomVacated(new RoomVacatedEvent(
-                    occupancy.spaceId(), occupancy.occupancyId(), occupancy.endedAt()));
+        int expired = 0;
+        for (RoomOccupancyRepository.ExpiredOccupancy candidate : candidates) {
+            try {
+                if (occupancyExpiration.expire(candidate, now)) {
+                    expired++;
+                }
+            } catch (Exception exception) {
+                // 건별 격리. 여기서 다시 던지면 남은 점유가 이번 주기에 처리되지 않고,
+                // 그것이 명세서 03이 건별 트랜잭션을 요구한 이유다.
+                log.error("점유 만료 처리에 실패했습니다. occupancyId={}", candidate.occupancyId(), exception);
+            }
         }
 
-        if (!expired.isEmpty()) {
-            log.info("만료된 점유 {}건을 정리했습니다.", expired.size());
+        if (expired > 0) {
+            log.info("만료된 점유 {}건을 정리했습니다.", expired);
         }
-        return expired.size();
+        return expired;
     }
 
     // ────────────────────────────── 내부 헬퍼 ──────────────────────────────

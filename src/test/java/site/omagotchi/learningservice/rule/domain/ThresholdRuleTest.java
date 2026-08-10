@@ -156,7 +156,15 @@ class ThresholdRuleTest {
 
             boolean result = thresholdRule.changeCondition(updatedOperator, updatedThreshold, OTHER_REQUESTER_ID);
 
-            assertFalse(result);
+
+
+
+            assertAll(
+                    () -> assertFalse(result),
+                    () -> assertEquals(REQUESTER_ID, thresholdRule.getUpdatedByUserId()),
+                    () -> assertEquals(Operator.GT, thresholdRule.getOperator()),
+                    () -> assertEquals(THRESHOLD, thresholdRule.getThreshold())
+            );
         }
 
     }

@@ -215,7 +215,7 @@ class UserProfileServiceTest {
     }
 
     private GameCharacter gameCharacter() {
-        GameCharacter gameCharacter = GameCharacter.create("야간반");
+        GameCharacter gameCharacter = GameCharacter.create("NIGHT_CLASS", "야간반", "기본 캐릭터");
         ReflectionTestUtils.setField(gameCharacter, "id", 1L);
         return gameCharacter;
     }

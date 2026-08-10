@@ -53,7 +53,7 @@ class XpRewardServiceTest {
                 USER_ID,
                 7L,
                 XpSourceType.DAILY_QUEST,
-                "10",
+                10L,
                 100
         );
         ReflectionTestUtils.setField(savedTransaction, "id", 20L);
@@ -64,7 +64,7 @@ class XpRewardServiceTest {
                 advancementHistoryRepository,
                 characterGrowthService
         );
-        when(xpTransactionRepository.findBySourceTypeAndSourceId(XpSourceType.DAILY_QUEST, "10"))
+        when(xpTransactionRepository.findBySourceTypeAndSourceId(XpSourceType.DAILY_QUEST, 10L))
                 .thenReturn(Optional.empty());
         when(characterGrowthService.requireRepresentativeCharacter(USER_ID)).thenReturn(character);
         when(userCharacterRepository.findWithLockById(7L)).thenReturn(Optional.of(character));
@@ -74,7 +74,7 @@ class XpRewardServiceTest {
         ));
         when(xpTransactionRepository.save(any(XpTransaction.class))).thenReturn(savedTransaction);
 
-        var result = service.reward(USER_ID, 100, XpSourceType.DAILY_QUEST, "10");
+        var result = service.reward(USER_ID, 100, XpSourceType.DAILY_QUEST, 10L);
 
         assertAll(
                 () -> assertEquals(7L, result.userCharacterId()),
@@ -92,7 +92,7 @@ class XpRewardServiceTest {
                 USER_ID,
                 7L,
                 XpSourceType.DAILY_QUEST,
-                "10",
+                10L,
                 900
         );
         ReflectionTestUtils.setField(savedTransaction, "id", 20L);
@@ -103,7 +103,7 @@ class XpRewardServiceTest {
                 advancementHistoryRepository,
                 characterGrowthService
         );
-        when(xpTransactionRepository.findBySourceTypeAndSourceId(XpSourceType.DAILY_QUEST, "10"))
+        when(xpTransactionRepository.findBySourceTypeAndSourceId(XpSourceType.DAILY_QUEST, 10L))
                 .thenReturn(Optional.empty());
         when(characterGrowthService.requireRepresentativeCharacter(USER_ID)).thenReturn(character);
         when(userCharacterRepository.findWithLockById(7L)).thenReturn(Optional.of(character));
@@ -112,7 +112,7 @@ class XpRewardServiceTest {
         when(advancementHistoryRepository.existsByUserCharacterIdAndStage(7L, AdvancementStage.FIRST))
                 .thenReturn(false);
 
-        service.reward(USER_ID, 900, XpSourceType.DAILY_QUEST, "10");
+        service.reward(USER_ID, 900, XpSourceType.DAILY_QUEST, 10L);
 
         verify(advancementHistoryRepository).save(any());
         assertEquals(AdvancementStage.FIRST, character.getAdvancementStage());
@@ -127,7 +127,7 @@ class XpRewardServiceTest {
                 USER_ID,
                 7L,
                 XpSourceType.DAILY_QUEST,
-                "10",
+                10L,
                 100
         );
         ReflectionTestUtils.setField(existingTransaction, "id", 20L);
@@ -142,13 +142,13 @@ class XpRewardServiceTest {
                 advancementHistoryRepository,
                 characterGrowthService
         );
-        when(xpTransactionRepository.findBySourceTypeAndSourceId(XpSourceType.DAILY_QUEST, "10"))
+        when(xpTransactionRepository.findBySourceTypeAndSourceId(XpSourceType.DAILY_QUEST, 10L))
                 .thenReturn(Optional.empty(), Optional.of(existingTransaction));
         when(characterGrowthService.requireRepresentativeCharacter(USER_ID)).thenReturn(character);
         when(userCharacterRepository.findWithLockById(7L)).thenReturn(Optional.of(character));
         when(characterGrowthService.requireLevelPolicies()).thenReturn(policies);
 
-        var result = service.reward(USER_ID, 100, XpSourceType.DAILY_QUEST, "10");
+        var result = service.reward(USER_ID, 100, XpSourceType.DAILY_QUEST, 10L);
 
         assertAll(
                 () -> assertEquals(20L, result.transactionId()),

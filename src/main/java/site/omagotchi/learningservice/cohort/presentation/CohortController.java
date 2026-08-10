@@ -4,7 +4,11 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
+import site.omagotchi.learningservice.cohort.application.CohortAuditLogService;
+import site.omagotchi.learningservice.cohort.application.CohortAttendancePolicyService;
 import site.omagotchi.learningservice.cohort.application.CohortManagerService;
+import site.omagotchi.learningservice.cohort.application.result.CohortAuditLogResponse;
+import site.omagotchi.learningservice.cohort.application.result.CohortAttendancePolicyResponse;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipResponse;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
 import site.omagotchi.learningservice.cohort.application.result.CohortResponse;
@@ -18,6 +22,7 @@ import site.omagotchi.learningservice.cohort.presentation.dto.request.ChangeCoho
 import site.omagotchi.learningservice.cohort.presentation.dto.request.CreateCohortRequest;
 import site.omagotchi.learningservice.cohort.presentation.dto.request.CreateJoinRequest;
 import site.omagotchi.learningservice.cohort.presentation.dto.request.IssueJoinCodeRequest;
+import site.omagotchi.learningservice.cohort.presentation.dto.request.SaveAttendancePolicyRequest;
 import site.omagotchi.learningservice.cohort.presentation.dto.request.UpdateCohortRequest;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 
@@ -36,6 +41,8 @@ public class CohortController {
     private final JoinCodeService joinCodeService;
     private final CohortMembershipService membershipService;
     private final CohortManagerService managerService;
+    private final CohortAttendancePolicyService attendancePolicyService;
+    private final CohortAuditLogService auditLogService;
 
     @PostMapping
     public CohortResponse create(
@@ -178,5 +185,33 @@ public class CohortController {
                 user.userId(),
                 user.globalRole()
         );
+    }
+
+    @GetMapping("/{cohortId}/attendance-policy")
+    public CohortAttendancePolicyResponse getAttendancePolicy(
+            @PathVariable Long cohortId,
+            JwtAuthenticationToken authentication
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        return attendancePolicyService.getPolicy(cohortId, user.userId());
+    }
+
+    @PutMapping("/{cohortId}/attendance-policy")
+    public CohortAttendancePolicyResponse saveAttendancePolicy(
+            @PathVariable Long cohortId,
+            JwtAuthenticationToken authentication,
+            @Valid @RequestBody SaveAttendancePolicyRequest request
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        return attendancePolicyService.savePolicy(cohortId, request.toCommand(), user.userId());
+    }
+
+    @GetMapping("/{cohortId}/audit-logs")
+    public List<CohortAuditLogResponse> getAuditLogs(
+            @PathVariable Long cohortId,
+            JwtAuthenticationToken authentication
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        return auditLogService.getAuditLogs(cohortId, user.userId());
     }
 }

@@ -144,7 +144,7 @@ class DailyQuestServiceTest {
 
         dailyQuestService.claim(USER_ID, 10L);
 
-        verify(xpRewardService).reward(USER_ID, 20, XpSourceType.DAILY_QUEST, "10");
+        verify(xpRewardService).reward(USER_ID, 20, XpSourceType.DAILY_QUEST, 10L);
         assertEquals(QuestStatus.CLAIMED, quest.getStatus());
     }
 

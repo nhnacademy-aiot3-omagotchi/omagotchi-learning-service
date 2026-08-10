@@ -11,7 +11,7 @@ import java.util.Optional;
  */
 public interface XpTransactionRepository extends JpaRepository<XpTransaction, Long> {
 
-    boolean existsBySourceTypeAndSourceId(XpSourceType sourceType, String sourceId);
+    boolean existsBySourceTypeAndSourceId(XpSourceType sourceType, Long sourceId);
 
-    Optional<XpTransaction> findBySourceTypeAndSourceId(XpSourceType sourceType, String sourceId);
+    Optional<XpTransaction> findBySourceTypeAndSourceId(XpSourceType sourceType, Long sourceId);
 }

@@ -17,6 +17,7 @@ import java.util.UUID;
 public class CohortAuditLogService {
 
     private final CohortAuditLogRepository auditLogRepository;
+    private final CohortAccessService accessService;
 
     /**
      * cohort 도메인에서 발생한 주요 변경 이벤트를 감사 로그로 저장한다.
@@ -52,7 +53,9 @@ public class CohortAuditLogService {
      * 특정 기수에서 발생한 감사 로그를 최신순으로 조회한다.
      * 관리자 화면의 변경 이력 조회에 사용한다.
      */
-    public List<CohortAuditLogResponse> getAuditLogs(Long cohortId) {
+    public List<CohortAuditLogResponse> getAuditLogs(Long cohortId, UUID actorUserId) {
+        accessService.requireManager(cohortId, actorUserId);
+
         return auditLogRepository.findByCohortIdOrderByOccurredAtDesc(cohortId).stream()
                 .map(CohortAuditLogResponse::from)
                 .toList();

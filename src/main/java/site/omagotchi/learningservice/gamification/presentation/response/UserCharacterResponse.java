@@ -6,6 +6,7 @@ import site.omagotchi.learningservice.gamification.domain.AdvancementStage;
 public record UserCharacterResponse(
         Long userCharacterId,
         Long gameCharacterId,
+        String gameCharacterCode,
         String gameCharacterName,
         String nickname,
         String displayName,
@@ -19,6 +20,7 @@ public record UserCharacterResponse(
         return new UserCharacterResponse(
                 result.userCharacterId(),
                 result.gameCharacterId(),
+                result.gameCharacterCode(),
                 result.gameCharacterName(),
                 result.nickname(),
                 result.displayName(),

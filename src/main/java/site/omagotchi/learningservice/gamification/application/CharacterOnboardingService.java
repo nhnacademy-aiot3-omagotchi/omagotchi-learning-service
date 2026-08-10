@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.gamification.application.command.CreateUserCharacterCommand;
+import site.omagotchi.learningservice.gamification.application.result.GameCharacterResult;
 import site.omagotchi.learningservice.gamification.application.result.UserCharacterResult;
 import site.omagotchi.learningservice.gamification.domain.CharacterNicknameValidator;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
@@ -13,6 +14,7 @@ import site.omagotchi.learningservice.gamification.infrastructure.GameCharacterR
 import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -22,6 +24,12 @@ public class CharacterOnboardingService {
 
     private final GameCharacterRepository gameCharacterRepository;
     private final UserCharacterRepository userCharacterRepository;
+
+    public List<GameCharacterResult> getAvailableCharacters() {
+        return gameCharacterRepository.findByActiveTrueOrderByIdAsc().stream()
+                .map(GameCharacterResult::from)
+                .toList();
+    }
 
     @Transactional
     public UserCharacterResult createRepresentativeCharacter(UUID userId, CreateUserCharacterCommand command) {

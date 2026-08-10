@@ -9,6 +9,7 @@ import site.omagotchi.learningservice.global.exception.ErrorCode;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
 
 import java.sql.SQLException;
+import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -78,6 +79,25 @@ class TeamConstraintTranslatorTest {
         DataIntegrityViolationException original = violation("uq_teams_active_name");
 
         assertThat(TeamConstraintTranslator.translate(original)).hasCause(original);
+    }
+
+    /**
+     * 터키어 로케일에서는 {@code String#toLowerCase()}가 "I"를 "i"가 아니라 "ı"로 바꾼다.
+     * {@code Locale.ROOT}를 쓰지 않으면 {@code UQ_TEAMS_ACTIVE_NAME}이
+     * {@code uq_teams_actıve_name}이 되어 매칭이 깨지고, 알 수 없는 제약으로 빠져 원본
+     * 예외가 500으로 나간다. JVM 기본 로케일을 바꾸는 테스트라 다른 테스트에 새지 않게
+     * 반드시 원래 값으로 되돌린다.
+     */
+    @Test
+    @DisplayName("JVM 기본 로케일이 터키어여도 인덱스명을 정확히 인식한다.")
+    void test8() {
+        Locale original = Locale.getDefault();
+        Locale.setDefault(Locale.of("tr", "TR"));
+        try {
+            assertTranslatedTo(TeamErrorCode.DUPLICATE_NAME, "UQ_TEAMS_ACTIVE_NAME");
+        } finally {
+            Locale.setDefault(original);
+        }
     }
 
     private void assertTranslatedTo(ErrorCode expectedErrorCode, String constraintName) {

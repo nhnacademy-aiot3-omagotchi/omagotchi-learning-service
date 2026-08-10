@@ -7,6 +7,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
 
+import java.util.Locale;
+
 /**
  * 유니크 위반을 기능 오류 코드로 변환한다.
  *
@@ -51,7 +53,7 @@ public final class TeamConstraintTranslator {
             return exception;
         }
 
-        String normalized = name.toLowerCase();
+        String normalized = name.toLowerCase(Locale.ROOT);
         if (normalized.contains(UQ_TEAMS_ACTIVE_NAME)) {
             return new BusinessException(TeamErrorCode.DUPLICATE_NAME, exception);
         }

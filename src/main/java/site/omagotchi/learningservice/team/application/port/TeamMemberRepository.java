@@ -68,6 +68,18 @@ public interface TeamMemberRepository {
     Optional<TeamMember> findByTeamIdAndCohortMembershipId(Long teamId, Long cohortMembershipId);
 
     /**
+     * 이 멤버십이 이 팀의 MASTER인가. 값(boolean)으로만 확인한다.
+     *
+     * <p>같은 트랜잭션에서 {@link #findByTeamIdAndCohortMembershipId}로 이미 이 멤버십의
+     * {@code TeamMember}를 엔티티로 읽었다면, 그 인스턴스가 영속성 컨텍스트에 캐시되어
+     * 같은 조회를 다시 해도 그대로 반환된다 — 그 사이 다른 트랜잭션이 커밋한 위임(role
+     * 변경)을 보지 못한다. {@code teams} 행 락을 잡은 뒤 MASTER 권한을 재확인할 때는
+     * 반드시 이 메서드를 쓴다({@code TeamAccessSupport.requireStillMaster} 참고).</p>
+     */
+    boolean existsByTeamIdAndCohortMembershipIdAndRole(
+            Long teamId, Long cohortMembershipId, TeamMemberRole role);
+
+    /**
      * 팀 현재 인원 (GR-17).
      *
      * <p>반드시 {@code teams} 행 락을 잡은 트랜잭션 안에서 호출해야 한다.

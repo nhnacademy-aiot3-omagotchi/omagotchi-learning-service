@@ -72,6 +72,16 @@ public class TeamMemberService {
         // 정원은 "최대 8행"이라 유니크 인덱스로 표현할 수 없다 — 락이 유일한 방어선이고,
         // 락 밖에서 세면 7명 팀에 둘이 동시에 들어와 9명이 된다.
         Team lockedTeam = accessSupport.lockActiveTeam(teamId);
+
+        // MASTER 재확인. 위 57행 확인은 락 밖 빠른 실패용일 뿐이다 — 그 사이 다른
+        // 트랜잭션이 위임(delegate)을 커밋하면 요청자는 이미 MEMBER인데, 락 이후
+        // 재확인이 없으면 무효화된 권한으로 팀원이 추가된다.
+        //
+        // requireMaster를 그대로 다시 부르면 안 된다 — 57행에서 이미 그 멤버십의
+        // TeamMember를 엔티티로 읽어 영속성 컨텍스트에 캐시해뒀으므로, 같은 조회를
+        // 반복하면 캐시된 인스턴스가 그대로 반환돼 그 사이 커밋된 위임을 보지 못한다.
+        accessSupport.requireStillMaster(teamId, requestMembership.id());
+
         if (teamMemberRepository.countByTeamId(lockedTeam.getId()) >= TeamMember.MAX_MEMBERS_PER_TEAM) {
             throw new BusinessException(TeamErrorCode.CAPACITY_EXCEEDED);
         }

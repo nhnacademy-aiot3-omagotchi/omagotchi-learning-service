@@ -104,7 +104,7 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
      * 들고 있게 된다.</p>
      */
     @Query("""
-                SELECT o.id AS occupancyId, o.expiresAt AS endedAt
+                SELECT o.id AS occupancyId, o.spaceId AS spaceId, o.expiresAt AS endedAt
                   FROM RoomOccupancy o
                  WHERE o.spaceId = :spaceId
                    AND o.status = :active
@@ -116,7 +116,7 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
     );
 
     @Query("""
-                SELECT o.id AS occupancyId, o.expiresAt AS endedAt
+                SELECT o.id AS occupancyId, o.spaceId AS spaceId, o.expiresAt AS endedAt
                   FROM RoomOccupancy o
                  WHERE o.occupierUserId = :userId
                    AND o.status = :active
@@ -127,9 +127,28 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
             @Param("active") OccupancyStatus active
     );
 
+    /**
+     * 만료된 ACTIVE 행 전부 (스케줄러 #9).
+     *
+     * <p>정렬을 두는 것은 정리 순서를 재현 가능하게 만들기 위해서다 — 실패해 재시도할 때
+     * 같은 순서로 처리된다.</p>
+     */
+    @Query("""
+                SELECT o.id AS occupancyId, o.spaceId AS spaceId, o.expiresAt AS endedAt
+                  FROM RoomOccupancy o
+                 WHERE o.status = :active
+                   AND o.expiresAt <= :now
+                 ORDER BY o.id ASC""")
+    List<StaleOccupancyProjection> findStale(
+            @Param("now") OffsetDateTime now,
+            @Param("active") OccupancyStatus active
+    );
+
     /** 닫힌 Projection. 필드를 늘리면 select 컬럼이 함께 늘어난다. */
     interface StaleOccupancyProjection {
         Long getOccupancyId();
+
+        Long getSpaceId();
 
         OffsetDateTime getEndedAt();
     }
@@ -172,6 +191,20 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
             @Param("userId") UUID userId,
             @Param("now") OffsetDateTime now,
             @Param("active") OccupancyStatus  active,
+            @Param("expired") OccupancyStatus expired
+    );
+
+    /** 만료된 ACTIVE 행 전부 정리 (스케줄러 #9). 조건은 위 둘에서 필터만 뺀 것이다. */
+    @Modifying
+    @Query("""
+                UPDATE RoomOccupancy o
+                SET o.status = :expired, o.endedAt = o.expiresAt
+                WHERE o.status = :active
+                AND o.expiresAt <= :now
+                """)
+    int expireStale(
+            @Param("now") OffsetDateTime now,
+            @Param("active") OccupancyStatus active,
             @Param("expired") OccupancyStatus expired
     );
 }

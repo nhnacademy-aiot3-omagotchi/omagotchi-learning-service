@@ -122,11 +122,24 @@ public class RoomOccupancyJpaPersistence implements RoomOccupancyRepository {
         return toExpired(stale);
     }
 
+    @Override
+    public List<ExpiredOccupancy> expireStale(OffsetDateTime now) {
+        List<RoomOccupancyJpaRepository.StaleOccupancyProjection> stale =
+                occupancyJpaRepository.findStale(now, OccupancyStatus.ACTIVE);
+        if (stale.isEmpty()) {
+            return List.of();
+        }
+        occupancyJpaRepository.expireStale(now, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED);
+        return toExpired(stale);
+    }
+
     private static List<ExpiredOccupancy> toExpired(
             List<RoomOccupancyJpaRepository.StaleOccupancyProjection> stale) {
         return stale.stream()
                 .map(projection -> new ExpiredOccupancy(
-                        projection.getOccupancyId(), projection.getEndedAt()))
+                        projection.getOccupancyId(),
+                        projection.getSpaceId(),
+                        projection.getEndedAt()))
                 .toList();
     }
 }

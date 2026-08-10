@@ -163,13 +163,27 @@ public interface RoomOccupancyRepository {
 
 
     /**
+     * 만료된 ACTIVE 행을 공간·계정 구분 없이 전부 정리한다 (스케줄러 #9).
+     *
+     * <p>{@link #expireStaleBySpaceId}·{@link #expireStaleByUserId}가 <b>대체하지 못하는</b>
+     * 경로다. 저 둘은 누군가 그 공간을 점유하려 하거나 그 계정이 새로 점유할 때만 돌아서,
+     * 아무도 오지 않는 방은 만료돼도 계속 ACTIVE로 남는다 — 공간 목록에 "사용 중"으로
+     * 뜨고 참여자도 열린 채다.</p>
+     *
+     * <p>한 번에 도는 양은 스케줄러 주기 사이에 만료된 점유뿐이라 크지 않다.</p>
+     */
+    List<ExpiredOccupancy> expireStale(OffsetDateTime now);
+
+
+    /**
      * 만료 정리로 종료된 점유.
      *
+     * @param spaceId 비워진 회의실. 공실 알림 발행에 필요하다 — 알림 대상은 공간 기준이다
      * @param endedAt 종료 시각. 정리를 수행한 시각이 아니라 그 점유의 {@code expires_at}이다.
-     *                참여자 {@code left_at}도 같은 값이어야 "회의가 끝난 시각"이 두 테이블에서
-     *                일치한다
+     *                참여자 {@code left_at}과 {@code RoomVacatedEvent.vacatedAt}도 같은 값이어야
+     *                "회의가 끝난 시각"이 테이블과 알림에서 일치한다
      */
-    record ExpiredOccupancy(Long occupancyId, OffsetDateTime endedAt) {
+    record ExpiredOccupancy(Long occupancyId, Long spaceId, OffsetDateTime endedAt) {
     }
 
 }

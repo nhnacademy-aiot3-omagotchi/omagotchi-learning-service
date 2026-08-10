@@ -2,3 +2,10 @@ eureka:
   client:
     # 테스트에서 실행 중인 Discovery Service에 연결하지 않음
     enabled: false
+
+omagotchi:
+  scheduling:
+    # 배경에서 도는 만료 정리가 테스트가 만든 점유를 EXPIRED로 바꿔 버리면
+    # 실패 원인이 테스트 코드와 무관한 곳에 생긴다. 정리 동작 자체는
+    # OccupancyExpiryIT가 서비스를 직접 호출해 검증한다
+    enabled: false

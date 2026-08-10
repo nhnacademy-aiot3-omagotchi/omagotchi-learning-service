@@ -14,6 +14,7 @@ import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -104,6 +105,54 @@ public class RoomOccupancyLifecycleService {
         // 발송 실패가 이 트랜잭션을 롤백시키지 않는다 (MR-18, ADR-0006).
         eventPublisher.publishRoomVacated(
                 new RoomVacatedEvent(spaceId, occupancy.getId(), now));
+    }
+
+    /**
+     * 만료된 점유를 일괄 종료한다 (스케줄러 #9).
+     *
+     * <p>점유 시작이 대행하는 {@code expireStale*}와 <b>목적이 다르다.</b> 저쪽은 요청 경로에서
+     * 불필요한 409를 줄이는 최선 노력이라 그 공간·그 계정만 훑지만, 여기는 아무도 찾지 않는
+     * 방까지 정리한다 — 만료된 채 방치되면 공간 목록에 계속 "사용 중"으로 뜨고 참여자도
+     * 열린 채 남는다.</p>
+     *
+     * <p><b>이 경로가 공실 알림의 정본 발행 지점이다.</b> 만료는 사용자 행위 없이 일어나므로
+     * 여기서 발행하지 않으면 "2시간 다 써서 비었다"는 가장 흔한 공실이 아무에게도
+     * 전달되지 않는다 (MR-03).</p>
+     *
+     * <p>한 트랜잭션으로 묶는 것이 의도다. 중간에 실패하면 전부 롤백되고 다음 주기가 같은
+     * 대상을 다시 처리한다 — 상태 전이가 조건부({@code status='ACTIVE'})라 재실행이 안전하고,
+     * 한 건 때문에 나머지가 영구히 방치되는 것보다 낫다.</p>
+     *
+     * <p><b>인스턴스가 여럿이면 같은 점유를 두 번 처리할 수 있다.</b> 상태 전이 자체는
+     * 조건부라 두 번째 UPDATE가 0행이지만, 이벤트는 조회 결과를 기준으로 발행하므로 중복
+     * 발행이 가능하다. 리스너가 {@code occupancyId}로 중복을 판별하고
+     * {@code uq_vacancy_alerts_waiting}이 소진된 신청을 다시 잡지 않아 실제 피해는 없다.
+     * 단일 인스턴스를 벗어나면 {@code FOR UPDATE SKIP LOCKED}를 검토한다.</p>
+     *
+     * @return 이번 실행으로 종료된 점유 수
+     */
+    @Transactional
+    public int expireAll() {
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        List<RoomOccupancyRepository.ExpiredOccupancy> expired = occupancyRepository.expireStale(now);
+
+        for (RoomOccupancyRepository.ExpiredOccupancy occupancy : expired) {
+            // 점유가 끝나면 그 안의 참여도 끝난다 (MR-32). 열어 두면
+            // uq_occupancy_participants_one_active가 계정 기준이라 그 사람들이 영구히
+            // 다른 회의에 참여할 수 없다.
+            participantRepository.closeAllActiveByOccupancyId(
+                    occupancy.occupancyId(), occupancy.endedAt());
+
+            // vacatedAt이 now가 아니라 종료 시각이다. 스케줄러 주기만큼 늦게 발견했을 뿐
+            // 실제로 비워진 것은 expires_at 시점이다.
+            eventPublisher.publishRoomVacated(new RoomVacatedEvent(
+                    occupancy.spaceId(), occupancy.occupancyId(), occupancy.endedAt()));
+        }
+
+        if (!expired.isEmpty()) {
+            log.info("만료된 점유 {}건을 정리했습니다.", expired.size());
+        }
+        return expired.size();
     }
 
     // ────────────────────────────── 내부 헬퍼 ──────────────────────────────

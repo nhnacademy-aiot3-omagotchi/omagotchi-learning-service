@@ -1,13 +1,18 @@
 package site.omagotchi.learningservice.occupancy.infrastructure;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,6 +32,56 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
     boolean existsByOccupierUserIdAndStatus(UUID occupierUserId, OccupancyStatus status);
 
     Optional<RoomOccupancy> findBySpaceIdAndStatus(Long spaceId, OccupancyStatus status);
+
+    /**
+     * 활성 점유의 식별 정보만 읽는다.
+     *
+     * <p>Interface Projection인 것이 요점이다. 닫힌 Projection은 나열한 컬럼만 select하고
+     * 엔티티를 영속성 컨텍스트에 올리지 않으므로, 뒤이은 {@link #findByIdForUpdate}가
+     * 1차 캐시가 아니라 실제 {@code FOR UPDATE} 결과를 돌려준다. 엔티티로 읽으면
+     * 락 후 상태 재확인이 락 이전 스냅샷을 보게 된다.</p>
+     */
+    Optional<ActiveOccupancyProjection> findSummaryBySpaceIdAndStatus(
+            Long spaceId, OccupancyStatus status);
+
+    /**
+     * 점유 행 배타 락.
+     *
+     * <p>{@code status} 조건을 쿼리에 넣지 않는 것이 의도다 — 락을 잡은 뒤 확인해야
+     * 종료 커밋 직후 도착한 요청을 409로 정확히 잡는다 ({@code TeamJpaRepository}의
+     * {@code findByIdForUpdate}와 같은 규약).</p>
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select o from RoomOccupancy o where o.id = :id")
+    Optional<RoomOccupancy> findByIdForUpdate(@Param("id") Long id);
+
+    /**
+     * 여러 공간의 활성 점유를 배치로 읽는다 (공간 목록의 사용 상태 계산용).
+     *
+     * <p>{@code expiresAt > now} 조건이 스케줄러 공백을 메운다 — 만료됐지만 아직
+     * ACTIVE인 행을 "사용 중"으로 보여주지 않는다.</p>
+     */
+    @Query("""
+                SELECT new site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView(
+                           o.spaceId, o.expiresAt)
+                  FROM RoomOccupancy o
+                 WHERE o.spaceId IN :spaceIds
+                   AND o.status = :active
+                   AND o.expiresAt > :now""")
+    List<SpaceOccupancyView> findActiveBySpaceIds(
+            @Param("spaceIds") Collection<Long> spaceIds,
+            @Param("now") OffsetDateTime now,
+            @Param("active") OccupancyStatus active
+    );
+
+    /** 닫힌 Projection. 필드를 늘리면 select 컬럼이 함께 늘어난다. */
+    interface ActiveOccupancyProjection {
+        Long getId();
+
+        Long getOccupierMembershipId();
+
+        UUID getOccupierUserId();
+    }
 
     /**
      * 만료된 ACTIVE 행 정리.

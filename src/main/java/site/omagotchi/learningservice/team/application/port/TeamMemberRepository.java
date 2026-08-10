@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.team.application.port;
 
 import site.omagotchi.learningservice.team.domain.TeamMember;
+import site.omagotchi.learningservice.team.domain.TeamMemberRole;
 
 import java.util.Collection;
 import java.util.List;
@@ -16,9 +17,9 @@ import java.util.Optional;
  * <p>주체 키가 {@code cohort_membership_id}인 것도 유의한다. 같은 사람이라도 기수가
  * 다르면 다른 값이므로, "이 계정이 팀에 있나"를 계정 id로 묻는 Method는 여기 없다.</p>
  *
- * <p>위임·해체·자동 위임(이슈 #8)에 필요한 조회는 아직 이 Port에 없다. 구현체 쪽
- * {@code TeamMemberJpaRepository}에 준비돼 있으니, 해당 서비스를 쓸 때 여기로 올린다 —
- * 쓰지 않는 Method를 미리 Port에 두지 않는다.</p>
+ * <p>아래쪽 네 Method(락·자동 위임 후보·일괄 삭제·역할 카운트)는 위임·해체(이슈 #8)가
+ * 쓴다. 앞쪽과 달리 <b>전부 트랜잭션 안에서만 의미가 있다</b> — 락 없이 부르거나 순서를
+ * 바꾸면 "MASTER 0명 또는 2명"이 커밋될 수 있다.</p>
  */
 public interface TeamMemberRepository {
 
@@ -82,4 +83,53 @@ public interface TeamMemberRepository {
      * 자동 위임 기준(GR-16: joined_at 최소)과 같은 축을 쓰기 위해서다.</p>
      */
     List<TeamMember> findByTeamIdOrderByJoinedAtAsc(Long teamId);
+
+
+    /**
+     * 팀원 행 전체를 배타 락으로 잡는다 (GR-20). 반드시 트랜잭션 안에서 호출한다.
+     *
+     * <p><b>id 오름차순으로 잠근다.</b> 정렬하지 않으면 두 위임 요청이 반대 순서로 행을
+     * 잠가 데드락이 난다 — 위임은 두 행(강등 대상·승격 대상)을 함께 만지므로 순서가
+     * 엇갈릴 여지가 있다.</p>
+     *
+     * <p>{@code teams} 행 락을 먼저 잡은 뒤에 호출해야 한다. 락 순서
+     * {@code teams} → {@code team_members}는 팀 도메인 전체가 공유하는 규칙이다.</p>
+     */
+    List<TeamMember> lockAllByTeamId(Long teamId);
+
+
+    /**
+     * 자동 위임 후보를 순서대로 조회한다 (GR-16).
+     *
+     * <p>정렬 기준은 {@code joined_at} 최소, 동률 시 {@code id} 최소다. 결정적이어야 하는
+     * 이유는 회원 삭제 훅이 재시도될 수 있기 때문이다 — {@code joined_at}만으로 정렬하면
+     * 같은 시각에 추가된 팀원 사이에서 순서가 매번 달라져, 두 번째 실행이 첫 번째와 다른
+     * 사람을 MASTER로 만든다.</p>
+     *
+     * <p>단건이 아니라 목록인 것은 "후보가 없음"(= 팀을 소프트 삭제해야 함)을 호출부가
+     * 빈 리스트로 구분하게 하려는 것이다.</p>
+     *
+     * @param excludedMemberId 떠나는 사람의 {@code team_members.id}. 아직 행이 남아 있을 수 있어 명시적으로 제외한다
+     */
+    List<TeamMember> findSuccessorCandidates(Long teamId, Long excludedMemberId);
+
+
+    /**
+     * 팀의 팀원 행을 전부 물리 삭제한다 (GR-19, 팀 해체).
+     *
+     * <p>소프트 삭제가 아닌 이유는 {@code uq_team_members_membership}이 상태 조건 없는
+     * 유니크이기 때문이다 — 행을 남기면 그 사람들이 어떤 팀에도 다시 들어갈 수 없다
+     * (ADR space-team/0005).</p>
+     */
+    void deleteByTeamId(Long teamId);
+
+
+    /**
+     * 팀의 특정 역할 인원 수. "MASTER 정확히 1명" 불변식 검증에 쓴다 (GR-12).
+     *
+     * <p>부분 유니크 {@code uq_team_members_one_master}는 "최대 1명"만 보장한다.
+     * "최소 1명"은 DB로 표현할 수 없어 이 카운트가 유일한 방어선이며, 반드시 위임
+     * 트랜잭션 안에서 확인해야 한다.</p>
+     */
+    long countByTeamIdAndRole(Long teamId, TeamMemberRole role);
 }

@@ -3,8 +3,8 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.cohort.application.dto.command.SaveAttendancePolicyCommand;
-import site.omagotchi.learningservice.cohort.application.dto.result.CohortAttendancePolicyResponse;
+import site.omagotchi.learningservice.cohort.application.command.SaveAttendancePolicyCommand;
+import site.omagotchi.learningservice.cohort.application.result.CohortAttendancePolicyResponse;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
@@ -20,12 +20,15 @@ public class CohortAttendancePolicyService {
 
     private final CohortRepository cohortRepository;
     private final CohortAttendancePolicyRepository attendancePolicyRepository;
+    private final CohortAccessService accessService;
 
     /**
      * 특정 기수의 출결 정책을 조회
      * 출결/타이머 기능이 기수별 판정 기준을 가져갈 때 사용
      */
-    public CohortAttendancePolicyResponse getPolicy(Long cohortId) {
+    public CohortAttendancePolicyResponse getPolicy(Long cohortId, UUID actorUserId) {
+        accessService.requireManager(cohortId, actorUserId);
+
         return attendancePolicyRepository.findById(cohortId)
                 .map(CohortAttendancePolicyResponse::from)
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
@@ -41,6 +44,8 @@ public class CohortAttendancePolicyService {
             SaveAttendancePolicyCommand command,
             UUID updatedByUserId
     ) {
+        accessService.requireManager(cohortId, updatedByUserId);
+
         if (!cohortRepository.existsById(cohortId)) {
             throw new BusinessException(CohortErrorCode.COHORT_NOT_FOUND);
         }

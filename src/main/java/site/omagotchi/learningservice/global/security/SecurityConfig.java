@@ -40,7 +40,13 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/actuator/health",
                                 "/actuator/health/**",
-                                "/actuator/info"
+                                "/actuator/info",
+                                "/ws",
+                                "/ws/**"
+                        ).permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/spaces"
                         ).permitAll()
                         .requestMatchers(
                                 HttpMethod.POST,

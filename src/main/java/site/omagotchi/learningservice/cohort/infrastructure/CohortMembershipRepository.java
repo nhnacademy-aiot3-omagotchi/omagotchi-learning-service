@@ -1,5 +1,7 @@
 package site.omagotchi.learningservice.cohort.infrastructure;
 
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -27,6 +29,18 @@ public interface CohortMembershipRepository extends
     boolean existsByIdAndStatus(Long id, CohortMembershipStatus status);
 
     Optional<CohortMembership> findByIdAndStatus(Long id, CohortMembershipStatus status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select membership
+            from CohortMembership membership
+            where membership.id = :id
+              and membership.status = :status
+            """)
+    Optional<CohortMembership> findWithLockByIdAndStatus(
+            Long id,
+            CohortMembershipStatus status
+    );
 
     Optional<CohortMembership> findFirstByCohortIdAndUserIdAndStatusOrderByRequestedAtDesc(
             Long cohortId,
@@ -66,6 +80,13 @@ public interface CohortMembershipRepository extends
             Long cohortId,
             UUID userId,
             CohortMembershipRole role,
+            CohortMembershipStatus status
+    );
+
+    boolean existsByCohortIdAndUserIdAndRoleInAndStatus(
+            Long cohortId,
+            UUID userId,
+            Collection<CohortMembershipRole> roles,
             CohortMembershipStatus status
     );
 

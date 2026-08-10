@@ -2,7 +2,11 @@ package site.omagotchi.learningservice.occupancy.application.port;
 
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
+import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
+
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -52,6 +56,62 @@ public interface RoomOccupancyRepository {
 
     /** 활성 점유 단건. 연장·반납(#7)의 진입점이다. */
     Optional<RoomOccupancy> findActiveBySpaceId(Long spaceId);
+
+
+    /**
+     * 여러 공간의 활성 점유를 한 번에 읽는다. 공간 목록의 사용 상태 파생 계산용이다.
+     *
+     * <p><b>배치인 것이 계약의 일부다.</b> 공간이 N개여도 쿼리는 1회여야 한다 —
+     * 목록을 돌며 {@link #findActiveBySpaceId}를 부르면 그대로 N+1이 된다.</p>
+     *
+     * <p>{@code now}로 만료된 행을 걸러내는 것이 중요하다. 유니크 인덱스는 {@code status}만
+     * 보고 {@code expires_at}은 보지 않으므로, 스케줄러(#9)가 아직 쓸어가지 않은 행이
+     * ACTIVE로 남아 있다 — 이 필터가 없으면 목록에 "사용 중"으로 뜨는데 점유는 성공하는
+     * 상태가 보인다.</p>
+     *
+     * <p>공간당 최대 1건이다 — {@code uq_room_occupancies_one_active_per_space}가
+     * 보장한다. 받는 쪽이 중복을 걱정할 필요가 없다.</p>
+     */
+    List<SpaceOccupancyView> findActiveBySpaceIds(Collection<Long> spaceIds, OffsetDateTime now);
+
+
+    /**
+     * 활성 점유의 식별 정보만 값으로 읽는다. 락 밖 사전 검증에 쓴다.
+     *
+     * <p>{@link #findActiveBySpaceId}가 아니라 이 메서드를 쓰는 이유가 중요하다.
+     * 엔티티를 락 전에 읽으면 그 인스턴스가 영속성 컨텍스트 1차 캐시에 올라가고,
+     * 뒤이은 {@link #lockById}가 {@code FOR UPDATE}를 실제로 실행해도 Hibernate는
+     * 캐시 인스턴스를 그대로 돌려준다. 그러면 락 획득 후 상태 재확인이 락 이전
+     * 스냅샷을 보게 되어 "종료 커밋 직후 도착한 요청" 방어가 무력화된다
+     * ({@code SpaceReader} 주석과 같은 함정).</p>
+     */
+    Optional<ActiveOccupancy> findActiveSummaryBySpaceId(Long spaceId);
+
+
+    /**
+     * 점유 행 배타 락. 반드시 트랜잭션 안에서 호출한다.
+     *
+     * <p>활성 조건을 쿼리에 넣지 않는 것이 의도다. 락을 잡은 뒤
+     * {@link RoomOccupancy#isActive()}를 확인해야 종료 커밋 직후 도착한 요청을
+     * "이미 종료된 점유"(409)로 정확히 잡는다. 조건에 넣으면 그냥 행 없음으로 빠진다.</p>
+     *
+     * <p>참여자 추가·이탈·제외가 이 락으로 시작하는 이유는 정원 검증 때문만이 아니다.
+     * 락 없이 처리하면 종료된 점유에 {@code left_at IS NULL} 행이 남아, 그 사용자가
+     * 영구히 다른 회의에 참여할 수 없게 된다 —
+     * {@code uq_occupancy_participants_one_active}가 계정 기준이기 때문이다.</p>
+     */
+    Optional<RoomOccupancy> lockById(Long occupancyId);
+
+
+    /**
+     * 참여자 관리에 필요한 점유 정보.
+     *
+     * <p>기수를 담지 않는다. 점유 행에 {@code cohort_id}가 없고(ERD v3) 기수는
+     * {@code occupierMembershipId} 조인으로 도출하므로, 기수 정합 검증(MR-33)은
+     * 이 값을 받아 기수 파트에 되묻는다.</p>
+     */
+    record ActiveOccupancy(Long id, Long occupierMembershipId, UUID occupierUserId) {
+    }
 
 
     /**

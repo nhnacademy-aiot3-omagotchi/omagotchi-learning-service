@@ -80,7 +80,8 @@ class GlobalExceptionHandlerTest {
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 CommonErrorCode.INTERNAL_SERVER_ERROR.code(),
                 CommonErrorCode.INTERNAL_SERVER_ERROR.message(),
-                REQUEST_URI
+                REQUEST_URI,
+                null
         ));
     }
 }

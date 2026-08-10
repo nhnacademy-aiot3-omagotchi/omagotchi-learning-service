@@ -7,11 +7,19 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.domain.CohortMembership;
+import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
+import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
+import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
+import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -19,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,6 +40,9 @@ class CohortAccessServiceTest {
 
     @Mock
     private CohortMembershipRepository membershipRepository;
+
+    @Mock
+    private CohortRepository cohortRepository;
 
     @InjectMocks
     private CohortAccessService accessService;
@@ -89,6 +101,99 @@ class CohortAccessServiceTest {
             );
 
             assertSame(CohortErrorCode.COHORT_NOT_FOUND, exception.getErrorCode());
+        }
+    }
+
+    @Nested
+    @DisplayName("활성 기수 조회")
+    class FindActiveCohorts {
+
+        @Test
+        @DisplayName("종료되지 않은 활성 관리자 소속의 활성 기수만 반환")
+        void returnsOnlyActiveManagedCohorts() {
+            Cohort activeCohort = cohort(1L);
+            CohortMembership activeManager = membership(
+                    1L,
+                    CohortMembershipRole.MANAGER,
+                    null
+            );
+            CohortMembership endedManager = membership(
+                    1L,
+                    CohortMembershipRole.MANAGER,
+                    OffsetDateTime.now()
+            );
+            CohortMembership inactiveCohortManager = membership(
+                    2L,
+                    CohortMembershipRole.MANAGER,
+                    null
+            );
+
+            when(cohortRepository.findByStatus(CohortStatus.ACTIVE))
+                    .thenReturn(List.of(activeCohort));
+            when(membershipRepository
+                    .findByUserIdOrderByRequestedAtDesc(USER_ID))
+                    .thenReturn(List.of(
+                            endedManager,
+                            inactiveCohortManager,
+                            activeManager
+                    ));
+
+            assertEquals(
+                    List.of(1L),
+                    accessService.findActiveManagedCohortIds(USER_ID)
+            );
+        }
+
+        @Test
+        @DisplayName("역할과 무관하게 종료되지 않은 활성 소속 기수를 반환")
+        void returnsActiveCohortsForEveryMembershipRole() {
+            Cohort firstCohort = cohort(1L);
+            Cohort secondCohort = cohort(2L);
+            CohortMembership manager = membership(
+                    1L,
+                    null,
+                    null
+            );
+            CohortMembership student = membership(
+                    2L,
+                    null,
+                    null
+            );
+
+            when(cohortRepository.findByStatus(CohortStatus.ACTIVE))
+                    .thenReturn(List.of(firstCohort, secondCohort));
+            when(membershipRepository
+                    .findByUserIdOrderByRequestedAtDesc(USER_ID))
+                    .thenReturn(List.of(student, manager));
+
+            assertEquals(
+                    List.of(2L, 1L),
+                    accessService.findActiveCohortIds(USER_ID)
+            );
+        }
+
+        private Cohort cohort(Long cohortId) {
+            Cohort cohort = mock(Cohort.class);
+            when(cohort.getId()).thenReturn(cohortId);
+            return cohort;
+        }
+
+        private CohortMembership membership(
+                Long cohortId,
+                CohortMembershipRole role,
+            OffsetDateTime endedAt
+        ) {
+            CohortMembership membership = mock(CohortMembership.class);
+            if (endedAt == null) {
+                when(membership.getCohortId()).thenReturn(cohortId);
+            }
+            if (role != null) {
+                when(membership.getRole()).thenReturn(role);
+            }
+            when(membership.getStatus())
+                    .thenReturn(CohortMembershipStatus.ACTIVE);
+            when(membership.getEndedAt()).thenReturn(endedAt);
+            return membership;
         }
     }
 }

@@ -3,11 +3,15 @@ package site.omagotchi.learningservice.occupancy.infrastructure;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
+import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -49,6 +53,40 @@ public class RoomOccupancyJpaPersistence implements RoomOccupancyRepository {
     @Override
     public Optional<RoomOccupancy> findActiveBySpaceId(Long spaceId) {
         return occupancyJpaRepository.findBySpaceIdAndStatus(spaceId, OccupancyStatus.ACTIVE);
+    }
+
+    @Override
+    public List<SpaceOccupancyView> findActiveBySpaceIds(Collection<Long> spaceIds, OffsetDateTime now) {
+        if (spaceIds == null || spaceIds.isEmpty()) {
+            return List.of();
+        }
+        return occupancyJpaRepository.findActiveBySpaceIds(spaceIds, now, OccupancyStatus.ACTIVE);
+    }
+
+    @Override
+    public Optional<ActiveOccupancy> findActiveSummaryBySpaceId(Long spaceId) {
+        return occupancyJpaRepository
+                .findSummaryBySpaceIdAndStatus(spaceId, OccupancyStatus.ACTIVE)
+                .map(projection -> new ActiveOccupancy(
+                        projection.getId(),
+                        projection.getOccupierMembershipId(),
+                        projection.getOccupierUserId()
+                ));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>트랜잭션 밖에서 부르면 락이 즉시 해제되어 아무것도 보장하지 못하므로 조용히
+     * 통과시키지 않고 명시적으로 막는다 ({@code SpaceNativeQueryReader#lock}과 같은 방어).</p>
+     */
+    @Override
+    public Optional<RoomOccupancy> lockById(Long occupancyId) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException(
+                    "점유 행 락은 트랜잭션 안에서만 획득할 수 있습니다. occupancyId=" + occupancyId);
+        }
+        return occupancyJpaRepository.findByIdForUpdate(occupancyId);
     }
 
     @Override

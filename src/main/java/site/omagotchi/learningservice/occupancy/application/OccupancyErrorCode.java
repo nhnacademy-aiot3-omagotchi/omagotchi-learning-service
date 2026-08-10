@@ -23,14 +23,24 @@ public enum OccupancyErrorCode implements ErrorCode {
             "회의실만 점유할 수 있습니다."),                                        // MR-20
     SPACE_INACTIVE(ErrorType.INVALID_INPUT, "OCCUPANCY_SPACE_INACTIVE",
             "현재 이용할 수 없는 공간입니다."),                                      // RM-13
+    DIFFERENT_COHORT(ErrorType.INVALID_INPUT, "OCCUPANCY_DIFFERENT_COHORT",
+            "같은 기수의 사용자만 참여자로 추가할 수 있습니다."),                     // MR-33
+    OCCUPIER_CANNOT_LEAVE(ErrorType.INVALID_INPUT, "OCCUPANCY_OCCUPIER_CANNOT_LEAVE",
+            "점유자는 반납으로만 회의를 종료할 수 있습니다."),                        // MR-31
 
     // 403
     NOT_PRESENT(ErrorType.AUTHORIZATION, "OCCUPANCY_NOT_PRESENT",
             "출석(재실) 상태에서만 회의실을 점유할 수 있습니다."),                    // MR-22
+    TARGET_NOT_PRESENT(ErrorType.AUTHORIZATION, "OCCUPANCY_TARGET_NOT_PRESENT",
+            "재실 상태인 사용자만 참여자로 추가할 수 있습니다."),                     // MR-19
+    NOT_OCCUPIER(ErrorType.AUTHORIZATION, "OCCUPANCY_NOT_OCCUPIER",
+            "점유자만 참여자를 관리할 수 있습니다."),                                 // MR-29, MR-31
 
     // 404
     SPACE_NOT_FOUND(ErrorType.NOT_FOUND, "OCCUPANCY_SPACE_NOT_FOUND",
             "공간을 찾을 수 없습니다."),
+    PARTICIPANT_NOT_FOUND(ErrorType.NOT_FOUND, "OCCUPANCY_PARTICIPANT_NOT_FOUND",
+            "참여자를 찾을 수 없습니다."),
 
     // 409
     ROOM_ALREADY_OCCUPIED(ErrorType.CONFLICT, "OCCUPANCY_ROOM_ALREADY_OCCUPIED",
@@ -38,7 +48,22 @@ public enum OccupancyErrorCode implements ErrorCode {
     ALREADY_OCCUPYING(ErrorType.CONFLICT, "OCCUPANCY_ALREADY_OCCUPYING",
             "이미 점유 중인 회의실이 있습니다."),                                    // MR-10
     ALREADY_PARTICIPATING(ErrorType.CONFLICT, "OCCUPANCY_ALREADY_PARTICIPATING",
-            "이미 다른 회의에 참여 중입니다.");                               // MR-30
+            "이미 다른 회의에 참여 중입니다."),                                // MR-30
+    OCCUPANCY_ENDED(ErrorType.CONFLICT, "OCCUPANCY_ENDED",
+            "이미 종료된 점유입니다."),
+    CAPACITY_EXCEEDED(ErrorType.CONFLICT, "OCCUPANCY_CAPACITY_EXCEEDED",
+            "회의실 정원을 초과했습니다."),                                    // MR-28
+    OCCUPIER_MEMBERSHIP_INACTIVE(ErrorType.CONFLICT, "OCCUPANCY_OCCUPIER_MEMBERSHIP_INACTIVE",
+            "점유자의 기수 소속이 유효하지 않아 참여자를 추가할 수 없습니다."),  // MR-33, 대상이 아니라 점유자 쪽 원인
+    EXTENSION_TOO_EARLY(ErrorType.CONFLICT, "OCCUPANCY_EXTENSION_TOO_EARLY",
+            "만료 30분 전부터 연장할 수 있습니다."),                            // MR-06
+    EXTENSION_LIMIT_EXCEEDED(ErrorType.CONFLICT, "OCCUPANCY_EXTENSION_LIMIT_EXCEEDED",
+            "연장은 최대 2회까지 가능합니다.");                                 // MR-06
+
+    // 만료 후 연장과 종료된 점유 반납에는 전용 코드를 두지 않고 OCCUPANCY_ENDED를 재사용한다.
+    // "이미 종료된 점유입니다"가 두 상황 모두에서 사용자에게 정확한 설명이고,
+    // 클라이언트가 구분해 분기할 이유가 없다. 스케줄러가 아직 EXPIRED로 바꾸지 않아
+    // status는 ACTIVE인 창에서도 expires_at이 지났으면 같은 코드로 거부한다.
 
     // 재실 조회 자체의 실패(명세서 02, 503)에는 전용 코드를 두지 않는다.
     // BusinessException은 ErrorType.INTERNAL을 전달할 수 없고(의도된 가드), 이 실패는

@@ -7,11 +7,16 @@ import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
+import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
+import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +24,11 @@ import java.util.UUID;
 public class CohortAccessService {
 
     private final CohortMembershipRepository membershipRepository;
+    private final CohortRepository cohortRepository;
+
+    public boolean exists(Long cohortId) {
+        return cohortRepository.existsById(cohortId);
+    }
 
     /**
      * 전역 시스템 관리자 권한이 필요한 작업인지 확인
@@ -52,6 +62,13 @@ public class CohortAccessService {
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
     }
 
+    public CohortMembership requireCurrentActiveMembership(UUID userId) {
+        return membershipRepository.findFirstByUserIdAndStatusAndEndedAtIsNullOrderByRequestedAtDesc(
+                userId,
+                CohortMembershipStatus.ACTIVE
+        ).orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
+    }
+
     /**
      * 사용자가 해당 기수에서 MANAGER 역할의 ACTIVE 소속인지 확인
      * 소속은 있지만 관리자 역할이 아니면 403으로 처리
@@ -82,5 +99,38 @@ public class CohortAccessService {
                         CohortMembershipStatus.ACTIVE
                 )
                 .isPresent();
+    }
+
+    public List<Long> findActiveManagedCohortIds(UUID userId) {
+        return findActiveCohortIds(userId, CohortMembershipRole.MANAGER);
+    }
+
+    public List<Long> findActiveCohortIds(UUID userId) {
+        return findActiveCohortIds(userId, null);
+    }
+
+    private List<Long> findActiveCohortIds(
+            UUID userId,
+            CohortMembershipRole requiredRole
+    ) {
+        Set<Long> activeCohortIds = cohortRepository
+                .findByStatus(CohortStatus.ACTIVE)
+                .stream()
+                .map(cohort -> cohort.getId())
+                .collect(Collectors.toSet());
+
+        return membershipRepository
+                .findByUserIdOrderByRequestedAtDesc(userId)
+                .stream()
+                .filter(membership -> requiredRole == null
+                        || membership.getRole() == requiredRole)
+                .filter(membership ->
+                        membership.getStatus() == CohortMembershipStatus.ACTIVE
+                )
+                .filter(membership -> membership.getEndedAt() == null)
+                .map(CohortMembership::getCohortId)
+                .filter(activeCohortIds::contains)
+                .distinct()
+                .toList();
     }
 }

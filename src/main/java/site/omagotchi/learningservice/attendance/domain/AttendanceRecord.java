@@ -106,6 +106,13 @@ public class AttendanceRecord {
         this.earlyLeaveMinutes = earlyLeaveMinutes;
     }
 
+    public void applyDecision(AttendanceDecision decision) {
+        this.autoStatus = decision.status();
+        this.finalStatus = decision.status();
+        this.lateMinutes = decision.lateMinutes();
+        this.earlyLeaveMinutes = decision.earlyLeaveMinutes();
+    }
+
     public void markAbsent() {
         this.autoStatus = AttendanceStatus.ABSENT;
         this.finalStatus = AttendanceStatus.ABSENT;

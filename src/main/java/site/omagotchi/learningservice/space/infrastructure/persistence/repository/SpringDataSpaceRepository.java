@@ -1,6 +1,8 @@
 package site.omagotchi.learningservice.space.infrastructure.persistence.repository;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import site.omagotchi.learningservice.space.infrastructure.persistence.entity.SpaceJpaEntity;
@@ -49,5 +51,11 @@ public interface SpringDataSpaceRepository
     Optional<SpaceJpaEntity>
     findByIdAndDeletedAtIsNull(
             Long spaceId
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT space FROM SpaceJpaEntity space WHERE space.id = :spaceId")
+    Optional<SpaceJpaEntity> findByIdForUpdate(
+            @Param("spaceId") Long spaceId
     );
 }

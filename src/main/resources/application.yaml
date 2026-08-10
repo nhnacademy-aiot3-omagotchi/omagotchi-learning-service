@@ -79,6 +79,25 @@ telegram:
   link-token:
     ttl: ${TELEGRAM_LINK_TOKEN_TTL:PT10M}
 
+community:
+  attachments:
+    storage-root: ${COMMUNITY_ATTACHMENT_STORAGE_ROOT:data/community-attachments}
+    max-file-size: ${COMMUNITY_ATTACHMENT_MAX_FILE_SIZE:5MB}
+    max-count: ${COMMUNITY_ATTACHMENT_MAX_COUNT:5}
+    allowed-extensions:
+      - jpg
+      - jpeg
+      - png
+      - gif
+    allowed-content-types:
+      - image/jpeg
+      - image/png
+      - image/gif
+
+realtime:
+  presence:
+    session-ttl: ${REALTIME_PRESENCE_SESSION_TTL:60s}
+
 auth:
   jwt:
     issuer: ${JWT_ISSUER:https://identity.omagotchi.local}

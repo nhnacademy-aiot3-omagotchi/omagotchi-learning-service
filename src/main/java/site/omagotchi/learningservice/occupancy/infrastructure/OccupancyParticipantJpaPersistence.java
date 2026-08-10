@@ -6,6 +6,10 @@ import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
 
+import java.time.OffsetDateTime;
+import java.util.Optional;
+import java.util.UUID;
+
 /**
  * {@link OccupancyParticipantRepository} 구현.
  *
@@ -31,5 +35,15 @@ public class OccupancyParticipantJpaPersistence implements OccupancyParticipantR
     @Override
     public long countActiveByOccupancyId(Long occupancyId) {
         return participantJpaRepository.countByOccupancyIdAndLeftAtIsNull(occupancyId);
+    }
+
+    @Override
+    public Optional<OccupancyParticipant> findByOccupancyIdAndUserId(Long occupancyId, UUID userId) {
+        return participantJpaRepository.findByOccupancyIdAndUserId(occupancyId, userId);
+    }
+
+    @Override
+    public int closeAllActiveByOccupancyId(Long occupancyId, OffsetDateTime endedAt) {
+        return participantJpaRepository.closeAllActiveByOccupancyId(occupancyId, endedAt);
     }
 }

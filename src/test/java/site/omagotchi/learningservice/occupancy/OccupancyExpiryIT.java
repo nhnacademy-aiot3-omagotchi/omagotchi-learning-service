@@ -68,7 +68,7 @@ class OccupancyExpiryIT {
      */
     @Test
     @DisplayName("점유가 만료된 사용자는 다른 회의실을 새로 점유할 수 있다.")
-    void test1() {
+    void expiredUserCanOccupyAnotherRoom() {
         Long cohortId = fixture.createCohort("만료-재점유");
         OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
         Long firstRoomId = fixture.createMeetingRoom(cohortId, "만료-재점유-1", 8);
@@ -87,7 +87,7 @@ class OccupancyExpiryIT {
      */
     @Test
     @DisplayName("만료 정리는 참여자 행을 지우지 않고 left_at만 마감한다.")
-    void test2() {
+    void expiryClosesParticipantsWithoutDeletingRows() {
         Long cohortId = fixture.createCohort("만료-참여자마감");
         OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "만료-참여자마감-1", 8);
@@ -108,7 +108,7 @@ class OccupancyExpiryIT {
      */
     @Test
     @DisplayName("참여자 마감 시각은 점유의 만료 시각과 같다.")
-    void test3() {
+    void participantClosedAtMatchesOccupancyExpiryTime() {
         Long cohortId = fixture.createCohort("만료-마감시각");
         OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "만료-마감시각-1", 8);
@@ -130,7 +130,7 @@ class OccupancyExpiryIT {
      */
     @Test
     @DisplayName("아무도 찾지 않는 방도 스케줄러가 정리한다.")
-    void test5() {
+    void schedulerExpiresUnvisitedRoom() {
         Long cohortId = fixture.createCohort("만료-스케줄러");
         OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "만료-스케줄러-1", 8);
@@ -154,7 +154,7 @@ class OccupancyExpiryIT {
      */
     @Test
     @DisplayName("정리를 두 번 돌려도 두 번째는 대상이 없다.")
-    void test6() {
+    void secondExpiryRunFindsNoCandidates() {
         Long cohortId = fixture.createCohort("만료-멱등");
         OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "만료-멱등-1", 8);
@@ -170,7 +170,7 @@ class OccupancyExpiryIT {
     /** 아직 만료되지 않은 점유를 쓸어가면 사용 중인 회의가 끊긴다. */
     @Test
     @DisplayName("만료되지 않은 점유는 건드리지 않는다.")
-    void test7() {
+    void doesNotTouchNonExpiredOccupancy() {
         Long cohortId = fixture.createCohort("만료-미도래");
         OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "만료-미도래-1", 8);
@@ -194,7 +194,7 @@ class OccupancyExpiryIT {
      */
     @Test
     @DisplayName("한 건이 실패해도 나머지 점유는 정리되고 커밋된다.")
-    void test8() {
+    void oneFailureDoesNotBlockOtherExpiries() {
         Long cohortId = fixture.createCohort("만료-건별격리");
         OccupancyTestFixture.Member first = fixture.createActiveMember(cohortId);
         OccupancyTestFixture.Member second = fixture.createActiveMember(cohortId);
@@ -224,7 +224,7 @@ class OccupancyExpiryIT {
     /** 이미 사용 중인 회의실을 뒤늦게 잡을 때도 같은 정리가 일어나야 한다. */
     @Test
     @DisplayName("공간 기준 정리도 참여자를 함께 마감한다.")
-    void test4() {
+    void spaceScopedExpiryAlsoClosesParticipants() {
         Long cohortId = fixture.createCohort("만료-공간기준");
         OccupancyTestFixture.Member first = fixture.createActiveMember(cohortId);
         OccupancyTestFixture.Member second = fixture.createActiveMember(cohortId);
@@ -250,7 +250,7 @@ class OccupancyExpiryIT {
      */
     @Test
     @DisplayName("만료 후보로 식별된 뒤 반납되면 단건 전이는 실패한다.")
-    void test9() {
+    void transitionFailsWhenReleasedAfterBeingIdentifiedAsCandidate() {
         Long cohortId = fixture.createCohort("만료-반납경합");
         OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "만료-반납경합-1", 8);
@@ -279,7 +279,7 @@ class OccupancyExpiryIT {
      */
     @Test
     @DisplayName("만료 후보로 식별된 뒤 연장되면 단건 전이는 실패한다.")
-    void test10() {
+    void transitionFailsWhenExtendedAfterBeingIdentifiedAsCandidate() {
         Long cohortId = fixture.createCohort("만료-연장경합");
         OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "만료-연장경합-1", 8);

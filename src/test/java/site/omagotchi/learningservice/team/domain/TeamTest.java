@@ -18,19 +18,19 @@ class TeamTest {
 
     @Test
     @DisplayName("앞뒤 공백 제거")
-    void test1() {
+    void trimsLeadingAndTrailingWhitespace() {
         assertThat(Team.normalizeName("    오마고치    ")).isEqualTo("오마고치");
     }
 
     @Test
     @DisplayName("null은 빈 문자열로 정규화된다")
-    void test2() {
+    void normalizesNullToEmptyString() {
         assertThat(Team.normalizeName(null)).isEmpty();
     }
 
     @Test
     @DisplayName("정규화는 판정하지 않는다 — 규칙을 어긴 이름도 그대로 돌려준다")
-    void test3() {
+    void normalizationDoesNotValidate() {
         String tooLong = "가".repeat(31);
 
         assertThat(Team.normalizeName(tooLong)).isEqualTo(tooLong);
@@ -38,19 +38,19 @@ class TeamTest {
 
     @Test
     @DisplayName("공백만 있는 이름은 유효하지 않다")
-    void test4() {
+    void blankNameIsInvalid() {
         assertThat(Team.isValidName(Team.normalizeName(" "))).isFalse();
     }
 
     @Test
     @DisplayName("30자 초과는 유효하지 않다")
-    void test5() {
+    void nameOverThirtyCharsIsInvalid() {
         assertThat(Team.isValidName("가".repeat(31))).isFalse();
     }
 
     @Test
     @DisplayName("정규화 후 30자면 유효하다 — 원문의 공백은 길이에 포함되지 않는다")
-    void test6() {
+    void nameIsValidAtThirtyCharsAfterNormalization() {
         String padded = " " + "가".repeat(30) + " ";
 
         assertThat(Team.isValidName(Team.normalizeName(padded))).isTrue();
@@ -58,14 +58,14 @@ class TeamTest {
 
     @Test
     @DisplayName("선검증을 빠뜨린 생성은 업무 실패가 아니라 호출 계약 위반이다")
-    void test7() {
+    void creationWithoutValidationIsContractViolationNotBusinessFailure() {
         assertThatThrownBy(() -> Team.create(1L, " "))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     @DisplayName("생성 시 이름이 정규화되어 저장된다")
-    void test8() {
+    void nameIsNormalizedOnCreation() {
         assertThat(Team.create(1L, "  오마고치  ").getName()).isEqualTo("오마고치");
     }
 }

@@ -41,7 +41,7 @@ class TeamConcurrencyIT {
 
     @Test
     @DisplayName("정원이 찬 팀에 동시에 추가하면 한 명만 성공한다")
-    void test1() throws Exception {
+    void onlyOneOfConcurrentAddsToFullTeamSucceeds() throws Exception {
         Long cohortId = fixture.createCohort("1기");
         var master = fixture.createActiveMember(cohortId);
         var team = teamService.create(cohortId, "오마고치", master.userId());

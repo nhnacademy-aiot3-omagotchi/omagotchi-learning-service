@@ -56,7 +56,7 @@ class OccupancyQueryServiceTest {
     /** 소비처가 공간 목록과 조인하므로 spaceId로 키잡아 돌려준다. */
     @Test
     @DisplayName("사용 중인 회의실을 공간 식별자로 키잡아 돌려준다.")
-    void test1() {
+    void returnsActiveOccupanciesKeyedBySpaceId() {
         givenOccupancies(occupancy(2L));
         given(cohortMembershipQueryService.findCohortIds(List.of(MEMBERSHIP_ID)))
                 .willReturn(Map.of(MEMBERSHIP_ID, COHORT_ID));
@@ -77,7 +77,7 @@ class OccupancyQueryServiceTest {
     /** 비어 있는 방은 키가 없다 — 소비처는 {@code null} 여부로 사용 상태를 판단한다. */
     @Test
     @DisplayName("점유가 없는 회의실은 결과에 담기지 않는다.")
-    void test2() {
+    void excludesRoomsWithoutActiveOccupancy() {
         givenOccupancies();
 
         assertThat(occupancyQueryService.findActiveBySpaceIds(List.of(1L), NOW)).isEmpty();
@@ -90,7 +90,7 @@ class OccupancyQueryServiceTest {
      */
     @Test
     @DisplayName("만료 판정 기준 시각을 그대로 전달한다.")
-    void test3() {
+    void passesThroughExpiryReferenceTime() {
         givenOccupancies();
 
         occupancyQueryService.findActiveBySpaceIds(List.of(1L), NOW);
@@ -101,7 +101,7 @@ class OccupancyQueryServiceTest {
     /** 빈 입력에 헛질의를 보내지 않는다. */
     @Test
     @DisplayName("조회할 공간이 없으면 질의하지 않는다.")
-    void test4() {
+    void skipsQueryWhenNoSpaceIds() {
         assertThat(occupancyQueryService.findActiveBySpaceIds(List.of(), NOW)).isEmpty();
 
         verify(occupancyRepository, never()).findActiveBySpaceIds(any(), any());
@@ -116,7 +116,7 @@ class OccupancyQueryServiceTest {
      */
     @Test
     @DisplayName("인자가 누락되면 빈 결과가 아니라 계약 위반으로 끊는다.")
-    void test5() {
+    void throwsContractViolationOnMissingArgument() {
         assertThatThrownBy(() -> occupancyQueryService.findActiveBySpaceIds(List.of(1L), null))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> occupancyQueryService.findActiveBySpaceIds(null, NOW))
@@ -135,7 +135,7 @@ class OccupancyQueryServiceTest {
      */
     @Test
     @DisplayName("점유자 멤버십을 찾지 못하면 기수를 비운다.")
-    void test6() {
+    void leavesCohortEmptyWhenMembershipNotFound() {
         givenOccupancies(occupancy(2L));
         given(cohortMembershipQueryService.findCohortIds(List.of(MEMBERSHIP_ID)))
                 .willReturn(Map.of());
@@ -155,7 +155,7 @@ class OccupancyQueryServiceTest {
      */
     @Test
     @DisplayName("점유가 여러 건이어도 참여자·기수 조회는 각각 1회다.")
-    void test7() {
+    void queriesParticipantsAndCohortOnceForMultipleOccupancies() {
         givenOccupancies(occupancy(1L), occupancy(2L));
         given(cohortMembershipQueryService.findCohortIds(any())).willReturn(Map.of());
         given(participantRepository.findActiveUserIdsByOccupancyIds(any())).willReturn(Map.of());
@@ -172,7 +172,7 @@ class OccupancyQueryServiceTest {
      */
     @Test
     @DisplayName("사용 중 여부는 기준 시각과 함께 위임한다.")
-    void test8() {
+    void delegatesActiveCheckWithReferenceTime() {
         given(occupancyRepository.existsActiveBySpaceId(1L, NOW)).willReturn(true);
 
         assertThat(occupancyQueryService.existsActive(1L, NOW)).isTrue();

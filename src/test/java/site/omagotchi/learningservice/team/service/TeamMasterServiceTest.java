@@ -61,7 +61,7 @@ class TeamMasterServiceTest {
 
     @Test
     @DisplayName("위임하면 두 팀원의 역할이 교환된다.")
-    void test1() {
+    void delegateSwapsRolesOfBothMembers() {
         TeamMember master = member(MASTER_MEMBER_ID, MASTER_MEMBERSHIP_ID, true);
         TeamMember target = member(TARGET_MEMBER_ID, TARGET_MEMBERSHIP_ID, false);
         givenDelegatable(master, target);
@@ -78,7 +78,7 @@ class TeamMasterServiceTest {
      */
     @Test
     @DisplayName("강등을 먼저 저장한 뒤에 승격한다.")
-    void test2() {
+    void savesDemotionBeforePromotion() {
         TeamMember master = member(MASTER_MEMBER_ID, MASTER_MEMBERSHIP_ID, true);
         TeamMember target = member(TARGET_MEMBER_ID, TARGET_MEMBERSHIP_ID, false);
         givenDelegatable(master, target);
@@ -93,7 +93,7 @@ class TeamMasterServiceTest {
     /** 정렬 없이 잠그면 두 위임 요청이 반대 순서로 행을 잡아 데드락이 난다. */
     @Test
     @DisplayName("팀 락을 잡은 뒤에 팀원 행을 잠근다.")
-    void test3() {
+    void locksTeamBeforeLockingMemberRows() {
         TeamMember master = member(MASTER_MEMBER_ID, MASTER_MEMBERSHIP_ID, true);
         TeamMember target = member(TARGET_MEMBER_ID, TARGET_MEMBERSHIP_ID, false);
         givenDelegatable(master, target);
@@ -107,7 +107,7 @@ class TeamMasterServiceTest {
 
     @Test
     @DisplayName("자기 자신에게는 위임할 수 없다.")
-    void test4() {
+    void cannotDelegateToSelf() {
         TeamMember master = member(MASTER_MEMBER_ID, MASTER_MEMBERSHIP_ID, true);
         givenLockedMembers(master, List.of(master));
 
@@ -125,7 +125,7 @@ class TeamMasterServiceTest {
      */
     @Test
     @DisplayName("이 팀 소속이 아닌 대상에게는 위임할 수 없다.")
-    void test5() {
+    void cannotDelegateToNonMember() {
         TeamMember master = member(MASTER_MEMBER_ID, MASTER_MEMBERSHIP_ID, true);
         givenLockedMembers(master, List.of(master));
 
@@ -139,7 +139,7 @@ class TeamMasterServiceTest {
 
     @Test
     @DisplayName("MASTER가 아니면 위임할 수 없다.")
-    void test6() {
+    void cannotDelegateWhenRequesterIsNotMaster() {
         given(accessSupport.lockActiveTeam(TEAM_ID)).willReturn(team());
         given(accessSupport.requireActiveMembership(COHORT_ID, USER_ID))
                 .willReturn(new TeamMembership(MASTER_MEMBERSHIP_ID, COHORT_ID, USER_ID));
@@ -160,7 +160,7 @@ class TeamMasterServiceTest {
      */
     @Test
     @DisplayName("위임 후 MASTER가 정확히 1명이 아니면 거부한다.")
-    void test7() {
+    void rejectsDelegationWhenMasterCountIsNotExactlyOne() {
         TeamMember master = member(MASTER_MEMBER_ID, MASTER_MEMBERSHIP_ID, true);
         TeamMember target = member(TARGET_MEMBER_ID, TARGET_MEMBERSHIP_ID, false);
         givenLockedMembers(master, List.of(master, target));
@@ -182,7 +182,7 @@ class TeamMasterServiceTest {
      */
     @Test
     @DisplayName("해체하면 팀원은 지우고 팀은 소프트 삭제한다.")
-    void test8() {
+    void disbandDeletesMembersAndSoftDeletesTeam() {
         Team team = team();
         given(accessSupport.lockActiveTeam(TEAM_ID)).willReturn(team);
         given(accessSupport.requireActiveMembership(COHORT_ID, USER_ID))
@@ -196,7 +196,7 @@ class TeamMasterServiceTest {
 
     @Test
     @DisplayName("MASTER가 아니면 해체할 수 없다.")
-    void test9() {
+    void cannotDisbandWhenRequesterIsNotMaster() {
         Team team = team();
         given(accessSupport.lockActiveTeam(TEAM_ID)).willReturn(team);
         given(accessSupport.requireActiveMembership(COHORT_ID, USER_ID))
@@ -221,7 +221,7 @@ class TeamMasterServiceTest {
      */
     @Test
     @DisplayName("자동 위임 대상은 후보 목록의 첫 사람이다.")
-    void test10() {
+    void autoSuccessorIsFirstCandidateInList() {
         TeamMember oldest = member(200L, 20L, false);
         TeamMember newer = member(300L, 30L, false);
         given(teamMemberRepository.findSuccessorCandidates(TEAM_ID, MASTER_MEMBER_ID))
@@ -233,7 +233,7 @@ class TeamMasterServiceTest {
     /** 후보가 없다는 것은 "팀을 소프트 삭제해야 한다"는 뜻이다 — 예외가 아니다. */
     @Test
     @DisplayName("남은 팀원이 없으면 승계자가 없다.")
-    void test11() {
+    void noSuccessorWhenNoMembersRemain() {
         given(teamMemberRepository.findSuccessorCandidates(TEAM_ID, MASTER_MEMBER_ID))
                 .willReturn(List.of());
 
@@ -243,7 +243,7 @@ class TeamMasterServiceTest {
     /** 떠나는 사람의 행이 아직 남아 있을 수 있어 후보에서 명시적으로 제외한다. */
     @Test
     @DisplayName("떠나는 사람을 제외하고 후보를 찾는다.")
-    void test12() {
+    void excludesLeavingMemberFromSuccessorCandidates() {
         given(teamMemberRepository.findSuccessorCandidates(TEAM_ID, MASTER_MEMBER_ID))
                 .willReturn(List.of());
 

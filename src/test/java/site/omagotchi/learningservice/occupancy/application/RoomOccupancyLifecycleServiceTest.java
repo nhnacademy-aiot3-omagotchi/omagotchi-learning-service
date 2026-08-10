@@ -87,7 +87,7 @@ class RoomOccupancyLifecycleServiceTest {
 
     @Test
     @DisplayName("연장하면 만료가 30분 미뤄지고 갱신된 값을 돌려준다.")
-    void test1() {
+    void extendPostponesExpiryByThirtyMinutes() {
         RoomOccupancy occupancy = givenLockedOccupancy(expiringIn(20));
 
         RoomOccupancyResult result = roomOccupancyLifecycleService.extend(SPACE_ID, OCCUPIER_USER_ID);
@@ -101,7 +101,7 @@ class RoomOccupancyLifecycleServiceTest {
     /** 연장 성공 시 같은 트랜잭션에서 리셋해야 새 만료 시각 기준으로 임박 알림이 다시 나간다. */
     @Test
     @DisplayName("연장하면 임박 알림 발송 기록이 리셋된다.")
-    void test2() {
+    void extendResetsReminderSentAt() {
         RoomOccupancy occupancy = givenLockedOccupancy(expiringIn(20));
         ReflectionTestUtils.setField(occupancy, "reminderSentAt", now().minusMinutes(5));
 
@@ -112,7 +112,7 @@ class RoomOccupancyLifecycleServiceTest {
 
     @Test
     @DisplayName("점유자가 아니면 연장할 수 없다.")
-    void test3() {
+    void cannotExtendWhenNotOccupier() {
         givenActiveSummary();
 
         assertBusinessError(
@@ -126,7 +126,7 @@ class RoomOccupancyLifecycleServiceTest {
     /** 명세서 §6: 만료 31분 전 연장은 409. */
     @Test
     @DisplayName("만료 31분 전에는 연장할 수 없다.")
-    void test4() {
+    void cannotExtendThirtyOneMinutesBeforeExpiry() {
         RoomOccupancy occupancy = givenLockedOccupancy(expiringIn(31));
 
         assertBusinessError(
@@ -140,7 +140,7 @@ class RoomOccupancyLifecycleServiceTest {
     /** 명세서 §6: 만료 29분 전 연장은 성공하고 정확히 +30분. */
     @Test
     @DisplayName("만료 29분 전에는 연장할 수 있다.")
-    void test5() {
+    void canExtendTwentyNineMinutesBeforeExpiry() {
         RoomOccupancy occupancy = givenLockedOccupancy(expiringIn(29));
 
         roomOccupancyLifecycleService.extend(SPACE_ID, OCCUPIER_USER_ID);
@@ -150,7 +150,7 @@ class RoomOccupancyLifecycleServiceTest {
 
     @Test
     @DisplayName("만료 30분 전 정각부터 연장할 수 있다.")
-    void test6() {
+    void canExtendExactlyThirtyMinutesBeforeExpiry() {
         RoomOccupancy occupancy = givenLockedOccupancy(expiringIn(30));
 
         roomOccupancyLifecycleService.extend(SPACE_ID, OCCUPIER_USER_ID);
@@ -160,7 +160,7 @@ class RoomOccupancyLifecycleServiceTest {
 
     @Test
     @DisplayName("두 번 연장한 뒤 세 번째 요청은 거부된다.")
-    void test7() {
+    void rejectsThirdExtensionAfterTwoSucceed() {
         RoomOccupancy occupancy = givenLockedOccupancy(expiringIn(20));
         ReflectionTestUtils.setField(occupancy, "extensionCount",
                 RoomOccupancy.MAX_EXTENSION_COUNT);
@@ -179,7 +179,7 @@ class RoomOccupancyLifecycleServiceTest {
      */
     @Test
     @DisplayName("만료 시각이 지났으면 상태가 ACTIVE여도 연장할 수 없다.")
-    void test8() {
+    void cannotExtendAfterExpiryEvenWhileStillActive() {
         RoomOccupancy occupancy = givenLockedOccupancy(expiringIn(-1));
 
         assertBusinessError(
@@ -197,7 +197,7 @@ class RoomOccupancyLifecycleServiceTest {
      */
     @Test
     @DisplayName("만료된 점유는 연장 창 밖이어도 종료 오류로 안내한다.")
-    void test9() {
+    void expiredOccupancyReturnsEndedErrorRegardlessOfWindow() {
         givenLockedOccupancy(expiringIn(-40));
 
         assertBusinessError(
@@ -208,7 +208,7 @@ class RoomOccupancyLifecycleServiceTest {
 
     @Test
     @DisplayName("활성 점유가 없으면 연장할 수 없다.")
-    void test10() {
+    void cannotExtendWithoutActiveOccupancy() {
         given(occupancyRepository.findActiveSummaryBySpaceId(SPACE_ID)).willReturn(Optional.empty());
 
         assertBusinessError(
@@ -221,7 +221,7 @@ class RoomOccupancyLifecycleServiceTest {
 
     @Test
     @DisplayName("반납하면 RELEASED로 바뀌고 종료 시각이 기록된다.")
-    void test11() {
+    void releaseSetsStatusReleasedAndRecordsEndedAt() {
         RoomOccupancy occupancy = givenLockedOccupancy(expiringIn(60));
 
         roomOccupancyLifecycleService.release(SPACE_ID, OCCUPIER_USER_ID);
@@ -237,7 +237,7 @@ class RoomOccupancyLifecycleServiceTest {
      */
     @Test
     @DisplayName("반납하면 열린 참여자 전원이 종료 시각으로 마감된다.")
-    void test12() {
+    void releaseClosesAllOpenParticipantsAtEndTime() {
         givenLockedOccupancy(expiringIn(60));
 
         roomOccupancyLifecycleService.release(SPACE_ID, OCCUPIER_USER_ID);
@@ -247,7 +247,7 @@ class RoomOccupancyLifecycleServiceTest {
 
     @Test
     @DisplayName("반납하면 공실 이벤트를 발행한다.")
-    void test13() {
+    void releasePublishesVacatedEvent() {
         givenLockedOccupancy(expiringIn(60));
 
         roomOccupancyLifecycleService.release(SPACE_ID, OCCUPIER_USER_ID);
@@ -267,7 +267,7 @@ class RoomOccupancyLifecycleServiceTest {
      */
     @Test
     @DisplayName("이벤트는 참여자 마감을 마친 뒤에 발행한다.")
-    void test14() {
+    void publishesEventAfterClosingParticipants() {
         givenLockedOccupancy(expiringIn(60));
 
         roomOccupancyLifecycleService.release(SPACE_ID, OCCUPIER_USER_ID);
@@ -279,7 +279,7 @@ class RoomOccupancyLifecycleServiceTest {
 
     @Test
     @DisplayName("점유자가 아니면 반납할 수 없다.")
-    void test15() {
+    void cannotReleaseWhenNotOccupier() {
         givenActiveSummary();
 
         assertBusinessError(
@@ -297,7 +297,7 @@ class RoomOccupancyLifecycleServiceTest {
      */
     @Test
     @DisplayName("락을 잡은 뒤 종료된 점유는 반납할 수 없다.")
-    void test16() {
+    void cannotReleaseOccupancyEndedAfterLock() {
         RoomOccupancy expired = occupancy(expiringIn(60));
         ReflectionTestUtils.setField(expired, "status", OccupancyStatus.EXPIRED);
         givenActiveSummary();
@@ -315,7 +315,7 @@ class RoomOccupancyLifecycleServiceTest {
     /** 만료 시각이 지났어도 아직 ACTIVE면 반납은 허용한다 — 연장과 달리 종료가 목적이다. */
     @Test
     @DisplayName("만료 시각이 지난 활성 점유도 반납할 수 있다.")
-    void test17() {
+    void canReleaseActiveOccupancyPastExpiry() {
         RoomOccupancy occupancy = givenLockedOccupancy(expiringIn(-10));
 
         roomOccupancyLifecycleService.release(SPACE_ID, OCCUPIER_USER_ID);
@@ -327,7 +327,7 @@ class RoomOccupancyLifecycleServiceTest {
     /** 요약 조회와 락 사이에 행이 사라지는 경우다. FK가 막고 있어 실제로는 드물지만 통과시키면 안 된다. */
     @Test
     @DisplayName("락 시점에 점유 행이 없으면 종료된 점유로 처리한다.")
-    void test18() {
+    void treatsMissingRowAtLockAsEnded() {
         givenActiveSummary();
         given(occupancyRepository.lockById(OCCUPANCY_ID)).willReturn(Optional.empty());
 
@@ -362,7 +362,7 @@ class RoomOccupancyLifecycleServiceTest {
     /** 후보를 하나씩 건별 트랜잭션에 넘긴다 — 한 건의 실패가 나머지를 막지 않기 위해서다. */
     @Test
     @DisplayName("만료 후보를 건별로 종료 처리에 넘긴다.")
-    void test19() {
+    void delegatesEachCandidateToExpirationIndividually() {
         OffsetDateTime endedAt = now().minusMinutes(5);
         RoomOccupancyRepository.ExpiredOccupancy candidate =
                 new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt);
@@ -380,7 +380,7 @@ class RoomOccupancyLifecycleServiceTest {
      */
     @Test
     @DisplayName("전이되지 않은 후보는 종료 건수에 세지 않는다.")
-    void test20() {
+    void doesNotCountUntransitionedCandidates() {
         OffsetDateTime endedAt = now().minusMinutes(5);
         RoomOccupancyRepository.ExpiredOccupancy extended =
                 new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt);
@@ -395,7 +395,7 @@ class RoomOccupancyLifecycleServiceTest {
 
     @Test
     @DisplayName("만료된 점유가 없으면 아무것도 하지 않는다.")
-    void test21() {
+    void doesNothingWhenNoExpiredOccupancies() {
         given(occupancyRepository.findStale(now())).willReturn(List.of());
 
         assertThat(roomOccupancyLifecycleService.expireAll()).isZero();
@@ -410,7 +410,7 @@ class RoomOccupancyLifecycleServiceTest {
      */
     @Test
     @DisplayName("한 건이 실패해도 나머지 점유를 계속 처리한다.")
-    void test22() {
+    void continuesProcessingRemainingCandidatesAfterOneFails() {
         OffsetDateTime endedAt = now().minusMinutes(5);
         RoomOccupancyRepository.ExpiredOccupancy failing =
                 new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt);

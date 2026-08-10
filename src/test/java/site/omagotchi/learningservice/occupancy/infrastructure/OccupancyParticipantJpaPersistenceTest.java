@@ -50,7 +50,7 @@ class OccupancyParticipantJpaPersistenceTest {
 
     @Test
     @DisplayName("저장은 flush까지 즉시 수행한다.")
-    void test1() {
+    void saveFlushesImmediately() {
         OccupancyParticipant participant = participant();
         given(participantJpaRepository.saveAndFlush(participant)).willReturn(participant);
 
@@ -62,7 +62,7 @@ class OccupancyParticipantJpaPersistenceTest {
 
     @Test
     @DisplayName("활성 참여 유니크 위반은 이미 참여 중 오류로 옮긴다.")
-    void test2() {
+    void activeParticipantViolationBecomesAlreadyParticipating() {
         OccupancyParticipant participant = participant();
         given(participantJpaRepository.saveAndFlush(any(OccupancyParticipant.class)))
                 .willThrow(violation("uq_occupancy_participants_one_active"));
@@ -76,7 +76,7 @@ class OccupancyParticipantJpaPersistenceTest {
 
     @Test
     @DisplayName("점유당 사람 1행 유니크 위반도 이미 참여 중 오류로 옮긴다.")
-    void test3() {
+    void pairViolationBecomesAlreadyParticipating() {
         OccupancyParticipant participant = participant();
         given(participantJpaRepository.saveAndFlush(any(OccupancyParticipant.class)))
                 .willThrow(violation("uq_occupancy_participants_pair"));
@@ -90,7 +90,7 @@ class OccupancyParticipantJpaPersistenceTest {
 
     @Test
     @DisplayName("모르는 무결성 위반은 감싸지 않고 그대로 전파한다.")
-    void test4() {
+    void propagatesUnknownViolationUnwrapped() {
         OccupancyParticipant participant = participant();
         DataIntegrityViolationException original = violation("fk_occupancy_participants_member");
         given(participantJpaRepository.saveAndFlush(any(OccupancyParticipant.class)))
@@ -104,7 +104,7 @@ class OccupancyParticipantJpaPersistenceTest {
     /** 이탈은 삭제가 아니라 left_at 기록이므로 정원 카운트는 열린 행만 세야 한다 (MR-28, MR-32). */
     @Test
     @DisplayName("정원 카운트는 이탈하지 않은 참여자만 센다.")
-    void test5() {
+    void countsOnlyActiveParticipants() {
         given(participantJpaRepository.countByOccupancyIdAndLeftAtIsNull(OCCUPANCY_ID))
                 .willReturn(3L);
 
@@ -119,7 +119,7 @@ class OccupancyParticipantJpaPersistenceTest {
      */
     @Test
     @DisplayName("참여자 조회는 이탈한 행도 찾는다.")
-    void test6() {
+    void findsRowRegardlessOfLeftStatus() {
         OccupancyParticipant left = participant();
         left.leave(NOW.plusMinutes(10));
         given(participantJpaRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, USER_ID))
@@ -133,7 +133,7 @@ class OccupancyParticipantJpaPersistenceTest {
     /** 반납·강제 종료·만료가 공유하는 마무리다 (MR-32). 삭제가 아니라 시각 기록이어야 한다. */
     @Test
     @DisplayName("참여자 일괄 마감을 종료 시각과 함께 위임한다.")
-    void test7() {
+    void delegatesCloseAllWithEndedAt() {
         given(participantJpaRepository.closeAllActiveByOccupancyId(OCCUPANCY_ID, NOW))
                 .willReturn(3);
 
@@ -148,7 +148,7 @@ class OccupancyParticipantJpaPersistenceTest {
      */
     @Test
     @DisplayName("여러 점유의 참여자를 점유별로 묶어 돌려준다.")
-    void test8() {
+    void groupsParticipantsByOccupancyId() {
         UUID otherUserId = UUID.randomUUID();
         given(participantJpaRepository.findActiveByOccupancyIds(List.of(OCCUPANCY_ID, 200L)))
                 .willReturn(List.of(
@@ -172,7 +172,7 @@ class OccupancyParticipantJpaPersistenceTest {
      */
     @Test
     @DisplayName("참여자 순서는 조회 순서를 그대로 유지한다.")
-    void test9() {
+    void preservesQueryOrderOfParticipants() {
         UUID first = UUID.randomUUID();
         UUID second = UUID.randomUUID();
         UUID third = UUID.randomUUID();
@@ -190,7 +190,7 @@ class OccupancyParticipantJpaPersistenceTest {
 
     @Test
     @DisplayName("조회할 점유가 없으면 질의하지 않는다.")
-    void test10() {
+    void skipsQueryWhenNoOccupancyIds() {
         assertThat(occupancyParticipantJpaPersistence
                 .findActiveUserIdsByOccupancyIds(List.of())).isEmpty();
 

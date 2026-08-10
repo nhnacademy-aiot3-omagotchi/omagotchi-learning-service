@@ -77,7 +77,7 @@ class TeamServiceTest {
 
     @Test
     @DisplayName("팀을 생성하면 생성자가 마스터로 등록된다.")
-    void test1() {
+    void creatingTeamRegistersCreatorAsMaster() {
         given(teamAccessSupport.resolveMembershipForCreate(1L, userId)).willReturn(membership);
         given(teamRepository.existsActiveByCohortIdAndName(1L, "오마고치")).willReturn(false);
         given(teamMemberRepository.existsByCohortMembershipId(10L)).willReturn(false);
@@ -93,7 +93,7 @@ class TeamServiceTest {
 
     @Test
     @DisplayName("이미 그 기수의 팀에 속해 있을 경우 팀을 생성할 수 없다.")
-    void test2() {
+    void cannotCreateTeamWhenAlreadyInTeamForCohort() {
         given(teamAccessSupport.resolveMembershipForCreate(1L, userId)).willReturn(membership);
         given(teamRepository.existsActiveByCohortIdAndName(1L, "오마고치")).willReturn(false);
         given(teamMemberRepository.existsByCohortMembershipId(10L)).willReturn(true);
@@ -104,7 +104,7 @@ class TeamServiceTest {
 
     @Test
     @DisplayName("같은 기수에 이미 같은 이름의 활성 팀이 있으면 생성할 수 없다.")
-    void test3() {
+    void cannotCreateTeamWithDuplicateActiveNameInCohort() {
         given(teamAccessSupport.resolveMembershipForCreate(1L, userId)).willReturn(membership);
         given(teamRepository.existsActiveByCohortIdAndName(1L, "오마고치")).willReturn(true);
 
@@ -117,7 +117,7 @@ class TeamServiceTest {
 
     @Test
     @DisplayName("팀 상세 조회 시 마스터가 먼저 오고, 표시명이 채워진 팀원 목록을 반환한다. (GR-06, GR-15)")
-    void test4() {
+    void teamDetailListsMasterFirstWithDisplayNames() {
         Long teamId = 100L;
         Team team = createTeamWithId(teamId, 1L);
 
@@ -151,7 +151,7 @@ class TeamServiceTest {
 
     @Test
     @DisplayName("팀 소속이 아니면 팀 상세를 조회할 수 없다.")
-    void test5() {
+    void cannotViewTeamDetailWithoutMembership() {
         Long teamId = 100L;
         Team team = createTeamWithId(teamId, 1L);
 
@@ -167,7 +167,7 @@ class TeamServiceTest {
 
     @Test
     @DisplayName("소속된 팀 목록을 반환한다. (GR-06)")
-    void test6() {
+    void returnsListOfMyTeams() {
         CohortMembershipView m1 = new CohortMembershipView(10L, 1L, userId);
         CohortMembershipView m2 = new CohortMembershipView(20L, 2L, userId);
         given(cohortMembershipQueryService.findActiveMemberships(userId)).willReturn(List.of(m1, m2));
@@ -189,7 +189,7 @@ class TeamServiceTest {
 
     @Test
     @DisplayName("활성 멤버십이 없으면 빈 목록을 반환한다.")
-    void test7() {
+    void returnsEmptyListWhenNoActiveMembership() {
         given(cohortMembershipQueryService.findActiveMemberships(userId)).willReturn(List.of());
 
         List<TeamResult> result = teamService.getMyTeams(userId);
@@ -201,7 +201,7 @@ class TeamServiceTest {
 
     @Test
     @DisplayName("멤버십은 있지만 소속된 팀이 없으면 빈 목록을 반환한다.")
-    void test8() {
+    void returnsEmptyListWhenMembershipHasNoTeam() {
         CohortMembershipView m1 = new CohortMembershipView(10L, 1L, userId);
         given(cohortMembershipQueryService.findActiveMemberships(userId)).willReturn(List.of(m1));
         given(teamMemberRepository.findByCohortMembershipIdIn(List.of(10L))).willReturn(List.of());

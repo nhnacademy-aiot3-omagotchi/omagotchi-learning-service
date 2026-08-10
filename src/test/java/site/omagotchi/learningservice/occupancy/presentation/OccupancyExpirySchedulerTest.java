@@ -30,7 +30,7 @@ class OccupancyExpirySchedulerTest {
 
     @Test
     @DisplayName("주기 실행은 만료 정리를 그대로 위임한다.")
-    void test1() {
+    void scheduledRunDelegatesToExpireAll() {
         given(roomOccupancyLifecycleService.expireAll()).willReturn(2);
 
         occupancyExpiryScheduler.expireStaleOccupancies();
@@ -47,7 +47,7 @@ class OccupancyExpirySchedulerTest {
      */
     @Test
     @DisplayName("정리에 실패해도 예외를 밖으로 던지지 않는다.")
-    void test2() {
+    void doesNotPropagateExceptionWhenExpiryFails() {
         willThrow(new IllegalStateException("DB 연결 실패"))
                 .given(roomOccupancyLifecycleService).expireAll();
 

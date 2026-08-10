@@ -24,7 +24,7 @@ class OccupancyConstraintTranslatorTest {
 
     @Test
     @DisplayName("회의실당 활성 점유 유니크 위반은 사용 중 오류가 된다.")
-    void test1() {
+    void oneActivePerSpaceViolationBecomesRoomAlreadyOccupied() {
         assertTranslatedTo(
                 OccupancyErrorCode.ROOM_ALREADY_OCCUPIED,
                 "uq_room_occupancies_one_active_per_space"
@@ -33,7 +33,7 @@ class OccupancyConstraintTranslatorTest {
 
     @Test
     @DisplayName("계정당 활성 점유 유니크 위반은 이미 점유 중 오류가 된다.")
-    void test2() {
+    void oneActivePerUserViolationBecomesAlreadyOccupying() {
         assertTranslatedTo(
                 OccupancyErrorCode.ALREADY_OCCUPYING,
                 "uq_room_occupancies_one_active_per_user"
@@ -43,7 +43,7 @@ class OccupancyConstraintTranslatorTest {
     /** 점유 시작 경로에서 이 위반이 곧 "다른 회의에 참여 중인 사람의 점유 요청"이다. */
     @Test
     @DisplayName("참여자 유니크 위반은 이미 참여 중 오류가 된다.")
-    void test3() {
+    void participantViolationBecomesAlreadyParticipating() {
         assertTranslatedTo(
                 OccupancyErrorCode.ALREADY_PARTICIPATING,
                 "uq_occupancy_participants_one_active"
@@ -56,7 +56,7 @@ class OccupancyConstraintTranslatorTest {
 
     @Test
     @DisplayName("PostgreSQL이 스키마를 붙여 넘겨도 알아본다.")
-    void test4() {
+    void recognizesConstraintNameWithSchemaPrefix() {
         assertTranslatedTo(
                 OccupancyErrorCode.ROOM_ALREADY_OCCUPIED,
                 "learning_service.UQ_ROOM_OCCUPANCIES_ONE_ACTIVE_PER_SPACE"
@@ -69,7 +69,7 @@ class OccupancyConstraintTranslatorTest {
      */
     @Test
     @DisplayName("모르는 제약이면 원본 예외를 그대로 돌려준다.")
-    void test5() {
+    void returnsOriginalExceptionForUnknownConstraint() {
         DataIntegrityViolationException original = violation("fk_room_occupancies_space");
 
         assertThat(OccupancyConstraintTranslator.translate(original)).isSameAs(original);
@@ -77,7 +77,7 @@ class OccupancyConstraintTranslatorTest {
 
     @Test
     @DisplayName("인덱스명을 읽을 수 없으면 원본 예외를 그대로 돌려준다.")
-    void test6() {
+    void returnsOriginalExceptionWhenConstraintNameUnreadable() {
         DataIntegrityViolationException original =
                 new DataIntegrityViolationException("원인을 알 수 없는 무결성 위반");
 
@@ -87,7 +87,7 @@ class OccupancyConstraintTranslatorTest {
     /** 원본을 cause로 달아야 예상 밖 실패의 스택 트레이스가 최종 경계까지 살아남는다. */
     @Test
     @DisplayName("변환한 예외는 원본을 cause로 보존한다.")
-    void test7() {
+    void translatedExceptionPreservesOriginalAsCause() {
         DataIntegrityViolationException original =
                 violation("uq_room_occupancies_one_active_per_space");
 
@@ -103,7 +103,7 @@ class OccupancyConstraintTranslatorTest {
      */
     @Test
     @DisplayName("JVM 기본 로케일이 터키어여도 인덱스명을 정확히 인식한다.")
-    void test8() {
+    void recognizesConstraintNameUnderTurkishLocale() {
         Locale original = Locale.getDefault();
         Locale.setDefault(Locale.of("tr", "TR"));
         try {

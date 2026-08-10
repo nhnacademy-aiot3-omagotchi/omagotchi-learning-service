@@ -52,7 +52,7 @@ class TeamNameScopeIT {
 
     @Test
     @DisplayName("다른 기수에는 같은 이름의 팀을 만들 수 있다")
-    void test1() {
+    void canCreateSameNameTeamInDifferentCohort() {
         Long cohort1 = fixture.createCohort("1기");
         Long cohort2 = fixture.createCohort("2기");
         var a = fixture.createActiveMember(cohort1);
@@ -67,7 +67,7 @@ class TeamNameScopeIT {
 
     @Test
     @DisplayName("같은 기수에서는 대소문자만 다른 이름도 중복으로 막힌다")
-    void test2() {
+    void blocksDuplicateNameDifferingOnlyInCase() {
         Long cohortId = fixture.createCohort("1기");
         var a = fixture.createActiveMember(cohortId);
         var b = fixture.createActiveMember(cohortId);
@@ -83,7 +83,7 @@ class TeamNameScopeIT {
 
     @Test
     @DisplayName("같은 기수에서는 앞뒤 공백만 다른 이름도 중복으로 막힌다")
-    void test3() {
+    void blocksDuplicateNameDifferingOnlyInWhitespace() {
         Long cohortId = fixture.createCohort("1기");
         var a = fixture.createActiveMember(cohortId);
         var b = fixture.createActiveMember(cohortId);
@@ -99,7 +99,7 @@ class TeamNameScopeIT {
 
     @Test
     @DisplayName("서비스 선검사를 건너뛰어도 uq_teams_active_name이 최종 방어선으로 막는다")
-    void test4() {
+    void uniqueIndexBlocksDuplicateEvenWhenServiceCheckIsBypassed() {
         Long cohortId = fixture.createCohort("1기");
         teamJpaRepository.saveAndFlush(Team.create(cohortId, "오마고치"));
 
@@ -128,7 +128,7 @@ class TeamNameScopeIT {
      */
     @Test
     @DisplayName("Port는 인덱스 위반을 DUPLICATE_NAME으로 변환한다 — flush를 지연하지 않기 때문")
-    void test5() {
+    void portTranslatesIndexViolationToDuplicateName() {
         Long cohortId = fixture.createCohort("1기");
         teamRepository.save(Team.create(cohortId, "오마고치"));
 
@@ -140,7 +140,7 @@ class TeamNameScopeIT {
 
     @Test
     @DisplayName("해체된 팀과 같은 이름으로 다시 만들 수 있다")
-    void test6() {
+    void canRecreateTeamWithSameNameAfterDisband() {
         Long cohortId = fixture.createCohort("1기");
         var master = fixture.createActiveMember(cohortId);
 
@@ -158,7 +158,7 @@ class TeamNameScopeIT {
 
     @Test
     @DisplayName("여러 기수를 담당하는 사람은 기수별로 팀에 하나씩 소속될 수 있다")
-    void test7() {
+    void multiCohortPersonCanBelongToOneTeamPerCohort() {
         Long cohort1 = fixture.createCohort("1기");
         Long cohort2 = fixture.createCohort("2기");
 
@@ -178,7 +178,7 @@ class TeamNameScopeIT {
 
     @Test
     @DisplayName("기수를 지정하지 않으면 담당 기수가 둘 이상인 사람은 거부된다")
-    void test8() {
+    void rejectsWhenCohortIdOmittedAndMultipleActiveCohorts() {
         Long cohort1 = fixture.createCohort("1기");
         Long cohort2 = fixture.createCohort("2기");
         UUID userId = UUID.randomUUID();

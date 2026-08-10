@@ -100,7 +100,7 @@ class OccupancyParticipantServiceTest {
 
     @Test
     @DisplayName("참여자를 추가하면 재실 구간의 멤버십으로 행이 생성된다.")
-    void test1() {
+    void addCreatesRowWithPresenceMembership() {
         givenAddableTarget();
         given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
                 .willReturn(Optional.empty());
@@ -125,7 +125,7 @@ class OccupancyParticipantServiceTest {
      */
     @Test
     @DisplayName("이탈했던 사람을 다시 추가하면 새 행 없이 기존 행이 복원된다.")
-    void test2() {
+    void reAddingRestoresExistingRowWithoutNewInsert() {
         givenAddableTarget();
         OccupancyParticipant left = participant();
         left.leave(now().minusMinutes(10));
@@ -143,7 +143,7 @@ class OccupancyParticipantServiceTest {
     /** DB가 막지 않으므로 이 검증이 유일한 방어선이다 (MR-33). */
     @Test
     @DisplayName("점유자와 다른 기수의 사용자는 참여자로 추가할 수 없다.")
-    void test3() {
+    void cannotAddUserFromDifferentCohortThanOccupier() {
         givenActiveOccupancy();
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
@@ -161,7 +161,7 @@ class OccupancyParticipantServiceTest {
     /** 종료된 멤버십은 기수를 특정할 수 없어 정합 검증이 성립하지 않는다. */
     @Test
     @DisplayName("대상의 멤버십이 활성이 아니면 추가할 수 없다.")
-    void test4() {
+    void cannotAddWhenTargetMembershipInactive() {
         givenActiveOccupancy();
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
@@ -181,7 +181,7 @@ class OccupancyParticipantServiceTest {
      */
     @Test
     @DisplayName("점유자의 멤버십이 활성이 아니면 대상과 무관하게 전용 코드로 실패한다.")
-    void test22() {
+    void failsWithDedicatedCodeWhenOccupierMembershipInactive() {
         givenActiveOccupancy();
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room()));
         given(cohortMembershipQueryService.findActiveMembership(OCCUPIER_MEMBERSHIP_ID))
@@ -198,7 +198,7 @@ class OccupancyParticipantServiceTest {
 
     @Test
     @DisplayName("점유자가 아니면 참여자를 추가할 수 없다.")
-    void test5() {
+    void cannotAddWhenRequesterNotOccupier() {
         givenActiveOccupancy();
 
         assertBusinessError(
@@ -209,7 +209,7 @@ class OccupancyParticipantServiceTest {
 
     @Test
     @DisplayName("재실이 아닌 사용자는 참여자로 추가할 수 없다.")
-    void test6() {
+    void cannotAddAbsentUserAsParticipant() {
         givenActiveOccupancy();
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
@@ -223,7 +223,7 @@ class OccupancyParticipantServiceTest {
 
     @Test
     @DisplayName("활성 점유가 없으면 이미 종료된 점유로 처리한다.")
-    void test7() {
+    void treatsMissingActiveOccupancyAsEnded() {
         given(occupancyRepository.findActiveSummaryBySpaceId(SPACE_ID)).willReturn(Optional.empty());
 
         assertBusinessError(
@@ -238,7 +238,7 @@ class OccupancyParticipantServiceTest {
      */
     @Test
     @DisplayName("락을 잡은 뒤 종료된 점유를 찾아낸다.")
-    void test8() {
+    void detectsOccupancyEndedAfterLock() {
         givenActiveOccupancy();
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
@@ -260,7 +260,7 @@ class OccupancyParticipantServiceTest {
     /** 정원은 "최대 N행"이라 유니크로 표현할 수 없어 락 안 카운트가 유일한 방어선이다. */
     @Test
     @DisplayName("정원이 찬 회의실에는 참여자를 추가할 수 없다.")
-    void test9() {
+    void cannotAddWhenRoomIsFull() {
         givenAddableTarget();
         given(participantRepository.countActiveByOccupancyId(OCCUPANCY_ID)).willReturn((long) CAPACITY);
 
@@ -279,7 +279,7 @@ class OccupancyParticipantServiceTest {
      */
     @Test
     @DisplayName("정원이 꽉 차 있어도 이미 참여 중인 사용자의 재추가는 성공한다.")
-    void test23() {
+    void readdingActiveParticipantSucceedsEvenWhenFull() {
         givenAddableTarget();
         given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
                 .willReturn(Optional.of(participant()));   // 이탈하지 않은 활성 참여자
@@ -302,7 +302,7 @@ class OccupancyParticipantServiceTest {
      */
     @Test
     @DisplayName("이탈했던 사용자의 재합류는 정원이 꽉 차 있으면 거부된다.")
-    void test24() {
+    void rejoinFailsWhenRoomIsFull() {
         givenAddableTarget();
         OccupancyParticipant left = participant();
         left.leave(now().minusMinutes(10));
@@ -321,7 +321,7 @@ class OccupancyParticipantServiceTest {
 
     @Test
     @DisplayName("잔여 1석이면 추가에 성공한다.")
-    void test10() {
+    void succeedsWithLastRemainingSeat() {
         givenAddableTarget();
         given(participantRepository.countActiveByOccupancyId(OCCUPANCY_ID))
                 .willReturn((long) CAPACITY - 1);
@@ -339,7 +339,7 @@ class OccupancyParticipantServiceTest {
      */
     @Test
     @DisplayName("정원 카운트는 점유 행 락을 잡은 뒤에 한다.")
-    void test11() {
+    void countsCapacityAfterLockingOccupancy() {
         givenAddableTarget();
         given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
                 .willReturn(Optional.empty());
@@ -356,7 +356,7 @@ class OccupancyParticipantServiceTest {
     /** 점유 중에 공간이 하드 삭제되는 경로는 없지만, 정원을 못 읽으면 통과시켜선 안 된다. */
     @Test
     @DisplayName("공간을 찾을 수 없으면 참여자를 추가하지 않는다.")
-    void test20() {
+    void doesNotAddWhenSpaceNotFound() {
         givenActiveOccupancy();
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.empty());
 
@@ -368,7 +368,7 @@ class OccupancyParticipantServiceTest {
 
     @Test
     @DisplayName("락 시점에 점유 행이 사라지면 이미 종료된 점유로 처리한다.")
-    void test21() {
+    void treatsMissingRowAtLockAsEndedOccupancy() {
         givenLockedOccupancyMissing();
 
         assertBusinessError(
@@ -383,7 +383,7 @@ class OccupancyParticipantServiceTest {
 
     @Test
     @DisplayName("참여자 본인이 이탈하면 이탈 시각이 기록된다.")
-    void test12() {
+    void selfLeaveRecordsLeftAt() {
         givenLockedOccupancy();
         OccupancyParticipant participant = participant();
         given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
@@ -397,7 +397,7 @@ class OccupancyParticipantServiceTest {
 
     @Test
     @DisplayName("점유자는 참여자를 제외할 수 있다.")
-    void test13() {
+    void occupierCanRemoveParticipant() {
         givenLockedOccupancy();
         OccupancyParticipant participant = participant();
         given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
@@ -410,7 +410,7 @@ class OccupancyParticipantServiceTest {
 
     @Test
     @DisplayName("점유자도 대상 본인도 아니면 제외할 수 없다.")
-    void test14() {
+    void cannotRemoveWhenNeitherOccupierNorSelf() {
         givenActiveOccupancy();
 
         assertBusinessError(
@@ -422,7 +422,7 @@ class OccupancyParticipantServiceTest {
     /** 점유자가 빠지면 주인 없는 활성 점유가 남는다 — 반납으로만 종료해야 한다. */
     @Test
     @DisplayName("점유자는 이탈로 회의를 떠날 수 없다.")
-    void test15() {
+    void occupierCannotLeaveViaRemove() {
         givenActiveOccupancy();
 
         assertBusinessError(
@@ -437,7 +437,7 @@ class OccupancyParticipantServiceTest {
      */
     @Test
     @DisplayName("권한 없는 사람이 점유자를 제외하려 하면 점유자 여부를 알리지 않고 막는다.")
-    void test16() {
+    void blocksUnauthorizedRemovalOfOccupierWithoutRevealingRole() {
         givenActiveOccupancy();
 
         assertBusinessError(
@@ -448,7 +448,7 @@ class OccupancyParticipantServiceTest {
 
     @Test
     @DisplayName("참여자가 아닌 사람은 이탈할 수 없다.")
-    void test17() {
+    void cannotLeaveWhenNotAParticipant() {
         givenLockedOccupancy();
         given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
                 .willReturn(Optional.empty());
@@ -465,7 +465,7 @@ class OccupancyParticipantServiceTest {
      */
     @Test
     @DisplayName("이미 이탈한 참여자에게 다시 요청해도 이탈 시각이 바뀌지 않는다.")
-    void test18() {
+    void repeatedLeaveRequestDoesNotChangeLeftAt() {
         givenLockedOccupancy();
         OccupancyParticipant participant = participant();
         OffsetDateTime firstLeftAt = now().minusMinutes(30);
@@ -480,7 +480,7 @@ class OccupancyParticipantServiceTest {
 
     @Test
     @DisplayName("이탈도 점유 행 락을 잡은 뒤에 처리한다.")
-    void test19() {
+    void leaveLocksOccupancyRowBeforeProcessing() {
         givenLockedOccupancy();
         given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
                 .willReturn(Optional.of(participant()));

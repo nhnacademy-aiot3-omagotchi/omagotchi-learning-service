@@ -27,26 +27,26 @@ class TeamConstraintTranslatorTest {
 
     @Test
     @DisplayName("기수 내 활성 팀 이름 유니크 위반은 이름 중복 오류가 된다.")
-    void test1() {
+    void activeNameViolationBecomesDuplicateNameError() {
         assertTranslatedTo(TeamErrorCode.DUPLICATE_NAME, "uq_teams_active_name");
     }
 
     @Test
     @DisplayName("멤버십 유니크 위반은 이미 팀 소속 오류가 된다.")
-    void test2() {
+    void membershipViolationBecomesAlreadyInTeamError() {
         assertTranslatedTo(TeamErrorCode.ALREADY_IN_TEAM, "uq_team_members_membership");
         assertTranslatedTo(TeamErrorCode.ALREADY_IN_TEAM, "uq_team_members_team_membership");
     }
 
     @Test
     @DisplayName("팀당 MASTER 1명 유니크 위반은 마스터 상태 충돌이 된다.")
-    void test3() {
+    void oneMasterViolationBecomesMasterStateConflict() {
         assertTranslatedTo(TeamErrorCode.MASTER_STATE_CONFLICT, "uq_team_members_one_master");
     }
 
     @Test
     @DisplayName("PostgreSQL이 스키마를 붙여 넘겨도 알아본다.")
-    void test4() {
+    void recognizesConstraintNameWithSchemaPrefix() {
         assertTranslatedTo(TeamErrorCode.DUPLICATE_NAME, "learning_service.UQ_TEAMS_ACTIVE_NAME");
     }
 
@@ -57,7 +57,7 @@ class TeamConstraintTranslatorTest {
      */
     @Test
     @DisplayName("모르는 제약이면 원본 예외를 그대로 돌려준다.")
-    void test5() {
+    void returnsOriginalExceptionForUnknownConstraint() {
         DataIntegrityViolationException original = violation("fk_team_members_team");
 
         assertThat(TeamConstraintTranslator.translate(original)).isSameAs(original);
@@ -65,7 +65,7 @@ class TeamConstraintTranslatorTest {
 
     @Test
     @DisplayName("인덱스명을 읽을 수 없으면 원본 예외를 그대로 돌려준다.")
-    void test6() {
+    void returnsOriginalExceptionWhenConstraintNameUnreadable() {
         DataIntegrityViolationException original =
                 new DataIntegrityViolationException("원인을 알 수 없는 무결성 위반");
 
@@ -75,7 +75,7 @@ class TeamConstraintTranslatorTest {
     /** 원본을 cause로 달아야 예상 밖 실패의 스택 트레이스가 최종 경계까지 살아남는다. */
     @Test
     @DisplayName("변환한 예외는 원본을 cause로 보존한다.")
-    void test7() {
+    void translatedExceptionPreservesOriginalAsCause() {
         DataIntegrityViolationException original = violation("uq_teams_active_name");
 
         assertThat(TeamConstraintTranslator.translate(original)).hasCause(original);
@@ -90,7 +90,7 @@ class TeamConstraintTranslatorTest {
      */
     @Test
     @DisplayName("JVM 기본 로케일이 터키어여도 인덱스명을 정확히 인식한다.")
-    void test8() {
+    void recognizesConstraintNameUnderTurkishLocale() {
         Locale original = Locale.getDefault();
         Locale.setDefault(Locale.of("tr", "TR"));
         try {

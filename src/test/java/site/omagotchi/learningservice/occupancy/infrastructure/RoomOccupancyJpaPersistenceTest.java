@@ -58,7 +58,7 @@ class RoomOccupancyJpaPersistenceTest {
      */
     @Test
     @DisplayName("저장은 flush까지 즉시 수행한다.")
-    void test1() {
+    void saveFlushesImmediately() {
         RoomOccupancy occupancy = occupancy();
         given(occupancyJpaRepository.saveAndFlush(occupancy)).willReturn(occupancy);
 
@@ -70,7 +70,7 @@ class RoomOccupancyJpaPersistenceTest {
 
     @Test
     @DisplayName("회의실 활성 유니크 위반은 409로 옮긴다.")
-    void test2() {
+    void oneActivePerSpaceViolationBecomesConflict() {
         RoomOccupancy occupancy = occupancy();
         given(occupancyJpaRepository.saveAndFlush(any(RoomOccupancy.class)))
                 .willThrow(violation("uq_room_occupancies_one_active_per_space"));
@@ -84,7 +84,7 @@ class RoomOccupancyJpaPersistenceTest {
 
     @Test
     @DisplayName("계정 활성 유니크 위반은 409로 옮긴다.")
-    void test3() {
+    void oneActivePerUserViolationBecomesConflict() {
         RoomOccupancy occupancy = occupancy();
         given(occupancyJpaRepository.saveAndFlush(any(RoomOccupancy.class)))
                 .willThrow(violation("uq_room_occupancies_one_active_per_user"));
@@ -98,7 +98,7 @@ class RoomOccupancyJpaPersistenceTest {
 
     @Test
     @DisplayName("모르는 무결성 위반은 감싸지 않고 그대로 전파한다.")
-    void test4() {
+    void propagatesUnknownViolationUnwrapped() {
         RoomOccupancy occupancy = occupancy();
         DataIntegrityViolationException original = violation("fk_room_occupancies_occupier");
         given(occupancyJpaRepository.saveAndFlush(any(RoomOccupancy.class))).willThrow(original);
@@ -117,7 +117,7 @@ class RoomOccupancyJpaPersistenceTest {
      */
     @Test
     @DisplayName("존재 확인은 ACTIVE 상태와 만료 시각으로 좁혀 위임한다.")
-    void test5() {
+    void existsCheckDelegatesWithActiveStatusAndExpiry() {
         given(occupancyJpaRepository.existsBySpaceIdAndStatusAndExpiresAtAfter(
                 SPACE_ID, OccupancyStatus.ACTIVE, NOW))
                 .willReturn(true);
@@ -131,7 +131,7 @@ class RoomOccupancyJpaPersistenceTest {
 
     @Test
     @DisplayName("활성 점유 조회도 ACTIVE 상태로 좁혀 위임한다.")
-    void test6() {
+    void findActiveDelegatesWithActiveStatus() {
         RoomOccupancy occupancy = occupancy();
         given(occupancyJpaRepository.findBySpaceIdAndStatus(SPACE_ID, OccupancyStatus.ACTIVE))
                 .willReturn(Optional.of(occupancy));
@@ -145,7 +145,7 @@ class RoomOccupancyJpaPersistenceTest {
      */
     @Test
     @DisplayName("만료 정리는 ACTIVE를 EXPIRED로 옮기고 정리된 점유를 돌려준다.")
-    void test7() {
+    void expireTransitionsActiveToExpiredAndReturnsResult() {
         given(occupancyJpaRepository.findStaleBySpaceId(SPACE_ID, NOW, OccupancyStatus.ACTIVE))
                 .willReturn(List.of(stale(100L, NOW.minusMinutes(1))));
         given(occupancyJpaRepository.expireById(
@@ -163,7 +163,7 @@ class RoomOccupancyJpaPersistenceTest {
      */
     @Test
     @DisplayName("정리 대상 식별이 상태 변경보다 먼저다.")
-    void test12() {
+    void identifiesCandidatesBeforeTransitioning() {
         given(occupancyJpaRepository.findStaleByUserId(USER_ID, NOW, OccupancyStatus.ACTIVE))
                 .willReturn(List.of(stale(100L, NOW.minusMinutes(1))));
         given(occupancyJpaRepository.expireById(
@@ -180,7 +180,7 @@ class RoomOccupancyJpaPersistenceTest {
     /** 정리할 것이 없으면 전이 시도 자체가 없다 — 점유 시작마다 도는 경로다. */
     @Test
     @DisplayName("만료된 점유가 없으면 상태 변경을 시도하지 않는다.")
-    void test13() {
+    void skipsTransitionWhenNoCandidates() {
         given(occupancyJpaRepository.findStaleBySpaceId(SPACE_ID, NOW, OccupancyStatus.ACTIVE))
                 .willReturn(List.of());
 
@@ -198,7 +198,7 @@ class RoomOccupancyJpaPersistenceTest {
      */
     @Test
     @DisplayName("조회와 전이 사이에 반납·연장이 끼면 그 후보는 결과에서 빠진다.")
-    void test16() {
+    void excludesCandidateWhenTransitionFailsBetweenLookupAndUpdate() {
         given(occupancyJpaRepository.findStaleByUserId(USER_ID, NOW, OccupancyStatus.ACTIVE))
                 .willReturn(List.of(stale(100L, NOW.minusMinutes(1))));
         // 조회 이후 다른 트랜잭션이 반납·연장을 커밋해 조건이 더 이상 맞지 않는 상황을
@@ -212,7 +212,7 @@ class RoomOccupancyJpaPersistenceTest {
     /** 스케줄러의 후보 조회는 찾기만 한다 — 전이는 건별로 따로 한다 (명세서 03 §4). */
     @Test
     @DisplayName("만료 후보 조회는 상태를 바꾸지 않는다.")
-    void test14() {
+    void findStaleDoesNotMutateState() {
         given(occupancyJpaRepository.findStale(NOW, OccupancyStatus.ACTIVE))
                 .willReturn(List.of(stale(100L, NOW.minusMinutes(1))));
 
@@ -229,7 +229,7 @@ class RoomOccupancyJpaPersistenceTest {
      */
     @Test
     @DisplayName("단건 전이는 영향 행 수를 그대로 알려준다.")
-    void test15() {
+    void singleTransitionReturnsAffectedRowCount() {
         given(occupancyJpaRepository.expireById(
                 100L, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(1);
         given(occupancyJpaRepository.expireById(
@@ -265,7 +265,7 @@ class RoomOccupancyJpaPersistenceTest {
      */
     @Test
     @DisplayName("활성 점유 요약은 ACTIVE로 좁혀 Projection으로 읽는다.")
-    void test8() {
+    void summaryReadsActiveOccupancyAsProjection() {
         given(occupancyJpaRepository.findSummaryBySpaceIdAndStatus(SPACE_ID, OccupancyStatus.ACTIVE))
                 .willReturn(Optional.of(projection()));
 
@@ -275,7 +275,7 @@ class RoomOccupancyJpaPersistenceTest {
 
     @Test
     @DisplayName("활성 점유가 없으면 빈 값을 돌려준다.")
-    void test9() {
+    void returnsEmptyWhenNoActiveOccupancy() {
         given(occupancyJpaRepository.findSummaryBySpaceIdAndStatus(SPACE_ID, OccupancyStatus.ACTIVE))
                 .willReturn(Optional.empty());
 
@@ -288,7 +288,7 @@ class RoomOccupancyJpaPersistenceTest {
      */
     @Test
     @DisplayName("트랜잭션 밖에서 점유 행 락을 잡으려 하면 막는다.")
-    void test10() {
+    void blocksLockOutsideTransaction() {
         assertThatThrownBy(() -> roomOccupancyJpaPersistence.lockById(100L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("트랜잭션");
@@ -298,7 +298,7 @@ class RoomOccupancyJpaPersistenceTest {
 
     @Test
     @DisplayName("트랜잭션 안에서는 상태 조건 없이 행을 잠근다.")
-    void test11() {
+    void locksRowUnconditionallyWithinTransaction() {
         RoomOccupancy occupancy = occupancy();
         given(occupancyJpaRepository.findByIdForUpdate(100L)).willReturn(Optional.of(occupancy));
 

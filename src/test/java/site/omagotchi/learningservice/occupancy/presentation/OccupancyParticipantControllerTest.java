@@ -48,7 +48,7 @@ class OccupancyParticipantControllerTest {
 
     @Test
     @DisplayName("참여자를 추가하면 201을 응답한다.")
-    void test1() throws Exception {
+    void returns201OnAddParticipant() throws Exception {
         mockMvc.perform(post(PATH)
                         .header("X-User-Id", REQUESTER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -60,7 +60,7 @@ class OccupancyParticipantControllerTest {
 
     @Test
     @DisplayName("대상 없이 추가를 요청하면 400을 응답한다.")
-    void test2() throws Exception {
+    void returns400WhenTargetMissing() throws Exception {
         mockMvc.perform(post(PATH)
                         .header("X-User-Id", REQUESTER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -70,32 +70,32 @@ class OccupancyParticipantControllerTest {
 
     @Test
     @DisplayName("타 기수 대상을 추가하면 400을 응답한다.")
-    void test3() throws Exception {
+    void returns400WhenTargetInDifferentCohort() throws Exception {
         assertAddError(OccupancyErrorCode.DIFFERENT_COHORT, 400);
     }
 
     @Test
     @DisplayName("점유자가 아니면 403을 응답한다.")
-    void test4() throws Exception {
+    void returns403WhenNotOccupier() throws Exception {
         assertAddError(OccupancyErrorCode.NOT_OCCUPIER, 403);
     }
 
     @Test
     @DisplayName("정원이 차면 409를 응답한다.")
-    void test5() throws Exception {
+    void returns409WhenCapacityExceeded() throws Exception {
         assertAddError(OccupancyErrorCode.CAPACITY_EXCEEDED, 409);
     }
 
     @Test
     @DisplayName("종료된 점유면 409를 응답한다.")
-    void test6() throws Exception {
+    void returns409WhenOccupancyEnded() throws Exception {
         assertAddError(OccupancyErrorCode.OCCUPANCY_ENDED, 409);
     }
 
     /** 자기 자신을 지정하면 이탈이다. 별도 엔드포인트가 없다. */
     @Test
     @DisplayName("본인을 지정해 이탈하면 204를 응답한다.")
-    void test7() throws Exception {
+    void returns204OnSelfLeave() throws Exception {
         mockMvc.perform(delete(PATH + "/" + REQUESTER_ID).header("X-User-Id", REQUESTER_ID))
                 .andExpect(status().isNoContent());
 
@@ -104,7 +104,7 @@ class OccupancyParticipantControllerTest {
 
     @Test
     @DisplayName("다른 사람을 지정해 제외하면 204를 응답한다.")
-    void test8() throws Exception {
+    void returns204OnKickingOther() throws Exception {
         mockMvc.perform(delete(PATH + "/" + TARGET_ID).header("X-User-Id", REQUESTER_ID))
                 .andExpect(status().isNoContent());
 
@@ -113,7 +113,7 @@ class OccupancyParticipantControllerTest {
 
     @Test
     @DisplayName("점유자를 이탈시키려 하면 400과 반납 안내를 응답한다.")
-    void test9() throws Exception {
+    void returns400WithReleaseGuidanceWhenTargetingOccupier() throws Exception {
         doThrow(new BusinessException(OccupancyErrorCode.OCCUPIER_CANNOT_LEAVE))
                 .when(occupancyParticipantService).remove(any(), any(), any());
 
@@ -124,7 +124,7 @@ class OccupancyParticipantControllerTest {
 
     @Test
     @DisplayName("참여자가 아니면 404를 응답한다.")
-    void test10() throws Exception {
+    void returns404WhenNotAParticipant() throws Exception {
         doThrow(new BusinessException(OccupancyErrorCode.PARTICIPANT_NOT_FOUND))
                 .when(occupancyParticipantService).remove(any(), any(), any());
 

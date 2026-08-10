@@ -49,7 +49,7 @@ class OccupancyExpirationTest {
 
     @Test
     @DisplayName("전이에 성공하면 참여자를 마감하고 공실을 알린다.")
-    void test1() {
+    void closesParticipantsAndPublishesVacatedEventOnSuccess() {
         OffsetDateTime endedAt = NOW.minusMinutes(5);
         given(occupancyRepository.expire(OCCUPANCY_ID, NOW)).willReturn(true);
 
@@ -68,7 +68,7 @@ class OccupancyExpirationTest {
      */
     @Test
     @DisplayName("전이되지 않으면 참여자도 알림도 건드리지 않는다.")
-    void test2() {
+    void doesNothingWhenTransitionFails() {
         given(occupancyRepository.expire(OCCUPANCY_ID, NOW)).willReturn(false);
 
         assertThat(occupancyExpiration.expire(candidate(NOW.minusMinutes(5)), NOW)).isFalse();
@@ -84,7 +84,7 @@ class OccupancyExpirationTest {
      */
     @Test
     @DisplayName("마감과 공실 시각은 처리 시각이 아니라 만료 시각이다.")
-    void test3() {
+    void closedAtIsExpiryTimeNotProcessingTime() {
         OffsetDateTime endedAt = NOW.minusMinutes(5);
         given(occupancyRepository.expire(OCCUPANCY_ID, NOW)).willReturn(true);
 

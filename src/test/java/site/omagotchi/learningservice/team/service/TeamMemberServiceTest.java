@@ -68,7 +68,7 @@ class TeamMemberServiceTest {
 
     @Test
     @DisplayName("팀원이 남아있으면 마스터는 위임 없이 탈퇴할 수 없다.")
-    void test1() {
+    void masterCannotLeaveWithoutDelegationWhenMembersRemain() {
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMembership(1L, 10L)).willReturn(masterMember);
@@ -82,7 +82,7 @@ class TeamMemberServiceTest {
 
     @Test
     @DisplayName("혼자 남은 마스터가 탈퇴하면 팀도 해체된다.")
-    void test2() {
+    void soleMasterLeavingDisbandsTeam() {
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMembership(1L, 10L)).willReturn(masterMember);
@@ -96,7 +96,7 @@ class TeamMemberServiceTest {
 
     @Test
     @DisplayName("정상 요청이면 팀원이 추가된다.")
-    void test3() {
+    void addsMemberOnValidRequest() {
         UUID targetUserId = UUID.randomUUID();
         CohortMembershipView targetMembership = new CohortMembershipView(20L, 1L, targetUserId);
 
@@ -118,7 +118,7 @@ class TeamMemberServiceTest {
 
     @Test
     @DisplayName("대상이 팀의 기수에 속해 있지 않으면 거부한다.")
-    void test4() {
+    void rejectsAddWhenTargetNotInTeamCohort() {
         UUID targetUserId = UUID.randomUUID();
 
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
@@ -135,7 +135,7 @@ class TeamMemberServiceTest {
 
     @Test
     @DisplayName("탈퇴한 계정은 팀원으로 추가할 수 없다.")
-    void test5() {
+    void cannotAddWithdrawnAccountAsMember() {
         UUID targetUserId = UUID.randomUUID();
 
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
@@ -151,7 +151,7 @@ class TeamMemberServiceTest {
 
     @Test
     @DisplayName("존재하지 않는 계정은 팀원으로 추가할 수 없다.")
-    void test6() {
+    void cannotAddNonExistentAccountAsMember() {
         UUID targetUserId = UUID.randomUUID();
 
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
@@ -167,7 +167,7 @@ class TeamMemberServiceTest {
 
     @Test
     @DisplayName("정원이 가득 차면 팀원을 추가할 수 없다.")
-    void test7() {
+    void cannotAddMemberWhenTeamIsFull() {
         UUID targetUserId = UUID.randomUUID();
         CohortMembershipView targetMembership = new CohortMembershipView(20L, 1L, targetUserId);
 
@@ -187,7 +187,7 @@ class TeamMemberServiceTest {
 
     @Test
     @DisplayName("마스터가 일반 팀원을 제외하면 삭제된다.")
-    void test8() {
+    void masterKickingMemberDeletesRow() {
         TeamMember normalMember = createMemberWithId(2L, 1L, 20L, false);
 
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
@@ -202,7 +202,7 @@ class TeamMemberServiceTest {
 
     @Test
     @DisplayName("마스터 본인은 제외할 수 없다.")
-    void test9() {
+    void masterCannotBeKicked() {
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
@@ -216,7 +216,7 @@ class TeamMemberServiceTest {
 
     @Test
     @DisplayName("존재하지 않는 팀원을 제외할 수 없다.")
-    void test10() {
+    void cannotKickNonExistentMember() {
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
@@ -228,7 +228,7 @@ class TeamMemberServiceTest {
 
     @Test
     @DisplayName("다른 팀 소속의 memberId를 지정하면 제외할 수 없다.")
-    void test11() {
+    void cannotKickMemberIdFromAnotherTeam() {
         TeamMember otherTeamMember = createMemberWithId(5L, 2L, 30L, false);
 
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);

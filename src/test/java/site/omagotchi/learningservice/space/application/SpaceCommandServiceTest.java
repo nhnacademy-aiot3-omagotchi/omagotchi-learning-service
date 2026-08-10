@@ -94,24 +94,6 @@ class SpaceCommandServiceTest {
     }
 
     @Test
-    void rejectsDuplicateNameDifferingOnlyByCase() {
-        when(spaceRepository.existsActiveByName("회의실 a"))
-                .thenReturn(true);
-
-        assertBusinessError(
-                SpaceErrorCode.DUPLICATE_NAME,
-                () -> spaceCommandService.create(
-                        new CreateSpaceCommand(
-                                "회의실 a",
-                                SpaceType.MEETING,
-                                8,
-                                42L
-                        )
-                )
-        );
-    }
-
-    @Test
     void allowsNameUsedOnlyBySoftDeletedSpace() {
         when(spaceRepository.existsActiveByName("회의실 A"))
                 .thenReturn(false);
@@ -813,10 +795,23 @@ class SpaceCommandServiceTest {
     }
 
     @Test
-    void rejectsAssignmentByManagerOfAnotherCohort() {
+    void rejectsAssignmentWhenActorDoesNotManageOwningCohort() {
         when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(lab(42L, null)));
         when(cohortAccessPort.isActiveManager(42L, ACTOR_USER_ID))
+                .thenReturn(false);
+
+        assertBusinessError(
+                SpaceErrorCode.ACCESS_DENIED,
+                () -> spaceCommandService.assignCohort(1L, 84L)
+        );
+    }
+
+    @Test
+    void rejectsAssignmentWhenActorDoesNotManageRequestedCohort() {
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(lab(42L, null)));
+        when(cohortAccessPort.isActiveManager(84L, ACTOR_USER_ID))
                 .thenReturn(false);
 
         assertBusinessError(

@@ -154,47 +154,6 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
     }
 
     /**
-     * 만료된 ACTIVE 행 정리.
-     *
-     * <p>{@code endedAt}에 {@code now}가 아니라 {@code expiresAt}을 넣는 것이 요점이다 —
-     * 실제 종료 시각이 그것이고, {@code ck_room_occupancies_end}
-     * ({@code (status='ACTIVE') = (ended_at IS NULL)})도 함께 만족한다.</p>
-     *
-     * <p>벌크 UPDATE는 영속성 컨텍스트를 우회하므로 {@code clearAutomatically}가 필요해 보이지만,
-     * 이 호출 시점에는 아직 어떤 점유 엔티티도 로드하지 않았다. 호출 순서를 바꾸면
-     * (예: 활성 점유를 엔티티로 먼저 읽고 정리) 1차 캐시가 낡은 상태를 들고 있게 된다.
-     * 바로 위 {@code findStale*}가 Projection인 것도 같은 이유다.</p>
-     */
-    @Modifying
-    @Query("""
-                UPDATE RoomOccupancy o
-                SET o.status = :expired, o.endedAt = o.expiresAt
-                WHERE o.spaceId = :spaceId
-                  AND o.status = :active
-                  AND o.expiresAt <= :now""")
-    int expireStaleBySpaceId(
-            @Param("spaceId") Long spaceId,
-            @Param("now")OffsetDateTime now,
-            @Param("active") OccupancyStatus active,
-            @Param("expired") OccupancyStatus expired
-            );
-
-    @Modifying
-    @Query("""
-                UPDATE RoomOccupancy o
-                SET o.status = :expired, o.endedAt = o.expiresAt
-                WHERE o.occupierUserId = :userId
-                AND o.status = :active
-                AND o.expiresAt <= :now
-                """)
-    int expireStaleByUserId(
-            @Param("userId") UUID userId,
-            @Param("now") OffsetDateTime now,
-            @Param("active") OccupancyStatus  active,
-            @Param("expired") OccupancyStatus expired
-    );
-
-    /**
      * 점유 한 건만 EXPIRED로 전이한다 (스케줄러 #9).
      *
      * <p>조건에 {@code expiresAt <= now}가 남아 있는 것이 핵심이다. 조회 시점에는 만료였어도

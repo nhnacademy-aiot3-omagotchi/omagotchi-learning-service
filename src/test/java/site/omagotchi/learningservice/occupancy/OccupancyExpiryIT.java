@@ -8,9 +8,11 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.support.TransactionTemplate;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
+import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
 import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 
@@ -50,6 +52,12 @@ class OccupancyExpiryIT {
 
     @Autowired
     JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    RoomOccupancyRepository occupancyRepository;
+
+    @Autowired
+    TransactionTemplate transactionTemplate;
 
     @MockitoSpyBean
     OccupancyParticipantRepository participantRepository;
@@ -227,6 +235,78 @@ class OccupancyExpiryIT {
 
         roomOccupancyService.start(roomId, second.userId());
 
+        assertThat(openParticipantRows(roomId)).isEqualTo(1);
+    }
+
+    // ────────────────────────────── 반납·연장과의 경합 ──────────────────────────────
+
+    /**
+     * {@code expireStaleBySpaceId}·{@code expireStaleByUserId}는 후보 식별과 전이를
+     * {@code RoomOccupancyRepository#expire}(단건 조건부 UPDATE)로 나눠 처리한다.
+     * 후보를 찾아둔 시각(스캔 {@code now}) 기준으로는 만료로 보였어도, 그 사이 다른 요청이
+     * 반납을 커밋하면 전이 시도는 실패해야 한다 — 벌크 UPDATE로 처리하고 조회 결과를 그대로
+     * 반환하던 예전 구현은 이 경합을 놓쳐, 이미 정상적으로 반납된 점유를 "정리했다"고
+     * 잘못 보고했다(참여자 재마감·중복 공실 알림으로 이어진다).
+     */
+    @Test
+    @DisplayName("만료 후보로 식별된 뒤 반납되면 단건 전이는 실패한다.")
+    void test9() {
+        Long cohortId = fixture.createCohort("만료-반납경합");
+        OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "만료-반납경합-1", 8);
+
+        roomOccupancyService.start(roomId, member.userId());
+        expire(roomId);   // status는 ACTIVE인 채로 expires_at만 과거로 — "만료 후보"로 보일 상태
+        Long occupancyId = activeOccupancyId(roomId);
+        OffsetDateTime scanNow = OffsetDateTime.now();
+
+        // 후보로 식별된 뒤, 다른 요청이 반납을 먼저 커밋한다.
+        roomOccupancyLifecycleService.release(roomId, member.userId());
+
+        // 단건 전이 시도 — 반납으로 status가 이미 ACTIVE가 아니므로 실패해야 한다.
+        Boolean transitioned = transactionTemplate.execute(
+                status -> occupancyRepository.expire(occupancyId, scanNow));
+        assertThat(transitioned).isFalse();
+
+        // 반납이 이미 올바르게 정리했다 — 실패한 전이가 그 결과를 다시 건드리면 안 된다.
+        assertThat(activeOccupancyRows(roomId)).isZero();
+        assertThat(openParticipantRows(roomId)).isZero();
+    }
+
+    /**
+     * 연장 쪽도 같은 방어가 필요하다 — 실패하지 않으면 지금 회의 중인 사람들의 참여자
+     * 행이 닫히고, 여전히 쓰고 있는 방에 대해 "비었다"는 공실 알림이 잘못 나간다.
+     */
+    @Test
+    @DisplayName("만료 후보로 식별된 뒤 연장되면 단건 전이는 실패한다.")
+    void test10() {
+        Long cohortId = fixture.createCohort("만료-연장경합");
+        OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "만료-연장경합-1", 8);
+
+        roomOccupancyService.start(roomId, member.userId());
+        Long occupancyId = activeOccupancyId(roomId);
+
+        // 곧 만료될 것처럼 보이게 하되(연장 가능 창 안), 아직 실제로 만료되지는 않게 둔다.
+        jdbcTemplate.update("""
+                UPDATE learning_service.room_occupancies
+                   SET expires_at = now() + interval '5 seconds'
+                 WHERE id = ?
+                """, occupancyId);
+        // "이 시각 기준으로는 이미 지났다"고 스캔이 오인했을 now — 아래 연장이 실제로
+        // 성공하는 실제 시각보다 뒤다.
+        OffsetDateTime scanNow = OffsetDateTime.now().plusSeconds(10);
+
+        // 후보로 식별된 뒤, 다른 요청이 연장을 먼저 커밋한다.
+        roomOccupancyLifecycleService.extend(roomId, member.userId());
+
+        // 단건 전이 시도 — 연장으로 expires_at이 미래로 밀려 스캔 시점 now로도 조건을 만족하지 않는다.
+        Boolean transitioned = transactionTemplate.execute(
+                status -> occupancyRepository.expire(occupancyId, scanNow));
+        assertThat(transitioned).isFalse();
+
+        // 연장된 점유는 여전히 사용 중이어야 한다 — 참여자도 그대로 열려 있어야 한다.
+        assertThat(activeOccupancyRows(roomId)).isEqualTo(1);
         assertThat(openParticipantRows(roomId)).isEqualTo(1);
     }
 

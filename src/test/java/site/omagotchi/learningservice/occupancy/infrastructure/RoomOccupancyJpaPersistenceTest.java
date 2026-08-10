@@ -148,34 +148,36 @@ class RoomOccupancyJpaPersistenceTest {
     void test7() {
         given(occupancyJpaRepository.findStaleBySpaceId(SPACE_ID, NOW, OccupancyStatus.ACTIVE))
                 .willReturn(List.of(stale(100L, NOW.minusMinutes(1))));
+        given(occupancyJpaRepository.expireById(
+                100L, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(1);
 
         assertThat(roomOccupancyJpaPersistence.expireStaleBySpaceId(SPACE_ID, NOW))
                 .containsExactly(new RoomOccupancyRepository.ExpiredOccupancy(
                         100L, SPACE_ID, NOW.minusMinutes(1)));
-        verify(occupancyJpaRepository).expireStaleBySpaceId(
-                SPACE_ID, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED);
     }
 
     /**
-     * <b>식별이 UPDATE보다 먼저여야 한다.</b> 벌크 UPDATE는 무엇을 바꿨는지 돌려주지 않고,
-     * 실행 뒤에는 {@code status='ACTIVE'} 조건이 그 행에 맞지 않아 다시 찾을 수 없다.
-     * 순서가 뒤집히면 참여자를 마감할 대상을 통째로 잃는다.
+     * <b>식별이 전이보다 먼저여야 한다.</b> 단건 전이는 무엇을 바꿨는지 스스로 알려주지만
+     * (영향 행 수), 그 대상 id 자체는 미리 식별해 둬야 한다 — 조건을 만족하는 행을
+     * 통째로 찾는 방법이 없기 때문이다.
      */
     @Test
     @DisplayName("정리 대상 식별이 상태 변경보다 먼저다.")
     void test12() {
         given(occupancyJpaRepository.findStaleByUserId(USER_ID, NOW, OccupancyStatus.ACTIVE))
                 .willReturn(List.of(stale(100L, NOW.minusMinutes(1))));
+        given(occupancyJpaRepository.expireById(
+                100L, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(1);
 
         roomOccupancyJpaPersistence.expireStaleByUserId(USER_ID, NOW);
 
         InOrder order = inOrder(occupancyJpaRepository);
         order.verify(occupancyJpaRepository).findStaleByUserId(USER_ID, NOW, OccupancyStatus.ACTIVE);
-        order.verify(occupancyJpaRepository).expireStaleByUserId(
-                USER_ID, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED);
+        order.verify(occupancyJpaRepository).expireById(
+                100L, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED);
     }
 
-    /** 정리할 것이 없으면 UPDATE도 보내지 않는다 — 점유 시작마다 도는 경로다. */
+    /** 정리할 것이 없으면 전이 시도 자체가 없다 — 점유 시작마다 도는 경로다. */
     @Test
     @DisplayName("만료된 점유가 없으면 상태 변경을 시도하지 않는다.")
     void test13() {
@@ -184,7 +186,27 @@ class RoomOccupancyJpaPersistenceTest {
 
         assertThat(roomOccupancyJpaPersistence.expireStaleBySpaceId(SPACE_ID, NOW)).isEmpty();
 
-        verify(occupancyJpaRepository, never()).expireStaleBySpaceId(any(), any(), any(), any());
+        verify(occupancyJpaRepository, never()).expireById(any(), any(), any(), any());
+    }
+
+    /**
+     * 조회(식별)와 전이 사이에 다른 요청이 반납·연장을 커밋하면, 단건 조건부 전이는
+     * 0행으로 끝난다 — 그 후보는 결과에서 제외돼야 한다. 벌크 UPDATE로 한 번에 처리하고
+     * 조회 결과를 그대로 반환하던 예전 구현은 이 경합을 놓쳐, 이미 반납됐거나 연장으로
+     * 여전히 사용 중인 점유를 "정리했다"고 잘못 보고했다 — 그 값이 참여자 마감·
+     * {@code RoomVacatedEvent} 발행으로 그대로 이어지는 게 실제 피해다.
+     */
+    @Test
+    @DisplayName("조회와 전이 사이에 반납·연장이 끼면 그 후보는 결과에서 빠진다.")
+    void test16() {
+        given(occupancyJpaRepository.findStaleByUserId(USER_ID, NOW, OccupancyStatus.ACTIVE))
+                .willReturn(List.of(stale(100L, NOW.minusMinutes(1))));
+        // 조회 이후 다른 트랜잭션이 반납·연장을 커밋해 조건이 더 이상 맞지 않는 상황을
+        // 흉내 낸다 — 단건 UPDATE가 0행으로 끝난다.
+        given(occupancyJpaRepository.expireById(
+                100L, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(0);
+
+        assertThat(roomOccupancyJpaPersistence.expireStaleByUserId(USER_ID, NOW)).isEmpty();
     }
 
     /** 스케줄러의 후보 조회는 찾기만 한다 — 전이는 건별로 따로 한다 (명세서 03 §4). */

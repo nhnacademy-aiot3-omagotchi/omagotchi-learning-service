@@ -94,32 +94,24 @@ public class RoomOccupancyJpaPersistence implements RoomOccupancyRepository {
     /**
      * {@inheritDoc}
      *
-     * <p>식별을 UPDATE보다 먼저 하는 것이 핵심이다. 벌크 UPDATE는 무엇을 바꿨는지
-     * 돌려주지 않고, 실행 뒤에는 {@code status='ACTIVE'} 조건이 그 행에 더 이상 맞지 않아
-     * 다시 찾을 수 없다 — 그러면 참여자를 마감할 대상을 잃는다.</p>
+     * <p>식별(조회)과 전이(단건 조건부 UPDATE)를 분리한다. 후보를 찾아둔 뒤 그 사이 다른
+     * 요청이 반납·연장을 커밋하면, 후보의 {@code status}·{@code expires_at}은 더 이상
+     * {@link #expire}의 조건({@code status='ACTIVE' AND expires_at <= now})과 맞지 않아
+     * 0행으로 끝난다 — 그 건은 결과에서 제외되어 참여자 마감·이벤트 발행 대상이 되지
+     * 않는다. 벌크 UPDATE로 한 번에 바꾸고 조회 결과를 그대로 반환하면, 그 사이 벌어진
+     * 반납·연장을 놓치고 이미 처리된(또는 여전히 사용 중인) 점유를 정리했다고 잘못
+     * 보고하게 된다.</p>
      */
     @Override
     public List<ExpiredOccupancy> expireStaleBySpaceId(Long spaceId, OffsetDateTime now) {
-        List<RoomOccupancyJpaRepository.StaleOccupancyProjection> stale =
-                occupancyJpaRepository.findStaleBySpaceId(spaceId, now, OccupancyStatus.ACTIVE);
-        if (stale.isEmpty()) {
-            return List.of();
-        }
-        occupancyJpaRepository.expireStaleBySpaceId(
-                spaceId, now, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED);
-        return toExpired(stale);
+        return expireCandidates(
+                occupancyJpaRepository.findStaleBySpaceId(spaceId, now, OccupancyStatus.ACTIVE), now);
     }
 
     @Override
     public List<ExpiredOccupancy> expireStaleByUserId(UUID userId, OffsetDateTime now) {
-        List<RoomOccupancyJpaRepository.StaleOccupancyProjection> stale =
-                occupancyJpaRepository.findStaleByUserId(userId, now, OccupancyStatus.ACTIVE);
-        if (stale.isEmpty()) {
-            return List.of();
-        }
-        occupancyJpaRepository.expireStaleByUserId(
-                userId, now, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED);
-        return toExpired(stale);
+        return expireCandidates(
+                occupancyJpaRepository.findStaleByUserId(userId, now, OccupancyStatus.ACTIVE), now);
     }
 
     @Override
@@ -137,6 +129,23 @@ public class RoomOccupancyJpaPersistence implements RoomOccupancyRepository {
     public boolean expire(Long occupancyId, OffsetDateTime now) {
         return occupancyJpaRepository.expireById(
                 occupancyId, now, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED) > 0;
+    }
+
+    /**
+     * 후보마다 단건 조건부 전이를 시도하고, 실제로 전이된 것만 남긴다.
+     *
+     * <p>{@link #expire}를 그대로 재사용한다 — 스케줄러(#9)의 {@code OccupancyExpiration}이
+     * 같은 방식으로 "조회 후보"와 "실제 전이 결과"를 구분하는 것과 같은 이유다.</p>
+     */
+    private List<ExpiredOccupancy> expireCandidates(
+            List<RoomOccupancyJpaRepository.StaleOccupancyProjection> candidates, OffsetDateTime now) {
+        return candidates.stream()
+                .filter(candidate -> expire(candidate.getOccupancyId(), now))
+                .map(candidate -> new ExpiredOccupancy(
+                        candidate.getOccupancyId(),
+                        candidate.getSpaceId(),
+                        candidate.getEndedAt()))
+                .toList();
     }
 
     private static List<ExpiredOccupancy> toExpired(

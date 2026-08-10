@@ -29,10 +29,6 @@ public class ThresholdRuleService {
 
     @Transactional
     public Long create(CreateThresholdRuleCommand command){
-
-        if (!sensorDeviceRepository.existsById(command.deviceEui())) {
-            throw new BusinessException(RuleErrorCode.DEVICE_NOT_FOUND);
-        }
         ThresholdRule thresholdRule;
         try{
             thresholdRule = ThresholdRule.create(
@@ -46,7 +42,11 @@ public class ThresholdRuleService {
             throw new BusinessException(RuleErrorCode.RULE_INVALID_CONDITION, e.getMessage(), e);
         }
 
-        if(thresholdRuleRepository.existsByDeviceEuiAndMetric(command.deviceEui(), command.metric())){
+        if (!sensorDeviceRepository.existsById(thresholdRule.getDeviceEui())) {
+            throw new BusinessException(RuleErrorCode.DEVICE_NOT_FOUND);
+        }
+
+        if(thresholdRuleRepository.existsByDeviceEuiAndMetric(thresholdRule.getDeviceEui(), thresholdRule.getMetric())){
             throw new BusinessException(RuleErrorCode.RULE_ALREADY_EXISTS);
         }
 

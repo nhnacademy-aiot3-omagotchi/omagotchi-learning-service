@@ -105,8 +105,6 @@ class ThresholdRuleServiceTest {
         @Test
         @DisplayName("도메인 검증 실패를 원인을 보존한 RULE_INVALID_CONDITION 으로 변환한다")
         void wrapsDomainError() {
-            when(sensorDeviceRepository.existsById(DEVICE_EUI)).thenReturn(true);
-
             // 측정 항목 33자 — 도메인이 IllegalArgumentException 을 던진다
             BusinessException exception = assertThrows(BusinessException.class,
                     () -> thresholdRuleService.create(new CreateThresholdRuleCommand(
@@ -115,6 +113,7 @@ class ThresholdRuleServiceTest {
             assertAll(
                     () -> assertEquals(RuleErrorCode.RULE_INVALID_CONDITION, exception.getErrorCode()),
                     () -> assertInstanceOf(IllegalArgumentException.class, exception.getCause()),
+                    () -> verifyNoInteractions(sensorDeviceRepository),
                     () -> verifyNoInteractions(thresholdRuleRepository),
                     () -> verifyNoInteractions(thresholdRuleHistoryRepository)
             );
@@ -128,9 +127,10 @@ class ThresholdRuleServiceTest {
             when(thresholdRuleRepository.existsByDeviceEuiAndMetric(DEVICE_EUI, METRIC))
                     .thenReturn(true);
 
+            // 대문자로 요청해도 저장은 "co2" 로 정규화되므로 조회도 소문자여야 한다
             BusinessException exception = assertThrows(BusinessException.class,
                     () -> thresholdRuleService.create(new CreateThresholdRuleCommand(
-                            DEVICE_EUI, METRIC, Operator.GT, THRESHOLD, REQUESTER_ID, REQUEST_ID)));
+                            DEVICE_EUI, "CO2", Operator.GT, THRESHOLD, REQUESTER_ID, REQUEST_ID)));
 
             assertAll(
                     () -> assertEquals(RuleErrorCode.RULE_ALREADY_EXISTS, exception.getErrorCode()),

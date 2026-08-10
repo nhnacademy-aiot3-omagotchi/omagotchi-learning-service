@@ -105,17 +105,25 @@ class RoomOccupancyJpaPersistenceTest {
                 .isNotInstanceOf(BusinessException.class);
     }
 
-    /** "행이 있다"와 "사용 중이다"는 다르다 — 종료 상태의 행도 이력으로 남는다. */
+    /**
+     * "행이 있다"와 "사용 중이다"는 다르다 — 종료 상태의 행도 이력으로 남는다.
+     *
+     * <p>만료 시각까지 함께 좁히는 것이 요점이다. {@code status}만 보면 스케줄러(#9)가 아직
+     * EXPIRED로 바꾸지 않은 행이 "사용 중"으로 잡혀, {@code findActiveBySpaceIds}가 공실로
+     * 보여준 방을 여기서는 사용 중으로 판정한다.</p>
+     */
     @Test
-    @DisplayName("존재 확인은 ACTIVE 상태로 좁혀 위임한다.")
+    @DisplayName("존재 확인은 ACTIVE 상태와 만료 시각으로 좁혀 위임한다.")
     void test5() {
-        given(occupancyJpaRepository.existsBySpaceIdAndStatus(SPACE_ID, OccupancyStatus.ACTIVE))
+        given(occupancyJpaRepository.existsBySpaceIdAndStatusAndExpiresAtAfter(
+                SPACE_ID, OccupancyStatus.ACTIVE, NOW))
                 .willReturn(true);
-        given(occupancyJpaRepository.existsByOccupierUserIdAndStatus(USER_ID, OccupancyStatus.ACTIVE))
+        given(occupancyJpaRepository.existsByOccupierUserIdAndStatusAndExpiresAtAfter(
+                USER_ID, OccupancyStatus.ACTIVE, NOW))
                 .willReturn(false);
 
-        assertThat(roomOccupancyJpaPersistence.existsActiveBySpaceId(SPACE_ID)).isTrue();
-        assertThat(roomOccupancyJpaPersistence.existsActiveByUserId(USER_ID)).isFalse();
+        assertThat(roomOccupancyJpaPersistence.existsActiveBySpaceId(SPACE_ID, NOW)).isTrue();
+        assertThat(roomOccupancyJpaPersistence.existsActiveByUserId(USER_ID, NOW)).isFalse();
     }
 
     @Test

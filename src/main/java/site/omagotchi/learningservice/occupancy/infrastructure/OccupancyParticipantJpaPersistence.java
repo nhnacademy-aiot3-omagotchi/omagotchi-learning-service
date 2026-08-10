@@ -7,6 +7,11 @@ import site.omagotchi.learningservice.occupancy.application.port.OccupancyPartic
 import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -40,6 +45,27 @@ public class OccupancyParticipantJpaPersistence implements OccupancyParticipantR
     @Override
     public Optional<OccupancyParticipant> findByOccupancyIdAndUserId(Long occupancyId, UUID userId) {
         return participantJpaRepository.findByOccupancyIdAndUserId(occupancyId, userId);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>{@code Collectors.groupingBy}가 아니라 {@link LinkedHashMap}에 직접 넣는 것은
+     * 값 목록의 순서를 보장하기 위해서다. 쿼리가 {@code id} 오름차순으로 정렬해도
+     * 그룹핑 구현이 순서를 지킨다는 보장이 계약에 없다.</p>
+     */
+    @Override
+    public Map<Long, List<UUID>> findActiveUserIdsByOccupancyIds(Collection<Long> occupancyIds) {
+        if (occupancyIds == null || occupancyIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, List<UUID>> userIdsByOccupancyId = new LinkedHashMap<>();
+        participantJpaRepository.findActiveByOccupancyIds(occupancyIds)
+                .forEach(participant -> userIdsByOccupancyId
+                        .computeIfAbsent(participant.getOccupancyId(), key -> new ArrayList<>())
+                        .add(participant.getUserId()));
+        return userIdsByOccupancyId;
     }
 
     @Override

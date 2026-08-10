@@ -163,6 +163,48 @@ class CohortMembershipQueryServiceTest {
         verify(membershipRepository, never()).findAllById(any());
     }
 
+    /**
+     * 공간 목록의 점유자 기수 판정(MR-36)이 쓴다. 점유 행에 {@code cohort_id}가 없어
+     * {@code occupier_membership_id}로 기수를 되찾아야 하는데, 방마다 단건 조회를 부르면
+     * 그대로 N+1이 된다.
+     */
+    @Test
+    @DisplayName("여러 멤버십의 기수를 한 번에 조회한다.")
+    void test11() {
+        given(membershipRepository.findAllById(List.of(MEMBERSHIP_ID, 20L)))
+                .willReturn(List.of(activeMembership(), otherCohortMembership()));
+
+        assertThat(cohortMembershipQueryService.findCohortIds(List.of(MEMBERSHIP_ID, 20L)))
+                .containsEntry(MEMBERSHIP_ID, COHORT_ID)
+                .containsEntry(20L, 4L);
+    }
+
+    /**
+     * 상태로 좁히지 않는 것이 의도다. 이미 시작된 점유의 기수를 알아내는 용도라,
+     * 그 사이 멤버십이 종료됐더라도 그 점유가 어느 기수의 것이었는지는 판정돼야 한다 —
+     * 여기서 걸러내면 종료 직후의 점유가 모든 사용자에게 "남의 기수"로 보인다.
+     */
+    @Test
+    @DisplayName("기수 조회는 멤버십 상태로 좁히지 않는다.")
+    void test12() {
+        CohortMembership ended = activeMembership();
+        ReflectionTestUtils.setField(ended, "status", CohortMembershipStatus.ENDED);
+        given(membershipRepository.findAllById(List.of(MEMBERSHIP_ID)))
+                .willReturn(List.of(ended));
+
+        assertThat(cohortMembershipQueryService.findCohortIds(List.of(MEMBERSHIP_ID)))
+                .containsEntry(MEMBERSHIP_ID, COHORT_ID);
+    }
+
+    @Test
+    @DisplayName("빈 목록이면 기수도 조회하지 않는다.")
+    void test13() {
+        assertThat(cohortMembershipQueryService.findCohortIds(List.of())).isEmpty();
+        assertThat(cohortMembershipQueryService.findCohortIds(null)).isEmpty();
+
+        verify(membershipRepository, never()).findAllById(any());
+    }
+
     private CohortMembership otherCohortMembership() {
         CohortMembership membership =
                 CohortMembership.activeManager(4L, USER_ID, UUID.randomUUID());

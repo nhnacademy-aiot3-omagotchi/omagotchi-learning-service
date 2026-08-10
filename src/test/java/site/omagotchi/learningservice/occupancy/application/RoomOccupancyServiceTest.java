@@ -216,7 +216,7 @@ class RoomOccupancyServiceTest {
     @DisplayName("이미 사용 중인 회의실은 점유할 수 없다.")
     void test10() {
         givenLockedRoom();
-        given(occupancyRepository.existsActiveBySpaceId(SPACE_ID)).willReturn(true);
+        given(occupancyRepository.existsActiveBySpaceId(SPACE_ID, now())).willReturn(true);
 
         assertBusinessError(
                 OccupancyErrorCode.ROOM_ALREADY_OCCUPIED,
@@ -228,8 +228,8 @@ class RoomOccupancyServiceTest {
     @DisplayName("이미 다른 회의실을 점유 중이면 점유할 수 없다.")
     void test11() {
         givenLockedRoom();
-        given(occupancyRepository.existsActiveBySpaceId(SPACE_ID)).willReturn(false);
-        given(occupancyRepository.existsActiveByUserId(USER_ID)).willReturn(true);
+        given(occupancyRepository.existsActiveBySpaceId(SPACE_ID, now())).willReturn(false);
+        given(occupancyRepository.existsActiveByUserId(USER_ID, now())).willReturn(true);
 
         assertBusinessError(
                 OccupancyErrorCode.ALREADY_OCCUPYING,
@@ -301,8 +301,8 @@ class RoomOccupancyServiceTest {
         InOrder order = inOrder(occupancyRepository, participantRepository);
         order.verify(occupancyRepository).expireStaleBySpaceId(SPACE_ID, now());
         order.verify(occupancyRepository).expireStaleByUserId(USER_ID, now());
-        order.verify(occupancyRepository).existsActiveBySpaceId(SPACE_ID);
-        order.verify(occupancyRepository).existsActiveByUserId(USER_ID);
+        order.verify(occupancyRepository).existsActiveBySpaceId(SPACE_ID, now());
+        order.verify(occupancyRepository).existsActiveByUserId(USER_ID, now());
         order.verify(occupancyRepository).save(any(RoomOccupancy.class));
         order.verify(participantRepository).save(any(OccupancyParticipant.class));
     }

@@ -2,7 +2,7 @@ package site.omagotchi.learningservice.occupancy.application.port;
 
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
-import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
+import site.omagotchi.learningservice.occupancy.application.result.ActiveSpaceOccupancy;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
@@ -39,8 +39,13 @@ public interface RoomOccupancyRepository {
      * <p>반드시 {@code spaces} 행 락을 잡은 트랜잭션 안에서 호출한다.
      * 락 밖에서 확인하면 두 요청이 동시에 "없음"을 보고 둘 다 INSERT를 시도한다 —
      * 그 경우는 유니크 인덱스가 막지만 예외 경로로 빠진다.</p>
+     *
+     * <p>{@code now}로 만료된 행을 제외하는 것이 계약의 일부다. {@code status}만 보면
+     * 스케줄러(#9)가 아직 쓸어가지 않은 만료 행이 "사용 중"으로 잡힌다 —
+     * {@link #findActiveBySpaceIds}와 판정 기준이 갈리면 같은 방이 목록에서는 공실인데
+     * 여기서는 사용 중이 된다.</p>
      */
-    boolean existsActiveBySpaceId(Long spaceId);
+    boolean existsActiveBySpaceId(Long spaceId, OffsetDateTime now);
 
 
     /**
@@ -50,8 +55,11 @@ public interface RoomOccupancyRepository {
      * 다만 이 검사는 {@code spaces} 락으로 직렬화되지 않는다 — 서로 다른 방을 동시에
      * 잡으려는 같은 계정은 락 대상이 달라 둘 다 통과한다. 그 경우
      * {@code uq_room_occupancies_one_active_per_user}가 유일한 방어선이다.</p>
+     *
+     * <p>{@link #existsActiveBySpaceId}와 같은 이유로 {@code now}를 받는다. 여기서
+     * 만료 행을 세면 이미 끝난 점유 때문에 새 점유가 막힌다.</p>
      */
-    boolean existsActiveByUserId(UUID userId);
+    boolean existsActiveByUserId(UUID userId, OffsetDateTime now);
 
 
     /** 활성 점유 단건. 연장·반납(#7)의 진입점이다. */
@@ -71,8 +79,13 @@ public interface RoomOccupancyRepository {
      *
      * <p>공간당 최대 1건이다 — {@code uq_room_occupancies_one_active_per_space}가
      * 보장한다. 받는 쪽이 중복을 걱정할 필요가 없다.</p>
+     *
+     * <p>점유자의 <b>기수가 아니라 멤버십 식별자</b>를 돌려주는 것이 요점이다. 점유 행에
+     * {@code cohort_id}가 없어(ERD v3) 기수는 {@code cohort_memberships} 조인으로만
+     * 나오는데, 그 테이블은 기수 파트 소유라 여기서 조인하면 안 된다. 기수 변환은
+     * {@code OccupancyQueryService}가 기수 파트의 공개 계약으로 처리한다.</p>
      */
-    List<SpaceOccupancyView> findActiveBySpaceIds(Collection<Long> spaceIds, OffsetDateTime now);
+    List<ActiveSpaceOccupancy> findActiveBySpaceIds(Collection<Long> spaceIds, OffsetDateTime now);
 
 
     /**

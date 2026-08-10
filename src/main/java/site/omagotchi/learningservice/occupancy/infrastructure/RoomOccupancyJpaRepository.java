@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
+import site.omagotchi.learningservice.occupancy.application.result.ActiveSpaceOccupancy;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
@@ -27,9 +27,18 @@ import java.util.UUID;
  */
 public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy, Long> {
 
-    boolean existsBySpaceIdAndStatus(Long spaceId, OccupancyStatus status);
+    /**
+     * {@code status}와 {@code expiresAt}을 함께 본다.
+     *
+     * <p>{@code existsBySpaceIdAndStatus}로 두면 만료됐지만 스케줄러(#9)가 아직 EXPIRED로
+     * 바꾸지 않은 행이 "사용 중"으로 잡힌다. {@link #findActiveBySpaceIds}가 이미
+     * {@code expiresAt > now}로 거르고 있어 조건을 맞추지 않으면 같은 방의 판정이 갈린다.</p>
+     */
+    boolean existsBySpaceIdAndStatusAndExpiresAtAfter(
+            Long spaceId, OccupancyStatus status, OffsetDateTime now);
 
-    boolean existsByOccupierUserIdAndStatus(UUID occupierUserId, OccupancyStatus status);
+    boolean existsByOccupierUserIdAndStatusAndExpiresAtAfter(
+            UUID occupierUserId, OccupancyStatus status, OffsetDateTime now);
 
     Optional<RoomOccupancy> findBySpaceIdAndStatus(Long spaceId, OccupancyStatus status);
 
@@ -62,13 +71,13 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
      * ACTIVE인 행을 "사용 중"으로 보여주지 않는다.</p>
      */
     @Query("""
-                SELECT new site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView(
-                           o.spaceId, o.expiresAt)
+                SELECT new site.omagotchi.learningservice.occupancy.application.result.ActiveSpaceOccupancy(
+                           o.id, o.spaceId, o.expiresAt, o.occupierMembershipId, o.occupierUserId)
                   FROM RoomOccupancy o
                  WHERE o.spaceId IN :spaceIds
                    AND o.status = :active
                    AND o.expiresAt > :now""")
-    List<SpaceOccupancyView> findActiveBySpaceIds(
+    List<ActiveSpaceOccupancy> findActiveBySpaceIds(
             @Param("spaceIds") Collection<Long> spaceIds,
             @Param("now") OffsetDateTime now,
             @Param("active") OccupancyStatus active

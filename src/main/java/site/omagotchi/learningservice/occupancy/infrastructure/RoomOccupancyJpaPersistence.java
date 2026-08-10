@@ -5,7 +5,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
-import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
+import site.omagotchi.learningservice.occupancy.application.result.ActiveSpaceOccupancy;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
@@ -41,13 +41,15 @@ public class RoomOccupancyJpaPersistence implements RoomOccupancyRepository {
     }
 
     @Override
-    public boolean existsActiveBySpaceId(Long spaceId) {
-        return occupancyJpaRepository.existsBySpaceIdAndStatus(spaceId, OccupancyStatus.ACTIVE);
+    public boolean existsActiveBySpaceId(Long spaceId, OffsetDateTime now) {
+        return occupancyJpaRepository.existsBySpaceIdAndStatusAndExpiresAtAfter(
+                spaceId, OccupancyStatus.ACTIVE, now);
     }
 
     @Override
-    public boolean existsActiveByUserId(UUID userId) {
-        return occupancyJpaRepository.existsByOccupierUserIdAndStatus(userId, OccupancyStatus.ACTIVE);
+    public boolean existsActiveByUserId(UUID userId, OffsetDateTime now) {
+        return occupancyJpaRepository.existsByOccupierUserIdAndStatusAndExpiresAtAfter(
+                userId, OccupancyStatus.ACTIVE, now);
     }
 
     @Override
@@ -56,7 +58,7 @@ public class RoomOccupancyJpaPersistence implements RoomOccupancyRepository {
     }
 
     @Override
-    public List<SpaceOccupancyView> findActiveBySpaceIds(Collection<Long> spaceIds, OffsetDateTime now) {
+    public List<ActiveSpaceOccupancy> findActiveBySpaceIds(Collection<Long> spaceIds, OffsetDateTime now) {
         if (spaceIds == null || spaceIds.isEmpty()) {
             return List.of();
         }

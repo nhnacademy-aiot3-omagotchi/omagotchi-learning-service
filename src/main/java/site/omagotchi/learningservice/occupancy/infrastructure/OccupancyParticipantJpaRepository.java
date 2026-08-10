@@ -8,6 +8,8 @@ import org.springframework.data.repository.query.Param;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,6 +23,32 @@ public interface OccupancyParticipantJpaRepository extends JpaRepository<Occupan
      * 방식이라(결정 #30) 이미 이탈한 행도 찾아야 한다.
      */
     Optional<OccupancyParticipant> findByOccupancyIdAndUserId(Long occupancyId, UUID userId);
+
+    /**
+     * 여러 점유의 현재 참여자를 배치로 읽는다 (공간 목록의 참여자 표시용).
+     *
+     * <p>엔티티가 아니라 Projection인 것이 의도다. 필요한 것은 {@code occupancy_id}와
+     * {@code user_id} 둘뿐인데 엔티티로 읽으면 참여자 전원이 영속성 컨텍스트에 올라간다 —
+     * 조회 전용 경로에서 더티 체킹 대상을 만들 이유가 없다.</p>
+     *
+     * <p>{@code id} 오름차순이 참여 순서다. 정렬을 빼면 표시 순서가 매 조회마다 달라진다.</p>
+     */
+    @Query("""
+                SELECT p.occupancyId AS occupancyId, p.userId AS userId
+                  FROM OccupancyParticipant p
+                 WHERE p.occupancyId IN :occupancyIds
+                   AND p.leftAt IS NULL
+                 ORDER BY p.id ASC""")
+    List<ActiveParticipantProjection> findActiveByOccupancyIds(
+            @Param("occupancyIds") Collection<Long> occupancyIds
+    );
+
+    /** 닫힌 Projection. 필드를 늘리면 select 컬럼이 함께 늘어난다. */
+    interface ActiveParticipantProjection {
+        Long getOccupancyId();
+
+        UUID getUserId();
+    }
 
     /**
      * 열린 참여자 전원 마감 (MR-32).

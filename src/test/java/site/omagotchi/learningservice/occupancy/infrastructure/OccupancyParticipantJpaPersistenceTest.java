@@ -15,6 +15,8 @@ import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -138,6 +140,76 @@ class OccupancyParticipantJpaPersistenceTest {
         assertThat(occupancyParticipantJpaPersistence
                 .closeAllActiveByOccupancyId(OCCUPANCY_ID, NOW))
                 .isEqualTo(3);
+    }
+
+    /**
+     * 공간 목록이 회의 참여자를 표시하는 데 쓴다. 점유별로 묶어 돌려주므로 소비처가
+     * 다시 그룹핑할 필요가 없다.
+     */
+    @Test
+    @DisplayName("여러 점유의 참여자를 점유별로 묶어 돌려준다.")
+    void test8() {
+        UUID otherUserId = UUID.randomUUID();
+        given(participantJpaRepository.findActiveByOccupancyIds(List.of(OCCUPANCY_ID, 200L)))
+                .willReturn(List.of(
+                        projection(OCCUPANCY_ID, USER_ID),
+                        projection(OCCUPANCY_ID, otherUserId),
+                        projection(200L, USER_ID)
+                ));
+
+        Map<Long, List<UUID>> found = occupancyParticipantJpaPersistence
+                .findActiveUserIdsByOccupancyIds(List.of(OCCUPANCY_ID, 200L));
+
+        assertThat(found).containsOnlyKeys(OCCUPANCY_ID, 200L);
+        assertThat(found.get(OCCUPANCY_ID)).containsExactly(USER_ID, otherUserId);
+        assertThat(found.get(200L)).containsExactly(USER_ID);
+    }
+
+    /**
+     * 참여 순서({@code occupancy_participants.id})가 표시 순서다. 그룹핑 구현이 순서를
+     * 지킨다는 보장이 계약에 없어 어댑터가 직접 유지한다 — 여기가 깨지면 목록을 새로고침할
+     * 때마다 참여자 순서가 달라진다.
+     */
+    @Test
+    @DisplayName("참여자 순서는 조회 순서를 그대로 유지한다.")
+    void test9() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        UUID third = UUID.randomUUID();
+        given(participantJpaRepository.findActiveByOccupancyIds(List.of(OCCUPANCY_ID)))
+                .willReturn(List.of(
+                        projection(OCCUPANCY_ID, first),
+                        projection(OCCUPANCY_ID, second),
+                        projection(OCCUPANCY_ID, third)
+                ));
+
+        assertThat(occupancyParticipantJpaPersistence
+                .findActiveUserIdsByOccupancyIds(List.of(OCCUPANCY_ID)))
+                .containsEntry(OCCUPANCY_ID, List.of(first, second, third));
+    }
+
+    @Test
+    @DisplayName("조회할 점유가 없으면 질의하지 않는다.")
+    void test10() {
+        assertThat(occupancyParticipantJpaPersistence
+                .findActiveUserIdsByOccupancyIds(List.of())).isEmpty();
+
+        verify(participantJpaRepository, never()).findActiveByOccupancyIds(any());
+    }
+
+    private OccupancyParticipantJpaRepository.ActiveParticipantProjection projection(
+            Long occupancyId, UUID userId) {
+        return new OccupancyParticipantJpaRepository.ActiveParticipantProjection() {
+            @Override
+            public Long getOccupancyId() {
+                return occupancyId;
+            }
+
+            @Override
+            public UUID getUserId() {
+                return userId;
+            }
+        };
     }
 
     private OccupancyParticipant participant() {

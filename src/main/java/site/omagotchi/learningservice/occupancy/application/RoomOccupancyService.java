@@ -93,10 +93,10 @@ public class RoomOccupancyService {
         // 선검사. 통과해도 안전이 보장되지는 않는다 — 동시 요청은 둘 다 "없음"을 볼 수 있고,
         // 그때는 부분 유니크가 최종 방어선이다. 여기서 거르는 이유는 흔한 경로에서
         // 예외 스택을 태우지 않기 위해서다.
-        if (occupancyRepository.existsActiveBySpaceId(spaceId)) {
+        if (occupancyRepository.existsActiveBySpaceId(spaceId, now)) {
             throw new BusinessException(OccupancyErrorCode.ROOM_ALREADY_OCCUPIED);  // MR-09
         }
-        if (occupancyRepository.existsActiveByUserId(userId)) {
+        if (occupancyRepository.existsActiveByUserId(userId, now)) {
             throw new BusinessException(OccupancyErrorCode.ALREADY_OCCUPYING);      // MR-10
         }
 

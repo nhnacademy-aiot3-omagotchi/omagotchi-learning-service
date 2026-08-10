@@ -7,8 +7,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
+import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
 import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 
@@ -16,6 +18,9 @@ import java.time.OffsetDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 
 /**
  * 만료된 점유의 정리 (MR-32).
@@ -45,6 +50,9 @@ class OccupancyExpiryIT {
 
     @Autowired
     JdbcTemplate jdbcTemplate;
+
+    @MockitoSpyBean
+    OccupancyParticipantRepository participantRepository;
 
     /**
      * 만료 뒤 다른 방을 잡는 것은 정상 흐름이다. 2시간이 지나 점유가 끝났으면
@@ -167,6 +175,44 @@ class OccupancyExpiryIT {
         assertThat(openParticipantRows(roomId)).isEqualTo(1);
     }
 
+    /**
+     * <b>건별 트랜잭션의 Commit·Rollback 검증</b> (명세서 03 §4, 10-backend-code-structure §4).
+     *
+     * <p>한 건이 터져도 나머지는 이번 주기에 커밋돼야 한다. 한 트랜잭션으로 묶여 있으면
+     * 실패한 건이 성공한 건까지 되돌려, 뒤 순번 점유들이 다음 주기까지 — 그 주기에도 같은
+     * 건이 먼저 터지면 영원히 — 방치된다.</p>
+     *
+     * <p>실패한 건 자체는 ACTIVE로 남아야 한다. 그래야 다음 주기가 다시 집어 간다.</p>
+     */
+    @Test
+    @DisplayName("한 건이 실패해도 나머지 점유는 정리되고 커밋된다.")
+    void test8() {
+        Long cohortId = fixture.createCohort("만료-건별격리");
+        OccupancyTestFixture.Member first = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member second = fixture.createActiveMember(cohortId);
+        Long failingRoomId = fixture.createMeetingRoom(cohortId, "만료-건별격리-1", 8);
+        Long healthyRoomId = fixture.createMeetingRoom(cohortId, "만료-건별격리-2", 8);
+
+        roomOccupancyService.start(failingRoomId, first.userId());
+        roomOccupancyService.start(healthyRoomId, second.userId());
+        expire(failingRoomId);
+        expire(healthyRoomId);
+
+        Long failingOccupancyId = activeOccupancyId(failingRoomId);
+        doThrow(new IllegalStateException("참여자 마감 실패"))
+                .when(participantRepository)
+                .closeAllActiveByOccupancyId(eq(failingOccupancyId), any());
+
+        roomOccupancyLifecycleService.expireAll();
+
+        // 정상 건은 커밋됐다
+        assertThat(activeOccupancyRows(healthyRoomId)).isZero();
+        assertThat(openParticipantRows(healthyRoomId)).isZero();
+
+        // 실패 건은 롤백돼 ACTIVE로 남았다 — 다음 주기가 다시 집어 간다
+        assertThat(activeOccupancyRows(failingRoomId)).isEqualTo(1);
+    }
+
     /** 이미 사용 중인 회의실을 뒤늦게 잡을 때도 같은 정리가 일어나야 한다. */
     @Test
     @DisplayName("공간 기준 정리도 참여자를 함께 마감한다.")
@@ -222,6 +268,13 @@ class OccupancyExpiryIT {
                   JOIN learning_service.room_occupancies o ON o.id = p.occupancy_id
                  WHERE o.space_id = ? AND o.status = 'EXPIRED'
                 """, OffsetDateTime.class, spaceId);
+    }
+
+    private Long activeOccupancyId(Long spaceId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT id FROM learning_service.room_occupancies
+                 WHERE space_id = ? AND status = 'ACTIVE'
+                """, Long.class, spaceId);
     }
 
     private int activeOccupancyRows(Long spaceId) {

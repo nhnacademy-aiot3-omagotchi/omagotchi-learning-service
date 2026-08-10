@@ -65,6 +65,9 @@ class RoomOccupancyLifecycleServiceTest {
     @Mock
     private OccupancyEventPublisher eventPublisher;
 
+    @Mock
+    private OccupancyExpiration occupancyExpiration;
+
     private Clock clock;
     private RoomOccupancyLifecycleService roomOccupancyLifecycleService;
 
@@ -75,6 +78,7 @@ class RoomOccupancyLifecycleServiceTest {
                 occupancyRepository,
                 participantRepository,
                 eventPublisher,
+                occupancyExpiration,
                 clock
         );
     }
@@ -355,64 +359,71 @@ class RoomOccupancyLifecycleServiceTest {
         return now().plusMinutes(minutes);
     }
 
-    /**
-     * 스케줄러가 없으면 아무도 찾지 않는 방이 만료된 채 방치된다 — 목록에 계속
-     * "사용 중"으로 뜨고 참여자도 열린 채다.
-     */
+    /** 후보를 하나씩 건별 트랜잭션에 넘긴다 — 한 건의 실패가 나머지를 막지 않기 위해서다. */
     @Test
-    @DisplayName("만료 정리는 참여자 마감과 공실 알림을 함께 수행한다.")
+    @DisplayName("만료 후보를 건별로 종료 처리에 넘긴다.")
     void test19() {
         OffsetDateTime endedAt = now().minusMinutes(5);
-        given(occupancyRepository.expireStale(now())).willReturn(List.of(
-                new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt)));
+        RoomOccupancyRepository.ExpiredOccupancy candidate =
+                new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt);
+        given(occupancyRepository.findStale(now())).willReturn(List.of(candidate));
+        given(occupancyExpiration.expire(candidate, now())).willReturn(true);
 
         assertThat(roomOccupancyLifecycleService.expireAll()).isEqualTo(1);
 
-        verify(participantRepository).closeAllActiveByOccupancyId(7L, endedAt);
-        verify(eventPublisher).publishRoomVacated(new RoomVacatedEvent(SPACE_ID, 7L, endedAt));
+        verify(occupancyExpiration).expire(candidate, now());
     }
 
     /**
-     * {@code vacatedAt}이 정리 시각이면 "언제 비었는지"가 스케줄러 주기만큼 밀린다.
-     * 늦게 발견했을 뿐 실제로 비워진 것은 만료 시각이다.
+     * 조회 결과가 곧 종료 건수는 아니다. 조회와 전이 사이에 연장·반납이 일어나거나 다른
+     * 인스턴스가 먼저 처리하면 그 건은 건너뛰고, 그 판정은 전이의 조건이 한다.
      */
     @Test
-    @DisplayName("공실 시각은 정리 시각이 아니라 점유의 만료 시각이다.")
+    @DisplayName("전이되지 않은 후보는 종료 건수에 세지 않는다.")
     void test20() {
         OffsetDateTime endedAt = now().minusMinutes(5);
-        given(occupancyRepository.expireStale(now())).willReturn(List.of(
-                new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt)));
+        RoomOccupancyRepository.ExpiredOccupancy extended =
+                new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt);
+        RoomOccupancyRepository.ExpiredOccupancy expired =
+                new RoomOccupancyRepository.ExpiredOccupancy(8L, 2L, endedAt);
+        given(occupancyRepository.findStale(now())).willReturn(List.of(extended, expired));
+        given(occupancyExpiration.expire(extended, now())).willReturn(false);
+        given(occupancyExpiration.expire(expired, now())).willReturn(true);
 
-        roomOccupancyLifecycleService.expireAll();
-
-        verify(eventPublisher, never()).publishRoomVacated(
-                new RoomVacatedEvent(SPACE_ID, 7L, now()));
+        assertThat(roomOccupancyLifecycleService.expireAll()).isEqualTo(1);
     }
 
     @Test
     @DisplayName("만료된 점유가 없으면 아무것도 하지 않는다.")
     void test21() {
-        given(occupancyRepository.expireStale(now())).willReturn(List.of());
+        given(occupancyRepository.findStale(now())).willReturn(List.of());
 
         assertThat(roomOccupancyLifecycleService.expireAll()).isZero();
 
-        verify(participantRepository, never()).closeAllActiveByOccupancyId(any(), any());
-        verify(eventPublisher, never()).publishRoomVacated(any());
+        verify(occupancyExpiration, never()).expire(any(), any());
     }
 
-    /** 여러 방이 동시에 만료되면 각각 따로 알려야 한다 — 대기자는 방마다 다르다. */
+    /**
+     * <b>건별 격리의 핵심 검증이다</b> (명세서 03 §4). 한 건이 터져도 나머지가 이번 주기에
+     * 처리돼야 한다 — 여기서 예외가 밖으로 나가면 뒤 순번 점유들이 다음 주기까지,
+     * 그 주기에도 같은 건이 먼저 터지면 영원히 방치된다.
+     */
     @Test
-    @DisplayName("여러 점유가 만료되면 방마다 공실을 알린다.")
+    @DisplayName("한 건이 실패해도 나머지 점유를 계속 처리한다.")
     void test22() {
         OffsetDateTime endedAt = now().minusMinutes(5);
-        given(occupancyRepository.expireStale(now())).willReturn(List.of(
-                new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt),
-                new RoomOccupancyRepository.ExpiredOccupancy(8L, 2L, endedAt)));
+        RoomOccupancyRepository.ExpiredOccupancy failing =
+                new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt);
+        RoomOccupancyRepository.ExpiredOccupancy healthy =
+                new RoomOccupancyRepository.ExpiredOccupancy(8L, 2L, endedAt);
+        given(occupancyRepository.findStale(now())).willReturn(List.of(failing, healthy));
+        given(occupancyExpiration.expire(failing, now()))
+                .willThrow(new IllegalStateException("전이 실패"));
+        given(occupancyExpiration.expire(healthy, now())).willReturn(true);
 
-        assertThat(roomOccupancyLifecycleService.expireAll()).isEqualTo(2);
+        assertThat(roomOccupancyLifecycleService.expireAll()).isEqualTo(1);
 
-        verify(eventPublisher).publishRoomVacated(new RoomVacatedEvent(SPACE_ID, 7L, endedAt));
-        verify(eventPublisher).publishRoomVacated(new RoomVacatedEvent(2L, 8L, endedAt));
+        verify(occupancyExpiration).expire(healthy, now());
     }
 
     private RoomOccupancy occupancy(OffsetDateTime expiresAt) {

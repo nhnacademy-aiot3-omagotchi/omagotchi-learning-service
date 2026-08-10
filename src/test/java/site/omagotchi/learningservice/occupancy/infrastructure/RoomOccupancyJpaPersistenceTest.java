@@ -187,6 +187,36 @@ class RoomOccupancyJpaPersistenceTest {
         verify(occupancyJpaRepository, never()).expireStaleBySpaceId(any(), any(), any(), any());
     }
 
+    /** 스케줄러의 후보 조회는 찾기만 한다 — 전이는 건별로 따로 한다 (명세서 03 §4). */
+    @Test
+    @DisplayName("만료 후보 조회는 상태를 바꾸지 않는다.")
+    void test14() {
+        given(occupancyJpaRepository.findStale(NOW, OccupancyStatus.ACTIVE))
+                .willReturn(List.of(stale(100L, NOW.minusMinutes(1))));
+
+        assertThat(roomOccupancyJpaPersistence.findStale(NOW))
+                .containsExactly(new RoomOccupancyRepository.ExpiredOccupancy(
+                        100L, SPACE_ID, NOW.minusMinutes(1)));
+
+        verify(occupancyJpaRepository, never()).expireById(any(), any(), any(), any());
+    }
+
+    /**
+     * 영향 행 수가 그대로 계약이다. 0행은 연장·반납·타 인스턴스 선처리 중 하나이며,
+     * 호출부가 이 값으로 참여자 마감과 이벤트 발행 여부를 정한다.
+     */
+    @Test
+    @DisplayName("단건 전이는 영향 행 수를 그대로 알려준다.")
+    void test15() {
+        given(occupancyJpaRepository.expireById(
+                100L, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(1);
+        given(occupancyJpaRepository.expireById(
+                200L, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(0);
+
+        assertThat(roomOccupancyJpaPersistence.expire(100L, NOW)).isTrue();
+        assertThat(roomOccupancyJpaPersistence.expire(200L, NOW)).isFalse();
+    }
+
     private RoomOccupancyJpaRepository.StaleOccupancyProjection stale(
             Long occupancyId, OffsetDateTime endedAt) {
         return new RoomOccupancyJpaRepository.StaleOccupancyProjection() {

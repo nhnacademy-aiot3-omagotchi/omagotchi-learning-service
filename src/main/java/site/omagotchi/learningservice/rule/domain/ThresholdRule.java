@@ -4,8 +4,6 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.OffsetDateTime;
 import java.util.Locale;
@@ -56,11 +54,11 @@ public class ThresholdRule {
     @Column(name = "updated_by_user_id")
     private UUID updatedByUserId;
 
-    @CreationTimestamp
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
-    @UpdateTimestamp
+
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
@@ -76,6 +74,18 @@ public class ThresholdRule {
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
+
+    @PrePersist
+    void onPersist() {
+        OffsetDateTime now = OffsetDateTime.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        this.updatedAt = OffsetDateTime.now();
+    }
 
     public static ThresholdRule create(
             String deviceEui,

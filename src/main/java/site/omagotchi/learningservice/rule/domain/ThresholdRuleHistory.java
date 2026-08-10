@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -47,12 +46,16 @@ public class ThresholdRuleHistory {
     @Column(name = "request_id", length = MAX_REQUEST_ID_LENGTH)
     private String requestId;
 
-    @CreationTimestamp
     @Column(name = "changed_at", nullable = false, updatable = false)
     private OffsetDateTime changedAt;
 
     @Column(name = "rule_version", nullable = false)
     private Long ruleVersion;
+
+    @PrePersist
+    void onPersist() {
+        this.changedAt = OffsetDateTime.now();
+    }
 
     /**
      * 변경이 적용된 룰의 현재 상태를 그대로 이력으로 남긴다.

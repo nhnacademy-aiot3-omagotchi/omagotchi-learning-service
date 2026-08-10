@@ -15,7 +15,6 @@ import site.omagotchi.learningservice.rule.application.command.CreateThresholdRu
 import site.omagotchi.learningservice.rule.application.command.UpdateThresholdRuleCommand;
 import site.omagotchi.learningservice.rule.application.result.UpdateThresholdRuleResult;
 import site.omagotchi.learningservice.rule.domain.Operator;
-import site.omagotchi.learningservice.rule.domain.RuleErrorCode;
 import site.omagotchi.learningservice.rule.domain.ThresholdRule;
 import site.omagotchi.learningservice.rule.domain.ThresholdRuleHistory;
 import site.omagotchi.learningservice.rule.infrastructure.SensorDeviceRepository;

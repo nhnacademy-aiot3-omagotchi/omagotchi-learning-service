@@ -20,7 +20,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("api/v1/rule")
+@RequestMapping("api/v1/rules")
 public class ThresholdRuleController {
 
     private final ThresholdRuleService thresholdRuleService;

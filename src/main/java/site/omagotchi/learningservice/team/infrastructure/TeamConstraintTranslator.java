@@ -7,6 +7,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
 
+import java.util.Locale;
+
 /**
  * 유니크 위반을 기능 오류 코드로 변환한다.
  *
@@ -36,31 +38,33 @@ public final class TeamConstraintTranslator {
      * 컴파일러가 그 지점에서 흐름이 끝난다는 것을 알기 때문에, catch 블록 뒤에
      * 도달 불가능한 return을 넣지 않아도 된다.</p>
      *
-     * <p>인덱스명을 못 읽으면 ALREADY_IN_TEAM으로 떨어진다. 팀 도메인에서 가장 흔한
-     * 위반이라 고른 기본값이며, 정확한 원인이 아닐 수 있다 — 새 유니크를 추가하면
-     * 여기 분기도 같이 늘려야 한다.</p>
+     * <p><b>아는 인덱스가 아니면 원본을 그대로 돌려준다.</b> 예전에는 ALREADY_IN_TEAM을
+     * 기본값으로 썼지만, 그러면 NOT NULL·FK·CHECK 위반까지 전부 409 "이미 팀에 소속"으로
+     * 나간다 — 의미를 좁게 확정할 수 있을 때만 변환하라는 규칙(04-error-handling §2)에
+     * 어긋나고, 원인을 찾을 단서인 stack trace도 사라진다. 500이 나가면 로그가 남지만
+     * 엉뚱한 409는 조용히 묻힌다. 새 유니크를 추가하면 여기 분기도 반드시 함께 늘린다.</p>
      *
      * @param exception 원인이 Hibernate {@code ConstraintViolationException}이어야 인덱스명을 읽을 수 있다
      * @return 던질 준비가 된 예외. 이 메서드는 예외를 던지지 않는다
      */
-    public static BusinessException translate(DataIntegrityViolationException exception) {
+    public static RuntimeException translate(DataIntegrityViolationException exception) {
         String name = extractConstraintName(exception);
         if (name == null) {
-            return new BusinessException(TeamErrorCode.ALREADY_IN_TEAM);
+            return exception;
         }
 
-        String normalized = name.toLowerCase();
+        String normalized = name.toLowerCase(Locale.ROOT);
         if (normalized.contains(UQ_TEAMS_ACTIVE_NAME)) {
-            return new BusinessException(TeamErrorCode.DUPLICATE_NAME);
+            return new BusinessException(TeamErrorCode.DUPLICATE_NAME, exception);
         }
         if (normalized.contains(UQ_TEAM_MEMBERS_MEMBERSHIP)
                 || normalized.contains(UQ_TEAM_MEMBERS_TEAM_MEMBERSHIP)) {
-            return new BusinessException(TeamErrorCode.ALREADY_IN_TEAM);
+            return new BusinessException(TeamErrorCode.ALREADY_IN_TEAM, exception);
         }
         if (normalized.contains(UQ_TEAM_MEMBERS_ONE_MASTER)) {
-            return new BusinessException(TeamErrorCode.MASTER_STATE_CONFLICT);
+            return new BusinessException(TeamErrorCode.MASTER_STATE_CONFLICT, exception);
         }
-        return new BusinessException(TeamErrorCode.ALREADY_IN_TEAM);
+        return exception;
     }
 
     private static String extractConstraintName(DataIntegrityViolationException exception) {

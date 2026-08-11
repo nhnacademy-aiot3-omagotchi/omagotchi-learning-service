@@ -4,10 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.team.application.command.CreateTeamRequest;
-import site.omagotchi.learningservice.team.application.reuslt.TeamDetailResponse;
-import site.omagotchi.learningservice.team.application.reuslt.TeamMemberResponse;
-import site.omagotchi.learningservice.team.application.reuslt.TeamResponse;
+import site.omagotchi.learningservice.team.application.result.TeamDetailResult;
+import site.omagotchi.learningservice.team.application.result.TeamMemberResult;
+import site.omagotchi.learningservice.team.application.result.TeamResult;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
@@ -54,21 +53,23 @@ public class TeamService {
      * 인덱스 위반을 같은 에러 코드로 되돌리는 일은 Port 구현이 맡으므로 여기서는
      * 두 경로가 같은 예외로 보인다.</p>
      *
-     * <p>{@code request.cohortId()}는 null일 수 있다 (RM-28). 활성 기수가 하나면 서버가
+     * <p>{@code cohortId}는 null일 수 있다 (RM-28). 활성 기수가 하나면 서버가
      * 결정하고, 둘 이상이면 지정을 요구한다 — 자세한 분기는
      * {@link TeamAccessSupport#resolveMembershipForCreate(Long, UUID)} 참고.</p>
      *
-     * @param userId JWT에서 꺼낸 요청자 계정 id. 요청 본문의 cohortId가 이 계정의 것인지 서버가 검증한다
+     * @param cohortId  대상 기수. null이면 서버가 요청자의 활성 멤버십에서 결정한다
+     * @param rawName   정규화 전 원문 이름. 길이·공백 판정은 {@code Team}이 소유한다
+     * @param userId    JWT에서 꺼낸 요청자 계정 id. 넘어온 cohortId가 이 계정의 것인지 서버가 검증한다
      * @throws site.omagotchi.learningservice.global.exception.BusinessException
      *         이름 규칙 위반(400), 담당하지 않는 기수(403), 이름 중복·이미 팀 소속(409)
      */
     @Transactional
-    public TeamResponse create(CreateTeamRequest request, UUID userId) {
-        TeamMembership membership = accessSupport.resolveMembershipForCreate(request.cohortId(), userId);
+    public TeamResult create(Long cohortId, String rawName, UUID userId) {
+        TeamMembership membership = accessSupport.resolveMembershipForCreate(cohortId, userId);
 
         // 도메인은 규칙을 boolean으로만 표현한다. 그것을 사용자 대상 400으로 옮기는 것이 여기 책임이다 —
         // Team이 직접 BusinessException을 던지면 도메인이 외부 오류 계약을 알게 된다.
-        String name = Team.normalizeName(request.name());
+        String name = Team.normalizeName(rawName);
         if (!Team.isValidName(name)) {
             throw new BusinessException(TeamErrorCode.INVALID_NAME);
         }
@@ -87,14 +88,14 @@ public class TeamService {
         // 여기서 기술 예외를 잡으면 Application이 Spring Data와 인덱스명을 알게 된다.
         Team team = teamRepository.save(Team.create(membership.cohortId(), name));
         teamMemberRepository.save(TeamMember.master(team.getId(), membership.id()));
-        return TeamResponse.from(team);
+        return TeamResult.from(team);
     }
 
     /**
      * 사용자가 속한 팀 목록 (GR-06).
      * 여러 기수를 담당하는 매니저·멘토는 기수별로 하나씩, 복수 건이 정상이다.
      */
-    public List<TeamResponse> getMyTeams(UUID userId) {
+    public List<TeamResult> getMyTeams(UUID userId) {
         List<Long> membershipIds = cohortMembershipQueryService.findActiveMemberships(userId).stream()
                 .map(CohortMembershipView::membershipId)
                 .toList();
@@ -110,7 +111,7 @@ public class TeamService {
         }
 
         return teamRepository.findByIdInAndDeletedAtIsNull(teamIds).stream()
-                .map(TeamResponse::from)
+                .map(TeamResult::from)
                 .toList();
     }
 
@@ -118,20 +119,20 @@ public class TeamService {
     /**
      * 팀 상세와 팀원 목록 (GR-15). 소속자만 조회할 수 있다.
      */
-    public TeamDetailResponse getTeam(Long teamId, UUID userId) {
+    public TeamDetailResult getTeam(Long teamId, UUID userId) {
         Team team = accessSupport.loadActiveTeam(teamId);
         TeamMembership membership = accessSupport.requireActiveMembership(team.getCohortId(), userId);
         accessSupport.requireMembership(teamId, membership.id());
 
         List<TeamMember> members = teamMemberRepository.findByTeamIdOrderByJoinedAtAsc(teamId);
-        return TeamDetailResponse.of(team, toMemberResponse(members));
+        return TeamDetailResult.of(team, toMemberResults(members));
     }
 
     /**
      * membership → user_id → accounts.name 경로.
      * 두 단계 모두 배치라 팀원이 몇 명이든 외부 조회는 2회로 고정된다.
      */
-    private List<TeamMemberResponse> toMemberResponse(List<TeamMember> members) {
+    private List<TeamMemberResult> toMemberResults(List<TeamMember> members) {
         List<Long> membershipIds = members.stream()
                 .map(TeamMember::getCohortMembershipId)
                 .toList();
@@ -147,7 +148,7 @@ public class TeamService {
                 .map(member -> {
                     UUID memberUserId = userIdsByMembership.get(member.getCohortMembershipId());
                     String displayName = memberUserId == null ? null : displayNames.get(memberUserId);
-                    return TeamMemberResponse.of(member, displayName);
+                    return TeamMemberResult.of(member, displayName);
                 })
                 .toList();
     }

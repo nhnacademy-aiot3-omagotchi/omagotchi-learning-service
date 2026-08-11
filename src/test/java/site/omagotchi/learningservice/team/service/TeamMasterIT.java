@@ -13,8 +13,6 @@ import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.application.TeamMasterService;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
-import site.omagotchi.learningservice.team.application.command.AddTeamMemberRequest;
-import site.omagotchi.learningservice.team.application.command.CreateTeamRequest;
 import site.omagotchi.learningservice.team.support.TeamTestFixture;
 
 import java.util.ArrayList;
@@ -60,7 +58,7 @@ class TeamMasterIT {
 
     @Test
     @DisplayName("위임하면 두 역할이 교환되고 MASTER는 정확히 1명이다.")
-    void test1() {
+    void delegateSwapsRolesAndKeepsExactlyOneMaster() {
         Long cohortId = fixture.createCohort("위임 기수");
         var master = fixture.createActiveMember(cohortId);
         var target = fixture.createActiveMember(cohortId);
@@ -79,7 +77,7 @@ class TeamMasterIT {
      */
     @Test
     @DisplayName("위임과 대상 탈퇴가 동시에 와도 MASTER는 정확히 1명이다.")
-    void test2() throws Exception {
+    void concurrentDelegateAndLeaveKeepExactlyOneMaster() throws Exception {
         Long cohortId = fixture.createCohort("위임-탈퇴 기수");
         var master = fixture.createActiveMember(cohortId);
         var target = fixture.createActiveMember(cohortId);
@@ -103,7 +101,7 @@ class TeamMasterIT {
      */
     @Test
     @DisplayName("위임 두 건이 동시에 와도 데드락이 나지 않는다.")
-    void test3() throws Exception {
+    void concurrentDelegationsDoNotDeadlock() throws Exception {
         Long cohortId = fixture.createCohort("이중 위임 기수");
         var master = fixture.createActiveMember(cohortId);
         var first = fixture.createActiveMember(cohortId);
@@ -127,7 +125,7 @@ class TeamMasterIT {
 
     @Test
     @DisplayName("해체하면 팀원 행이 사라지고 팀은 조회에서 빠진다.")
-    void test4() {
+    void disbandRemovesMembersAndHidesTeamFromQueries() {
         Long cohortId = fixture.createCohort("해체 기수");
         var master = fixture.createActiveMember(cohortId);
         var member = fixture.createActiveMember(cohortId);
@@ -142,7 +140,7 @@ class TeamMasterIT {
     /** {@code uq_teams_active_name}이 {@code WHERE deleted_at IS NULL}이라 동명 재생성이 된다. */
     @Test
     @DisplayName("해체한 팀과 같은 이름으로 다시 만들 수 있다.")
-    void test5() {
+    void canRecreateTeamWithSameNameAfterDisband() {
         Long cohortId = fixture.createCohort("동명 재생성 기수");
         var master = fixture.createActiveMember(cohortId);
         Long teamId = createTeamWith(cohortId, "같은이름", master);
@@ -161,7 +159,7 @@ class TeamMasterIT {
      */
     @Test
     @DisplayName("MASTER를 둘로 만들려 하면 부분 유니크가 막는다.")
-    void test6() {
+    void partialUniqueIndexBlocksTwoMasters() {
         Long cohortId = fixture.createCohort("역순 방어 기수");
         var master = fixture.createActiveMember(cohortId);
         var target = fixture.createActiveMember(cohortId);
@@ -180,12 +178,11 @@ class TeamMasterIT {
 
     /** 첫 사람이 MASTER가 되고 나머지는 팀원으로 추가된다. */
     private Long createTeamWith(Long cohortId, String name, TeamTestFixture.Member... members) {
-        Long teamId = teamService.create(
-                new CreateTeamRequest(cohortId, name), members[0].userId()).teamId();
+        Long teamId = teamService.create(cohortId, name, members[0].userId()).teamId();
 
         for (int i = 1; i < members.length; i++) {
             teamMemberService.addMember(
-                    teamId, new AddTeamMemberRequest(members[i].userId()), members[0].userId());
+                    teamId, members[i].userId(), members[0].userId());
         }
         return teamId;
     }

@@ -3,6 +3,9 @@ package site.omagotchi.learningservice.occupancy.application.port;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -32,6 +35,27 @@ public interface OccupancyParticipantRepository {
 
     /** 이 점유의 현재 참여자 수 ({@code left_at IS NULL}). 정원 검증(MR-28)에 쓴다. */
     long countActiveByOccupancyId(Long occupancyId);
+
+
+    /**
+     * 여러 점유의 현재 참여자를 한 번에 읽는다 ({@code left_at IS NULL}).
+     * 공간 목록이 회의 참여자를 표시하는 데 쓴다.
+     *
+     * <p><b>배치인 것이 계약의 일부다.</b> 사용 중인 방이 N개여도 쿼리는 1회여야 한다 —
+     * 점유마다 따로 조회하면 그대로 N+1이 된다.</p>
+     *
+     * <p>점유자 본인도 결과에 포함된다. 점유 시작이 점유자를 참여자로 등록하므로(MR-27)
+     * 별도 항목이 아니며, 받는 쪽이 점유자를 다시 더하면 중복된다.</p>
+     *
+     * <p>값 목록만 돌려주고 {@code cohort_membership_id}는 담지 않는다. 참여자의 기수는
+     * 점유자의 기수와 같음이 추가 시점에 이미 검증됐고(MR-33), 소비처의 노출 판정은
+     * 점유자 기수 하나로 끝나므로 참여자별 기수를 알 이유가 없다.</p>
+     *
+     * @param occupancyIds 조회할 점유. 비어 있으면 빈 결과
+     * @return {@code occupancyId → 참여자 계정 목록}. 참여자가 없는 점유는 키가 없다.
+     *         목록은 참여 순서({@code occupancy_participants.id})를 유지한다
+     */
+    Map<Long, List<UUID>> findActiveUserIdsByOccupancyIds(Collection<Long> occupancyIds);
 
 
     /**

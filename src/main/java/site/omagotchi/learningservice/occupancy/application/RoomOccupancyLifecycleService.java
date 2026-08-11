@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.occupancy.application;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
@@ -14,6 +15,7 @@ import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -40,6 +42,7 @@ public class RoomOccupancyLifecycleService {
     private final RoomOccupancyRepository occupancyRepository;
     private final OccupancyParticipantRepository participantRepository;
     private final OccupancyEventPublisher eventPublisher;
+    private final OccupancyExpiration occupancyExpiration;
     private final Clock clock;
 
     /**
@@ -104,6 +107,62 @@ public class RoomOccupancyLifecycleService {
         // 발송 실패가 이 트랜잭션을 롤백시키지 않는다 (MR-18, ADR-0006).
         eventPublisher.publishRoomVacated(
                 new RoomVacatedEvent(spaceId, occupancy.getId(), now));
+    }
+
+    /**
+     * 만료된 점유를 일괄 종료한다 (스케줄러 #9).
+     *
+     * <p>점유 시작이 대행하는 {@code expireStale*}와 <b>목적이 다르다.</b> 저쪽은 요청 경로에서
+     * 불필요한 409를 줄이는 최선 노력이라 그 공간·그 계정만 훑지만, 여기는 아무도 찾지 않는
+     * 방까지 정리한다 — 만료된 채 방치되면 공간 목록에 계속 "사용 중"으로 뜨고 참여자도
+     * 열린 채 남는다.</p>
+     *
+     * <p><b>이 경로가 공실 알림의 정본 발행 지점이다.</b> 만료는 사용자 행위 없이 일어나므로
+     * 여기서 발행하지 않으면 "2시간 다 써서 비었다"는 가장 흔한 공실이 아무에게도
+     * 전달되지 않는다 (MR-03).</p>
+     *
+     * <p><b>이 Method에 트랜잭션이 없는 것이 의도다.</b> 명세서 03이 "한 건의 실패가 나머지를
+     * 막지 않도록 건별로 처리한다"고 정했고, 트랜잭션이 있으면 {@link OccupancyExpiration}의
+     * {@code REQUIRES_NEW}가 매 건 바깥 트랜잭션을 중단시켰다 재개하는 낭비가 되고, 조회 한 번을
+     * 위해 커넥션을 후보 전체 처리가 끝날 때까지 붙들게 된다. 조회는 단일 SELECT라 트랜잭션이
+     * 필요 없다.</p>
+     *
+     * <p>{@code Propagation.NOT_SUPPORTED}를 명시하는 것이 핵심이다. 클래스 레벨
+     * {@code @Transactional(readOnly = true)}는 Method에 별도 선언이 없으면 그대로 상속되므로,
+     * 여기 명시하지 않으면 이 문서가 말하는 "트랜잭션 없음"이 실제로는 성립하지 않는다.</p>
+     *
+     * <p>건별 실패를 여기서 잡아 다음 건으로 넘어간다. 실패한 건은 상태가 그대로 ACTIVE라
+     * 다음 주기가 다시 집어 간다 — 전이가 조건부({@code status='ACTIVE' AND expires_at <= now})라
+     * 재실행이 안전하다.</p>
+     *
+     * <p>조회 결과가 곧 종료 건수는 아니다. 조회와 전이 사이에 연장·반납이 일어나거나 다른
+     * 인스턴스가 먼저 처리하면 그 건은 건너뛴다 — 판정은 전부
+     * {@link RoomOccupancyRepository#expire}의 조건이 한다.</p>
+     *
+     * @return 이번 실행으로 실제 종료된 점유 수. 조회된 후보 수보다 적을 수 있다
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public int expireAll() {
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        List<RoomOccupancyRepository.ExpiredOccupancy> candidates = occupancyRepository.findStale(now);
+
+        int expired = 0;
+        for (RoomOccupancyRepository.ExpiredOccupancy candidate : candidates) {
+            try {
+                if (occupancyExpiration.expire(candidate, now)) {
+                    expired++;
+                }
+            } catch (Exception exception) {
+                // 건별 격리. 여기서 다시 던지면 남은 점유가 이번 주기에 처리되지 않고,
+                // 그것이 명세서 03이 건별 트랜잭션을 요구한 이유다.
+                log.error("점유 만료 처리에 실패했습니다. occupancyId={}", candidate.occupancyId(), exception);
+            }
+        }
+
+        if (expired > 0) {
+            log.info("만료된 점유 {}건을 정리했습니다.", expired);
+        }
+        return expired;
     }
 
     // ────────────────────────────── 내부 헬퍼 ──────────────────────────────

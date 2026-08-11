@@ -10,8 +10,7 @@ import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
-import site.omagotchi.learningservice.team.application.command.CreateTeamRequest;
-import site.omagotchi.learningservice.team.application.reuslt.TeamResponse;
+import site.omagotchi.learningservice.team.application.result.TeamResult;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.application.port.TeamRepository;
@@ -53,14 +52,14 @@ class TeamNameScopeIT {
 
     @Test
     @DisplayName("다른 기수에는 같은 이름의 팀을 만들 수 있다")
-    void test1() {
+    void canCreateSameNameTeamInDifferentCohort() {
         Long cohort1 = fixture.createCohort("1기");
         Long cohort2 = fixture.createCohort("2기");
         var a = fixture.createActiveMember(cohort1);
         var b = fixture.createActiveMember(cohort2);
 
-        TeamResponse first = teamService.create(new CreateTeamRequest(cohort1, "오마고치"), a.userId());
-        TeamResponse second = teamService.create(new CreateTeamRequest(cohort2, "오마고치"), b.userId());
+        TeamResult first = teamService.create(cohort1, "오마고치", a.userId());
+        TeamResult second = teamService.create(cohort2, "오마고치", b.userId());
 
         assertThat(first.teamId()).isNotEqualTo(second.teamId());
         assertThat(first.name()).isEqualTo(second.name());
@@ -68,39 +67,39 @@ class TeamNameScopeIT {
 
     @Test
     @DisplayName("같은 기수에서는 대소문자만 다른 이름도 중복으로 막힌다")
-    void test2() {
+    void blocksDuplicateNameDifferingOnlyInCase() {
         Long cohortId = fixture.createCohort("1기");
         var a = fixture.createActiveMember(cohortId);
         var b = fixture.createActiveMember(cohortId);
 
-        teamService.create(new CreateTeamRequest(cohortId, "Omagotchi"), a.userId());
+        teamService.create(cohortId, "Omagotchi", a.userId());
 
-        CreateTeamRequest lowerCased = new CreateTeamRequest(cohortId, "omagotchi");
+        String lowerCased = "omagotchi";
         UUID challenger = b.userId();
 
-        assertThatThrownBy(() -> teamService.create(lowerCased, challenger))
+        assertThatThrownBy(() -> teamService.create(cohortId, lowerCased, challenger))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.DUPLICATE_NAME);
     }
 
     @Test
     @DisplayName("같은 기수에서는 앞뒤 공백만 다른 이름도 중복으로 막힌다")
-    void test3() {
+    void blocksDuplicateNameDifferingOnlyInWhitespace() {
         Long cohortId = fixture.createCohort("1기");
         var a = fixture.createActiveMember(cohortId);
         var b = fixture.createActiveMember(cohortId);
 
-        teamService.create(new CreateTeamRequest(cohortId, "오마고치"), a.userId());
+        teamService.create(cohortId, "오마고치", a.userId());
 
-        CreateTeamRequest padded = new CreateTeamRequest(cohortId, "   오마고치   ");
+        String padded = "   오마고치   ";
         UUID challenger = b.userId();
 
-        assertThatThrownBy(() -> teamService.create(padded, challenger))
+        assertThatThrownBy(() -> teamService.create(cohortId, padded, challenger))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.DUPLICATE_NAME);
     }
 
     @Test
     @DisplayName("서비스 선검사를 건너뛰어도 uq_teams_active_name이 최종 방어선으로 막는다")
-    void test4() {
+    void uniqueIndexBlocksDuplicateEvenWhenServiceCheckIsBypassed() {
         Long cohortId = fixture.createCohort("1기");
         teamJpaRepository.saveAndFlush(Team.create(cohortId, "오마고치"));
 
@@ -129,7 +128,7 @@ class TeamNameScopeIT {
      */
     @Test
     @DisplayName("Port는 인덱스 위반을 DUPLICATE_NAME으로 변환한다 — flush를 지연하지 않기 때문")
-    void test5() {
+    void portTranslatesIndexViolationToDuplicateName() {
         Long cohortId = fixture.createCohort("1기");
         teamRepository.save(Team.create(cohortId, "오마고치"));
 
@@ -141,25 +140,25 @@ class TeamNameScopeIT {
 
     @Test
     @DisplayName("해체된 팀과 같은 이름으로 다시 만들 수 있다")
-    void test6() {
+    void canRecreateTeamWithSameNameAfterDisband() {
         Long cohortId = fixture.createCohort("1기");
         var master = fixture.createActiveMember(cohortId);
 
-        TeamResponse before = teamService.create(new CreateTeamRequest(cohortId, "오마고치"), master.userId());
+        TeamResult before = teamService.create(cohortId, "오마고치", master.userId());
 
         // 마스터가 단독 팀원이므로 탈퇴가 곧 팀 소프트 삭제다 (GR-13).
         teamMemberService.leave(before.teamId(), master.userId());
         assertThat(teamJpaRepository.findById(before.teamId()).orElseThrow().isDisbanded()).isTrue();
 
         // 이름 유니크와 1인 1팀 유니크가 둘 다 풀려야 통과한다.
-        TeamResponse after = teamService.create(new CreateTeamRequest(cohortId, "오마고치"), master.userId());
+        TeamResult after = teamService.create(cohortId, "오마고치", master.userId());
 
         assertThat(after.teamId()).isNotEqualTo(before.teamId());
     }
 
     @Test
     @DisplayName("여러 기수를 담당하는 사람은 기수별로 팀에 하나씩 소속될 수 있다")
-    void test7() {
+    void multiCohortPersonCanBelongToOneTeamPerCohort() {
         Long cohort1 = fixture.createCohort("1기");
         Long cohort2 = fixture.createCohort("2기");
 
@@ -168,18 +167,18 @@ class TeamNameScopeIT {
         fixture.createActiveMember(cohort1, userId);
         fixture.createActiveMember(cohort2, userId);
 
-        TeamResponse first = teamService.create(new CreateTeamRequest(cohort1, "1기팀"), userId);
-        TeamResponse second = teamService.create(new CreateTeamRequest(cohort2, "2기팀"), userId);
+        TeamResult first = teamService.create(cohort1, "1기팀", userId);
+        TeamResult second = teamService.create(cohort2, "2기팀", userId);
 
         // GR-18은 기수 내 제약이므로 두 건 모두 살아 있어야 한다.
-        List<TeamResponse> myTeams = teamService.getMyTeams(userId);
-        assertThat(myTeams).extracting(TeamResponse::teamId)
+        List<TeamResult> myTeams = teamService.getMyTeams(userId);
+        assertThat(myTeams).extracting(TeamResult::teamId)
                 .containsExactlyInAnyOrder(first.teamId(), second.teamId());
     }
 
     @Test
     @DisplayName("기수를 지정하지 않으면 담당 기수가 둘 이상인 사람은 거부된다")
-    void test8() {
+    void rejectsWhenCohortIdOmittedAndMultipleActiveCohorts() {
         Long cohort1 = fixture.createCohort("1기");
         Long cohort2 = fixture.createCohort("2기");
         UUID userId = UUID.randomUUID();
@@ -187,7 +186,7 @@ class TeamNameScopeIT {
         fixture.createActiveMember(cohort2, userId);
 
         assertThatThrownBy(() ->
-                teamService.create(new CreateTeamRequest(null, "오마고치"), userId))
+                teamService.create(null, "오마고치", userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.COHORT_REQUIRED);
     }
 }

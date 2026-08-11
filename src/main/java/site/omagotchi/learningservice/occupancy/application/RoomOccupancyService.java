@@ -7,6 +7,8 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.AttendancePresenceQueryService;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
+import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.port.SpaceReader;
@@ -16,6 +18,7 @@ import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -43,6 +46,7 @@ public class RoomOccupancyService {
     private final AttendancePresenceQueryService attendancePresenceQueryService;
     private final RoomOccupancyRepository occupancyRepository;
     private final OccupancyParticipantRepository participantRepository;
+    private final OccupancyEventPublisher eventPublisher;
     private final Clock clock;
 
     /**
@@ -87,16 +91,24 @@ public class RoomOccupancyService {
         // 만료됐지만 스케줄러(#9)가 아직 안 쓸어간 행을 먼저 정리한다.
         // 유니크 인덱스는 status만 보고 expires_at은 보지 않으므로, 이 정리가 없으면
         // "목록에는 사용 가능인데 점유하면 409"인 상태가 남는다.
-        occupancyRepository.expireStaleBySpaceId(spaceId, now);
-        occupancyRepository.expireStaleByUserId(userId, now);
+        //
+        // 이 방의 정리는 공실 알림을 발행하지 않는다. 지금 이 요청이 곧바로 점유할
+        // 방이라, 발행하면 대기자들이 "비었다"는 알림을 받고 와서 409를 맞는다.
+        // 공실 알림은 일회성 의사표시라(notified_at 소진) 헛된 알림 하나가
+        // 그 사람의 신청을 태워 없앤다.
+        closeParticipants(occupancyRepository.expireStaleBySpaceId(spaceId, now));
+
+        // 반면 계정 기준 정리는 다른 방이다. 그 방은 실제로 비었으므로 발행해야 한다 —
+        // 여기서 EXPIRED로 바꿔버리면 스케줄러가 다시 찾지 못해 알림이 영영 유실된다.
+        vacate(occupancyRepository.expireStaleByUserId(userId, now));
 
         // 선검사. 통과해도 안전이 보장되지는 않는다 — 동시 요청은 둘 다 "없음"을 볼 수 있고,
         // 그때는 부분 유니크가 최종 방어선이다. 여기서 거르는 이유는 흔한 경로에서
         // 예외 스택을 태우지 않기 위해서다.
-        if (occupancyRepository.existsActiveBySpaceId(spaceId)) {
+        if (occupancyRepository.existsActiveBySpaceId(spaceId, now)) {
             throw new BusinessException(OccupancyErrorCode.ROOM_ALREADY_OCCUPIED);  // MR-09
         }
-        if (occupancyRepository.existsActiveByUserId(userId)) {
+        if (occupancyRepository.existsActiveByUserId(userId, now)) {
             throw new BusinessException(OccupancyErrorCode.ALREADY_OCCUPYING);      // MR-10
         }
 
@@ -136,5 +148,43 @@ public class RoomOccupancyService {
     private OpenPresenceView findOpenPresence(UUID userId) {
         return attendancePresenceQueryService.findOpenPresence(userId)
                 .orElseThrow(() -> new BusinessException(OccupancyErrorCode.NOT_PRESENT));
+    }
+
+    /**
+     * 만료 정리로 끝난 점유의 참여자를 함께 마감한다 (MR-32).
+     *
+     * <p>점유 행만 EXPIRED로 바꾸고 여기서 멈추면 <b>그 참여자들이 다시는 어떤 회의에도
+     * 들어갈 수 없다.</b> {@code uq_occupancy_participants_one_active}가 계정 기준이라
+     * 열린 참여 행 하나가 그 계정을 영구히 묶는다. 점유 시작이 스스로를 참여자로
+     * 등록하므로(MR-27) 새 점유도 같이 막힌다 — 만료된 방의 점유자가 다른 방을 잡으려 하면
+     * {@code OCCUPANCY_ALREADY_PARTICIPATING}(409)을 받는다.</p>
+     *
+     * <p>마감 시각이 정리 시각이 아니라 점유의 종료 시각인 것이 요점이다. 실제로 회의가
+     * 끝난 것은 {@code expires_at}이고, 정리는 그 뒤에 도착한 다른 요청이 대행할 뿐이라
+     * 지금 시각을 찍으면 참여 시간이 실제보다 길게 집계된다.</p>
+     *
+     * <p>반복 호출은 안전하다 — {@code closeAllActiveByOccupancyId}가
+     * {@code WHERE left_at IS NULL} 조건부 UPDATE라 이미 닫힌 행을 덮어쓰지 않는다.
+     * 공간 기준 정리와 계정 기준 정리가 같은 점유를 가리킬 수 있어 필요한 성질이다.</p>
+     */
+    private void closeParticipants(List<RoomOccupancyRepository.ExpiredOccupancy> expired) {
+        expired.forEach(occupancy -> participantRepository
+                .closeAllActiveByOccupancyId(occupancy.occupancyId(), occupancy.endedAt()));
+    }
+
+    /**
+     * 참여자를 마감하고 공실을 알린다.
+     *
+     * <p>{@link #closeParticipants}와 나눠 둔 이유는 "정리했다"와 "비었다"가 항상 같지
+     * 않기 때문이다. 지금 점유하려는 방을 정리한 것은 사용자에게 공실이 아니며, 그때
+     * 알리면 일회성 신청이 헛되이 소진된다.</p>
+     *
+     * <p>{@code vacatedAt}이 {@code now}가 아닌 것은 발송이 늦어도 "언제 비었는지"의
+     * 정본이 종료 시각이기 때문이다 ({@link RoomVacatedEvent} 참고).</p>
+     */
+    private void vacate(List<RoomOccupancyRepository.ExpiredOccupancy> expired) {
+        closeParticipants(expired);
+        expired.forEach(occupancy -> eventPublisher.publishRoomVacated(new RoomVacatedEvent(
+                occupancy.spaceId(), occupancy.occupancyId(), occupancy.endedAt())));
     }
 }

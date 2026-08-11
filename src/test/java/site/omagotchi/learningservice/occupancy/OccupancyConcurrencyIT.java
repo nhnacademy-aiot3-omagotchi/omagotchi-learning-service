@@ -81,7 +81,7 @@ class OccupancyConcurrencyIT {
      */
     @Test
     @DisplayName("같은 회의실에 20명이 동시에 점유를 요청하면 1명만 성공한다.")
-    void test1() throws Exception {
+    void onlyOneOfTwentyConcurrentOccupyRequestsSucceeds() throws Exception {
         Long cohortId = fixture.createCohort("동시점유 기수");
         Long spaceId = fixture.createMeetingRoom(cohortId, "동시점유 회의실", 30);
 
@@ -106,7 +106,7 @@ class OccupancyConcurrencyIT {
      */
     @Test
     @DisplayName("동시 점유에서 밀린 요청은 모두 사용 중(409)으로 응답한다.")
-    void test2() throws Exception {
+    void losingConcurrentRequestsReturnRoomAlreadyOccupied() throws Exception {
         Long cohortId = fixture.createCohort("409 기수");
         Long spaceId = fixture.createMeetingRoom(cohortId, "409 회의실", 30);
 
@@ -130,7 +130,7 @@ class OccupancyConcurrencyIT {
      */
     @Test
     @DisplayName("다기수 담당자는 서로 다른 멤버십으로도 회의실을 둘 잡을 수 없다.")
-    void test3() {
+    void multiCohortManagerCannotOccupyTwoRoomsWithDifferentMemberships() {
         Long firstCohortId = fixture.createCohort("다기수 3기");
         Long secondCohortId = fixture.createCohort("다기수 4기");
         UUID managerUserId = UUID.randomUUID();
@@ -154,7 +154,7 @@ class OccupancyConcurrencyIT {
     /** 기수 쿼터는 없다 — 회의실은 순수 선착순으로 배분된다 (MR-35). */
     @Test
     @DisplayName("서로 다른 기수가 서로 다른 회의실을 동시에 점유할 수 있다.")
-    void test4() throws Exception {
+    void differentCohortsCanOccupyDifferentRoomsConcurrently() throws Exception {
         Long firstCohortId = fixture.createCohort("MR-35 3기");
         Long secondCohortId = fixture.createCohort("MR-35 4기");
         UUID firstUserId = fixture.createActiveMember(firstCohortId).userId();
@@ -192,7 +192,7 @@ class OccupancyConcurrencyIT {
      */
     @Test
     @DisplayName("잔여 1석에 여러 명이 동시에 추가돼도 정원을 넘지 않는다.")
-    void test5() throws Exception {
+    void concurrentAddsToLastSeatDoNotExceedCapacity() throws Exception {
         Long cohortId = fixture.createCohort("정원 기수");
         Long spaceId = fixture.createMeetingRoom(cohortId, "정원 회의실", 2);
 
@@ -221,7 +221,7 @@ class OccupancyConcurrencyIT {
      */
     @Test
     @DisplayName("타 기수 사용자는 참여자로 추가되지 않는다.")
-    void test6() {
+    void userFromDifferentCohortCannotBeAddedAsParticipant() {
         Long occupierCohortId = fixture.createCohort("MR-33 3기");
         Long otherCohortId = fixture.createCohort("MR-33 4기");
         Long spaceId = fixture.createMeetingRoom(occupierCohortId, "MR-33 회의실", 8);
@@ -246,7 +246,7 @@ class OccupancyConcurrencyIT {
      */
     @Test
     @DisplayName("이탈 후 재합류하면 새 행 없이 기존 행이 재사용된다.")
-    void test7() {
+    void rejoinAfterLeavingReusesExistingRow() {
         Long cohortId = fixture.createCohort("재합류 기수");
         Long spaceId = fixture.createMeetingRoom(cohortId, "재합류 회의실", 8);
 
@@ -270,7 +270,7 @@ class OccupancyConcurrencyIT {
      */
     @Test
     @DisplayName("반납한 회의실은 다른 사람이 즉시 다시 점유할 수 있다.")
-    void test8() {
+    void releasedRoomCanBeImmediatelyReoccupiedByAnotherUser() {
         Long cohortId = fixture.createCohort("반납 재점유 기수");
         Long spaceId = fixture.createMeetingRoom(cohortId, "반납 재점유 회의실", 8);
 
@@ -292,7 +292,7 @@ class OccupancyConcurrencyIT {
      */
     @Test
     @DisplayName("반납하면 참여자 행이 삭제되지 않고 left_at만 채워진다.")
-    void test9() {
+    void releaseFillsLeftAtWithoutDeletingParticipantRows() {
         Long cohortId = fixture.createCohort("반납 마감 기수");
         Long spaceId = fixture.createMeetingRoom(cohortId, "반납 마감 회의실", 8);
 
@@ -313,7 +313,7 @@ class OccupancyConcurrencyIT {
     /** 반납한 사람은 참여 이력이 닫혔으므로 다른 회의실을 곧바로 점유할 수 있어야 한다. */
     @Test
     @DisplayName("반납 후에는 같은 사람이 다른 회의실을 점유할 수 있다.")
-    void test10() {
+    void sameUserCanOccupyAnotherRoomAfterReleasing() {
         Long cohortId = fixture.createCohort("반납 후 재점유 기수");
         Long firstRoomId = fixture.createMeetingRoom(cohortId, "반납 후 회의실 A", 8);
         Long secondRoomId = fixture.createMeetingRoom(cohortId, "반납 후 회의실 B", 8);
@@ -335,7 +335,7 @@ class OccupancyConcurrencyIT {
      */
     @Test
     @DisplayName("같은 점유에 반납이 동시에 와도 한 건만 성공한다.")
-    void test11() throws Exception {
+    void onlyOneOfConcurrentReleasesOnSameOccupancySucceeds() throws Exception {
         Long cohortId = fixture.createCohort("동시 반납 기수");
         Long spaceId = fixture.createMeetingRoom(cohortId, "동시 반납 회의실", 8);
 
@@ -371,7 +371,7 @@ class OccupancyConcurrencyIT {
      */
     @Test
     @DisplayName("참여자 마감이 실패하면 점유 상태 변경도 함께 롤백된다.")
-    void test18() {
+    void occupancyStateRollsBackWhenParticipantClosingFails() {
         Long cohortId = fixture.createCohort("반납 롤백 기수");
         Long spaceId = fixture.createMeetingRoom(cohortId, "반납 롤백 회의실", 8);
 
@@ -404,7 +404,7 @@ class OccupancyConcurrencyIT {
      */
     @Test
     @DisplayName("출근하지 않은 사용자는 회의실을 점유할 수 없다.")
-    void test12() {
+    void absentUserCannotOccupyRoom() {
         Long cohortId = fixture.createCohort("비재실 기수");
         Long spaceId = fixture.createMeetingRoom(cohortId, "비재실 회의실", 8);
         UUID absentUserId = fixture.createAbsentMember(cohortId).userId();
@@ -419,7 +419,7 @@ class OccupancyConcurrencyIT {
 
     @Test
     @DisplayName("출근하지 않은 사용자는 참여자로 추가할 수 없다.")
-    void test13() {
+    void absentUserCannotBeAddedAsParticipant() {
         Long cohortId = fixture.createCohort("비재실 참여자 기수");
         Long spaceId = fixture.createMeetingRoom(cohortId, "비재실 참여자 회의실", 8);
 
@@ -439,7 +439,7 @@ class OccupancyConcurrencyIT {
     /** 퇴근하면 구간이 닫히므로 더 이상 재실이 아니다 — 열린 구간만 재실로 본다. */
     @Test
     @DisplayName("퇴근해 재실 구간이 닫히면 점유할 수 없다.")
-    void test14() {
+    void cannotOccupyAfterCheckingOutClosesPresenceInterval() {
         Long cohortId = fixture.createCohort("퇴근 기수");
         Long spaceId = fixture.createMeetingRoom(cohortId, "퇴근 회의실", 8);
         var member = fixture.createActiveMember(cohortId);
@@ -460,7 +460,7 @@ class OccupancyConcurrencyIT {
      */
     @Test
     @DisplayName("다기수 담당자가 점유하면 최신 재실 구간의 멤버십이 기록된다.")
-    void test15() {
+    void multiCohortManagerOccupancyRecordsLatestPresenceMembership() {
         Long firstCohortId = fixture.createCohort("재실 도출 3기");
         Long secondCohortId = fixture.createCohort("재실 도출 4기");
         Long spaceId = fixture.createMeetingRoom(firstCohortId, "재실 도출 회의실", 8);
@@ -482,7 +482,7 @@ class OccupancyConcurrencyIT {
      */
     @Test
     @DisplayName("여러 회의실의 점유 상태를 한 번에 조회한다.")
-    void test16() {
+    void queriesOccupancyStatusForMultipleRoomsAtOnce() {
         Long cohortId = fixture.createCohort("배치 조회 기수");
         Long occupiedRoomId = fixture.createMeetingRoom(cohortId, "배치 조회 사용중", 8);
         Long emptyRoomId = fixture.createMeetingRoom(cohortId, "배치 조회 빈방", 8);
@@ -504,7 +504,7 @@ class OccupancyConcurrencyIT {
      */
     @Test
     @DisplayName("만료된 점유는 사용 중으로 세지 않는다.")
-    void test17() {
+    void expiredOccupancyIsNotCountedAsActive() {
         Long cohortId = fixture.createCohort("만료 제외 기수");
         Long spaceId = fixture.createMeetingRoom(cohortId, "만료 제외 회의실", 8);
 

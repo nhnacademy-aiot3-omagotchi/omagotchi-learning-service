@@ -11,7 +11,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.team.application.TeamAccessSupport;
 import site.omagotchi.learningservice.team.application.TeamService;
-import site.omagotchi.learningservice.team.application.command.CreateTeamRequest;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.infrastructure.TeamJpaRepository;
@@ -53,10 +52,10 @@ class TeamDisbandRaceIT {
 
     @Test
     @DisplayName("락 전에 기수를 조회했어도, 그 사이 해체가 커밋되면 락 시점에 404로 잡힌다")
-    void test1() {
+    void lockDetectsDisbandCommittedBeforeLockEvenAfterPreLockLookup() {
         Long cohortId = fixture.createCohort("1기");
         var master = fixture.createActiveMember(cohortId);
-        var team = teamService.create(new CreateTeamRequest(cohortId, "오마고치"), master.userId());
+        var team = teamService.create(cohortId, "오마고치", master.userId());
         Long teamId = team.teamId();
 
         Throwable thrown = transactionTemplate.execute(status -> {
@@ -93,10 +92,10 @@ class TeamDisbandRaceIT {
     @Test
     @Disabled("Hibernate 1차 캐시 동작을 문서화한 재현 테스트. 회귀 방어는 test1이 담당한다.")
     @DisplayName("[대조군] 락 전에 loadActiveTeam으로 엔티티를 미리 읽으면, 해체가 커밋돼도 캐시된 인스턴스가 반환되어 재확인이 무력화된다")
-    void test2() {
+    void controlCaseStaleEntityHidesDisbandWhenLoadedBeforeLock() {
         Long cohortId = fixture.createCohort("1기");
         var master = fixture.createActiveMember(cohortId);
-        var team = teamService.create(new CreateTeamRequest(cohortId, "오마고치"), master.userId());
+        var team = teamService.create(cohortId, "오마고치", master.userId());
         Long teamId = team.teamId();
 
         Throwable thrown = transactionTemplate.execute(status -> {

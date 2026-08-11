@@ -7,10 +7,10 @@ import org.springframework.web.bind.annotation.*;
 import site.omagotchi.learningservice.team.application.TeamMasterService;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
-import site.omagotchi.learningservice.team.application.command.AddTeamMemberRequest;
-import site.omagotchi.learningservice.team.application.command.CreateTeamRequest;
-import site.omagotchi.learningservice.team.application.reuslt.TeamDetailResponse;
-import site.omagotchi.learningservice.team.application.reuslt.TeamResponse;
+import site.omagotchi.learningservice.team.presentation.request.AddTeamMemberRequest;
+import site.omagotchi.learningservice.team.presentation.request.CreateTeamRequest;
+import site.omagotchi.learningservice.team.presentation.response.TeamDetailResponse;
+import site.omagotchi.learningservice.team.presentation.response.TeamResponse;
 
 import java.util.List;
 import java.util.UUID;
@@ -52,7 +52,8 @@ public class TeamController {
             @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody CreateTeamRequest request
     ) {
-        return teamService.create(request, userId);
+        return TeamResponse.from(
+                teamService.create(request.cohortId(), request.name(), userId));
     }
 
     /**
@@ -63,7 +64,9 @@ public class TeamController {
      */
     @GetMapping("/me")
     public List<TeamResponse> getMyTeams(@RequestHeader("X-User-Id") UUID userId) {
-        return teamService.getMyTeams(userId);
+        return teamService.getMyTeams(userId).stream()
+                .map(TeamResponse::from)
+                .toList();
     }
 
     /**
@@ -77,7 +80,7 @@ public class TeamController {
             @PathVariable("team-id") Long teamId,
             @RequestHeader("X-User-Id") UUID userId
     ) {
-        return teamService.getTeam(teamId, userId);
+        return TeamDetailResponse.from(teamService.getTeam(teamId, userId));
     }
 
     /**
@@ -94,7 +97,7 @@ public class TeamController {
             @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody AddTeamMemberRequest request
             ) {
-        teamMemberService.addMember(teamId, request, userId);
+        teamMemberService.addMember(teamId, request.targetUserId(), userId);
     }
 
     /**

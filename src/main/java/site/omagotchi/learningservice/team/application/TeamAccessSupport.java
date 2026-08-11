@@ -7,6 +7,7 @@ import site.omagotchi.learningservice.cohort.application.result.CohortMembership
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
+import site.omagotchi.learningservice.team.domain.TeamMemberRole;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.application.port.TeamRepository;
 
@@ -143,5 +144,25 @@ public class TeamAccessSupport {
             throw new BusinessException(TeamErrorCode.MASTER_REQUIRED);
         }
         return member;
+    }
+
+    /**
+     * {@code teams} 행 락을 잡은 뒤 MASTER 권한을 값으로 다시 확인한다.
+     *
+     * <p>{@link #requireMaster}를 그대로 재호출하면 안 된다. 같은 트랜잭션에서 락 밖 사전
+     * 검증이 이미 {@link #requireMaster}(또는 {@link #requireMembership})를 호출해
+     * 그 멤버십의 {@code TeamMember}를 엔티티로 읽었다면, 영속성 컨텍스트에 캐시된 그
+     * 인스턴스가 재조회의 반환값이 된다 — 그 사이 다른 트랜잭션이 위임을 커밋해 role이
+     * 바뀌었어도 캐시는 락 이전 스냅샷을 그대로 들고 있다. 이 메서드는 엔티티가 아니라
+     * boolean 값으로 확인해 이 함정을 피한다.</p>
+     *
+     * @throws site.omagotchi.learningservice.global.exception.BusinessException MASTER가 아니면 403
+     */
+    public void requireStillMaster(Long teamId, Long cohortMembershipId) {
+        boolean master = teamMemberRepository.existsByTeamIdAndCohortMembershipIdAndRole(
+                teamId, cohortMembershipId, TeamMemberRole.MASTER);
+        if (!master) {
+            throw new BusinessException(TeamErrorCode.MASTER_REQUIRED);
+        }
     }
 }

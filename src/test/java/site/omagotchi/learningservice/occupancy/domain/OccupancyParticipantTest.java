@@ -25,7 +25,7 @@ class OccupancyParticipantTest {
 
     @Test
     @DisplayName("참여하면 이탈 시각 없이 참여 중으로 시작한다.")
-    void test1() {
+    void joinStartsActiveWithoutLeftAt() {
         OccupancyParticipant participant = join();
 
         assertThat(participant.getOccupancyId()).isEqualTo(100L);
@@ -42,7 +42,7 @@ class OccupancyParticipantTest {
      */
     @Test
     @DisplayName("이탈 시각이 기록되면 참여 중이 아니다.")
-    void test2() {
+    void notActiveWhenLeftAtRecorded() {
         OccupancyParticipant participant = join();
 
         ReflectionTestUtils.setField(participant, "leftAt", JOINED_AT.plusMinutes(30));
@@ -52,7 +52,7 @@ class OccupancyParticipantTest {
 
     @Test
     @DisplayName("이탈하면 이탈 시각이 기록된다.")
-    void test3() {
+    void leaveRecordsLeftAt() {
         OccupancyParticipant participant = join();
 
         assertThat(participant.leave(JOINED_AT.plusMinutes(30))).isTrue();
@@ -67,7 +67,7 @@ class OccupancyParticipantTest {
      */
     @Test
     @DisplayName("이미 이탈했으면 이탈 시각을 덮어쓰지 않는다.")
-    void test4() {
+    void doesNotOverwriteLeftAtWhenAlreadyLeft() {
         OccupancyParticipant participant = join();
         participant.leave(JOINED_AT.plusMinutes(30));
 
@@ -79,7 +79,7 @@ class OccupancyParticipantTest {
     /** 재합류마다 joinedAt을 앞당기면 이 사람이 회의에 처음 들어온 시각을 잃는다. */
     @Test
     @DisplayName("재합류하면 최초 참여 시각을 유지한 채 이탈 시각만 지워진다.")
-    void test5() {
+    void rejoinClearsLeftAtButKeepsOriginalJoinedAt() {
         OccupancyParticipant participant = join();
         participant.leave(JOINED_AT.plusMinutes(30));
 
@@ -92,7 +92,7 @@ class OccupancyParticipantTest {
 
     @Test
     @DisplayName("이탈 시각 없이는 이탈할 수 없다.")
-    void test6() {
+    void cannotLeaveWithoutLeftAt() {
         OccupancyParticipant participant = join();
 
         assertThatThrownBy(() -> participant.leave(null))
@@ -101,7 +101,7 @@ class OccupancyParticipantTest {
 
     @Test
     @DisplayName("참여에 필요한 값이 비어 있으면 만들 수 없다.")
-    void test7() {
+    void cannotJoinWithMissingRequiredValues() {
         assertThatThrownBy(() -> OccupancyParticipant.join(null, 10L, USER_ID, JOINED_AT))
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> OccupancyParticipant.join(100L, null, USER_ID, JOINED_AT))

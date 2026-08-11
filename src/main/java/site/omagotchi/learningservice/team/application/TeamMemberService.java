@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.team.application.command.AddTeamMemberRequest;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
@@ -46,22 +45,25 @@ public class TeamMemberService {
      * <p>
      * 락 전 단계에서 Team을 엔티티로 읽지 않는 것이 핵심이다. 읽어두면 1차 캐시의
      * 인스턴스가 lockActiveTeam의 반환값이 되어 해체 재확인이 락 이전 상태를 본다.
+     *
+     * @param targetUserId 추가할 계정 id. 어느 기수의 멤버십으로 넣을지는 서버가 팀의 기수로 역조회한다
+     * @param userId       요청자 계정 id. 이 팀의 MASTER여야 한다
      */
     @Transactional
-    public void addMember(Long teamId, AddTeamMemberRequest request, UUID userId) {
+    public void addMember(Long teamId, UUID targetUserId, UUID userId) {
         Long cohortId = accessSupport.requireActiveTeamCohortId(teamId);
         TeamMembership requestMembership =
                 accessSupport.requireActiveMembership(cohortId, userId);
         accessSupport.requireMaster(teamId, requestMembership.id());
 
-        validateAccount(request.targetUserId());
+        validateAccount(targetUserId);
 
 
         // GR-22: 팀의 기수로 대상 멤버십을 역조회한다.
         // 조회 방향을 뒤집으면 "대상의 기수 == 팀의 기수" 검증이 조회 결과로 자동 충족된다.
         // team_members에 cohort_id가 없으므로 이 앱 검증이 유일한 방어선이다.
         TeamMembership targetMembership = cohortMembershipQueryService
-                .findActiveMembership(cohortId, request.targetUserId())
+                .findActiveMembership(cohortId, targetUserId)
                 .map(view -> new TeamMembership(view.membershipId(), view.cohortId(), view.userId()))
                 .orElseThrow(() -> new BusinessException(TeamErrorCode.TARGET_NOT_IN_COHORT));
 
@@ -70,6 +72,16 @@ public class TeamMemberService {
         // 정원은 "최대 8행"이라 유니크 인덱스로 표현할 수 없다 — 락이 유일한 방어선이고,
         // 락 밖에서 세면 7명 팀에 둘이 동시에 들어와 9명이 된다.
         Team lockedTeam = accessSupport.lockActiveTeam(teamId);
+
+        // MASTER 재확인. 위 57행 확인은 락 밖 빠른 실패용일 뿐이다 — 그 사이 다른
+        // 트랜잭션이 위임(delegate)을 커밋하면 요청자는 이미 MEMBER인데, 락 이후
+        // 재확인이 없으면 무효화된 권한으로 팀원이 추가된다.
+        //
+        // requireMaster를 그대로 다시 부르면 안 된다 — 57행에서 이미 그 멤버십의
+        // TeamMember를 엔티티로 읽어 영속성 컨텍스트에 캐시해뒀으므로, 같은 조회를
+        // 반복하면 캐시된 인스턴스가 그대로 반환돼 그 사이 커밋된 위임을 보지 못한다.
+        accessSupport.requireStillMaster(teamId, requestMembership.id());
+
         if (teamMemberRepository.countByTeamId(lockedTeam.getId()) >= TeamMember.MAX_MEMBERS_PER_TEAM) {
             throw new BusinessException(TeamErrorCode.CAPACITY_EXCEEDED);
         }

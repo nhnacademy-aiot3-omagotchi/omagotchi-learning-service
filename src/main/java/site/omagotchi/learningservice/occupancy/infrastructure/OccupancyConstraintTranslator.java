@@ -7,6 +7,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.OccupancyErrorCode;
 
+import java.util.Locale;
+
 /**
  * 유니크 위반을 기능 오류 코드로 변환한다.
  *
@@ -47,16 +49,16 @@ public final class OccupancyConstraintTranslator {
             return exception;
         }
 
-        String normalized = name.toLowerCase();
+        String normalized = name.toLowerCase(Locale.ROOT);
         if (normalized.contains(UQ_ONE_ACTIVE_PER_SPACE)) {
-            return new BusinessException(OccupancyErrorCode.ROOM_ALREADY_OCCUPIED);
+            return new BusinessException(OccupancyErrorCode.ROOM_ALREADY_OCCUPIED, exception);
         }
         if (normalized.contains(UQ_ONE_ACTIVE_PER_USER)) {
-            return new BusinessException(OccupancyErrorCode.ALREADY_OCCUPYING);
+            return new BusinessException(OccupancyErrorCode.ALREADY_OCCUPYING, exception);
         }
         if (normalized.contains(UQ_PARTICIPANTS_ONE_ACTIVE)
                 || normalized.contains(UQ_PARTICIPANTS_PAIR)) {
-            return new BusinessException(OccupancyErrorCode.ALREADY_PARTICIPATING);
+            return new BusinessException(OccupancyErrorCode.ALREADY_PARTICIPATING, exception);
         }
         return exception;
     }

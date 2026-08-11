@@ -28,7 +28,7 @@ class RoomOccupancyTest {
 
     @Test
     @DisplayName("점유를 시작하면 ACTIVE 상태로 연장 횟수 0에서 출발한다.")
-    void test1() {
+    void startBeginsActiveWithZeroExtensions() {
         RoomOccupancy occupancy = start();
 
         assertThat(occupancy.getStatus()).isEqualTo(OccupancyStatus.ACTIVE);
@@ -39,13 +39,13 @@ class RoomOccupancyTest {
     /** ck_room_occupancies_end 가 (status='ACTIVE') = (ended_at IS NULL) 을 강제한다. */
     @Test
     @DisplayName("시작 직후에는 종료 시각이 비어 있다.")
-    void test2() {
+    void endedAtIsNullRightAfterStart() {
         assertThat(start().getEndedAt()).isNull();
     }
 
     @Test
     @DisplayName("점유 주체로 멤버십과 계정을 함께 보관한다.")
-    void test3() {
+    void storesBothMembershipAndUserIdAsOccupier() {
         RoomOccupancy occupancy = start();
 
         assertThat(occupancy.getOccupierMembershipId()).isEqualTo(10L);
@@ -54,7 +54,7 @@ class RoomOccupancyTest {
 
     @Test
     @DisplayName("기본 점유 시간은 2시간이다.")
-    void test4() {
+    void defaultDurationIsTwoHours() {
         assertThat(RoomOccupancy.DEFAULT_DURATION).isEqualTo(Duration.ofHours(2));
     }
 
@@ -64,7 +64,7 @@ class RoomOccupancyTest {
      */
     @Test
     @DisplayName("만료 시각과 같은 순간부터 만료로 본다.")
-    void test5() {
+    void isExpiredAtTheExactExpiryMoment() {
         RoomOccupancy occupancy = start();
 
         assertThat(occupancy.isExpiredAt(EXPIRES_AT.minusSeconds(1))).isFalse();
@@ -75,7 +75,7 @@ class RoomOccupancyTest {
 
     @Test
     @DisplayName("남은 시간은 만료까지의 초이며 만료 후에는 0이다.")
-    void test6() {
+    void remainingSecondsIsZeroAfterExpiry() {
         RoomOccupancy occupancy = start();
 
         assertThat(occupancy.remainingSeconds(STARTED_AT)).isEqualTo(7200L);
@@ -90,7 +90,7 @@ class RoomOccupancyTest {
      */
     @Test
     @DisplayName("종료된 점유는 사용 중이 아니다.")
-    void test7() {
+    void endedStatusIsNotActive() {
         RoomOccupancy occupancy = start();
 
         for (OccupancyStatus ended : new OccupancyStatus[]{
@@ -102,7 +102,7 @@ class RoomOccupancyTest {
 
     @Test
     @DisplayName("점유자 판정은 멤버십이 아니라 계정 기준이다.")
-    void test8() {
+    void occupiedByChecksUserIdNotMembership() {
         RoomOccupancy occupancy = start();
 
         assertThat(occupancy.isOccupiedBy(USER_ID)).isTrue();
@@ -111,7 +111,7 @@ class RoomOccupancyTest {
 
     @Test
     @DisplayName("시작에 필요한 값이 비어 있으면 만들 수 없다.")
-    void test9() {
+    void cannotStartWithMissingRequiredValues() {
         assertThatThrownBy(() -> RoomOccupancy.start(null, 10L, USER_ID, STARTED_AT, EXPIRES_AT))
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> RoomOccupancy.start(1L, null, USER_ID, STARTED_AT, EXPIRES_AT))
@@ -128,7 +128,7 @@ class RoomOccupancyTest {
 
     @Test
     @DisplayName("연장 가능 시점은 만료 30분 전부터다.")
-    void test10() {
+    void extensionWindowStartsThirtyMinutesBeforeExpiry() {
         RoomOccupancy occupancy = start();
 
         assertThat(occupancy.isWithinExtensionWindow(EXPIRES_AT.minusMinutes(31))).isFalse();
@@ -142,7 +142,7 @@ class RoomOccupancyTest {
      */
     @Test
     @DisplayName("연장 결과는 언제 눌렀는지와 무관하게 만료 시각의 30분 뒤다.")
-    void test11() {
+    void extendResultIsThirtyMinutesAfterExpiryRegardlessOfWhenCalled() {
         RoomOccupancy early = start();
         RoomOccupancy late = start();
 
@@ -155,7 +155,7 @@ class RoomOccupancyTest {
 
     @Test
     @DisplayName("연장하면 횟수가 하나 늘어난다.")
-    void test12() {
+    void extendIncrementsExtensionCount() {
         RoomOccupancy occupancy = start();
 
         occupancy.extend();
@@ -166,7 +166,7 @@ class RoomOccupancyTest {
     /** 남겨두면 연장한 점유는 두 번 다시 임박 알림을 받지 못한다 (MR-12). */
     @Test
     @DisplayName("연장하면 임박 알림 발송 기록이 지워진다.")
-    void test13() {
+    void extendClearsReminderSentAt() {
         RoomOccupancy occupancy = start();
         ReflectionTestUtils.setField(occupancy, "reminderSentAt", EXPIRES_AT.minusMinutes(10));
 
@@ -177,7 +177,7 @@ class RoomOccupancyTest {
 
     @Test
     @DisplayName("연장은 두 번까지만 남아 있다.")
-    void test14() {
+    void hasRemainingExtensionUpToTwoTimes() {
         RoomOccupancy occupancy = start();
 
         assertThat(occupancy.hasRemainingExtension()).isTrue();
@@ -193,7 +193,7 @@ class RoomOccupancyTest {
     /** 여기 값이 DB CHECK 제약과 어긋나면 3회째 연장이 앱은 통과하고 DB에서 터진다. */
     @Test
     @DisplayName("연장 상수는 30분 단위·최대 2회다.")
-    void test15() {
+    void extensionConstantsAreThirtyMinutesAndMaxTwo() {
         assertThat(RoomOccupancy.EXTENSION_UNIT).isEqualTo(Duration.ofMinutes(30));
         assertThat(RoomOccupancy.EXTENSION_WINDOW).isEqualTo(Duration.ofMinutes(30));
         assertThat(RoomOccupancy.MAX_EXTENSION_COUNT).isEqualTo((short) 2);
@@ -206,7 +206,7 @@ class RoomOccupancyTest {
      */
     @Test
     @DisplayName("연장 횟수를 다 쓰면 더 이상 연장할 수 없다.")
-    void test19() {
+    void cannotExtendAfterUsingUpAllExtensions() {
         RoomOccupancy occupancy = start();
         occupancy.extend();
         occupancy.extend();
@@ -225,7 +225,7 @@ class RoomOccupancyTest {
      */
     @Test
     @DisplayName("종료된 점유는 연장할 수 없다.")
-    void test20() {
+    void cannotExtendEndedOccupancy() {
         RoomOccupancy occupancy = start();
         occupancy.release(EXPIRES_AT.minusMinutes(10));
 
@@ -241,7 +241,7 @@ class RoomOccupancyTest {
     /** ck_room_occupancies_end 때문에 status와 ended_at은 반드시 함께 바뀌어야 한다. */
     @Test
     @DisplayName("반납하면 상태와 종료 시각이 함께 기록된다.")
-    void test16() {
+    void releaseRecordsStatusAndEndedAtTogether() {
         RoomOccupancy occupancy = start();
 
         assertThat(occupancy.release(EXPIRES_AT.minusMinutes(10))).isTrue();
@@ -257,7 +257,7 @@ class RoomOccupancyTest {
      */
     @Test
     @DisplayName("이미 종료된 점유는 반납해도 상태가 바뀌지 않는다.")
-    void test17() {
+    void releaseDoesNotChangeAlreadyEndedStatus() {
         RoomOccupancy occupancy = start();
         ReflectionTestUtils.setField(occupancy, "status", OccupancyStatus.EXPIRED);
         ReflectionTestUtils.setField(occupancy, "endedAt", EXPIRES_AT);
@@ -270,7 +270,7 @@ class RoomOccupancyTest {
 
     @Test
     @DisplayName("종료 시각 없이는 반납할 수 없다.")
-    void test18() {
+    void cannotReleaseWithoutEndedAt() {
         assertThatThrownBy(() -> start().release(null))
                 .isInstanceOf(NullPointerException.class);
     }

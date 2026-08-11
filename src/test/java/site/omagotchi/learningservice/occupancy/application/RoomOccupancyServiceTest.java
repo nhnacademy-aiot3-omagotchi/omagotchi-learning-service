@@ -14,6 +14,8 @@ import site.omagotchi.learningservice.attendance.application.AttendancePresenceQ
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
+import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
+import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.port.SpaceReader;
@@ -26,6 +28,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -51,6 +54,7 @@ class RoomOccupancyServiceTest {
     private static final Instant NOW = Instant.parse("2026-07-24T01:00:00Z");
 
     private static final Long SPACE_ID = 1L;
+    private static final Long OTHER_SPACE_ID = 2L;
     private static final Long MEMBERSHIP_ID = 10L;
     private static final Long OCCUPANCY_ID = 100L;
     private static final UUID USER_ID = UUID.randomUUID();
@@ -67,6 +71,9 @@ class RoomOccupancyServiceTest {
     @Mock
     private OccupancyParticipantRepository participantRepository;
 
+    @Mock
+    private OccupancyEventPublisher eventPublisher;
+
     private Clock clock;
     private RoomOccupancyService roomOccupancyService;
 
@@ -78,13 +85,14 @@ class RoomOccupancyServiceTest {
                 attendancePresenceQueryService,
                 occupancyRepository,
                 participantRepository,
+                eventPublisher,
                 clock
         );
     }
 
     @Test
     @DisplayName("점유에 성공하면 만료 시각은 시작 시각의 2시간 뒤다.")
-    void test1() {
+    void expiresAtIsTwoHoursAfterStartOnSuccess() {
         givenLockedRoom();
         givenSavedOccupancy();
 
@@ -105,7 +113,7 @@ class RoomOccupancyServiceTest {
      */
     @Test
     @DisplayName("점유자 멤버십은 재실 구간에서 가져온다.")
-    void test2() {
+    void occupierMembershipComesFromPresenceInterval() {
         givenLockedRoom();
         givenSavedOccupancy();
 
@@ -119,7 +127,7 @@ class RoomOccupancyServiceTest {
 
     @Test
     @DisplayName("점유에 성공하면 점유자가 참여자로 함께 등록된다.")
-    void test3() {
+    void occupierIsRegisteredAsParticipantOnSuccess() {
         givenLockedRoom();
         givenSavedOccupancy();
 
@@ -139,7 +147,7 @@ class RoomOccupancyServiceTest {
 
     @Test
     @DisplayName("없는 공간은 점유할 수 없다.")
-    void test4() {
+    void cannotOccupyNonExistentSpace() {
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.empty());
 
         assertBusinessError(
@@ -150,7 +158,7 @@ class RoomOccupancyServiceTest {
 
     @Test
     @DisplayName("회의실이 아닌 공간은 점유할 수 없다.")
-    void test5() {
+    void cannotOccupyNonMeetingRoomSpace() {
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(false, true)));
 
         assertBusinessError(
@@ -161,7 +169,7 @@ class RoomOccupancyServiceTest {
 
     @Test
     @DisplayName("비활성 공간은 점유할 수 없다.")
-    void test6() {
+    void cannotOccupyInactiveSpace() {
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, false)));
 
         assertBusinessError(
@@ -172,7 +180,7 @@ class RoomOccupancyServiceTest {
 
     @Test
     @DisplayName("재실이 아니면 점유할 수 없다.")
-    void test7() {
+    void cannotOccupyWhenNotPresent() {
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
         given(attendancePresenceQueryService.findOpenPresence(USER_ID)).willReturn(Optional.empty());
 
@@ -188,7 +196,7 @@ class RoomOccupancyServiceTest {
      */
     @Test
     @DisplayName("락을 잡은 뒤 비활성화된 공간을 찾아낸다.")
-    void test8() {
+    void detectsSpaceDeactivatedAfterLock() {
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
         givenPresent();
         given(spaceReader.lock(SPACE_ID)).willReturn(Optional.of(room(true, false)));
@@ -201,7 +209,7 @@ class RoomOccupancyServiceTest {
 
     @Test
     @DisplayName("락 시점에 공간이 사라지면 없는 공간으로 처리한다.")
-    void test9() {
+    void treatsSpaceAsNotFoundWhenMissingAtLockTime() {
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
         givenPresent();
         given(spaceReader.lock(SPACE_ID)).willReturn(Optional.empty());
@@ -214,9 +222,9 @@ class RoomOccupancyServiceTest {
 
     @Test
     @DisplayName("이미 사용 중인 회의실은 점유할 수 없다.")
-    void test10() {
+    void cannotOccupyAlreadyOccupiedRoom() {
         givenLockedRoom();
-        given(occupancyRepository.existsActiveBySpaceId(SPACE_ID)).willReturn(true);
+        given(occupancyRepository.existsActiveBySpaceId(SPACE_ID, now())).willReturn(true);
 
         assertBusinessError(
                 OccupancyErrorCode.ROOM_ALREADY_OCCUPIED,
@@ -226,10 +234,10 @@ class RoomOccupancyServiceTest {
 
     @Test
     @DisplayName("이미 다른 회의실을 점유 중이면 점유할 수 없다.")
-    void test11() {
+    void cannotOccupyWhenAlreadyOccupyingAnotherRoom() {
         givenLockedRoom();
-        given(occupancyRepository.existsActiveBySpaceId(SPACE_ID)).willReturn(false);
-        given(occupancyRepository.existsActiveByUserId(USER_ID)).willReturn(true);
+        given(occupancyRepository.existsActiveBySpaceId(SPACE_ID, now())).willReturn(false);
+        given(occupancyRepository.existsActiveByUserId(USER_ID, now())).willReturn(true);
 
         assertBusinessError(
                 OccupancyErrorCode.ALREADY_OCCUPYING,
@@ -243,7 +251,7 @@ class RoomOccupancyServiceTest {
      */
     @Test
     @DisplayName("재실 조회 자체가 실패하면 감싸지 않고 그대로 전파한다.")
-    void test12() {
+    void propagatesPresenceQueryFailureUnwrapped() {
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
         given(attendancePresenceQueryService.findOpenPresence(USER_ID))
                 .willThrow(new IllegalStateException("출결 모듈 조회 실패"));
@@ -256,7 +264,7 @@ class RoomOccupancyServiceTest {
 
     @Test
     @DisplayName("검증에 걸리면 점유도 참여자도 저장하지 않는다.")
-    void test13() {
+    void doesNotSaveOccupancyOrParticipantWhenValidationFails() {
         given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, false)));
 
         assertBusinessError(
@@ -274,7 +282,7 @@ class RoomOccupancyServiceTest {
      */
     @Test
     @DisplayName("재실 조회는 공간 락을 잡기 전에 끝낸다.")
-    void test14() {
+    void presenceQueryCompletesBeforeSpaceLock() {
         givenLockedRoom();
         givenSavedOccupancy();
 
@@ -292,7 +300,7 @@ class RoomOccupancyServiceTest {
      */
     @Test
     @DisplayName("만료된 행을 정리한 뒤에 활성 점유를 확인한다.")
-    void test15() {
+    void expiresStaleRowsBeforeCheckingActiveOccupancy() {
         givenLockedRoom();
         givenSavedOccupancy();
 
@@ -301,10 +309,92 @@ class RoomOccupancyServiceTest {
         InOrder order = inOrder(occupancyRepository, participantRepository);
         order.verify(occupancyRepository).expireStaleBySpaceId(SPACE_ID, now());
         order.verify(occupancyRepository).expireStaleByUserId(USER_ID, now());
-        order.verify(occupancyRepository).existsActiveBySpaceId(SPACE_ID);
-        order.verify(occupancyRepository).existsActiveByUserId(USER_ID);
+        order.verify(occupancyRepository).existsActiveBySpaceId(SPACE_ID, now());
+        order.verify(occupancyRepository).existsActiveByUserId(USER_ID, now());
         order.verify(occupancyRepository).save(any(RoomOccupancy.class));
         order.verify(participantRepository).save(any(OccupancyParticipant.class));
+    }
+
+    /**
+     * 만료 정리가 점유 행만 EXPIRED로 바꾸고 멈추면 그 참여자들이 열린 채 남는다.
+     * {@code uq_occupancy_participants_one_active}가 계정 기준이라 그 계정은 영구히
+     * 다른 회의에 참여할 수 없고, 점유 시작이 스스로를 참여자로 등록하므로(MR-27)
+     * 새 점유도 409로 막힌다.
+     */
+    @Test
+    @DisplayName("만료 정리된 점유의 참여자를 함께 마감한다.")
+    void closesParticipantsOfExpiredOccupancy() {
+        givenLockedRoom();
+        givenSavedOccupancy();
+        OffsetDateTime endedAt = now().minusMinutes(1);
+        given(occupancyRepository.expireStaleBySpaceId(SPACE_ID, now()))
+                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt)));
+        given(occupancyRepository.expireStaleByUserId(USER_ID, now()))
+                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(8L, OTHER_SPACE_ID, endedAt)));
+
+        roomOccupancyService.start(SPACE_ID, USER_ID);
+
+        verify(participantRepository).closeAllActiveByOccupancyId(7L, endedAt);
+        verify(participantRepository).closeAllActiveByOccupancyId(8L, endedAt);
+    }
+
+    /**
+     * 마감 시각은 정리를 수행한 시각이 아니라 점유의 종료 시각이다. 지금 시각을 찍으면
+     * 참여 시간이 실제보다 길게 집계되고, 점유 행의 {@code ended_at}과도 어긋난다.
+     */
+    @Test
+    @DisplayName("참여자 마감 시각은 정리 시각이 아니라 점유의 종료 시각이다.")
+    void participantClosedAtIsOccupancyEndTimeNotCleanupTime() {
+        givenLockedRoom();
+        givenSavedOccupancy();
+        OffsetDateTime endedAt = now().minusHours(2);
+        given(occupancyRepository.expireStaleBySpaceId(SPACE_ID, now()))
+                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt)));
+
+        roomOccupancyService.start(SPACE_ID, USER_ID);
+
+        verify(participantRepository).closeAllActiveByOccupancyId(7L, endedAt);
+        verify(participantRepository, never()).closeAllActiveByOccupancyId(7L, now());
+    }
+
+    /**
+     * 지금 점유하려는 방의 정리는 공실이 아니다.
+     *
+     * <p>발행하면 대기자들이 "비었다"는 알림을 받고 와서 409를 맞는다. 공실 알림은
+     * 일회성 의사표시라({@code notified_at} 소진) 헛된 알림 하나가 그 사람의 신청을
+     * 태워 없앤다 — 다시 신청하기 전까지 진짜 공실을 놓친다.</p>
+     */
+    @Test
+    @DisplayName("점유할 방의 만료 정리는 공실로 알리지 않는다.")
+    void expiryOfTargetRoomDoesNotPublishVacatedEvent() {
+        givenLockedRoom();
+        givenSavedOccupancy();
+        OffsetDateTime endedAt = now().minusMinutes(1);
+        given(occupancyRepository.expireStaleBySpaceId(SPACE_ID, now()))
+                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(7L, SPACE_ID, endedAt)));
+
+        roomOccupancyService.start(SPACE_ID, USER_ID);
+
+        verify(eventPublisher, never()).publishRoomVacated(any());
+    }
+
+    /**
+     * 반면 계정 기준 정리는 다른 방이다. 그 방은 실제로 비었고, 여기서 EXPIRED로
+     * 바꿔버리면 스케줄러가 다시 찾지 못해 알림이 영영 유실된다.
+     */
+    @Test
+    @DisplayName("계정의 다른 방이 만료 정리되면 공실로 알린다.")
+    void expiryOfOtherRoomPublishesVacatedEvent() {
+        givenLockedRoom();
+        givenSavedOccupancy();
+        OffsetDateTime endedAt = now().minusMinutes(1);
+        given(occupancyRepository.expireStaleByUserId(USER_ID, now()))
+                .willReturn(List.of(new RoomOccupancyRepository.ExpiredOccupancy(8L, OTHER_SPACE_ID, endedAt)));
+
+        roomOccupancyService.start(SPACE_ID, USER_ID);
+
+        verify(eventPublisher).publishRoomVacated(
+                new RoomVacatedEvent(OTHER_SPACE_ID, 8L, endedAt));
     }
 
     private SpaceReader.MeetingRoom room(boolean meetingRoom, boolean active) {

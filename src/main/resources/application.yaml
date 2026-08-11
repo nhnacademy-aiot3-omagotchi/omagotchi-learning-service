@@ -97,3 +97,14 @@ auth:
     issuer: ${JWT_ISSUER}
     audience: ${JWT_AUDIENCE}
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
+
+omagotchi:
+  scheduling:
+    # 끄면 만료된 점유가 정리되지 않는다. Test에서만 끈다
+    enabled: ${SCHEDULING_ENABLED:true}
+  occupancy:
+    expiry:
+      # 만료 정리 주기. 공실 알림 지연의 상한이기도 하다
+      fixed-delay: ${OCCUPANCY_EXPIRY_FIXED_DELAY:60000}
+      # 기동 직후에는 Flyway·연결 풀 준비와 겹치지 않게 미룬다
+      initial-delay: ${OCCUPANCY_EXPIRY_INITIAL_DELAY:30000}

@@ -34,7 +34,7 @@ class SpringOccupancyEventPublisherTest {
 
     @Test
     @DisplayName("공실 이벤트를 변형 없이 그대로 발행한다.")
-    void test1() {
+    void publishesVacatedEventUnchanged() {
         RoomVacatedEvent event = new RoomVacatedEvent(1L, 100L, VACATED_AT);
 
         springOccupancyEventPublisher.publishRoomVacated(event);

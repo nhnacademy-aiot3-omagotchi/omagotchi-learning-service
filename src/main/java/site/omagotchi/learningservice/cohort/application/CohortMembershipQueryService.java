@@ -116,4 +116,28 @@ public class CohortMembershipQueryService {
         return membershipRepository.findAllById(membershipIds).stream()
                 .collect(Collectors.toMap(CohortMembership::getId, CohortMembership::getUserId));
     }
+
+    /**
+     * 멤버십 식별자를 기수 식별자로 일괄 변환한다.
+     *
+     * <p>공간 목록의 점유자 기수 판정(MR-36)이 첫 소비처다. 점유 행은 기수를 컬럼으로
+     * 갖지 않고 {@code occupier_membership_id}만 보관하므로(ERD v3), "이 점유가 내 기수의
+     * 것인가"를 판정하려면 멤버십에서 기수를 되찾아야 한다.</p>
+     *
+     * <p><b>배치인 것이 계약의 일부다.</b> 공간이 N개여도 호출은 1회여야 한다 —
+     * {@link #findActiveMembership(Long)}을 목록에서 반복하면 그대로 N+1이 되고,
+     * 기수 모듈이 분리되면 N+1 원격 호출이 된다.</p>
+     *
+     * <p>{@link #findUserIds(Collection)}와 같은 이유로 상태를 좁히지 않는다. 이미 시작된
+     * 점유의 기수를 알아내는 용도라, 그 사이 멤버십이 종료됐더라도 그 점유가 어느 기수의
+     * 것이었는지는 그대로 판정해야 한다 — 여기서 걸러내면 종료 직후의 점유가 모든
+     * 사용자에게 "남의 기수"로 보인다.</p>
+     */
+    public Map<Long, Long> findCohortIds(Collection<Long> membershipIds) {
+        if (membershipIds == null || membershipIds.isEmpty()) {
+            return Map.of();
+        }
+        return membershipRepository.findAllById(membershipIds).stream()
+                .collect(Collectors.toMap(CohortMembership::getId, CohortMembership::getCohortId));
+    }
 }

@@ -23,7 +23,7 @@ class RoomOccupancyResponseTest {
 
     @Test
     @DisplayName("결과의 값을 그대로 옮긴다.")
-    void test1() {
+    void copiesValuesFromResult() {
         RoomOccupancyResponse response = RoomOccupancyResponse.from(result());
 
         assertThat(response.occupancyId()).isEqualTo(100L);
@@ -37,7 +37,7 @@ class RoomOccupancyResponseTest {
     /** 상태는 enum이 아니라 이름 문자열로 나간다 — 응답 계약이 enum 순서에 묶이지 않는다. */
     @Test
     @DisplayName("상태는 이름 문자열로 내보낸다.")
-    void test2() {
+    void exposesStatusAsNameString() {
         assertThat(RoomOccupancyResponse.from(result()).status()).isEqualTo("ACTIVE");
     }
 
@@ -47,7 +47,7 @@ class RoomOccupancyResponseTest {
      */
     @Test
     @DisplayName("남은 시간은 결과가 계산한 값을 그대로 쓴다.")
-    void test3() {
+    void usesRemainingSecondsFromResult() {
         RoomOccupancyResult result = new RoomOccupancyResult(
                 100L, 1L, OccupancyStatus.ACTIVE,
                 STARTED_AT, STARTED_AT.plusHours(2), 0, 0L

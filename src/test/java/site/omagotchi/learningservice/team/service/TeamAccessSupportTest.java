@@ -43,7 +43,7 @@ class TeamAccessSupportTest {
 
     @Test
     @DisplayName("활성 기수가 하나면 지정하지 않아도 그 기수로 결정")
-    void test1() {
+    void resolvesSingleActiveCohortWithoutExplicitId() {
         given(cohortMembershipQueryService.findActiveMemberships(userId))
                 .willReturn(List.of(new CohortMembershipView(10L, 1L, userId)));
 
@@ -53,7 +53,7 @@ class TeamAccessSupportTest {
 
     @Test
     @DisplayName("활성 기수가 둘 이상이면 대상 기수 지정을 요구")
-    void test2() {
+    void requiresCohortIdWhenMultipleActiveCohorts() {
         given(cohortMembershipQueryService.findActiveMemberships(userId)).willReturn(List.of(
                 new CohortMembershipView(10L, 1L, userId),
                 new CohortMembershipView(11L, 2L, userId)
@@ -65,7 +65,7 @@ class TeamAccessSupportTest {
 
     @Test
     @DisplayName("담당하지 않는 기수를 지정할 경우 거부")
-    void test3() {
+    void rejectsUnrelatedCohortId() {
         given(cohortMembershipQueryService.findActiveMembership(99L, userId)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> teamAccessSupport.resolveMembershipForCreate(99L, userId))
@@ -74,7 +74,7 @@ class TeamAccessSupportTest {
 
     @Test
     @DisplayName("활성 멤버십이 있으면 그대로 반환한다.")
-    void test4() {
+    void returnsMembershipWhenActive() {
         given(cohortMembershipQueryService.findActiveMembership(1L, userId))
                 .willReturn(Optional.of(new CohortMembershipView(10L, 1L, userId)));
 
@@ -85,7 +85,7 @@ class TeamAccessSupportTest {
 
     @Test
     @DisplayName("활성 멤버십이 없으면 거부한다.")
-    void test5() {
+    void rejectsWhenNoActiveMembership() {
         given(cohortMembershipQueryService.findActiveMembership(1L, userId)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> teamAccessSupport.requireActiveMembership(1L, userId))
@@ -94,7 +94,7 @@ class TeamAccessSupportTest {
 
     @Test
     @DisplayName("해체되지 않은 팀은 조회된다.")
-    void test6() {
+    void returnsNonDisbandedTeam() {
         Team team = Team.create(1L, "테스트");
         given(teamRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(team));
 
@@ -103,7 +103,7 @@ class TeamAccessSupportTest {
 
     @Test
     @DisplayName("존재하지 않는 팀은 조회할 수 없다.")
-    void test7() {
+    void cannotLoadNonExistentTeam() {
         given(teamRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> teamAccessSupport.loadActiveTeam(1L))
@@ -112,7 +112,7 @@ class TeamAccessSupportTest {
 
     @Test
     @DisplayName("락 대상 팀이 해체 전이면 그대로 반환한다.")
-    void test8() {
+    void lockReturnsTeamWhenNotDisbanded() {
         Team team = Team.create(1L, "테스트");
         given(teamRepository.findByIdForUpdate(1L)).willReturn(Optional.of(team));
 
@@ -121,7 +121,7 @@ class TeamAccessSupportTest {
 
     @Test
     @DisplayName("락 대상 팀 행이 없으면 거부한다.")
-    void test9() {
+    void lockRejectsWhenTeamRowMissing() {
         given(teamRepository.findByIdForUpdate(1L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> teamAccessSupport.lockActiveTeam(1L))
@@ -130,7 +130,7 @@ class TeamAccessSupportTest {
 
     @Test
     @DisplayName("락을 잡았더니 이미 해체된 팀이면 거부한다.")
-    void test10() {
+    void lockRejectsWhenAlreadyDisbanded() {
         Team team = Team.create(1L, "테스트");
         team.disband();
         given(teamRepository.findByIdForUpdate(1L)).willReturn(Optional.of(team));
@@ -141,7 +141,7 @@ class TeamAccessSupportTest {
 
     @Test
     @DisplayName("팀 소속이면 팀원 행을 반환한다.")
-    void test11() {
+    void returnsMemberRowWhenBelongsToTeam() {
         TeamMember member = TeamMember.member(1L, 10L);
         given(teamMemberRepository.findByTeamIdAndCohortMembershipId(1L, 10L))
                 .willReturn(Optional.of(member));
@@ -151,7 +151,7 @@ class TeamAccessSupportTest {
 
     @Test
     @DisplayName("팀 소속이 아니면 거부한다.")
-    void test12() {
+    void rejectsWhenNotTeamMember() {
         given(teamMemberRepository.findByTeamIdAndCohortMembershipId(1L, 10L))
                 .willReturn(Optional.empty());
 
@@ -161,7 +161,7 @@ class TeamAccessSupportTest {
 
     @Test
     @DisplayName("마스터면 그대로 반환한다.")
-    void test13() {
+    void returnsMemberWhenMaster() {
         TeamMember master = TeamMember.master(1L, 10L);
         given(teamMemberRepository.findByTeamIdAndCohortMembershipId(1L, 10L))
                 .willReturn(Optional.of(master));
@@ -171,7 +171,7 @@ class TeamAccessSupportTest {
 
     @Test
     @DisplayName("마스터가 아니면 거부한다.")
-    void test14() {
+    void rejectsWhenNotMaster() {
         TeamMember member = TeamMember.member(1L, 10L);
         given(teamMemberRepository.findByTeamIdAndCohortMembershipId(1L, 10L))
                 .willReturn(Optional.of(member));

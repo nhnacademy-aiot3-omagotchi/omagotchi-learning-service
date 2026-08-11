@@ -15,6 +15,8 @@ import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -48,7 +50,7 @@ class OccupancyParticipantJpaPersistenceTest {
 
     @Test
     @DisplayName("저장은 flush까지 즉시 수행한다.")
-    void test1() {
+    void saveFlushesImmediately() {
         OccupancyParticipant participant = participant();
         given(participantJpaRepository.saveAndFlush(participant)).willReturn(participant);
 
@@ -60,7 +62,7 @@ class OccupancyParticipantJpaPersistenceTest {
 
     @Test
     @DisplayName("활성 참여 유니크 위반은 이미 참여 중 오류로 옮긴다.")
-    void test2() {
+    void activeParticipantViolationBecomesAlreadyParticipating() {
         OccupancyParticipant participant = participant();
         given(participantJpaRepository.saveAndFlush(any(OccupancyParticipant.class)))
                 .willThrow(violation("uq_occupancy_participants_one_active"));
@@ -74,7 +76,7 @@ class OccupancyParticipantJpaPersistenceTest {
 
     @Test
     @DisplayName("점유당 사람 1행 유니크 위반도 이미 참여 중 오류로 옮긴다.")
-    void test3() {
+    void pairViolationBecomesAlreadyParticipating() {
         OccupancyParticipant participant = participant();
         given(participantJpaRepository.saveAndFlush(any(OccupancyParticipant.class)))
                 .willThrow(violation("uq_occupancy_participants_pair"));
@@ -88,7 +90,7 @@ class OccupancyParticipantJpaPersistenceTest {
 
     @Test
     @DisplayName("모르는 무결성 위반은 감싸지 않고 그대로 전파한다.")
-    void test4() {
+    void propagatesUnknownViolationUnwrapped() {
         OccupancyParticipant participant = participant();
         DataIntegrityViolationException original = violation("fk_occupancy_participants_member");
         given(participantJpaRepository.saveAndFlush(any(OccupancyParticipant.class)))
@@ -102,7 +104,7 @@ class OccupancyParticipantJpaPersistenceTest {
     /** 이탈은 삭제가 아니라 left_at 기록이므로 정원 카운트는 열린 행만 세야 한다 (MR-28, MR-32). */
     @Test
     @DisplayName("정원 카운트는 이탈하지 않은 참여자만 센다.")
-    void test5() {
+    void countsOnlyActiveParticipants() {
         given(participantJpaRepository.countByOccupancyIdAndLeftAtIsNull(OCCUPANCY_ID))
                 .willReturn(3L);
 
@@ -117,7 +119,7 @@ class OccupancyParticipantJpaPersistenceTest {
      */
     @Test
     @DisplayName("참여자 조회는 이탈한 행도 찾는다.")
-    void test6() {
+    void findsRowRegardlessOfLeftStatus() {
         OccupancyParticipant left = participant();
         left.leave(NOW.plusMinutes(10));
         given(participantJpaRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, USER_ID))
@@ -131,13 +133,83 @@ class OccupancyParticipantJpaPersistenceTest {
     /** 반납·강제 종료·만료가 공유하는 마무리다 (MR-32). 삭제가 아니라 시각 기록이어야 한다. */
     @Test
     @DisplayName("참여자 일괄 마감을 종료 시각과 함께 위임한다.")
-    void test7() {
+    void delegatesCloseAllWithEndedAt() {
         given(participantJpaRepository.closeAllActiveByOccupancyId(OCCUPANCY_ID, NOW))
                 .willReturn(3);
 
         assertThat(occupancyParticipantJpaPersistence
                 .closeAllActiveByOccupancyId(OCCUPANCY_ID, NOW))
                 .isEqualTo(3);
+    }
+
+    /**
+     * 공간 목록이 회의 참여자를 표시하는 데 쓴다. 점유별로 묶어 돌려주므로 소비처가
+     * 다시 그룹핑할 필요가 없다.
+     */
+    @Test
+    @DisplayName("여러 점유의 참여자를 점유별로 묶어 돌려준다.")
+    void groupsParticipantsByOccupancyId() {
+        UUID otherUserId = UUID.randomUUID();
+        given(participantJpaRepository.findActiveByOccupancyIds(List.of(OCCUPANCY_ID, 200L)))
+                .willReturn(List.of(
+                        projection(OCCUPANCY_ID, USER_ID),
+                        projection(OCCUPANCY_ID, otherUserId),
+                        projection(200L, USER_ID)
+                ));
+
+        Map<Long, List<UUID>> found = occupancyParticipantJpaPersistence
+                .findActiveUserIdsByOccupancyIds(List.of(OCCUPANCY_ID, 200L));
+
+        assertThat(found).containsOnlyKeys(OCCUPANCY_ID, 200L);
+        assertThat(found.get(OCCUPANCY_ID)).containsExactly(USER_ID, otherUserId);
+        assertThat(found.get(200L)).containsExactly(USER_ID);
+    }
+
+    /**
+     * 참여 순서({@code occupancy_participants.id})가 표시 순서다. 그룹핑 구현이 순서를
+     * 지킨다는 보장이 계약에 없어 어댑터가 직접 유지한다 — 여기가 깨지면 목록을 새로고침할
+     * 때마다 참여자 순서가 달라진다.
+     */
+    @Test
+    @DisplayName("참여자 순서는 조회 순서를 그대로 유지한다.")
+    void preservesQueryOrderOfParticipants() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        UUID third = UUID.randomUUID();
+        given(participantJpaRepository.findActiveByOccupancyIds(List.of(OCCUPANCY_ID)))
+                .willReturn(List.of(
+                        projection(OCCUPANCY_ID, first),
+                        projection(OCCUPANCY_ID, second),
+                        projection(OCCUPANCY_ID, third)
+                ));
+
+        assertThat(occupancyParticipantJpaPersistence
+                .findActiveUserIdsByOccupancyIds(List.of(OCCUPANCY_ID)))
+                .containsEntry(OCCUPANCY_ID, List.of(first, second, third));
+    }
+
+    @Test
+    @DisplayName("조회할 점유가 없으면 질의하지 않는다.")
+    void skipsQueryWhenNoOccupancyIds() {
+        assertThat(occupancyParticipantJpaPersistence
+                .findActiveUserIdsByOccupancyIds(List.of())).isEmpty();
+
+        verify(participantJpaRepository, never()).findActiveByOccupancyIds(any());
+    }
+
+    private OccupancyParticipantJpaRepository.ActiveParticipantProjection projection(
+            Long occupancyId, UUID userId) {
+        return new OccupancyParticipantJpaRepository.ActiveParticipantProjection() {
+            @Override
+            public Long getOccupancyId() {
+                return occupancyId;
+            }
+
+            @Override
+            public UUID getUserId() {
+                return userId;
+            }
+        };
     }
 
     private OccupancyParticipant participant() {

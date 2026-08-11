@@ -57,7 +57,7 @@ class RoomOccupancyControllerTest {
 
     @Test
     @DisplayName("점유에 성공하면 201과 점유 정보를 응답한다.")
-    void test1() throws Exception {
+    void returns201WithOccupancyInfoOnSuccess() throws Exception {
         when(roomOccupancyService.start(any(), any())).thenReturn(result());
 
         mockMvc.perform(post(PATH).header("X-User-Id", USER_ID))
@@ -72,7 +72,7 @@ class RoomOccupancyControllerTest {
     /** 요청 본문이 없는 것이 의도다 — 기수 식별자를 받으면 출근한 기수와 다른 기수로 점유할 수 있다. */
     @Test
     @DisplayName("경로의 공간과 헤더의 계정만으로 서비스를 호출한다.")
-    void test2() throws Exception {
+    void callsServiceWithPathSpaceIdAndHeaderUserId() throws Exception {
         when(roomOccupancyService.start(any(), any())).thenReturn(result());
 
         mockMvc.perform(post(PATH).header("X-User-Id", USER_ID))
@@ -83,7 +83,7 @@ class RoomOccupancyControllerTest {
 
     @Test
     @DisplayName("응답에 점유자·참여자 정보를 담지 않는다.")
-    void test3() throws Exception {
+    void responseExcludesOccupierAndParticipantInfo() throws Exception {
         when(roomOccupancyService.start(any(), any())).thenReturn(result());
 
         mockMvc.perform(post(PATH).header("X-User-Id", USER_ID))
@@ -95,25 +95,25 @@ class RoomOccupancyControllerTest {
 
     @Test
     @DisplayName("사용 중인 회의실이면 409와 공실 알림 안내를 응답한다.")
-    void test4() throws Exception {
+    void returns409WithVacancyNotificationGuidanceWhenRoomOccupied() throws Exception {
         assertErrorResponse(OccupancyErrorCode.ROOM_ALREADY_OCCUPIED, 409);
     }
 
     @Test
     @DisplayName("재실이 아니면 403을 응답한다.")
-    void test5() throws Exception {
+    void returns403WhenNotPresent() throws Exception {
         assertErrorResponse(OccupancyErrorCode.NOT_PRESENT, 403);
     }
 
     @Test
     @DisplayName("회의실이 아니면 400을 응답한다.")
-    void test6() throws Exception {
+    void returns400WhenNotMeetingRoom() throws Exception {
         assertErrorResponse(OccupancyErrorCode.NOT_MEETING_ROOM, 400);
     }
 
     @Test
     @DisplayName("없는 공간이면 404를 응답한다.")
-    void test7() throws Exception {
+    void returns404WhenSpaceNotFound() throws Exception {
         assertErrorResponse(OccupancyErrorCode.SPACE_NOT_FOUND, 404);
     }
 
@@ -123,7 +123,7 @@ class RoomOccupancyControllerTest {
      */
     @Test
     @DisplayName("출결 모듈 조회가 실패하면 500을 응답한다.")
-    void test8() throws Exception {
+    void returns500WhenAttendanceQueryFails() throws Exception {
         when(roomOccupancyService.start(any(), any()))
                 .thenThrow(new IllegalStateException("출결 모듈 조회 실패"));
 
@@ -140,7 +140,7 @@ class RoomOccupancyControllerTest {
      */
     @Test
     @DisplayName("연장에 성공하면 200과 갱신된 만료 시각을 응답한다.")
-    void test9() throws Exception {
+    void returns200WithUpdatedExpiryOnExtendSuccess() throws Exception {
         when(roomOccupancyLifecycleService.extend(any(), any())).thenReturn(extendedResult());
 
         mockMvc.perform(post(PATH + "/extend").header("X-User-Id", USER_ID))
@@ -153,7 +153,7 @@ class RoomOccupancyControllerTest {
 
     @Test
     @DisplayName("만료 30분 전이 되기 전에 연장하면 409를 응답한다.")
-    void test10() throws Exception {
+    void returns409WhenExtendingTooEarly() throws Exception {
         when(roomOccupancyLifecycleService.extend(any(), any()))
                 .thenThrow(new BusinessException(OccupancyErrorCode.EXTENSION_TOO_EARLY));
 
@@ -164,7 +164,7 @@ class RoomOccupancyControllerTest {
 
     @Test
     @DisplayName("연장 횟수를 다 쓰면 409를 응답한다.")
-    void test11() throws Exception {
+    void returns409WhenExtensionLimitReached() throws Exception {
         when(roomOccupancyLifecycleService.extend(any(), any()))
                 .thenThrow(new BusinessException(OccupancyErrorCode.EXTENSION_LIMIT_EXCEEDED));
 
@@ -176,7 +176,7 @@ class RoomOccupancyControllerTest {
     /** DELETE가 아닌 이유는 점유 행이 이력으로 보존되기 때문이다 — 제거가 아니라 상태 전이다. */
     @Test
     @DisplayName("반납에 성공하면 204를 응답한다.")
-    void test12() throws Exception {
+    void returns204OnReleaseSuccess() throws Exception {
         mockMvc.perform(post(PATH + "/release").header("X-User-Id", USER_ID))
                 .andExpect(status().isNoContent());
 
@@ -185,7 +185,7 @@ class RoomOccupancyControllerTest {
 
     @Test
     @DisplayName("점유자가 아니면 반납할 수 없다.")
-    void test13() throws Exception {
+    void cannotReleaseWhenNotOccupier() throws Exception {
         doThrow(new BusinessException(OccupancyErrorCode.NOT_OCCUPIER))
                 .when(roomOccupancyLifecycleService).release(any(), any());
 
@@ -196,7 +196,7 @@ class RoomOccupancyControllerTest {
 
     @Test
     @DisplayName("이미 종료된 점유를 반납하면 409를 응답한다.")
-    void test14() throws Exception {
+    void returns409WhenReleasingEndedOccupancy() throws Exception {
         doThrow(new BusinessException(OccupancyErrorCode.OCCUPANCY_ENDED))
                 .when(roomOccupancyLifecycleService).release(any(), any());
 

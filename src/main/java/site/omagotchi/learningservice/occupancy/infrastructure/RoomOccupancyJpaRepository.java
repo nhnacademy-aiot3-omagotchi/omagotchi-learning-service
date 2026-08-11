@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
+import site.omagotchi.learningservice.occupancy.application.result.ActiveSpaceOccupancy;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
@@ -27,9 +27,18 @@ import java.util.UUID;
  */
 public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy, Long> {
 
-    boolean existsBySpaceIdAndStatus(Long spaceId, OccupancyStatus status);
+    /**
+     * {@code status}와 {@code expiresAt}을 함께 본다.
+     *
+     * <p>{@code existsBySpaceIdAndStatus}로 두면 만료됐지만 스케줄러(#9)가 아직 EXPIRED로
+     * 바꾸지 않은 행이 "사용 중"으로 잡힌다. {@link #findActiveBySpaceIds}가 이미
+     * {@code expiresAt > now}로 거르고 있어 조건을 맞추지 않으면 같은 방의 판정이 갈린다.</p>
+     */
+    boolean existsBySpaceIdAndStatusAndExpiresAtAfter(
+            Long spaceId, OccupancyStatus status, OffsetDateTime now);
 
-    boolean existsByOccupierUserIdAndStatus(UUID occupierUserId, OccupancyStatus status);
+    boolean existsByOccupierUserIdAndStatusAndExpiresAtAfter(
+            UUID occupierUserId, OccupancyStatus status, OffsetDateTime now);
 
     Optional<RoomOccupancy> findBySpaceIdAndStatus(Long spaceId, OccupancyStatus status);
 
@@ -62,13 +71,13 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
      * ACTIVE인 행을 "사용 중"으로 보여주지 않는다.</p>
      */
     @Query("""
-                SELECT new site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView(
-                           o.spaceId, o.expiresAt)
+                SELECT new site.omagotchi.learningservice.occupancy.application.result.ActiveSpaceOccupancy(
+                           o.id, o.spaceId, o.expiresAt, o.occupierMembershipId, o.occupierUserId)
                   FROM RoomOccupancy o
                  WHERE o.spaceId IN :spaceIds
                    AND o.status = :active
                    AND o.expiresAt > :now""")
-    List<SpaceOccupancyView> findActiveBySpaceIds(
+    List<ActiveSpaceOccupancy> findActiveBySpaceIds(
             @Param("spaceIds") Collection<Long> spaceIds,
             @Param("now") OffsetDateTime now,
             @Param("active") OccupancyStatus active
@@ -84,42 +93,89 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
     }
 
     /**
-     * 만료된 ACTIVE 행 정리.
+     * 정리 대상이 될 만료 행을 미리 식별한다.
      *
-     * <p>{@code endedAt}에 {@code now}가 아니라 {@code expiresAt}을 넣는 것이 요점이다 —
-     * 실제 종료 시각이 그것이고, {@code ck_room_occupancies_end}
-     * ({@code (status='ACTIVE') = (ended_at IS NULL)})도 함께 만족한다.</p>
+     * <p>벌크 UPDATE가 무엇을 바꿨는지 돌려주지 않기 때문에 필요하다. 참여자 마감(MR-32)은
+     * 점유 식별자와 종료 시각을 알아야 하는데, UPDATE 뒤에는 조건({@code status='ACTIVE'})이
+     * 더 이상 그 행에 맞지 않아 다시 찾을 수 없다.</p>
      *
-     * <p>벌크 UPDATE는 영속성 컨텍스트를 우회하므로 {@code clearAutomatically}가 필요해 보이지만,
-     * 이 호출 시점에는 아직 어떤 점유 엔티티도 로드하지 않았다. 호출 순서를 바꾸면
-     * (예: 활성 점유를 엔티티로 먼저 읽고 정리) 1차 캐시가 낡은 상태를 들고 있게 된다.</p>
+     * <p><b>Projection인 것이 중요하다.</b> 엔티티로 읽으면 그 인스턴스가 1차 캐시에 올라가고,
+     * 뒤이은 벌크 UPDATE가 영속성 컨텍스트를 우회하므로 캐시가 낡은 {@code status}를
+     * 들고 있게 된다.</p>
+     */
+    @Query("""
+                SELECT o.id AS occupancyId, o.spaceId AS spaceId, o.expiresAt AS endedAt
+                  FROM RoomOccupancy o
+                 WHERE o.spaceId = :spaceId
+                   AND o.status = :active
+                   AND o.expiresAt <= :now""")
+    List<StaleOccupancyProjection> findStaleBySpaceId(
+            @Param("spaceId") Long spaceId,
+            @Param("now") OffsetDateTime now,
+            @Param("active") OccupancyStatus active
+    );
+
+    @Query("""
+                SELECT o.id AS occupancyId, o.spaceId AS spaceId, o.expiresAt AS endedAt
+                  FROM RoomOccupancy o
+                 WHERE o.occupierUserId = :userId
+                   AND o.status = :active
+                   AND o.expiresAt <= :now""")
+    List<StaleOccupancyProjection> findStaleByUserId(
+            @Param("userId") UUID userId,
+            @Param("now") OffsetDateTime now,
+            @Param("active") OccupancyStatus active
+    );
+
+    /**
+     * 만료된 ACTIVE 행 전부 (스케줄러 #9).
+     *
+     * <p>정렬을 두는 것은 정리 순서를 재현 가능하게 만들기 위해서다 — 실패해 재시도할 때
+     * 같은 순서로 처리된다.</p>
+     */
+    @Query("""
+                SELECT o.id AS occupancyId, o.spaceId AS spaceId, o.expiresAt AS endedAt
+                  FROM RoomOccupancy o
+                 WHERE o.status = :active
+                   AND o.expiresAt <= :now
+                 ORDER BY o.id ASC""")
+    List<StaleOccupancyProjection> findStale(
+            @Param("now") OffsetDateTime now,
+            @Param("active") OccupancyStatus active
+    );
+
+    /** 닫힌 Projection. 필드를 늘리면 select 컬럼이 함께 늘어난다. */
+    interface StaleOccupancyProjection {
+        Long getOccupancyId();
+
+        Long getSpaceId();
+
+        OffsetDateTime getEndedAt();
+    }
+
+    /**
+     * 점유 한 건만 EXPIRED로 전이한다 (스케줄러 #9).
+     *
+     * <p>조건에 {@code expiresAt <= now}가 남아 있는 것이 핵심이다. 조회 시점에는 만료였어도
+     * 그 사이 점유자가 연장했으면 조건에 맞지 않아 0행이 되고, 사용 중인 회의가 스케줄러에
+     * 끊기지 않는다. {@code status} 조건은 반납·강제 종료가 이미 찍은 종료 사유를
+     * EXPIRED로 덮어쓰지 않게 한다.</p>
+     *
+     * <p>영향 행 수를 그대로 돌려주는 것이 계약이다 — 호출부가 이 값으로 참여자 마감과
+     * 이벤트 발행 여부를 정한다.</p>
      */
     @Modifying
     @Query("""
                 UPDATE RoomOccupancy o
                 SET o.status = :expired, o.endedAt = o.expiresAt
-                WHERE o.spaceId = :spaceId
-                  AND o.status = :active
-                  AND o.expiresAt <= :now""")
-    int expireStaleBySpaceId(
-            @Param("spaceId") Long spaceId,
-            @Param("now")OffsetDateTime now,
-            @Param("active") OccupancyStatus active,
-            @Param("expired") OccupancyStatus expired
-            );
-
-    @Modifying
-    @Query("""
-                UPDATE RoomOccupancy o
-                SET o.status = :expired, o.endedAt = o.expiresAt
-                WHERE o.occupierUserId = :userId
+                WHERE o.id = :id
                 AND o.status = :active
                 AND o.expiresAt <= :now
                 """)
-    int expireStaleByUserId(
-            @Param("userId") UUID userId,
+    int expireById(
+            @Param("id") Long id,
             @Param("now") OffsetDateTime now,
-            @Param("active") OccupancyStatus  active,
+            @Param("active") OccupancyStatus active,
             @Param("expired") OccupancyStatus expired
     );
 }

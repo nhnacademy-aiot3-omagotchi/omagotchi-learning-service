@@ -4,6 +4,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -18,6 +19,7 @@ import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -26,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -55,7 +58,7 @@ class RoomOccupancyJpaPersistenceTest {
      */
     @Test
     @DisplayName("저장은 flush까지 즉시 수행한다.")
-    void test1() {
+    void saveFlushesImmediately() {
         RoomOccupancy occupancy = occupancy();
         given(occupancyJpaRepository.saveAndFlush(occupancy)).willReturn(occupancy);
 
@@ -67,7 +70,7 @@ class RoomOccupancyJpaPersistenceTest {
 
     @Test
     @DisplayName("회의실 활성 유니크 위반은 409로 옮긴다.")
-    void test2() {
+    void oneActivePerSpaceViolationBecomesConflict() {
         RoomOccupancy occupancy = occupancy();
         given(occupancyJpaRepository.saveAndFlush(any(RoomOccupancy.class)))
                 .willThrow(violation("uq_room_occupancies_one_active_per_space"));
@@ -81,7 +84,7 @@ class RoomOccupancyJpaPersistenceTest {
 
     @Test
     @DisplayName("계정 활성 유니크 위반은 409로 옮긴다.")
-    void test3() {
+    void oneActivePerUserViolationBecomesConflict() {
         RoomOccupancy occupancy = occupancy();
         given(occupancyJpaRepository.saveAndFlush(any(RoomOccupancy.class)))
                 .willThrow(violation("uq_room_occupancies_one_active_per_user"));
@@ -95,7 +98,7 @@ class RoomOccupancyJpaPersistenceTest {
 
     @Test
     @DisplayName("모르는 무결성 위반은 감싸지 않고 그대로 전파한다.")
-    void test4() {
+    void propagatesUnknownViolationUnwrapped() {
         RoomOccupancy occupancy = occupancy();
         DataIntegrityViolationException original = violation("fk_room_occupancies_occupier");
         given(occupancyJpaRepository.saveAndFlush(any(RoomOccupancy.class))).willThrow(original);
@@ -105,22 +108,30 @@ class RoomOccupancyJpaPersistenceTest {
                 .isNotInstanceOf(BusinessException.class);
     }
 
-    /** "행이 있다"와 "사용 중이다"는 다르다 — 종료 상태의 행도 이력으로 남는다. */
+    /**
+     * "행이 있다"와 "사용 중이다"는 다르다 — 종료 상태의 행도 이력으로 남는다.
+     *
+     * <p>만료 시각까지 함께 좁히는 것이 요점이다. {@code status}만 보면 스케줄러(#9)가 아직
+     * EXPIRED로 바꾸지 않은 행이 "사용 중"으로 잡혀, {@code findActiveBySpaceIds}가 공실로
+     * 보여준 방을 여기서는 사용 중으로 판정한다.</p>
+     */
     @Test
-    @DisplayName("존재 확인은 ACTIVE 상태로 좁혀 위임한다.")
-    void test5() {
-        given(occupancyJpaRepository.existsBySpaceIdAndStatus(SPACE_ID, OccupancyStatus.ACTIVE))
+    @DisplayName("존재 확인은 ACTIVE 상태와 만료 시각으로 좁혀 위임한다.")
+    void existsCheckDelegatesWithActiveStatusAndExpiry() {
+        given(occupancyJpaRepository.existsBySpaceIdAndStatusAndExpiresAtAfter(
+                SPACE_ID, OccupancyStatus.ACTIVE, NOW))
                 .willReturn(true);
-        given(occupancyJpaRepository.existsByOccupierUserIdAndStatus(USER_ID, OccupancyStatus.ACTIVE))
+        given(occupancyJpaRepository.existsByOccupierUserIdAndStatusAndExpiresAtAfter(
+                USER_ID, OccupancyStatus.ACTIVE, NOW))
                 .willReturn(false);
 
-        assertThat(roomOccupancyJpaPersistence.existsActiveBySpaceId(SPACE_ID)).isTrue();
-        assertThat(roomOccupancyJpaPersistence.existsActiveByUserId(USER_ID)).isFalse();
+        assertThat(roomOccupancyJpaPersistence.existsActiveBySpaceId(SPACE_ID, NOW)).isTrue();
+        assertThat(roomOccupancyJpaPersistence.existsActiveByUserId(USER_ID, NOW)).isFalse();
     }
 
     @Test
     @DisplayName("활성 점유 조회도 ACTIVE 상태로 좁혀 위임한다.")
-    void test6() {
+    void findActiveDelegatesWithActiveStatus() {
         RoomOccupancy occupancy = occupancy();
         given(occupancyJpaRepository.findBySpaceIdAndStatus(SPACE_ID, OccupancyStatus.ACTIVE))
                 .willReturn(Optional.of(occupancy));
@@ -128,16 +139,124 @@ class RoomOccupancyJpaPersistenceTest {
         assertThat(roomOccupancyJpaPersistence.findActiveBySpaceId(SPACE_ID)).contains(occupancy);
     }
 
+    /**
+     * 정리된 점유를 돌려주는 것이 계약이다. 호출부가 이 값으로 참여자를 마감하며(MR-32),
+     * 빈 목록을 돌려주면 그 참여자들이 열린 채 남아 영구히 다른 회의에 참여할 수 없다.
+     */
     @Test
-    @DisplayName("만료 정리는 ACTIVE를 EXPIRED로 옮기도록 위임한다.")
-    void test7() {
-        given(occupancyJpaRepository.expireStaleBySpaceId(
-                SPACE_ID, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(1);
-        given(occupancyJpaRepository.expireStaleByUserId(
-                USER_ID, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(2);
+    @DisplayName("만료 정리는 ACTIVE를 EXPIRED로 옮기고 정리된 점유를 돌려준다.")
+    void expireTransitionsActiveToExpiredAndReturnsResult() {
+        given(occupancyJpaRepository.findStaleBySpaceId(SPACE_ID, NOW, OccupancyStatus.ACTIVE))
+                .willReturn(List.of(stale(100L, NOW.minusMinutes(1))));
+        given(occupancyJpaRepository.expireById(
+                100L, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(1);
 
-        assertThat(roomOccupancyJpaPersistence.expireStaleBySpaceId(SPACE_ID, NOW)).isEqualTo(1);
-        assertThat(roomOccupancyJpaPersistence.expireStaleByUserId(USER_ID, NOW)).isEqualTo(2);
+        assertThat(roomOccupancyJpaPersistence.expireStaleBySpaceId(SPACE_ID, NOW))
+                .containsExactly(new RoomOccupancyRepository.ExpiredOccupancy(
+                        100L, SPACE_ID, NOW.minusMinutes(1)));
+    }
+
+    /**
+     * <b>식별이 전이보다 먼저여야 한다.</b> 단건 전이는 무엇을 바꿨는지 스스로 알려주지만
+     * (영향 행 수), 그 대상 id 자체는 미리 식별해 둬야 한다 — 조건을 만족하는 행을
+     * 통째로 찾는 방법이 없기 때문이다.
+     */
+    @Test
+    @DisplayName("정리 대상 식별이 상태 변경보다 먼저다.")
+    void identifiesCandidatesBeforeTransitioning() {
+        given(occupancyJpaRepository.findStaleByUserId(USER_ID, NOW, OccupancyStatus.ACTIVE))
+                .willReturn(List.of(stale(100L, NOW.minusMinutes(1))));
+        given(occupancyJpaRepository.expireById(
+                100L, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(1);
+
+        roomOccupancyJpaPersistence.expireStaleByUserId(USER_ID, NOW);
+
+        InOrder order = inOrder(occupancyJpaRepository);
+        order.verify(occupancyJpaRepository).findStaleByUserId(USER_ID, NOW, OccupancyStatus.ACTIVE);
+        order.verify(occupancyJpaRepository).expireById(
+                100L, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED);
+    }
+
+    /** 정리할 것이 없으면 전이 시도 자체가 없다 — 점유 시작마다 도는 경로다. */
+    @Test
+    @DisplayName("만료된 점유가 없으면 상태 변경을 시도하지 않는다.")
+    void skipsTransitionWhenNoCandidates() {
+        given(occupancyJpaRepository.findStaleBySpaceId(SPACE_ID, NOW, OccupancyStatus.ACTIVE))
+                .willReturn(List.of());
+
+        assertThat(roomOccupancyJpaPersistence.expireStaleBySpaceId(SPACE_ID, NOW)).isEmpty();
+
+        verify(occupancyJpaRepository, never()).expireById(any(), any(), any(), any());
+    }
+
+    /**
+     * 조회(식별)와 전이 사이에 다른 요청이 반납·연장을 커밋하면, 단건 조건부 전이는
+     * 0행으로 끝난다 — 그 후보는 결과에서 제외돼야 한다. 벌크 UPDATE로 한 번에 처리하고
+     * 조회 결과를 그대로 반환하던 예전 구현은 이 경합을 놓쳐, 이미 반납됐거나 연장으로
+     * 여전히 사용 중인 점유를 "정리했다"고 잘못 보고했다 — 그 값이 참여자 마감·
+     * {@code RoomVacatedEvent} 발행으로 그대로 이어지는 게 실제 피해다.
+     */
+    @Test
+    @DisplayName("조회와 전이 사이에 반납·연장이 끼면 그 후보는 결과에서 빠진다.")
+    void excludesCandidateWhenTransitionFailsBetweenLookupAndUpdate() {
+        given(occupancyJpaRepository.findStaleByUserId(USER_ID, NOW, OccupancyStatus.ACTIVE))
+                .willReturn(List.of(stale(100L, NOW.minusMinutes(1))));
+        // 조회 이후 다른 트랜잭션이 반납·연장을 커밋해 조건이 더 이상 맞지 않는 상황을
+        // 흉내 낸다 — 단건 UPDATE가 0행으로 끝난다.
+        given(occupancyJpaRepository.expireById(
+                100L, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(0);
+
+        assertThat(roomOccupancyJpaPersistence.expireStaleByUserId(USER_ID, NOW)).isEmpty();
+    }
+
+    /** 스케줄러의 후보 조회는 찾기만 한다 — 전이는 건별로 따로 한다 (명세서 03 §4). */
+    @Test
+    @DisplayName("만료 후보 조회는 상태를 바꾸지 않는다.")
+    void findStaleDoesNotMutateState() {
+        given(occupancyJpaRepository.findStale(NOW, OccupancyStatus.ACTIVE))
+                .willReturn(List.of(stale(100L, NOW.minusMinutes(1))));
+
+        assertThat(roomOccupancyJpaPersistence.findStale(NOW))
+                .containsExactly(new RoomOccupancyRepository.ExpiredOccupancy(
+                        100L, SPACE_ID, NOW.minusMinutes(1)));
+
+        verify(occupancyJpaRepository, never()).expireById(any(), any(), any(), any());
+    }
+
+    /**
+     * 영향 행 수가 그대로 계약이다. 0행은 연장·반납·타 인스턴스 선처리 중 하나이며,
+     * 호출부가 이 값으로 참여자 마감과 이벤트 발행 여부를 정한다.
+     */
+    @Test
+    @DisplayName("단건 전이는 영향 행 수를 그대로 알려준다.")
+    void singleTransitionReturnsAffectedRowCount() {
+        given(occupancyJpaRepository.expireById(
+                100L, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(1);
+        given(occupancyJpaRepository.expireById(
+                200L, NOW, OccupancyStatus.ACTIVE, OccupancyStatus.EXPIRED)).willReturn(0);
+
+        assertThat(roomOccupancyJpaPersistence.expire(100L, NOW)).isTrue();
+        assertThat(roomOccupancyJpaPersistence.expire(200L, NOW)).isFalse();
+    }
+
+    private RoomOccupancyJpaRepository.StaleOccupancyProjection stale(
+            Long occupancyId, OffsetDateTime endedAt) {
+        return new RoomOccupancyJpaRepository.StaleOccupancyProjection() {
+            @Override
+            public Long getOccupancyId() {
+                return occupancyId;
+            }
+
+            @Override
+            public Long getSpaceId() {
+                return SPACE_ID;
+            }
+
+            @Override
+            public OffsetDateTime getEndedAt() {
+                return endedAt;
+            }
+        };
     }
 
     /**
@@ -146,7 +265,7 @@ class RoomOccupancyJpaPersistenceTest {
      */
     @Test
     @DisplayName("활성 점유 요약은 ACTIVE로 좁혀 Projection으로 읽는다.")
-    void test8() {
+    void summaryReadsActiveOccupancyAsProjection() {
         given(occupancyJpaRepository.findSummaryBySpaceIdAndStatus(SPACE_ID, OccupancyStatus.ACTIVE))
                 .willReturn(Optional.of(projection()));
 
@@ -156,7 +275,7 @@ class RoomOccupancyJpaPersistenceTest {
 
     @Test
     @DisplayName("활성 점유가 없으면 빈 값을 돌려준다.")
-    void test9() {
+    void returnsEmptyWhenNoActiveOccupancy() {
         given(occupancyJpaRepository.findSummaryBySpaceIdAndStatus(SPACE_ID, OccupancyStatus.ACTIVE))
                 .willReturn(Optional.empty());
 
@@ -169,7 +288,7 @@ class RoomOccupancyJpaPersistenceTest {
      */
     @Test
     @DisplayName("트랜잭션 밖에서 점유 행 락을 잡으려 하면 막는다.")
-    void test10() {
+    void blocksLockOutsideTransaction() {
         assertThatThrownBy(() -> roomOccupancyJpaPersistence.lockById(100L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("트랜잭션");
@@ -179,7 +298,7 @@ class RoomOccupancyJpaPersistenceTest {
 
     @Test
     @DisplayName("트랜잭션 안에서는 상태 조건 없이 행을 잠근다.")
-    void test11() {
+    void locksRowUnconditionallyWithinTransaction() {
         RoomOccupancy occupancy = occupancy();
         given(occupancyJpaRepository.findByIdForUpdate(100L)).willReturn(Optional.of(occupancy));
 

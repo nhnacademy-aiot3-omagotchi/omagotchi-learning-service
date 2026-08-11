@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.team.application.reuslt;
+package site.omagotchi.learningservice.team.application.result;
 
 import site.omagotchi.learningservice.team.domain.Team;
 
@@ -15,17 +15,17 @@ import java.util.List;
  *
  * <p>팀원은 마스터가 먼저, 그다음 가입 순으로 정렬되어 있다.</p>
  */
-public record TeamDetailResponse (
+public record TeamDetailResult(
         Long teamId,
         Long cohortId,
         String name,
         OffsetDateTime createdAt,
         int memberCount,
-        List<TeamMemberResponse> members
-){
+        List<TeamMemberResult> members
+) {
     /** {@code members}는 이미 정렬된(마스터 우선) 목록이어야 한다. 여기서 다시 정렬하지 않는다. */
-    public static TeamDetailResponse of(Team team, List<TeamMemberResponse> members) {
-        return new TeamDetailResponse(
+    public static TeamDetailResult of(Team team, List<TeamMemberResult> members) {
+        return new TeamDetailResult(
                 team.getId(), team.getCohortId(), team.getName(),
                 team.getCreatedAt(), members.size(), members
         );

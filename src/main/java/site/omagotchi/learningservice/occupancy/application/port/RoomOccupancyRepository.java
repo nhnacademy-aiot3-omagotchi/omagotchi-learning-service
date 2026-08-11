@@ -2,7 +2,7 @@ package site.omagotchi.learningservice.occupancy.application.port;
 
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
-import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
+import site.omagotchi.learningservice.occupancy.application.result.ActiveSpaceOccupancy;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
@@ -39,8 +39,13 @@ public interface RoomOccupancyRepository {
      * <p>반드시 {@code spaces} 행 락을 잡은 트랜잭션 안에서 호출한다.
      * 락 밖에서 확인하면 두 요청이 동시에 "없음"을 보고 둘 다 INSERT를 시도한다 —
      * 그 경우는 유니크 인덱스가 막지만 예외 경로로 빠진다.</p>
+     *
+     * <p>{@code now}로 만료된 행을 제외하는 것이 계약의 일부다. {@code status}만 보면
+     * 스케줄러(#9)가 아직 쓸어가지 않은 만료 행이 "사용 중"으로 잡힌다 —
+     * {@link #findActiveBySpaceIds}와 판정 기준이 갈리면 같은 방이 목록에서는 공실인데
+     * 여기서는 사용 중이 된다.</p>
      */
-    boolean existsActiveBySpaceId(Long spaceId);
+    boolean existsActiveBySpaceId(Long spaceId, OffsetDateTime now);
 
 
     /**
@@ -50,8 +55,11 @@ public interface RoomOccupancyRepository {
      * 다만 이 검사는 {@code spaces} 락으로 직렬화되지 않는다 — 서로 다른 방을 동시에
      * 잡으려는 같은 계정은 락 대상이 달라 둘 다 통과한다. 그 경우
      * {@code uq_room_occupancies_one_active_per_user}가 유일한 방어선이다.</p>
+     *
+     * <p>{@link #existsActiveBySpaceId}와 같은 이유로 {@code now}를 받는다. 여기서
+     * 만료 행을 세면 이미 끝난 점유 때문에 새 점유가 막힌다.</p>
      */
-    boolean existsActiveByUserId(UUID userId);
+    boolean existsActiveByUserId(UUID userId, OffsetDateTime now);
 
 
     /** 활성 점유 단건. 연장·반납(#7)의 진입점이다. */
@@ -71,8 +79,13 @@ public interface RoomOccupancyRepository {
      *
      * <p>공간당 최대 1건이다 — {@code uq_room_occupancies_one_active_per_space}가
      * 보장한다. 받는 쪽이 중복을 걱정할 필요가 없다.</p>
+     *
+     * <p>점유자의 <b>기수가 아니라 멤버십 식별자</b>를 돌려주는 것이 요점이다. 점유 행에
+     * {@code cohort_id}가 없어(ERD v3) 기수는 {@code cohort_memberships} 조인으로만
+     * 나오는데, 그 테이블은 기수 파트 소유라 여기서 조인하면 안 된다. 기수 변환은
+     * {@code OccupancyQueryService}가 기수 파트의 공개 계약으로 처리한다.</p>
      */
-    List<SpaceOccupancyView> findActiveBySpaceIds(Collection<Long> spaceIds, OffsetDateTime now);
+    List<ActiveSpaceOccupancy> findActiveBySpaceIds(Collection<Long> spaceIds, OffsetDateTime now);
 
 
     /**
@@ -125,9 +138,16 @@ public interface RoomOccupancyRepository {
      * <p>{@code ended_at}에 {@code now}가 아니라 {@code expires_at}을 넣는 것이 요점이다 —
      * 실제 종료 시각이 그것이고, {@code ck_room_occupancies_end}도 함께 만족한다.</p>
      *
-     * @return 정리된 행 수
+     * <p><b>정리된 점유를 돌려주는 것이 계약의 일부다.</b> 점유 행만 EXPIRED로 바꾸면
+     * 그 안의 참여자가 열린 채 남고, {@code uq_occupancy_participants_one_active}가 계정
+     * 기준이라 그 사람들이 영구히 다른 회의에 참여할 수 없게 된다 (MR-32). 호출부가
+     * 반환값으로 {@link OccupancyParticipantRepository#closeAllActiveByOccupancyId}를
+     * 이어서 불러야 하며, 두 테이블을 한 Port에서 함께 쓰지 않기 위해 마감은 여기서
+     * 하지 않는다.</p>
+     *
+     * @return 이번 호출로 EXPIRED가 된 점유. 없으면 빈 목록
      */
-    int expireStaleBySpaceId(Long spaceId, OffsetDateTime now);
+    List<ExpiredOccupancy> expireStaleBySpaceId(Long spaceId, OffsetDateTime now);
 
 
     /**
@@ -136,7 +156,59 @@ public interface RoomOccupancyRepository {
      * <p>{@link #expireStaleBySpaceId}와 달리 {@code spaces} 락 밖의 다른 방일 수 있어
      * 완전히 직렬화되지 않는다. 정리에 실패해도 유니크 인덱스가 최종 방어선이므로
      * 정확성은 유지되고, 이 호출은 불필요한 409를 줄이는 최선 노력이다.</p>
+     *
+     * <p>{@link #expireStaleBySpaceId}와 같은 이유로 정리된 점유를 돌려준다.</p>
      */
-    int expireStaleByUserId(UUID userId, OffsetDateTime now);
+    List<ExpiredOccupancy> expireStaleByUserId(UUID userId, OffsetDateTime now);
+
+
+    /**
+     * 만료됐지만 아직 ACTIVE인 행을 공간·계정 구분 없이 찾는다 (스케줄러 #9).
+     *
+     * <p>{@link #expireStaleBySpaceId}·{@link #expireStaleByUserId}가 <b>대체하지 못하는</b>
+     * 경로다. 저 둘은 누군가 그 공간을 점유하려 하거나 그 계정이 새로 점유할 때만 돌아서,
+     * 아무도 오지 않는 방은 만료돼도 계속 ACTIVE로 남는다 — 공간 목록에 "사용 중"으로
+     * 뜨고 참여자도 열린 채다.</p>
+     *
+     * <p><b>찾기만 하고 바꾸지 않는다.</b> 상태 전이는 {@link #expire}가 건별로 한다 —
+     * 명세서 03이 "한 건의 실패가 나머지를 막지 않도록 건별로 처리한다"고 정했고,
+     * 한 UPDATE로 묶으면 그 격리가 성립하지 않는다.</p>
+     */
+    List<ExpiredOccupancy> findStale(OffsetDateTime now);
+
+
+    /**
+     * 점유 한 건을 EXPIRED로 전이한다 (스케줄러 #9).
+     *
+     * <p>조건이 {@code status = 'ACTIVE' AND expires_at <= now}인 것이 핵심이다.
+     * 조회와 전이 사이에 벌어진 일을 이 조건이 걸러낸다.</p>
+     * <ul>
+     *   <li><b>연장</b>: {@code expires_at}이 미래로 밀려 조건에 맞지 않는다 — 사용 중인
+     *       회의가 스케줄러에 끊기지 않는다 (명세서 03 §5 "만료와 연장 경합")</li>
+     *   <li><b>반납·강제 종료</b>: {@code status}가 이미 ACTIVE가 아니라 종료 사유를
+     *       EXPIRED로 덮어쓰지 않는다</li>
+     *   <li><b>다른 인스턴스가 먼저 처리</b>: 같은 이유로 0행이 된다. 행 락으로 직렬화되므로
+     *       둘 중 하나만 {@code true}를 받아 <b>공실 알림이 중복 발행되지 않는다</b></li>
+     * </ul>
+     *
+     * <p>{@code endedAt}을 인자로 받지 않고 그 행의 {@code expires_at}을 쓰는 것이 요점이다 —
+     * 실제 종료 시각이 그것이고, {@code ck_room_occupancies_end}도 함께 만족한다.</p>
+     *
+     * @return 이번 호출로 전이됐으면 {@code true}. {@code false}면 위 사유 중 하나이며
+     *         <b>참여자 마감도 이벤트 발행도 하면 안 된다</b>
+     */
+    boolean expire(Long occupancyId, OffsetDateTime now);
+
+
+    /**
+     * 만료 정리로 종료된 점유.
+     *
+     * @param spaceId 비워진 회의실. 공실 알림 발행에 필요하다 — 알림 대상은 공간 기준이다
+     * @param endedAt 종료 시각. 정리를 수행한 시각이 아니라 그 점유의 {@code expires_at}이다.
+     *                참여자 {@code left_at}과 {@code RoomVacatedEvent.vacatedAt}도 같은 값이어야
+     *                "회의가 끝난 시각"이 테이블과 알림에서 일치한다
+     */
+    record ExpiredOccupancy(Long occupancyId, Long spaceId, OffsetDateTime endedAt) {
+    }
 
 }

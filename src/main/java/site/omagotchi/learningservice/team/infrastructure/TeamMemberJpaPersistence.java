@@ -61,6 +61,13 @@ public class TeamMemberJpaPersistence implements TeamMemberRepository {
     }
 
     @Override
+    public boolean existsByTeamIdAndCohortMembershipIdAndRole(
+            Long teamId, Long cohortMembershipId, TeamMemberRole role) {
+        return teamMemberJpaRepository
+                .existsByTeamIdAndCohortMembershipIdAndRole(teamId, cohortMembershipId, role);
+    }
+
+    @Override
     public Optional<TeamMember> findByTeamIdAndCohortMembershipId(Long teamId, Long cohortMembershipId) {
         return teamMemberJpaRepository.findByTeamIdAndCohortMembershipId(teamId, cohortMembershipId);
     }

@@ -40,7 +40,7 @@ public class ThresholdRuleController {
 
     @PatchMapping("/{rule-id}")
     public UpdateThresholdRuleResponse update(
-            @PathVariable Long ruleId,
+            @PathVariable("rule-id") Long ruleId,
             @Valid @RequestBody UpdateThresholdRuleRequest request,
             JwtAuthenticationToken authentication,
             @RequestHeader(value = "X-Request-ID", required = false) String requestId){

@@ -15,6 +15,12 @@ import site.omagotchi.learningservice.rule.domain.*;
 
 import java.util.List;
 
+/**
+ * TODO 룰 변경을 rule.updated 로 발행해 rule-service 캐시를 즉시 갱신한다.
+ *      현재는 rule-service RuleSyncClient 의 5분 주기 동기화로만 반영되므로 최대 5분 지연된다.
+ *      설계는 docs/rule-updated-publish-guide.md 참고 — 트랜잭션 롤백 시 발행되면 안 되므로
+ *      Spring 이벤트로 분리하고 리스너에 @TransactionalEventListener(AFTER_COMMIT) 을 붙인다.
+ */
 @Slf4j
 @Service
 @Transactional(readOnly = true)

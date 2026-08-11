@@ -20,7 +20,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/threshold-rule")
+@RequestMapping("api/v1/rules")
 public class ThresholdRuleController {
 
     private final ThresholdRuleService thresholdRuleService;
@@ -38,7 +38,7 @@ public class ThresholdRuleController {
         return new CreateThresholdRuleResponse(ruleId);
     }
 
-    @PatchMapping("/{rule-id}")
+    @PatchMapping("/{ruleId}")
     public UpdateThresholdRuleResponse update(
             @PathVariable Long ruleId,
             @Valid @RequestBody UpdateThresholdRuleRequest request,

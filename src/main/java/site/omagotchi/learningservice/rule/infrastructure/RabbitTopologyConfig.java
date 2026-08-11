@@ -4,6 +4,7 @@ import org.springframework.amqp.core.*;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.databind.json.JsonMapper;
 /**
  * 래빗MQ 토폴로지 설정
  * <p/>
@@ -37,7 +38,7 @@ public class RabbitTopologyConfig {
     }
 
     @Bean
-    public JacksonJsonMessageConverter jacksonJsonMessageConverter(){
-        return new JacksonJsonMessageConverter();
+    public JacksonJsonMessageConverter jacksonJsonMessageConverter(JsonMapper jsonMapper){
+        return new JacksonJsonMessageConverter(jsonMapper);
     }
 }

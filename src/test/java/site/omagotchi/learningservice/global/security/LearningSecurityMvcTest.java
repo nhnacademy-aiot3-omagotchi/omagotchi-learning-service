@@ -17,6 +17,8 @@ import site.omagotchi.learningservice.space.application.SpaceCommandService;
 import site.omagotchi.learningservice.space.application.SpaceQueryService;
 import site.omagotchi.learningservice.space.presentation.SpaceAdminController;
 import site.omagotchi.learningservice.space.presentation.SpaceQueryController;
+import site.omagotchi.learningservice.rule.application.ThresholdRuleService;
+import site.omagotchi.learningservice.rule.presentation.ThresholdRuleController;
 import site.omagotchi.learningservice.telegram.application.TelegramUserLinkService;
 import site.omagotchi.learningservice.telegram.application.dto.result.TelegramUserLinkResponse;
 import site.omagotchi.learningservice.telegram.presentation.TelegramController;
@@ -35,11 +37,13 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = {
+        ThresholdRuleController.class,
         TelegramController.class,
         TelegramWebhookController.class,
         SpaceAdminController.class,
@@ -70,6 +74,9 @@ class LearningSecurityMvcTest {
 
     @MockitoBean
     private SpaceQueryService spaceQueryService;
+
+    @MockitoBean
+    private ThresholdRuleService thresholdRuleService;
 
     @Test
     @DisplayName("Telegram webhook은 Access JWT 없이 호출")
@@ -175,6 +182,50 @@ class LearningSecurityMvcTest {
                 USER_ID,
                 GlobalRole.USER
         );
+    }
+
+    @Test
+    @DisplayName("USER의 임계치 룰 생성은 403")
+    void rejectsUserFromCreatingThresholdRule() throws Exception {
+        // 임계치 룰은 rule-service 판정 동작을 바꾸는 운영 설정이라 일반 사용자에게 열려 있으면 안 된다
+        String userToken = TestJwtKeyConfig.issue("USER");
+
+        mockMvc.perform(post("/api/v1/threshold-rules")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_ACCESS_DENIED"));
+
+        verifyNoInteractions(thresholdRuleService);
+    }
+
+    @Test
+    @DisplayName("USER의 임계치 룰 수정은 403")
+    void rejectsUserFromUpdatingThresholdRule() throws Exception {
+        String userToken = TestJwtKeyConfig.issue("USER");
+
+        mockMvc.perform(patch("/api/v1/threshold-rules/1")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_ACCESS_DENIED"));
+
+        verifyNoInteractions(thresholdRuleService);
+    }
+
+    @Test
+    @DisplayName("임계치 룰 조회는 USER도 허용 - rule-service RuleSyncClient 의 적재 경로다")
+    void allowsUserToReadThresholdRules() throws Exception {
+        given(thresholdRuleService.readAll()).willReturn(List.of());
+        String userToken = TestJwtKeyConfig.issue("USER");
+
+        mockMvc.perform(get("/api/v1/threshold-rules")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken))
+                .andExpect(status().isOk());
+
+        verify(thresholdRuleService).readAll();
     }
 
     private TelegramUserLinkResponse linkResponse(UUID userId) {

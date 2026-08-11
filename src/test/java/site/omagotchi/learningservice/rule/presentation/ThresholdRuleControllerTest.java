@@ -44,7 +44,8 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standal
 @ExtendWith(MockitoExtension.class)
 class ThresholdRuleControllerTest {
 
-    private static final String BASE_PATH = "/api/v1/rule";
+    // rule-service RuleSyncClient 가 GET /api/v1/rules 를 호출한다. 복수형이 계약이다.
+    private static final String BASE_PATH = "/api/v1/rules";
     private static final String DEVICE_EUI = "0011223344556677";
     private static final String METRIC = "co2";
     private static final Double THRESHOLD = 1_000.0;

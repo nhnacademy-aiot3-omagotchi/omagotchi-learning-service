@@ -101,7 +101,7 @@ public class DailyQuestService {
                 userId,
                 quest.getRewardXp(),
                 XpSourceType.DAILY_QUEST,
-                String.valueOf(quest.getId())
+                quest.getId()
         );
         return DailyQuestResult.from(quest);
     }

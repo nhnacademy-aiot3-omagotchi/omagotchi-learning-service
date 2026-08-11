@@ -35,7 +35,7 @@ public class XpRewardService {
             UUID userId,
             long amount,
             XpSourceType sourceType,
-            String sourceId
+            Long sourceId
     ) {
         // 같은 원본 이벤트로 보상이 두 번 나가지 않도록 원장 기준으로 먼저 방지
         return xpTransactionRepository.findBySourceTypeAndSourceId(sourceType, sourceId)
@@ -51,7 +51,7 @@ public class XpRewardService {
             UUID userId,
             long amount,
             XpSourceType sourceType,
-            String sourceId
+            Long sourceId
     ) {
         UserCharacter representative = characterGrowthService.requireRepresentativeCharacter(userId);
         // EXP와 레벨은 user_character 한 행에 모이므로 지급 시점에 잠금

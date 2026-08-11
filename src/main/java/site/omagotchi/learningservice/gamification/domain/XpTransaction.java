@@ -39,8 +39,8 @@ public class XpTransaction {
     @Column(name = "source_type", nullable = false, length = 30)
     private XpSourceType sourceType;
 
-    @Column(name = "source_id", nullable = false, length = 80)
-    private String sourceId;
+    @Column(name = "source_id", nullable = false, updatable = false)
+    private Long sourceId;
 
     @Column(nullable = false, updatable = false)
     private long amount;
@@ -53,7 +53,7 @@ public class XpTransaction {
             UUID userId,
             Long userCharacterId,
             XpSourceType sourceType,
-            String sourceId,
+            Long sourceId,
             long amount
     ) {
         if (amount <= 0) {

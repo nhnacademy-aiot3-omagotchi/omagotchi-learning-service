@@ -2,18 +2,16 @@ package site.omagotchi.learningservice.rule.application;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.rule.application.command.CreateThresholdRuleCommand;
 import site.omagotchi.learningservice.rule.application.command.UpdateThresholdRuleCommand;
+import site.omagotchi.learningservice.rule.application.port.SensorDeviceRepository;
+import site.omagotchi.learningservice.rule.application.port.ThresholdRuleHistoryRepository;
+import site.omagotchi.learningservice.rule.application.port.ThresholdRuleRepository;
 import site.omagotchi.learningservice.rule.application.result.UpdateThresholdRuleResult;
 import site.omagotchi.learningservice.rule.domain.*;
-import site.omagotchi.learningservice.rule.infrastructure.SensorDeviceRepository;
-import site.omagotchi.learningservice.rule.infrastructure.ThresholdRuleHistoryRepository;
-import site.omagotchi.learningservice.rule.infrastructure.ThresholdRuleRepository;
 
 import java.util.List;
 
@@ -42,7 +40,7 @@ public class ThresholdRuleService {
             throw new BusinessException(RuleErrorCode.RULE_INVALID_CONDITION, e.getMessage(), e);
         }
 
-        if (!sensorDeviceRepository.existsById(thresholdRule.getDeviceEui())) {
+        if (!sensorDeviceRepository.existsByDeviceEui(thresholdRule.getDeviceEui())) {
             throw new BusinessException(RuleErrorCode.DEVICE_NOT_FOUND);
         }
 
@@ -50,13 +48,8 @@ public class ThresholdRuleService {
             throw new BusinessException(RuleErrorCode.RULE_ALREADY_EXISTS);
         }
 
-        try{
-            thresholdRuleRepository.save(thresholdRule);
-            thresholdRuleRepository.flush();
-        }catch (DataIntegrityViolationException e){
-            throw new BusinessException(RuleErrorCode.RULE_ALREADY_EXISTS, e.getMessage(), e);
-        }
-
+        // 유니크 위반은 경계 안에서 RULE_ALREADY_EXISTS로 변환된다
+        thresholdRuleRepository.save(thresholdRule);
 
         thresholdRuleHistoryRepository.save(ThresholdRuleHistory.record(
                 thresholdRule,
@@ -91,11 +84,8 @@ public class ThresholdRuleService {
             return new UpdateThresholdRuleResult(false, thresholdRule.getVersion());
         }
 
-        try{
-            thresholdRuleRepository.flush();
-        }catch (ObjectOptimisticLockingFailureException e){
-            throw new BusinessException(RuleErrorCode.RULE_VERSION_CONFLICT, e.getMessage(), e);
-        }
+        // 낙관적 락 충돌은 경계 안에서 RULE_VERSION_CONFLICT로 변환된다
+        thresholdRuleRepository.update(thresholdRule);
 
         thresholdRuleHistoryRepository.save(ThresholdRuleHistory.record(
                 thresholdRule,

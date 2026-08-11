@@ -1,4 +1,52 @@
+server:
+  port: 0
+
+spring:
+  datasource:
+    # 통합 테스트에서는 @ServiceConnection이 이 값을 Testcontainers PostgreSQL로 덮어씀
+    url: jdbc:postgresql://localhost:5432/unused_learning_test
+    username: test
+    password: test
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      username: ""
+      password: ""
+      connect-timeout: 1s
+      timeout: 1s
+      ssl:
+        enabled: false
+
 eureka:
   client:
     # 테스트에서 실행 중인 Discovery Service에 연결하지 않음
     enabled: false
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+
+timer:
+  max-duration: PT12H
+
+telegram:
+  bot:
+    username: omagotchi_test_bot
+  link-token:
+    ttl: PT10M
+
+community:
+  attachments:
+    storage-root: target/test-community-attachments
+    max-file-size: 5MB
+    max-count: 5
+
+realtime:
+  presence:
+    session-ttl: 60s
+
+auth:
+  jwt:
+    issuer: https://identity.omagotchi.local
+    audience: omagotchi-api
+    # TestJwtKeyConfig가 메모리에서 생성한 공개키 Bean을 제공
+    public-key-location: classpath:unused-test-key.pem

@@ -14,14 +14,16 @@ Java 21과 Docker가 실행 중인 상태에서 다음 명령을 사용합니다
 
 ## 일반 애플리케이션 실행
 
-`local` profile은 저장소 루트의 `.env`를 읽습니다.
+`local` profile은 저장소 루트의 `.env.local`을 읽습니다.
 
 ```bash
-cp .env.example .env
+cp .env.local.example .env.local
 ./mvnw -Dspring-boot.run.profiles=local spring-boot:run
 ```
 
-`.env`의 DB 접속값은 개인 로컬 PostgreSQL 또는 팀 Compose 환경에 맞게 설정합니다. 학교 DB는 데이터베이스 이름과 `learning_service` schema 생성 권한을 확인하기 전까지 연결하지 않습니다.
+`.env.local`의 DB 접속값은 개인 로컬 PostgreSQL 또는 팀 Compose 환경에 맞게 설정합니다. 학교 DB는 데이터베이스 이름과 `learning_service` schema 생성 권한을 확인하기 전까지 연결하지 않습니다.
+
+Redis Presence 기능을 사용하는 현재 애플리케이션은 로컬 Redis도 필요합니다. `REDIS_HOST`와 `REDIS_PORT`는 필수이며, 인증 없는 Redis는 username/password를 생략할 수 있습니다. 연결 timeout과 SSL은 필요할 때만 `.env.local`에서 기본값을 덮어씁니다.
 
 ### 로컬 JWT 공개키
 
@@ -41,7 +43,15 @@ openssl pkey -in secrets/jwt-private.pem -pubout -out secrets/jwt-public.pem
 chmod 600 secrets/jwt-private.pem secrets/jwt-public.pem
 ```
 
-`local` profile의 기본 공개키 경로와 `.env.example`은 이 파일을 가리킵니다. 경로를 바꿔야 할 때만 `.env`의 `JWT_PUBLIC_KEY_LOCATION`을 변경합니다.
+`local` profile의 기본 공개키 경로와 `.env.local.example`은 이 파일을 가리킵니다. 경로를 바꿔야 할 때만 `.env.local`의 `JWT_PUBLIC_KEY_LOCATION`을 변경합니다.
+
+## 환경별 설정 계약
+
+- `local`: 필수 `./.env.local`을 읽고 Eureka는 기본적으로 비활성화합니다.
+- `test`: `.env.local`을 읽지 않고 `application-test.yaml`, Testcontainers PostgreSQL과 테스트 RSA Key만 사용합니다.
+- `prod`: 별도 env 파일을 import하지 않습니다. DB·Redis·Eureka·JWT·Telegram·첨부파일 저장소 설정은 환경변수와 Mount된 공개키로 주입해야 합니다.
+
+공통 `application.yaml`에는 운영 필수값의 fallback이 없습니다. 값 누락, 잘못된 Duration 또는 읽을 수 없는 JWT 공개키는 요청을 받기 전에 애플리케이션 시작을 실패시킵니다. 실제 Credential과 Key 파일은 `.env.local.example`이나 Git에 기록하지 않습니다.
 
 ## Migration 규칙
 

@@ -1,7 +1,6 @@
 package site.omagotchi.learningservice.telegram.application;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
@@ -16,7 +15,6 @@ import site.omagotchi.learningservice.telegram.infrastructure.TelegramLinkTokenR
 import site.omagotchi.learningservice.telegram.infrastructure.TelegramUserLinkRepository;
 
 import java.security.SecureRandom;
-import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.HexFormat;
 import java.util.UUID;
@@ -31,13 +29,8 @@ public class TelegramUserLinkService {
 
     private final TelegramUserLinkRepository userLinkRepository;
     private final TelegramLinkTokenRepository linkTokenRepository;
+    private final TelegramLinkProperties telegramLinkProperties;
     private final SecureRandom secureRandom = new SecureRandom();
-
-    @Value("${telegram.bot.username:omagotchi_bot}")
-    private String botUsername;
-
-    @Value("${telegram.link-token.ttl:PT10M}")
-    private Duration linkTokenTtl;
 
     /**
      * 서비스 사용자가 Telegram Bot과 개인 대화를 시작할 수 있는 일회용 딥링크를 발급한다.
@@ -45,7 +38,7 @@ public class TelegramUserLinkService {
     @Transactional
     public TelegramLinkTokenResponse issueLinkToken(UUID userId) {
         String rawToken = generateRawToken();
-        OffsetDateTime expiresAt = OffsetDateTime.now().plus(linkTokenTtl);
+        OffsetDateTime expiresAt = OffsetDateTime.now().plus(telegramLinkProperties.linkToken().ttl());
 
         TelegramLinkToken token = TelegramLinkToken.issue(
                 userId,
@@ -55,7 +48,7 @@ public class TelegramUserLinkService {
         linkTokenRepository.save(token);
 
         return new TelegramLinkTokenResponse(
-                "https://t.me/" + botUsername + "?start=" + rawToken,
+                "https://t.me/" + telegramLinkProperties.bot().username() + "?start=" + rawToken,
                 expiresAt
         );
     }

@@ -12,7 +12,6 @@ import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
-import site.omagotchi.learningservice.realtime.config.PresenceProperties;
 
 import java.time.Duration;
 import java.util.Map;

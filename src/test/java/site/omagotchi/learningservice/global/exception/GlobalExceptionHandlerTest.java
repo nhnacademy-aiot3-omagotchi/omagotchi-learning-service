@@ -77,7 +77,6 @@ class GlobalExceptionHandlerTest {
     private void thenUnexpectedExceptionIsHidden(ResponseEntity<ApiErrorResponse> response) {
         then(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         then(response.getBody()).isEqualTo(new ApiErrorResponse(
-                HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 CommonErrorCode.INTERNAL_SERVER_ERROR.code(),
                 CommonErrorCode.INTERNAL_SERVER_ERROR.message(),
                 REQUEST_URI,

@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.rule.infrastructure;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.ImmediateRequeueAmqpException;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory.ConfirmType;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -43,7 +44,12 @@ public class RabbitRecoverConfig {
 
             //실제로 DLQ로 이관함. 이때 헤더를 추가해줌
             //x-exception-stacktrace, x-exception-message, x-original-exchange, x-original-routingKey
-            delegate.recover(message, cause);
+            try{
+                delegate.recover(message, cause);
+            }catch (Exception e){
+                log.error("파킹 큐 이관 실패 - requeue. traceId={}", properties.getHeader("traceId"), e);
+                throw new ImmediateRequeueAmqpException("파킹 큐 이관 실패", e);
+            }
 
             // 발행이 브로커에 확인된 뒤에만 집계한다.
             // 위에서 예외가 나면 여기 도달하지 않으므로 미발행 메시지가 섞이지 않는다.

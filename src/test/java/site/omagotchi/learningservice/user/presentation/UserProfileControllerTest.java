@@ -58,7 +58,7 @@ class UserProfileControllerTest {
         given(userProfileService.getMyProfile(USER_ID))
                 .willReturn(new UserProfileResult("오마", 0L, 0L, 0, null, null));
 
-        mockMvc.perform(get("/api/users/me/profile")
+        mockMvc.perform(get("/api/v1/user-profiles/me/profile")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
                         .header("X-User-Id", SPOOFED_USER_ID))
                 .andExpect(status().isOk())
@@ -73,7 +73,7 @@ class UserProfileControllerTest {
         given(userProfileService.updateNickname(USER_ID, "새이름"))
                 .willReturn(new UserNicknameResult("새이름"));
 
-        mockMvc.perform(patch("/api/users/me/nickname")
+        mockMvc.perform(patch("/api/v1/user-profiles/me/nickname")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
                         .header("X-User-Id", SPOOFED_USER_ID)
                         .contentType(MediaType.APPLICATION_JSON)

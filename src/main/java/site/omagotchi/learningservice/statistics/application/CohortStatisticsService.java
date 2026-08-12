@@ -35,14 +35,20 @@ public class CohortStatisticsService {
             UUID managerUserId,
             Long cohortId
     ) {
+        // 관리자 권한 검증
         cohortAccessService.requireManager(cohortId, managerUserId);
 
+        // 요청 기준 시각과 현재 집계일 계산
         Instant calculatedAt = clock.instant();
         LocalDate aggregationDate = StudyTimePolicy.aggregationDate(calculatedAt);
+
+        // 오늘 확정 학습 통계 DB 조회
         TodaySummary summary = cohortStatisticsRepository.summarizeToday(
                 cohortId,
                 aggregationDate
         );
+
+        // 참여자 평균 계산 및 응답 결과 조립
         long averageParticipantStudySeconds = summary.participantCount() == 0
                 ? 0L
                 : summary.totalStudySeconds() / summary.participantCount();
@@ -65,11 +71,15 @@ public class CohortStatisticsService {
             Long cohortId,
             String requestedWindow
     ) {
+        // 관리자 권한 검증
         cohortAccessService.requireManager(cohortId, managerUserId);
 
+        // 조회 window 검증과 요청 기준 기간 계산
         WindowQuery window = WindowQuery.parse(requestedWindow);
         Instant calculatedAt = clock.instant();
         DateRange dateRange = window.resolveAt(calculatedAt);
+
+        // 기간별 확정 학습 통계 DB 조회 및 빈 날짜 보정
         List<DailyTotalResult> dailyTotals = fillDailyTotals(
                 dateRange,
                 cohortStatisticsRepository.findDailyStudySeconds(
@@ -78,6 +88,8 @@ public class CohortStatisticsService {
                         dateRange.to()
                 )
         );
+
+        // 기간 합계·평균 계산 및 응답 결과 조립
         long totalStudySeconds = dailyTotals.stream()
                 .mapToLong(DailyTotalResult::studySeconds)
                 .sum();
@@ -97,12 +109,14 @@ public class CohortStatisticsService {
             DateRange dateRange,
             List<DailyTotalResult> sparseDailyTotals
     ) {
+        // DB가 반환한 날짜별 합계를 빠르게 조회할 수 있도록 변환
         Map<LocalDate, Long> totalsByDate = sparseDailyTotals.stream()
                 .collect(Collectors.toUnmodifiableMap(
                         DailyTotalResult::aggregationDate,
                         DailyTotalResult::studySeconds
                 ));
 
+        // 요청 window의 모든 날짜를 오름차순으로 채워 반환
         return IntStream.range(0, dateRange.window().days())
                 .mapToObj(dateRange.from()::plusDays)
                 .map(aggregationDate -> new DailyTotalResult(

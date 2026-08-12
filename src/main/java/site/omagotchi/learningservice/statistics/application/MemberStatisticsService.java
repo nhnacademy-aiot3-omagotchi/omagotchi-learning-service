@@ -47,8 +47,10 @@ public class MemberStatisticsService {
             Integer requestedSize,
             String requestedSort
     ) {
+        // 관리자 권한 검증
         cohortAccessService.requireManager(cohortId, managerUserId);
 
+        // 페이지 조회 조건 검증과 요청 기준 기간 계산
         MemberPageQuery query =
                 MemberPageQuery.of(
                         requestedWindow,
@@ -58,17 +60,23 @@ public class MemberStatisticsService {
                 );
         Instant calculatedAt = clock.instant();
         DateRange dateRange = query.window().resolveAt(calculatedAt);
-        List<MemberSummaryResult> items = memberStatisticsRepository
-                .findActiveStudentStatisticsPage(
+
+        // 활성 수강생 수를 먼저 조회하여 전체 페이지 범위 계산
+        long totalElements = memberStatisticsRepository.countActiveStudents(cohortId);
+        int totalPages = totalPages(totalElements, query.size());
+
+        // 요청 페이지가 존재할 때만 수강생 통계 DB 조회
+        List<MemberSummaryResult> items = query.offset() >= totalElements
+                ? List.of()
+                : memberStatisticsRepository.findActiveStudentStatisticsPage(
                         cohortId,
                         dateRange.to(),
                         dateRange.from(),
                         dateRange.to(),
                         query
                 );
-        long totalElements = memberStatisticsRepository.countActiveStudents(cohortId);
-        int totalPages = totalPages(totalElements, query.size());
 
+        // 페이지 조회 결과와 메타데이터 조립
         return new MemberPageResult(
                 query.window().value(),
                 dateRange.from(),
@@ -88,16 +96,24 @@ public class MemberStatisticsService {
             Long cohortMembershipId,
             String requestedWindow
     ) {
+        // 관리자 권한 검증
         cohortAccessService.requireManager(cohortId, managerUserId);
 
+        // 조회 window 검증
         WindowQuery window = WindowQuery.parse(requestedWindow);
+
+        // 같은 기수의 활성 수강생인지 DB 조회로 검증
         MemberReference member = memberStatisticsRepository
                 .findActiveStudent(cohortId, cohortMembershipId)
                 .orElseThrow(() -> new BusinessException(
                         CohortErrorCode.COHORT_MEMBERSHIP_NOT_FOUND
                 ));
+
+        // 대상 검증 후 요청 기준 시각과 기간 계산
         Instant calculatedAt = clock.instant();
         DateRange dateRange = window.resolveAt(calculatedAt);
+
+        // 수강생의 기간 요약과 날짜별 학습 통계 DB 조회
         PeriodSummary summary =
                 memberStatisticsRepository.summarizeActiveRecords(
                         cohortMembershipId,
@@ -113,6 +129,7 @@ public class MemberStatisticsService {
                 )
         );
 
+        // 기간 요약과 빈 날짜가 보정된 응답 결과 조립
         return new MemberOverviewResult(
                 member.cohortMembershipId(),
                 member.userId(),
@@ -135,22 +152,33 @@ public class MemberStatisticsService {
             Long cohortMembershipId,
             LocalDate date
     ) {
+        // 관리자 권한 검증
         cohortAccessService.requireManager(cohortId, managerUserId);
 
+        // 요청 날짜의 필수값과 현재 집계일 상한 검증
+        if (date == null) {
+            throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
+        }
+        Instant calculatedAt = clock.instant();
+        if (date.isAfter(StudyTimePolicy.aggregationDate(calculatedAt))) {
+            throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
+        }
+
+        // 같은 기수의 활성 수강생인지 DB 조회로 검증
         MemberReference member = memberStatisticsRepository
                 .findActiveStudent(cohortId, cohortMembershipId)
                 .orElseThrow(() -> new BusinessException(
                         CohortErrorCode.COHORT_MEMBERSHIP_NOT_FOUND
                 ));
-        Instant calculatedAt = clock.instant();
-        if (date == null || date.isAfter(StudyTimePolicy.aggregationDate(calculatedAt))) {
-            throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
-        }
+
+        // 검증된 수강생의 선택 집계일 기록 DB 조회
         List<MemberDailyRecordResult> records =
                 memberStatisticsRepository.findMemberDailyRecords(
                         cohortMembershipId,
                         date
                 );
+
+        // 기록 합계 계산 및 응답 결과 조립
         long totalStudySeconds = records.stream()
                 .mapToLong(MemberDailyRecordResult::studySeconds)
                 .sum();
@@ -169,12 +197,14 @@ public class MemberStatisticsService {
             DateRange dateRange,
             List<DailyTotalResult> sparseDailyTotals
     ) {
+        // DB가 반환한 날짜별 합계를 빠르게 조회할 수 있도록 변환
         Map<LocalDate, Long> totalsByDate = sparseDailyTotals.stream()
                 .collect(Collectors.toUnmodifiableMap(
                         DailyTotalResult::aggregationDate,
                         DailyTotalResult::studySeconds
                 ));
 
+        // 요청 window의 모든 날짜를 오름차순으로 채워 반환
         return IntStream.range(0, dateRange.window().days())
                 .mapToObj(dateRange.from()::plusDays)
                 .map(aggregationDate -> new DailyTotalResult(
@@ -185,9 +215,12 @@ public class MemberStatisticsService {
     }
 
     private int totalPages(long totalElements, int size) {
+        // 조회 대상이 없으면 페이지도 존재하지 않음
         if (totalElements == 0) {
             return 0;
         }
+
+        // 나머지가 있는 마지막 페이지를 포함해 전체 페이지 수 계산
         return Math.toIntExact(((totalElements - 1) / size) + 1);
     }
 }

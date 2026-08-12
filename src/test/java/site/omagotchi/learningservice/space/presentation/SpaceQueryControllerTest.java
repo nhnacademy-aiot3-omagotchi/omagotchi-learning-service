@@ -42,7 +42,7 @@ class SpaceQueryControllerTest {
     void returnsEmptyJsonArrayWhenNoSpacesExist() throws Exception {
         when(spaceQueryService.getSpaceList(null)).thenReturn(List.of());
 
-        mockMvc.perform(get("/api/spaces"))
+        mockMvc.perform(get("/api/v1/spaces"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());
@@ -76,7 +76,7 @@ class SpaceQueryControllerTest {
                 )
         ));
 
-        mockMvc.perform(get("/api/spaces"))
+        mockMvc.perform(get("/api/v1/spaces"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].spaceId").value(1))
                 .andExpect(jsonPath("$[0].name").value("회의실 A"))
@@ -102,7 +102,7 @@ class SpaceQueryControllerTest {
         UUID spoofedUserId = UUID.randomUUID();
         when(spaceQueryService.getSpaceList(USER_ID)).thenReturn(List.of());
 
-        mockMvc.perform(get("/api/spaces")
+        mockMvc.perform(get("/api/v1/spaces")
                         .with(jwt().jwt(token -> token
                                 .subject(USER_ID.toString())
                                 .claim("role", "USER")))

@@ -29,7 +29,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/gamification")
+@RequestMapping("/api/v1/gamification")
 public class GamificationController {
 
     private final CharacterOnboardingService characterOnboardingService;

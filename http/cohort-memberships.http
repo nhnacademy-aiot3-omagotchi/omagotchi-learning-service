@@ -11,7 +11,7 @@
 
 ### 기수 생성
 # @name createCohort
-POST {{baseUrl}}/api/cohorts
+POST {{baseUrl}}/api/v1/cohorts
 Authorization: Bearer {{systemAdminAccessToken}}
 Content-Type: application/json
 Accept: application/json
@@ -30,7 +30,7 @@ Accept: application/json
 %}
 
 ### 기수 관리자 membership 생성
-POST {{baseUrl}}/api/cohorts/{{cohortId}}/managers
+POST {{baseUrl}}/api/v1/cohorts/{{cohortId}}/managers
 Authorization: Bearer {{systemAdminAccessToken}}
 Content-Type: application/json
 Accept: application/json
@@ -40,7 +40,7 @@ Accept: application/json
 }
 
 ### 가입 코드 발급
-POST {{baseUrl}}/api/cohorts/{{cohortId}}/join-code
+POST {{baseUrl}}/api/v1/cohorts/{{cohortId}}/join-code
 Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json
@@ -56,7 +56,7 @@ Accept: application/json
 %}
 
 ### 학생 membership 참가 신청
-POST {{baseUrl}}/api/cohorts/join-requests
+POST {{baseUrl}}/api/v1/cohorts/join-requests
 Authorization: Bearer {{userAccessToken}}
 Content-Type: application/json
 Accept: application/json
@@ -72,7 +72,7 @@ Accept: application/json
 %}
 
 ### 학생 membership 승인
-PATCH {{baseUrl}}/api/cohort-memberships/{{membershipId}}/approve
+PATCH {{baseUrl}}/api/v1/cohort-memberships/{{membershipId}}/approve
 Authorization: Bearer {{managerAccessToken}}
 Content-Type: application/json
 Accept: application/json

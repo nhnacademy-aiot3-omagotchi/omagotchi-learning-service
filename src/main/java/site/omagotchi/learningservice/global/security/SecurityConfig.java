@@ -35,7 +35,7 @@ public class SecurityConfig {
                         .dispatcherTypeMatchers(DispatcherType.ERROR
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST,
-                                "/api/telegram/webhook"
+                                "/api/v1/webhooks/telegram"
                         ).permitAll()
                         .requestMatchers(
                                 "/actuator/health",
@@ -46,16 +46,16 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(
                                 HttpMethod.GET,
-                                "/api/spaces"
+                                "/api/v1/spaces"
                         ).permitAll()
                         .requestMatchers(
                                 HttpMethod.POST,
-                                "/api/cohorts",
-                                "/api/cohorts/*/managers"
+                                "/api/v1/cohorts",
+                                "/api/v1/cohorts/*/managers"
                         ).hasRole("SYSTEM_ADMIN")
                         .requestMatchers(
                                 HttpMethod.PATCH,
-                                "/api/cohorts/*/status"
+                                "/api/v1/cohorts/*/status"
                         ).hasRole("SYSTEM_ADMIN")
                         .requestMatchers(
                                 HttpMethod.POST,

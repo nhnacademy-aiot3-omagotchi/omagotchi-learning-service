@@ -69,7 +69,7 @@ class GamificationControllerTest {
         given(characterOnboardingService.getAvailableCharacters())
                 .willReturn(List.of(new GameCharacterResult(1L, "NIGHT_CLASS", "야간반", "기본 캐릭터")));
 
-        mockMvc.perform(get("/gamification/characters")
+        mockMvc.perform(get("/api/v1/gamification/characters")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].gameCharacterId").value(1))
@@ -97,7 +97,7 @@ class GamificationControllerTest {
                 true
         ));
 
-        mockMvc.perform(post("/gamification/characters/representative")
+        mockMvc.perform(post("/api/v1/gamification/characters/representative")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""

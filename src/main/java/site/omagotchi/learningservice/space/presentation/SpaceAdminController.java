@@ -27,7 +27,7 @@ import site.omagotchi.learningservice.space.presentation.response.SpaceCohortRes
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/admin/spaces")
+@RequestMapping("/api/v1/admin/spaces")
 public class SpaceAdminController {
 
     private final SpaceCommandService spaceCommandService;

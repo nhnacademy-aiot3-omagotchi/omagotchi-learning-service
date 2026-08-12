@@ -26,7 +26,7 @@ import java.util.List;
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/cohorts/{cohortId}/attendance-records")
+@RequestMapping("/api/v1/cohorts/{cohortId}/attendance-records")
 public class AttendanceController {
 
     private final AttendanceService attendanceService;

@@ -86,7 +86,7 @@ class LearningSecurityMvcTest {
                 .willReturn(linkResponse(USER_ID));
 
         // When
-        ResultActions result = mockMvc.perform(post("/api/telegram/webhook")
+        ResultActions result = mockMvc.perform(post("/api/v1/webhooks/telegram")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"));
 
@@ -98,7 +98,7 @@ class LearningSecurityMvcTest {
     @DisplayName("보호 API는 Access JWT가 없으면 401")
     void rejectsProtectedRequestWithoutToken() throws Exception {
         // When
-        ResultActions result = mockMvc.perform(get("/api/telegram/link"));
+        ResultActions result = mockMvc.perform(get("/api/v1/telegram/link"));
 
         // Then
         result
@@ -108,7 +108,7 @@ class LearningSecurityMvcTest {
                         startsWith("Bearer")
                 ))
                 .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"))
-                .andExpect(jsonPath("$.path").value("/api/telegram/link"));
+                .andExpect(jsonPath("$.path").value("/api/v1/telegram/link"));
         verifyNoInteractions(telegramUserLinkService);
     }
 
@@ -117,7 +117,7 @@ class LearningSecurityMvcTest {
     void permitsAnonymousSpaceList() throws Exception {
         given(spaceQueryService.getSpaceList(null)).willReturn(List.of());
 
-        mockMvc.perform(get("/api/spaces"))
+        mockMvc.perform(get("/api/v1/spaces"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
 
@@ -132,7 +132,7 @@ class LearningSecurityMvcTest {
                 .willReturn(linkResponse(USER_ID));
 
         // When
-        ResultActions result = mockMvc.perform(get("/api/telegram/link")
+        ResultActions result = mockMvc.perform(get("/api/v1/telegram/link")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
                 .header("X-User-Id", SPOOFED_USER_ID)
                 .header("X-Global-Role", "SYSTEM_ADMIN"));
@@ -151,7 +151,7 @@ class LearningSecurityMvcTest {
         String userToken = TestJwtKeyConfig.issue("USER");
 
         // When
-        ResultActions result = mockMvc.perform(post("/api/cohorts")
+        ResultActions result = mockMvc.perform(post("/api/v1/cohorts")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"));
@@ -171,7 +171,7 @@ class LearningSecurityMvcTest {
     void spaceAdminUsesJwtActorInsteadOfSpoofedHeaders() throws Exception {
         String userToken = TestJwtKeyConfig.issue("USER");
 
-        mockMvc.perform(delete("/api/admin/spaces/1")
+        mockMvc.perform(delete("/api/v1/admin/spaces/1")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken)
                         .header("X-User-Id", SPOOFED_USER_ID)
                         .header("X-Global-Role", "SYSTEM_ADMIN"))

@@ -43,9 +43,6 @@ class StudyRecordControllerTest {
     private static final UUID USER_ID = UUID.fromString(
             "00000000-0000-0000-0000-000000000001"
     );
-    private static final UUID COMMAND_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000002"
-    );
     private static final UUID STUDY_RECORD_ID = UUID.fromString(
             "00000000-0000-0000-0000-000000000004"
     );
@@ -253,7 +250,7 @@ class StudyRecordControllerTest {
         @DisplayName("정상 처리")
         void createsStudyRecord() throws Exception {
             StudyRecordResult result = studyRecordResult();
-            given(studyRecordCommandService.create(eq(COMMAND_ID), any(), any(), any()))
+            given(studyRecordCommandService.create(any(), any(), any()))
                     .willReturn(result);
 
             mockMvc.perform(post(
@@ -261,7 +258,6 @@ class StudyRecordControllerTest {
                             COHORT_ID
                     )
                             .principal(authentication())
-                            .header("X-Command-Id", COMMAND_ID)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {
@@ -274,7 +270,7 @@ class StudyRecordControllerTest {
                     .andExpect(jsonPath("$.id").value(STUDY_RECORD_ID.toString()));
 
             ArgumentCaptor<CreateStudyRecordCommand> captor = ArgumentCaptor.forClass(CreateStudyRecordCommand.class);
-            verify(studyRecordCommandService).create(eq(COMMAND_ID), eq(USER_ID), eq(COHORT_ID), captor.capture());
+            verify(studyRecordCommandService).create(eq(USER_ID), eq(COHORT_ID), captor.capture());
             CreateStudyRecordCommand command = captor.getValue();
             assertEquals(Instant.parse("2000-01-01T01:00:00Z"), command.startTime());
             assertEquals(Instant.parse("2000-01-01T02:00:00Z"), command.endTime());
@@ -288,7 +284,6 @@ class StudyRecordControllerTest {
                             COHORT_ID
                     )
                             .principal(authentication())
-                            .header("X-Command-Id", COMMAND_ID)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {
@@ -314,7 +309,6 @@ class StudyRecordControllerTest {
         void updatesStudyRecord() throws Exception {
             StudyRecordResult result = studyRecordResult();
             given(studyRecordCommandService.update(
-                    eq(COMMAND_ID),
                     eq(USER_ID),
                     eq(COHORT_ID),
                     eq(STUDY_RECORD_ID),
@@ -327,7 +321,6 @@ class StudyRecordControllerTest {
                             STUDY_RECORD_ID
                     )
                             .principal(authentication())
-                            .header("X-Command-Id", COMMAND_ID)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {
@@ -342,7 +335,6 @@ class StudyRecordControllerTest {
 
             ArgumentCaptor<UpdateStudyRecordCommand> captor = ArgumentCaptor.forClass(UpdateStudyRecordCommand.class);
             verify(studyRecordCommandService).update(
-                    eq(COMMAND_ID),
                     eq(USER_ID),
                     eq(COHORT_ID),
                     eq(STUDY_RECORD_ID),
@@ -363,7 +355,6 @@ class StudyRecordControllerTest {
                             STUDY_RECORD_ID
                     )
                             .principal(authentication())
-                            .header("X-Command-Id", COMMAND_ID)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {
@@ -394,12 +385,10 @@ class StudyRecordControllerTest {
                             STUDY_RECORD_ID
                     )
                             .principal(authentication())
-                            .header("X-Command-Id", COMMAND_ID)
                             .header("X-RESOURCE-VERSION", EXPECTED_VERSION))
                     .andExpect(status().isNoContent());
 
             verify(studyRecordCommandService).delete(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     STUDY_RECORD_ID,

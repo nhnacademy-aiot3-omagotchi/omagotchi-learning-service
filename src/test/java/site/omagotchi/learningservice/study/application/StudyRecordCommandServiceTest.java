@@ -46,9 +46,6 @@ class StudyRecordCommandServiceTest {
     private static final UUID STUDY_RECORD_ID = UUID.fromString(
             "00000000-0000-0000-0000-000000000004"
     );
-    private static final UUID COMMAND_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000002"
-    );
     private static final LocalDate BASE_DATE = LocalDate.of(2000, Month.JANUARY, 1);
     private static final Instant START_TIME = Instant.parse("2000-01-01T01:00:00Z");
     private static final Instant END_TIME = Instant.parse("2000-01-01T02:00:00Z");
@@ -92,7 +89,6 @@ class StudyRecordCommandServiceTest {
                     .willAnswer(invocation -> invocation.getArgument(0));
 
             StudyRecordResult result = studyRecordCommandService.create(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     request
@@ -135,7 +131,6 @@ class StudyRecordCommandServiceTest {
             BusinessException exception = assertThrows(
                     BusinessException.class,
                     () -> studyRecordCommandService.create(
-                            COMMAND_ID,
                             USER_ID,
                             COHORT_ID,
                             command
@@ -165,7 +160,6 @@ class StudyRecordCommandServiceTest {
                     .willAnswer(invocation -> invocation.getArgument(0));
 
             StudyRecordResult result = studyRecordCommandService.create(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     request
@@ -193,7 +187,6 @@ class StudyRecordCommandServiceTest {
             BusinessException exception = assertThrows(
                     BusinessException.class,
                     () -> studyRecordCommandService.create(
-                            COMMAND_ID,
                             USER_ID,
                             COHORT_ID,
                             command
@@ -277,7 +270,6 @@ class StudyRecordCommandServiceTest {
                 BusinessException exception = assertThrows(
                         BusinessException.class,
                         () -> studyRecordCommandService.create(
-                                COMMAND_ID,
                                 USER_ID,
                                 COHORT_ID,
                                 command
@@ -317,7 +309,6 @@ class StudyRecordCommandServiceTest {
             given(studyRecordRepository.saveWithVersionCheck(entity)).willReturn(entity);
 
             StudyRecordResult result = studyRecordCommandService.update(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     studyRecordId,
@@ -358,7 +349,6 @@ class StudyRecordCommandServiceTest {
             BusinessException exception = assertThrows(
                     BusinessException.class,
                     () -> studyRecordCommandService.update(
-                            COMMAND_ID,
                             USER_ID,
                             COHORT_ID,
                             studyRecordId,
@@ -398,7 +388,6 @@ class StudyRecordCommandServiceTest {
             BusinessException exception = assertThrows(
                     BusinessException.class,
                     () -> studyRecordCommandService.update(
-                            COMMAND_ID,
                             USER_ID,
                             COHORT_ID,
                             studyRecordId,
@@ -433,7 +422,6 @@ class StudyRecordCommandServiceTest {
             BusinessException exception = assertThrows(
                     BusinessException.class,
                     () -> studyRecordCommandService.update(
-                            COMMAND_ID,
                             USER_ID,
                             COHORT_ID,
                             studyRecordId,
@@ -471,7 +459,6 @@ class StudyRecordCommandServiceTest {
             BusinessException exception = assertThrows(
                     BusinessException.class,
                     () -> studyRecordCommandService.update(
-                            COMMAND_ID,
                             USER_ID,
                             COHORT_ID,
                             studyRecordId,
@@ -508,7 +495,6 @@ class StudyRecordCommandServiceTest {
             BusinessException exception = assertThrows(
                     BusinessException.class,
                     () -> studyRecordCommandService.update(
-                            COMMAND_ID,
                             USER_ID,
                             COHORT_ID,
                             studyRecordId,
@@ -539,7 +525,6 @@ class StudyRecordCommandServiceTest {
             given(clock.instant()).willReturn(deletedAt);
 
             studyRecordCommandService.delete(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     studyRecordId,
@@ -568,7 +553,6 @@ class StudyRecordCommandServiceTest {
             BusinessException exception = assertThrows(
                     BusinessException.class,
                     () -> studyRecordCommandService.delete(
-                            COMMAND_ID,
                             USER_ID,
                             COHORT_ID,
                             studyRecordId,
@@ -596,7 +580,6 @@ class StudyRecordCommandServiceTest {
             BusinessException exception = assertThrows(
                     BusinessException.class,
                     () -> studyRecordCommandService.delete(
-                            COMMAND_ID,
                             USER_ID,
                             COHORT_ID,
                             studyRecordId,

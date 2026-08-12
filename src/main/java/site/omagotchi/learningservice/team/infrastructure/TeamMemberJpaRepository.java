@@ -67,6 +67,21 @@ public interface TeamMemberJpaRepository extends JpaRepository<TeamMember, Long>
             Long teamId, Long cohortMembershipId, TeamMemberRole role);
 
     /**
+     * 이 멤버십이 속한 팀 식별자만 읽는다 (GR-16).
+     *
+     * <p>엔티티가 아니라 스칼라인 것이 요점이다. {@code TeamMember}를 읽으면 1차 캐시에
+     * 올라가 뒤이은 {@code FOR UPDATE}가 락 이전 스냅샷을 돌려준다 —
+     * {@code TeamJpaRepository.findActiveCohortId}와 같은 이유다.</p>
+     */
+    @Query("""
+            select member.teamId
+              from TeamMember member
+             where member.cohortMembershipId = :cohortMembershipId
+            """)
+    Optional<Long> findTeamIdByCohortMembershipId(
+            @Param("cohortMembershipId") Long cohortMembershipId);
+
+    /**
      * 팀 현재 인원 (GR-17).
      *
      * <p>반드시 {@code teams} 행 락을 잡은 트랜잭션 안에서 호출해야 한다.

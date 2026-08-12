@@ -40,9 +40,17 @@ public class TeamMemberJpaPersistence implements TeamMemberRepository {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>{@code save}와 같이 flush까지 여기서 끝낸다. Spring Data에 {@code deleteAndFlush}가
+     * 없어 두 줄이 됐을 뿐, 의도는 {@code saveAndFlush}와 동일하다 — DELETE의 실행 시점을
+     * 어댑터 안으로 고정해 호출 순서와 SQL 순서를 일치시킨다.</p>
+     */
     @Override
     public void delete(TeamMember member) {
         teamMemberJpaRepository.delete(member);
+        teamMemberJpaRepository.flush();
     }
 
     @Override
@@ -110,5 +118,10 @@ public class TeamMemberJpaPersistence implements TeamMemberRepository {
     @Override
     public long countByTeamIdAndRole(Long teamId, TeamMemberRole role) {
         return teamMemberJpaRepository.countByTeamIdAndRole(teamId, role);
+    }
+
+    @Override
+    public Optional<Long> findTeamIdByCohortMembershipId(Long cohortMembershipId) {
+        return teamMemberJpaRepository.findTeamIdByCohortMembershipId(cohortMembershipId);
     }
 }

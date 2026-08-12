@@ -36,7 +36,18 @@ public interface TeamMemberRepository {
      */
     TeamMember save(TeamMember member);
 
-    /** 팀원 행 물리 삭제. 탈퇴·제외 공통이다. */
+    /**
+     * 팀원 행 물리 삭제. 탈퇴·제외·소속 종료 정리 공통이다.
+     *
+     * <p><b>DELETE가 이 Method 안에서 실행된다.</b> {@link #save}가 {@code saveAndFlush}인 것과
+     * 같은 이유로 flush 시점을 여기서 고정한다 — 미루면 Hibernate가 flush를 커밋 시점까지
+     * 모아두고, 그때 <b>DELETE를 UPDATE보다 나중에</b> 실행한다(insert → update → … → delete).</p>
+     *
+     * <p>그 순서가 MASTER 교체를 깨뜨린다. {@code TeamMasterService.removeEndedMember}는
+     * "기존 MASTER 행 삭제 → 후임 승격" 순으로 진행하는데, 삭제가 승격 UPDATE 뒤로 밀리면
+     * 순간적으로 MASTER가 2행이 되어 {@code uq_team_members_one_master}를 위반한다.
+     * 여기서 flush하면 호출 순서가 곧 SQL 실행 순서가 된다.</p>
+     */
     void delete(TeamMember member);
 
     /**
@@ -66,6 +77,22 @@ public interface TeamMemberRepository {
 
     /** 특정 팀에서의 소속 행. 권한 검증(팀원인가·MASTER인가)의 진입점이다. */
     Optional<TeamMember> findByTeamIdAndCohortMembershipId(Long teamId, Long cohortMembershipId);
+
+
+    /**
+     * 이 멤버십이 속한 팀을 스칼라로 읽는다 (GR-16).
+     *
+     * <p>소속 종료 정리는 팀을 모른 채 시작하므로 먼저 찾아야 하는데, <b>엔티티가 아니라 값
+     * 하나만 뽑는 것이 이 Method의 존재 이유다.</b> {@code TeamMember}를 먼저 읽으면 그
+     * 인스턴스가 1차 캐시에 올라가고, 뒤이은 {@link #lockAllByTeamId}가
+     * {@code FOR UPDATE}를 실제로 실행해도 Hibernate는 캐시의 인스턴스를 돌려준다 —
+     * 그러면 락 이후 role 재확인이 락 이전 스냅샷을 보게 되어, 그 사이 커밋된 위임을
+     * 놓친다 ({@code TeamRepository.findActiveCohortId}와 같은 함정).</p>
+     *
+     * <p>팀 필터가 없어도 되는 것은 멤버십이 기수당 1행이고
+     * {@code uq_team_members_membership}이 한 멤버십의 소속을 하나로 강제하기 때문이다.</p>
+     */
+    Optional<Long> findTeamIdByCohortMembershipId(Long cohortMembershipId);
 
     /**
      * 이 멤버십이 이 팀의 MASTER인가. 값(boolean)으로만 확인한다.

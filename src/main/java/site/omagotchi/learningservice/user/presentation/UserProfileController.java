@@ -21,7 +21,7 @@ import site.omagotchi.learningservice.user.presentation.response.UserProfileResp
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/users/me")
+@RequestMapping("/api/v1/user-profiles/me")
 public class UserProfileController {
 
     private final UserProfileService userProfileService;

@@ -18,7 +18,7 @@ import java.util.List;
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/spaces")
+@RequestMapping("/api/v1/spaces")
 public class SpaceQueryController {
 
     private final SpaceQueryService spaceQueryService;
@@ -26,7 +26,7 @@ public class SpaceQueryController {
     /**
      * 삭제되지 않은 전체 공간과 현재 사용 상태를 조회한다.
      *
-     * GET /api/spaces
+     * GET /api/v1/spaces
      */
     @GetMapping
     public ResponseEntity<List<SpaceListResponse>> getSpaceList(

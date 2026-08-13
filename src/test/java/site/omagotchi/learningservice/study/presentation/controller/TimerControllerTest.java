@@ -35,9 +35,6 @@ class TimerControllerTest {
     private static final UUID USER_ID = UUID.fromString(
             "00000000-0000-0000-0000-000000000001"
     );
-    private static final UUID COMMAND_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000002"
-    );
     private static final UUID TIMER_RUN_ID = UUID.fromString(
             "00000000-0000-0000-0000-000000000003"
     );
@@ -71,15 +68,14 @@ class TimerControllerTest {
                     STARTED_AT,
                     0L
             );
-            given(timerCommandService.start(COMMAND_ID, USER_ID, COHORT_ID))
+            given(timerCommandService.start(USER_ID, COHORT_ID))
                     .willReturn(result);
 
             mockMvc.perform(post(
                             "/api/v1/cohorts/{cohortId}/timer/start",
                             COHORT_ID
                     )
-                            .principal(authentication())
-                            .header("X-Command-Id", COMMAND_ID))
+                            .principal(authentication()))
                     .andExpect(status().isCreated())
                     .andExpect(jsonPath("$.resultCode").value("TIMER_STARTED"))
                     .andExpect(jsonPath("$.timerRunId").value(TIMER_RUN_ID.toString()))
@@ -87,7 +83,7 @@ class TimerControllerTest {
                     .andExpect(jsonPath("$.startedAt").value(STARTED_AT.toString()))
                     .andExpect(jsonPath("$.elapsedSeconds").value(0L));
 
-            verify(timerCommandService).start(COMMAND_ID, USER_ID, COHORT_ID);
+            verify(timerCommandService).start(USER_ID, COHORT_ID);
         }
     }
 
@@ -152,12 +148,10 @@ class TimerControllerTest {
                             COHORT_ID,
                             TIMER_RUN_ID
                     )
-                            .principal(authentication())
-                            .header("X-Command-Id", COMMAND_ID))
+                            .principal(authentication()))
                     .andExpect(status().isNoContent());
 
             verify(timerCommandService).discard(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     TIMER_RUN_ID
@@ -177,12 +171,10 @@ class TimerControllerTest {
                             COHORT_ID,
                             TIMER_RUN_ID
                     )
-                            .principal(authentication())
-                            .header("X-Command-Id", COMMAND_ID))
+                            .principal(authentication()))
                     .andExpect(status().isNoContent());
 
             verify(timerCommandService).stop(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     TIMER_RUN_ID

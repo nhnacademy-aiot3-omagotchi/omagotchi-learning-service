@@ -28,7 +28,6 @@ import java.util.UUID;
 @RequestMapping("/api/v1/cohorts/{cohortId}")
 public class StudyRecordController {
 
-    private static final String COMMAND_ID_HEADER = "X-Command-Id";
     private static final String RESOURCE_VERSION_HEADER = "X-RESOURCE-VERSION";
 
     private final StudyRecordCommandService studyRecordCommandService;
@@ -87,13 +86,11 @@ public class StudyRecordController {
     @PostMapping("/study-records")
     public ResponseEntity<StudyRecordResponse> createStudyRecord(
             JwtAuthenticationToken authentication,
-            @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @PathVariable Long cohortId,
             @Valid @RequestBody CreateStudyRecordRequest request
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         StudyRecordResult result = studyRecordCommandService.create(
-                commandId,
                 user.userId(),
                 cohortId,
                 request.toCommand()
@@ -105,14 +102,12 @@ public class StudyRecordController {
     @PutMapping("/study-records/{studyRecordId}")
     public ResponseEntity<StudyRecordResponse> updateStudyRecord(
             JwtAuthenticationToken authentication,
-            @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @PathVariable Long cohortId,
             @PathVariable UUID studyRecordId,
             @Valid @RequestBody UpdateStudyRecordRequest request
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         StudyRecordResult result = studyRecordCommandService.update(
-                commandId,
                 user.userId(),
                 cohortId,
                 studyRecordId,
@@ -125,14 +120,12 @@ public class StudyRecordController {
     @DeleteMapping("/study-records/{studyRecordId}")
     public ResponseEntity<Void> deleteStudyRecord(
             JwtAuthenticationToken authentication,
-            @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @RequestHeader(RESOURCE_VERSION_HEADER) Long expectedVersion,
             @PathVariable Long cohortId,
             @PathVariable UUID studyRecordId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         studyRecordCommandService.delete(
-                commandId,
                 user.userId(),
                 cohortId,
                 studyRecordId,

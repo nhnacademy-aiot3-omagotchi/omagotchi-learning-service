@@ -11,7 +11,7 @@ import site.omagotchi.learningservice.telegram.presentation.dto.request.Telegram
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/telegram/webhook")
+@RequestMapping("/api/v1/webhooks/telegram")
 public class TelegramWebhookController {
 
     private final TelegramUserLinkService telegramUserLinkService;

@@ -16,7 +16,7 @@ import java.time.LocalDate;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/rankings")
+@RequestMapping("/api/v1/rankings")
 public class RankingController {
 
     private final RankingQueryService rankingQueryService;

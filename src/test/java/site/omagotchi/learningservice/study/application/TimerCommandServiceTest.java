@@ -49,9 +49,6 @@ class TimerCommandServiceTest {
     private static final UUID USER_ID = UUID.fromString(
             "00000000-0000-0000-0000-000000000001"
     );
-    private static final UUID COMMAND_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000002"
-    );
     private static final Instant STARTED_AT = Instant.parse("2000-01-01T00:00:00Z");
     private static final Instant EXPIRATION_AT = Instant.parse("2000-01-01T12:00:00Z");
     private static final TimerTimePolicy TIME_POLICY = new TimerTimePolicy(
@@ -111,7 +108,6 @@ class TimerCommandServiceTest {
                     });
 
             TimerStateResult result = timerCommandService.start(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID
             );
@@ -155,7 +151,6 @@ class TimerCommandServiceTest {
                     .willAnswer(invocation -> invocation.getArgument(0));
 
             TimerStateResult result = service.start(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID
             );
@@ -174,7 +169,7 @@ class TimerCommandServiceTest {
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
-                    () -> timerCommandService.start(COMMAND_ID, USER_ID, COHORT_ID)
+                    () -> timerCommandService.start(USER_ID, COHORT_ID)
             );
 
             assertSame(CohortErrorCode.COHORT_NOT_FOUND, exception.getErrorCode());
@@ -198,7 +193,7 @@ class TimerCommandServiceTest {
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
-                    () -> timerCommandService.start(COMMAND_ID, USER_ID, COHORT_ID)
+                    () -> timerCommandService.start(USER_ID, COHORT_ID)
             );
 
             assertAll(
@@ -227,7 +222,6 @@ class TimerCommandServiceTest {
                     });
 
             TimerStateResult result = timerCommandService.start(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID
             );
@@ -260,7 +254,6 @@ class TimerCommandServiceTest {
             given(clock.instant()).willReturn(endedAt);
 
             timerCommandService.stop(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     TIMER_RUN_ID
@@ -298,7 +291,6 @@ class TimerCommandServiceTest {
 
             // when
             service.stop(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     TIMER_RUN_ID
@@ -328,7 +320,6 @@ class TimerCommandServiceTest {
             given(clock.instant()).willReturn(endedAt);
 
             timerCommandService.stop(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     TIMER_RUN_ID
@@ -355,7 +346,6 @@ class TimerCommandServiceTest {
             given(clock.instant()).willReturn(endedAt);
 
             timerCommandService.stop(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     TIMER_RUN_ID
@@ -396,7 +386,6 @@ class TimerCommandServiceTest {
             given(clock.instant()).willReturn(boundary);
 
             timerCommandService.stop(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     TIMER_RUN_ID
@@ -421,7 +410,6 @@ class TimerCommandServiceTest {
             given(clock.instant()).willReturn(STARTED_AT);
 
             timerCommandService.stop(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     TIMER_RUN_ID
@@ -449,7 +437,6 @@ class TimerCommandServiceTest {
             BusinessException exception = assertThrows(
                     BusinessException.class,
                     () -> timerCommandService.stop(
-                            COMMAND_ID,
                             USER_ID,
                             COHORT_ID,
                             TIMER_RUN_ID
@@ -470,7 +457,6 @@ class TimerCommandServiceTest {
             BusinessException exception = assertThrows(
                     BusinessException.class,
                     () -> timerCommandService.stop(
-                            COMMAND_ID,
                             USER_ID,
                             COHORT_ID,
                             TIMER_RUN_ID
@@ -489,7 +475,6 @@ class TimerCommandServiceTest {
             given(clock.instant()).willReturn(EXPIRATION_AT);
 
             timerCommandService.stop(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     TIMER_RUN_ID
@@ -513,7 +498,6 @@ class TimerCommandServiceTest {
             assertThrows(
                     RuntimeException.class,
                     () -> timerCommandService.stop(
-                            COMMAND_ID,
                             USER_ID,
                             COHORT_ID,
                             TIMER_RUN_ID
@@ -537,7 +521,6 @@ class TimerCommandServiceTest {
             given(clock.instant()).willReturn(currentAt);
 
             timerCommandService.discard(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     TIMER_RUN_ID
@@ -561,7 +544,6 @@ class TimerCommandServiceTest {
             given(clock.instant()).willReturn(EXPIRATION_AT);
 
             timerCommandService.discard(
-                    COMMAND_ID,
                     USER_ID,
                     COHORT_ID,
                     TIMER_RUN_ID

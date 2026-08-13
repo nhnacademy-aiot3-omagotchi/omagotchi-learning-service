@@ -16,7 +16,7 @@ import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/cohort-memberships")
+@RequestMapping("/api/v1/cohort-memberships")
 public class CohortMembershipController {
 
     private final CohortMembershipService membershipService;

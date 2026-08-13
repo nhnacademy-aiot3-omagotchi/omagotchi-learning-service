@@ -19,22 +19,16 @@ import java.util.UUID;
 @RequestMapping("/api/v1/cohorts/{cohortId}/timer")
 public class TimerController {
 
-    private static final String COMMAND_ID_HEADER = "X-Command-Id";
-
     private final TimerCommandService timerCommandService;
     private final TimerQueryService timerQueryService;
-
-    // TODO: command_receipts 구현 후 쓰기 호출의 commandId와 영수증 처리를 연결한다.
 
     @PostMapping("/start")
     public ResponseEntity<StartTimerResponse> startTimer(
             JwtAuthenticationToken authentication,
-            @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @PathVariable Long cohortId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         TimerStateResult result = timerCommandService.start(
-                commandId,
                 user.userId(),
                 cohortId
         );
@@ -57,13 +51,11 @@ public class TimerController {
     @PostMapping("/{timerRunId}/stop")
     public ResponseEntity<Void> stopTimer(
             JwtAuthenticationToken authentication,
-            @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @PathVariable Long cohortId,
             @PathVariable UUID timerRunId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         timerCommandService.stop(
-                commandId,
                 user.userId(),
                 cohortId,
                 timerRunId
@@ -75,13 +67,11 @@ public class TimerController {
     @PostMapping("/{timerRunId}/discard")
     public ResponseEntity<Void> discardTimer(
             JwtAuthenticationToken authentication,
-            @RequestHeader(COMMAND_ID_HEADER) UUID commandId,
             @PathVariable Long cohortId,
             @PathVariable UUID timerRunId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         timerCommandService.discard(
-                commandId,
                 user.userId(),
                 cohortId,
                 timerRunId

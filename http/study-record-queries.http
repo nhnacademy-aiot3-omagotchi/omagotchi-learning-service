@@ -10,7 +10,6 @@
 ### 일별 조회 확인용 첫 번째 공부 기록 생성 (1시간)
 POST {{baseUrl}}/api/v1/cohorts/{{cohortId}}/study-records
 Authorization: Bearer {{userAccessToken}}
-X-Command-Id: {{$uuid}}
 Content-Type: application/json
 Accept: application/json
 
@@ -30,7 +29,6 @@ Accept: application/json
 ### 일별 조회 확인용 두 번째 공부 기록 생성 (30분)
 POST {{baseUrl}}/api/v1/cohorts/{{cohortId}}/study-records
 Authorization: Bearer {{userAccessToken}}
-X-Command-Id: {{$uuid}}
 Content-Type: application/json
 Accept: application/json
 
@@ -50,7 +48,6 @@ Accept: application/json
 ### 월별 조회 확인용 다음 날 공부 기록 생성 (45분)
 POST {{baseUrl}}/api/v1/cohorts/{{cohortId}}/study-records
 Authorization: Bearer {{userAccessToken}}
-X-Command-Id: {{$uuid}}
 Content-Type: application/json
 Accept: application/json
 

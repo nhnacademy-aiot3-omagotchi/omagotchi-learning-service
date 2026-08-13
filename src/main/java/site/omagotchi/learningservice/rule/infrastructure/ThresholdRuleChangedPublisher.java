@@ -15,7 +15,10 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Component
 public class ThresholdRuleChangedPublisher {
-    private static final long CONFIRM_TIME_OUT_MS = 5000L;
+
+    /** 브로커 확인을 기다리는 상한. 초과하면 발행 실패로 간주한다. */
+    private static final long CONFIRM_TIMEOUT_MS = 5_000L;
+
     private final RabbitTemplate rabbitTemplate;
     private final Counter publishFailed;
 
@@ -48,13 +51,22 @@ public class ThresholdRuleChangedPublisher {
             );
 
             CorrelationData.Confirm confirm =
-                    correlation.getFuture().get(CONFIRM_TIME_OUT_MS, TimeUnit.MILLISECONDS);
+                    correlation.getFuture().get(CONFIRM_TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
             if(!confirm.ack()){
                 publishFailed.increment();
-                log.error("rule.changed 브로커 응답 실패 ruleId={} v={}, resason={}", event.ruleId(), event.ruleVersion(), confirm.reason());
+                log.error("rule.changed nack ruleId={}, v={}, reason={} — 재동기화가 보정",
+                        event.ruleId(), event.ruleVersion(), confirm.reason()); // 브로커가 nack를 보내도 재발행하지않음 왜? -> rule-service에서 5분 재발행해줘서 굳이...
+                return;
             }
-            log.info("rule.changed 발행 ruleId={}, v={}", event.ruleId(), event.ruleVersion());
+
+            // "구독자에게 도달했다"가 아니라 "브로커가 받았다"다 (위 주석 참고)
+            log.info("rule.changed 브로커 수신 ruleId={}, v={}", event.ruleId(), event.ruleVersion());
+
+        }catch (InterruptedException e){
+            Thread.currentThread().interrupt();
+            publishFailed.increment();
+            log.error("rule.changed 발행 대기 중단 ruleId={}, v={}", event.ruleId(), event.ruleVersion(), e);
 
         }catch (Exception e){
             publishFailed.increment();

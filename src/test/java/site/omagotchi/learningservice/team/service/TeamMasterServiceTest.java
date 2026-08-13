@@ -16,16 +16,20 @@ import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.application.TeamMasterService;
 import site.omagotchi.learningservice.team.application.TeamMembership;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
+import site.omagotchi.learningservice.team.application.port.TeamRepository;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.team.domain.TeamMemberRole;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -47,6 +51,9 @@ class TeamMasterServiceTest {
     private static final Long MASTER_MEMBERSHIP_ID = 10L;
     private static final Long TARGET_MEMBERSHIP_ID = 20L;
     private static final UUID USER_ID = UUID.randomUUID();
+
+    @Mock
+    private TeamRepository teamRepository;
 
     @Mock
     private TeamMemberRepository teamMemberRepository;
@@ -266,6 +273,105 @@ class TeamMasterServiceTest {
                 .willReturn(new TeamMembership(MASTER_MEMBERSHIP_ID, COHORT_ID, USER_ID));
         given(accessSupport.requireMaster(TEAM_ID, MASTER_MEMBERSHIP_ID)).willReturn(master);
         given(teamMemberRepository.lockAllByTeamId(TEAM_ID)).willReturn(locked);
+    }
+
+    // ──────────────────── 소속 종료 정리 (GR-16) ────────────────────
+
+    /**
+     * 마스터의 소속이 끝나면 남은 팀원 중 하나가 뒤를 이어야 한다.
+     * 여기서 승격하지 않으면 MASTER 0명인 팀이 커밋되고, 그 팀은 아무도 관리할 수 없다 —
+     * 부분 유니크는 "최대 1명"만 보장해 이 상태를 막지 못한다.
+     */
+    @Test
+    @DisplayName("마스터의 소속이 종료되면 남은 팀원에게 자동 위임한다")
+    void promotesSuccessorWhenEndedMemberWasMaster() {
+        TeamMember master = member(MASTER_MEMBER_ID, MASTER_MEMBERSHIP_ID, true);
+        TeamMember successor = member(TARGET_MEMBER_ID, TARGET_MEMBERSHIP_ID, false);
+        givenLockedTeamWith(master, successor);
+        given(teamMemberRepository.findSuccessorCandidates(TEAM_ID, MASTER_MEMBER_ID))
+                .willReturn(List.of(successor));
+        given(teamMemberRepository.countByTeamIdAndRole(TEAM_ID, TeamMemberRole.MASTER))
+                .willReturn(1L);
+
+        assertThat(teamMasterService.removeEndedMember(MASTER_MEMBERSHIP_ID)).isTrue();
+
+        verify(teamMemberRepository).delete(master);
+        assertThat(successor.isMaster()).isTrue();
+    }
+
+    /** 마지막 한 명의 소속이 끝나면 승격시킬 대상이 없다 — 팀 자체가 사라져야 한다. */
+    @Test
+    @DisplayName("남은 팀원이 없으면 팀을 소프트 삭제한다")
+    void disbandsTeamWhenNoSuccessorRemains() {
+        TeamMember master = member(MASTER_MEMBER_ID, MASTER_MEMBERSHIP_ID, true);
+        Team team = givenLockedTeamWith(master);
+        given(teamMemberRepository.findSuccessorCandidates(TEAM_ID, MASTER_MEMBER_ID))
+                .willReturn(List.of());
+
+        assertThat(teamMasterService.removeEndedMember(MASTER_MEMBERSHIP_ID)).isTrue();
+
+        verify(teamMemberRepository).delete(master);
+        assertThat(team.isDisbanded()).isTrue();
+    }
+
+    /** 일반 팀원은 빠지기만 하면 된다 — 위임도 해체도 일어나지 않아야 한다. */
+    @Test
+    @DisplayName("일반 팀원의 소속이 종료되면 행만 삭제한다")
+    void onlyDeletesRowWhenEndedMemberWasNotMaster() {
+        TeamMember master = member(MASTER_MEMBER_ID, MASTER_MEMBERSHIP_ID, true);
+        TeamMember leaving = member(TARGET_MEMBER_ID, TARGET_MEMBERSHIP_ID, false);
+        Team team = givenLockedTeamWith(master, leaving);
+
+        assertThat(teamMasterService.removeEndedMember(TARGET_MEMBERSHIP_ID)).isTrue();
+
+        verify(teamMemberRepository).delete(leaving);
+        verify(teamMemberRepository, never()).findSuccessorCandidates(any(), any());
+        assertThat(team.isDisbanded()).isFalse();
+        assertThat(master.isMaster()).isTrue();
+    }
+
+    /**
+     * 훅은 재전달된다. 두 번째 실행이 예외를 던지면 재시도가 영원히 실패하고,
+     * 그 뒤에 이어질 점유·알림 정리까지 함께 막힌다.
+     */
+    @Test
+    @DisplayName("소속이 이미 팀에 없으면 아무것도 하지 않는다")
+    void doesNothingWhenMembershipHasNoTeam() {
+        given(teamMemberRepository.findTeamIdByCohortMembershipId(MASTER_MEMBERSHIP_ID))
+                .willReturn(Optional.empty());
+
+        assertThat(teamMasterService.removeEndedMember(MASTER_MEMBERSHIP_ID)).isFalse();
+
+        verify(teamRepository, never()).findByIdForUpdate(any());
+        verify(teamMemberRepository, never()).delete(any());
+    }
+
+    /**
+     * 락 순서는 teams → team_members로 고정한다. 위임·해체와 같은 순서이며 어기면 데드락이다.
+     * 특히 이 경로는 팀을 모른 채 시작하므로, 팀 식별자를 값으로 먼저 읽고 락을 잡는다.
+     */
+    @Test
+    @DisplayName("팀 행을 먼저 잠근 뒤 팀원 행을 잠근다")
+    void locksTeamBeforeMembersOnCleanup() {
+        TeamMember master = member(MASTER_MEMBER_ID, MASTER_MEMBERSHIP_ID, true);
+        givenLockedTeamWith(master);
+        given(teamMemberRepository.findSuccessorCandidates(TEAM_ID, MASTER_MEMBER_ID))
+                .willReturn(List.of());
+
+        teamMasterService.removeEndedMember(MASTER_MEMBERSHIP_ID);
+
+        InOrder order = inOrder(teamRepository, teamMemberRepository);
+        order.verify(teamRepository).findByIdForUpdate(TEAM_ID);
+        order.verify(teamMemberRepository).lockAllByTeamId(TEAM_ID);
+    }
+
+    private Team givenLockedTeamWith(TeamMember... members) {
+        Team team = team();
+        given(teamMemberRepository.findTeamIdByCohortMembershipId(anyLong()))
+                .willReturn(Optional.of(TEAM_ID));
+        given(teamRepository.findByIdForUpdate(TEAM_ID)).willReturn(Optional.of(team));
+        given(teamMemberRepository.lockAllByTeamId(TEAM_ID)).willReturn(List.of(members));
+        return team;
     }
 
     private static Team team() {

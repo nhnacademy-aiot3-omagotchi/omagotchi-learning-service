@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
+import site.omagotchi.learningservice.team.application.port.TeamRepository;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.team.domain.TeamMemberRole;
@@ -34,6 +35,7 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class TeamMasterService {
 
+    private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final TeamAccessSupport accessSupport;
 
@@ -106,15 +108,90 @@ public class TeamMasterService {
     }
 
     /**
+     * 종료된 소속을 팀에서 정리한다 (GR-16).
+     *
+     * <p>계정 삭제·수동 제명으로 멤버십이 끝났을 때 {@code CohortMembershipEndedEvent}를 받아
+     * 실행한다. 명세서 06 §2의 "팀 처리" 그대로다 — 행 삭제, 대상이 MASTER였으면 자동 위임,
+     * 남은 팀원이 없으면 팀 소프트 삭제.</p>
+     *
+     * <p><b>탈퇴(GR-08)와 다르다.</b> 마스터의 자발적 탈퇴는 팀원이 남아 있으면 409로 거부하고
+     * 위임을 먼저 요구하지만, 여기는 본인 의사와 무관하게 소속이 사라진 상황이라 거부할
+     * 상대가 없다. 그래서 이 경로에서만 자동 위임이 일어난다.</p>
+     *
+     * <p><b>멱등하다.</b> 소속 행이 이미 없으면 아무것도 하지 않는다 — 훅은 재전달되고,
+     * 두 번째 실행이 예외를 던지면 재시도가 영원히 실패한다.</p>
+     *
+     * <p>해체 통보를 보내지 않는 것이 의도다. 팀이 사라지는 것은 맞지만 마지막 한 명마저
+     * 계정이 삭제된 상황이라 받을 사람이 없다 — 통보 대상이 있는 GR-19의 해체와 다르다.</p>
+     *
+     * @return 이번 호출로 정리했으면 {@code true}, 이미 소속이 없었으면 {@code false}
+     */
+    @Transactional
+    public boolean removeEndedMember(Long cohortMembershipId) {
+        Long teamId = teamMemberRepository.findTeamIdByCohortMembershipId(cohortMembershipId)
+                .orElse(null);
+        if (teamId == null) {
+            return false;
+        }
+
+        // 락 순서는 teams → team_members(id 오름차순)로 고정한다. 위임·해체와 같은 순서이며,
+        // 어기면 데드락이다. 해체된 팀도 잡아야 남은 소속 행을 지울 수 있으므로
+        // lockActiveTeam이 아니라 락만 잡고 상태는 아래에서 본다.
+        Team team = teamRepository.findByIdForUpdate(teamId).orElse(null);
+        if (team == null) {
+            return false;
+        }
+        List<TeamMember> lockedMembers = teamMemberRepository.lockAllByTeamId(teamId);
+
+        // 락 이전 스냅샷이 아니라 락 결과 안에서 대상을 찾는다 — 그 사이 탈퇴·제외가
+        // 커밋됐으면 여기서 사라진 것으로 보인다.
+        TeamMember leaving = lockedMembers.stream()
+                .filter(member -> member.getCohortMembershipId().equals(cohortMembershipId))
+                .findFirst()
+                .orElse(null);
+        if (leaving == null) {
+            return false;
+        }
+
+        boolean wasMaster = leaving.isMaster();
+
+        // 삭제가 승격보다 먼저 DB에 반영돼야 한다. delete가 flush까지 끝내므로(포트 계약)
+        // 이 호출 순서가 곧 SQL 순서다 — 밀리면 승격 UPDATE 시점에 MASTER가 2행이 되어
+        // uq_team_members_one_master를 위반한다. delegate()가 강등을 먼저 flush하는 것과
+        // 같은 제약이며, 다만 이쪽은 강등이 아니라 삭제로 자리를 비운다.
+        teamMemberRepository.delete(leaving);
+
+        if (!wasMaster) {
+            return true;
+        }
+
+        // MASTER가 빠졌으므로 팀에 MASTER가 0명이다. 부분 유니크는 "최대 1명"만 보장하니
+        // 여기서 반드시 승격하거나 팀을 없애야 한다 — 그냥 두면 아무도 관리할 수 없는
+        // 팀이 커밋되고 되살릴 API가 없다.
+        Optional<TeamMember> successor = findSuccessor(teamId, leaving.getId());
+        if (successor.isEmpty()) {
+            team.disband();
+            log.info("마지막 팀원의 소속이 종료되어 팀을 해체했습니다. teamId={}", teamId);
+            return true;
+        }
+
+        TeamMember promoted = successor.get();
+        promoted.promote();
+        teamMemberRepository.save(promoted);
+        requireExactlyOneMaster(teamId);
+        log.info("소속 종료로 팀 마스터를 자동 위임했습니다. teamId={}, newMasterId={}",
+                teamId, promoted.getId());
+        return true;
+    }
+
+    /**
      * 마스터가 팀을 떠날 때 뒤를 이을 팀원을 고른다 (GR-16).
      *
      * <p>기준은 {@code joined_at} 최소, 동률 시 {@code id} 최소다. <b>결정적이어야 한다</b> —
      * 회원 삭제 훅은 재시도될 수 있고, 두 번째 실행이 첫 번째와 다른 사람을 MASTER로
      * 만들면 멱등하지 않다.</p>
      *
-     * <p>아직 호출부가 없다. 회원 삭제 훅(GR-16)의 진입점이 인증 파트와 미확정이라 그
-     * 흐름을 만들 수 없지만, <b>선정 기준 자체는 여기서 확정하고 테스트로 고정한다</b> —
-     * 기수 종료 연동(CE-01)도 이 로직을 재사용하도록 명세가 지정하고 있다.</p>
+     * <p>기수 종료 연동(CE-01)도 이 로직을 재사용하도록 명세가 지정하고 있다.</p>
      *
      * @param leavingMemberId 떠나는 사람. 아직 행이 남아 있을 수 있어 후보에서 제외한다
      * @return 후보가 없으면 {@code Optional.empty()} — 팀을 소프트 삭제해야 한다는 뜻이다

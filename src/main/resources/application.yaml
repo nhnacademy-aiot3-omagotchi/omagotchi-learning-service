@@ -5,6 +5,13 @@ spring:
   application:
     name: learning-service
 
+  task:
+    execution:
+      # AsyncConfig의 eventTaskExecutor와 Boot 기본 실행기를 분리한다 (ADR space-team/0012).
+      # 지우면 applicationTaskExecutor가 사라져 이름 없는 @Async가 이벤트 실행기로 가는데,
+      # 기동도 로그도 정상이라 드러나지 않는다. AsyncConfigTest가 이 값을 고정한다.
+      mode: force
+
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -124,3 +131,12 @@ omagotchi:
       fixed-delay: ${OCCUPANCY_EXPIRY_FIXED_DELAY:60000}
       # 기동 직후에는 Flyway·연결 풀 준비와 겹치지 않게 미룬다
       initial-delay: ${OCCUPANCY_EXPIRY_INITIAL_DELAY:30000}
+  team:
+    sweep:
+      # 고아 팀원 정합성 스윕 주기 = 복구 지연의 상한 (ADR space-team/0013).
+      # 이미 실패한 건만 다루는 예외 경로라 만료 정리보다 길게 잡는다
+      fixed-delay: ${TEAM_SWEEP_FIXED_DELAY:300000}
+      initial-delay: ${TEAM_SWEEP_INITIAL_DELAY:60000}
+      # 한 배치에서 훑을 소속 행 수. team_members는 물리 삭제라 전체가 유계지만
+      # 한 번에 전건을 들고 오지 않는다
+      batch-size: ${TEAM_SWEEP_BATCH_SIZE:200}

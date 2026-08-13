@@ -36,7 +36,18 @@ public interface TeamMemberRepository {
      */
     TeamMember save(TeamMember member);
 
-    /** 팀원 행 물리 삭제. 탈퇴·제외 공통이다. */
+    /**
+     * 팀원 행 물리 삭제. 탈퇴·제외·소속 종료 정리 공통이다.
+     *
+     * <p><b>DELETE가 이 Method 안에서 실행된다.</b> {@link #save}가 {@code saveAndFlush}인 것과
+     * 같은 이유로 flush 시점을 여기서 고정한다 — 미루면 Hibernate가 flush를 커밋 시점까지
+     * 모아두고, 그때 <b>DELETE를 UPDATE보다 나중에</b> 실행한다(insert → update → … → delete).</p>
+     *
+     * <p>그 순서가 MASTER 교체를 깨뜨린다. {@code TeamMasterService.removeEndedMember}는
+     * "기존 MASTER 행 삭제 → 후임 승격" 순으로 진행하는데, 삭제가 승격 UPDATE 뒤로 밀리면
+     * 순간적으로 MASTER가 2행이 되어 {@code uq_team_members_one_master}를 위반한다.
+     * 여기서 flush하면 호출 순서가 곧 SQL 실행 순서가 된다.</p>
+     */
     void delete(TeamMember member);
 
     /**
@@ -67,6 +78,22 @@ public interface TeamMemberRepository {
     /** 특정 팀에서의 소속 행. 권한 검증(팀원인가·MASTER인가)의 진입점이다. */
     Optional<TeamMember> findByTeamIdAndCohortMembershipId(Long teamId, Long cohortMembershipId);
 
+
+    /**
+     * 이 멤버십이 속한 팀을 스칼라로 읽는다 (GR-16).
+     *
+     * <p>소속 종료 정리는 팀을 모른 채 시작하므로 먼저 찾아야 하는데, <b>엔티티가 아니라 값
+     * 하나만 뽑는 것이 이 Method의 존재 이유다.</b> {@code TeamMember}를 먼저 읽으면 그
+     * 인스턴스가 1차 캐시에 올라가고, 뒤이은 {@link #lockAllByTeamId}가
+     * {@code FOR UPDATE}를 실제로 실행해도 Hibernate는 캐시의 인스턴스를 돌려준다 —
+     * 그러면 락 이후 role 재확인이 락 이전 스냅샷을 보게 되어, 그 사이 커밋된 위임을
+     * 놓친다 ({@code TeamRepository.findActiveCohortId}와 같은 함정).</p>
+     *
+     * <p>팀 필터가 없어도 되는 것은 멤버십이 기수당 1행이고
+     * {@code uq_team_members_membership}이 한 멤버십의 소속을 하나로 강제하기 때문이다.</p>
+     */
+    Optional<Long> findTeamIdByCohortMembershipId(Long cohortMembershipId);
+
     /**
      * 이 멤버십이 이 팀의 MASTER인가. 값(boolean)으로만 확인한다.
      *
@@ -87,6 +114,39 @@ public interface TeamMemberRepository {
      * "최대 8행"은 유니크 인덱스로 표현할 수 없어 DB가 잡아주지 못한다.</p>
      */
     long countByTeamId(Long teamId);
+
+
+    /**
+     * 정합성 스윕이 순회할 소속 행을 {@code id} 오름차순 배치로 읽는다 (ADR 0013).
+     *
+     * <p><b>이 테이블만 읽는 것이 요점이다.</b> "소속이 아직 살아 있나"는
+     * {@code CohortMembershipQueryService#findInactiveMembershipIds}에 묻는다 — 여기서
+     * {@code cohort_memberships}를 조인하면 팀의 infrastructure가 기수 파트 테이블을 알게 되고,
+     * 그것이 지금 다른 곳에서 걷어내고 있는 위반과 같은 종류다.</p>
+     *
+     * <p><b>드라이빙 테이블이 이쪽인 것도 의도다.</b> {@code team_members}는 물리 삭제라
+     * 행 수가 현재 소속 수로 유계이지만, 종료된 소속은 기수가 끝날 때마다 영구히 누적된다.
+     * 종료 소속에서 출발하면 스캔 대상이 해마다 늘고 새 인덱스가 필요해진다.</p>
+     *
+     * <p>엔티티가 아니라 값을 돌려주는 이유는 1차 캐시다. {@link TeamMember}로 읽으면 그
+     * 인스턴스가 영속성 컨텍스트에 올라가고, 뒤이어 정리가 {@link #lockAllByTeamId}로
+     * {@code FOR UPDATE}를 걸어도 Hibernate가 캐시 인스턴스를 그대로 돌려준다.</p>
+     *
+     * @param afterId 이 값보다 큰 {@code team_members.id}부터. 첫 배치는 0
+     * @param limit   한 배치 크기
+     * @return {@code id} 오름차순. 비면 순회 종료다
+     */
+    List<MembershipRef> findMembershipRefsAfter(Long afterId, int limit);
+
+
+    /**
+     * 스윕이 한 행에 대해 알아야 하는 최소 정보.
+     *
+     * @param teamMemberId       커서 전진용. 정리 대상 지정에는 쓰지 않는다
+     * @param cohortMembershipId 소속 유효성 판정과 정리 진입점의 인자
+     */
+    record MembershipRef(Long teamMemberId, Long cohortMembershipId) {
+    }
 
     /**
      * 팀원 목록 (GR-15). 가입 순으로 반환한다.

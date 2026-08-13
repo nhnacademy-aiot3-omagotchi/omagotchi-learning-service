@@ -6,6 +6,8 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.command.ApproveMembershipCommand;
 import site.omagotchi.learningservice.cohort.application.command.CreateJoinCommand;
 import site.omagotchi.learningservice.cohort.application.command.RejectMembershipCommand;
+import site.omagotchi.learningservice.cohort.application.event.CohortMembershipEndedEvent;
+import site.omagotchi.learningservice.cohort.application.port.CohortEventPublisher;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
@@ -41,6 +43,44 @@ public class CohortMembershipService {
     private final CohortJoinCodeRepository joinCodeRepository;
     private final CohortMembershipRepository membershipRepository;
     private final CohortAccessService accessService;
+    private final CohortEventPublisher eventPublisher;
+
+    /**
+     * 기수 소속을 종료한다 (GR-16, MR-26).
+     *
+     * <p>계정 삭제 훅과 수동 제명이 공유하는 진입점이다. 팀·점유 정리는 여기서 하지 않고
+     * {@link CohortMembershipEndedEvent}를 받는 각 파트가 자기 데이터를 정리한다 —
+     * 기수 파트가 남의 테이블을 알 이유가 없고, 정리 실패가 종료 자체를 롤백시켜서도
+     * 안 되기 때문이다 (ADR space-team/0006).</p>
+     *
+     * <p><b>멱등하다.</b> 이미 종료됐거나 ACTIVE가 아닌 소속이면 아무것도 하지 않고
+     * 이벤트도 내지 않는다. {@code approve}·{@code reject}가 같은 상황에서
+     * {@code INVALID_MEMBERSHIP_STATUS_TRANSITION}을 던지는 것과 다른 판단인데,
+     * 저쪽은 사용자가 누른 명령이라 "이미 처리됨"을 알려줘야 하지만 여기는 재전달이
+     * 전제인 시스템 훅이라 두 번째 도착이 오류가 아니다. 여기서 던지면 훅이 실패로
+     * 기록되고 무한 재시도에 빠진다.</p>
+     *
+     * <p>ACTIVE만 종료 대상인 이유는 {@code CohortMembershipRepository#endActive} 참고 —
+     * PENDING 행은 {@code ck_cohort_memberships_processed}에 걸린다.</p>
+     *
+     * @return 이번 호출로 종료됐으면 {@code true}, 이미 종료 상태였으면 {@code false}
+     */
+    @Transactional
+    public boolean end(Long membershipId) {
+        CohortMembership membership = membershipRepository.findById(membershipId)
+                .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_MEMBERSHIP_NOT_FOUND));
+
+        OffsetDateTime endedAt = OffsetDateTime.now();
+        if (membershipRepository.endActive(membershipId, endedAt) == 0) {
+            return false;
+        }
+
+        // 발행은 상태 변경 뒤다. 리스너가 AFTER_COMMIT으로 받으므로 실제 정리는 커밋 후이며,
+        // 정리 실패가 이 트랜잭션을 롤백시키지 않는다 (ADR-0006).
+        eventPublisher.publishMembershipEnded(new CohortMembershipEndedEvent(
+                membershipId, membership.getCohortId(), membership.getUserId(), endedAt));
+        return true;
+    }
 
     /**
      * 가입 코드로 기수 참가 신청을 생성

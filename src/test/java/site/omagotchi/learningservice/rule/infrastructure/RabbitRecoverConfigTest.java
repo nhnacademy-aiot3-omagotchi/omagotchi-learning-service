@@ -56,7 +56,8 @@ class RabbitRecoverConfigTest {
                         .hasFailed()
                         .getFailure()
                         .rootCause()
-                        .isInstanceOf(IllegalStateException.class));
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessageContaining("correlated"));
     }
 
     private RabbitProperties properties(ConfirmType confirmType) {

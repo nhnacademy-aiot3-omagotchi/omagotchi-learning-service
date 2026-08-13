@@ -2,6 +2,8 @@ package site.omagotchi.learningservice.team.infrastructure;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -83,6 +85,24 @@ public class TeamMemberJpaPersistence implements TeamMemberRepository {
     @Override
     public long countByTeamId(Long teamId) {
         return teamMemberJpaRepository.countByTeamId(teamId);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>{@code LIMIT}을 {@link Pageable}로 거는 것은 JPQL에 그 문법이 없기 때문이다.
+     * 정렬은 쿼리의 {@code order by}가 이미 갖고 있으므로 {@link Pageable}에는 크기만 준다 —
+     * 양쪽에 정렬을 두면 Spring Data가 둘을 합쳐 중복된 {@code ORDER BY}를 만든다.</p>
+     */
+    @Override
+    public List<MembershipRef> findMembershipRefsAfter(Long afterId, int limit) {
+        return teamMemberJpaRepository
+                .findMembershipRefsAfter(afterId, PageRequest.ofSize(limit))
+                .stream()
+                .map(projection -> new MembershipRef(
+                        projection.getTeamMemberId(),
+                        projection.getCohortMembershipId()))
+                .toList();
     }
 
     @Override

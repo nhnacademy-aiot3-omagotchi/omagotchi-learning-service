@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.team.infrastructure;
 
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import site.omagotchi.learningservice.team.domain.TeamMember;
@@ -124,6 +125,35 @@ public interface TeamMemberJpaRepository extends JpaRepository<TeamMember, Long>
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select m from TeamMember m where m.teamId = :teamId order by m.id asc")
     List<TeamMember> findAllByTeamIdForUpdate(@Param("teamId") Long teamId);
+
+    /**
+     * 정합성 스윕의 배치 조회 (ADR 0013).
+     *
+     * <p>Projection인 것이 요점이다. 엔티티로 읽으면 그 인스턴스가 1차 캐시에 올라가고,
+     * 뒤이은 정리의 {@code FOR UPDATE}가 락 이전 스냅샷을 돌려준다 —
+     * {@link #findTeamIdByCohortMembershipId}와 같은 함정이다.</p>
+     *
+     * <p>{@code cohort_memberships}를 조인하지 않는다. 소속 유효성은 기수 파트의 공개
+     * 계약에 묻는다 (Port javadoc 참고).</p>
+     */
+    @Query("""
+            select member.id as teamMemberId,
+                   member.cohortMembershipId as cohortMembershipId
+              from TeamMember member
+             where member.id > :afterId
+             order by member.id asc
+            """)
+    List<MembershipRefProjection> findMembershipRefsAfter(
+            @Param("afterId") Long afterId,
+            Pageable pageable
+    );
+
+    /** 닫힌 Projection. 필드를 늘리면 select 컬럼이 함께 늘어난다. */
+    interface MembershipRefProjection {
+        Long getTeamMemberId();
+
+        Long getCohortMembershipId();
+    }
 
     /**
      * 자동 위임 대상 선정 기준 (GR-16): joined_at 최소, 동률 시 id 최소.

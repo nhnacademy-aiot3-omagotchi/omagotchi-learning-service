@@ -115,6 +115,39 @@ public interface TeamMemberRepository {
      */
     long countByTeamId(Long teamId);
 
+
+    /**
+     * 정합성 스윕이 순회할 소속 행을 {@code id} 오름차순 배치로 읽는다 (ADR 0013).
+     *
+     * <p><b>이 테이블만 읽는 것이 요점이다.</b> "소속이 아직 살아 있나"는
+     * {@code CohortMembershipQueryService#findInactiveMembershipIds}에 묻는다 — 여기서
+     * {@code cohort_memberships}를 조인하면 팀의 infrastructure가 기수 파트 테이블을 알게 되고,
+     * 그것이 지금 다른 곳에서 걷어내고 있는 위반과 같은 종류다.</p>
+     *
+     * <p><b>드라이빙 테이블이 이쪽인 것도 의도다.</b> {@code team_members}는 물리 삭제라
+     * 행 수가 현재 소속 수로 유계이지만, 종료된 소속은 기수가 끝날 때마다 영구히 누적된다.
+     * 종료 소속에서 출발하면 스캔 대상이 해마다 늘고 새 인덱스가 필요해진다.</p>
+     *
+     * <p>엔티티가 아니라 값을 돌려주는 이유는 1차 캐시다. {@link TeamMember}로 읽으면 그
+     * 인스턴스가 영속성 컨텍스트에 올라가고, 뒤이어 정리가 {@link #lockAllByTeamId}로
+     * {@code FOR UPDATE}를 걸어도 Hibernate가 캐시 인스턴스를 그대로 돌려준다.</p>
+     *
+     * @param afterId 이 값보다 큰 {@code team_members.id}부터. 첫 배치는 0
+     * @param limit   한 배치 크기
+     * @return {@code id} 오름차순. 비면 순회 종료다
+     */
+    List<MembershipRef> findMembershipRefsAfter(Long afterId, int limit);
+
+
+    /**
+     * 스윕이 한 행에 대해 알아야 하는 최소 정보.
+     *
+     * @param teamMemberId       커서 전진용. 정리 대상 지정에는 쓰지 않는다
+     * @param cohortMembershipId 소속 유효성 판정과 정리 진입점의 인자
+     */
+    record MembershipRef(Long teamMemberId, Long cohortMembershipId) {
+    }
+
     /**
      * 팀원 목록 (GR-15). 가입 순으로 반환한다.
      *

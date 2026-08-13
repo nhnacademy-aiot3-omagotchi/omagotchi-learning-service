@@ -12,45 +12,33 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
- * 도메인 이벤트 리스너의 비동기 실행 설정.
+ * 도메인 이벤트 리스너의 비동기 실행 설정 (ADR space-team/0006, 0012).
  *
- * <p><b>{@code @EnableAsync}가 없으면 {@code @Async}는 조용히 무시된다.</b> 그러면 리스너가
- * 발행 스레드에서 그대로 실행되어, 정리·발송이 느리거나 실패할 때 원래 요청까지 끌고 간다 —
- * ADR space-team/0006이 비동기로 분리한 이유가 사라진다.</p>
+ * <p>도메인 이벤트 전용 실행기를 두고 Boot의 기본 실행기({@code applicationTaskExecutor})와
+ * 분리한다. 아래 {@code CallerRunsPolicy} 같은 이벤트용 결정이 HTTP 처리에 번지지 않게 하려는
+ * 것이며, 분리를 실제로 성립시키는 것은 {@code application.yaml}의
+ * {@code spring.task.execution.mode: force}다.</p>
  *
- * <p><b>전용 실행기를 두고 기본 실행기는 건드리지 않는다.</b> 이 Class가 빈 이름
- * {@code applicationTaskExecutor}를 차지하면 Spring Boot의 기본 실행기를 밀어내고,
- * 그 실행기는 {@code @Async}뿐 아니라 Spring MVC의 비동기 요청 처리도 함께 쓴다 —
- * 아래 {@code CallerRunsPolicy} 같은 도메인 이벤트용 결정이 HTTP 처리에까지 번진다.
- * {@link AsyncConfigurer#getAsyncExecutor()}를 재정의하지 않는 것도 같은 이유다.
- * 재정의하면 이 실행기가 {@code @Async} 전체의 기본값이 된다.</p>
+ * <p><b>아래 넷 중 하나라도 어기면 분리가 조용히 깨지거나 기동이 실패한다.</b>
+ * 각각의 이유와 근거 Class는 ADR 0012 §4·§6에 있다.</p>
+ * <ul>
+ *   <li>리스너는 {@code @Async(AsyncConfig.EVENT_EXECUTOR)}로 <b>이름을 지정한다.</b>
+ *       이름을 생략하는 것은 "기본 실행기를 쓰겠다"는 선언이다</li>
+ *   <li>이 Class는 {@code AsyncConfigurer}를 <b>직접 구현하지 않는다</b> —
+ *       구현하면 {@code force}에서 기동이 실패한다</li>
+ *   <li>{@link AsyncConfigurer#getAsyncExecutor()}를 <b>재정의하지 않는다</b> —
+ *       재정의하면 이 실행기가 {@code @Async} 전체의 기본값이 된다</li>
+ *   <li>{@code spring.task.execution.mode: force}를 <b>지우지 않는다</b> —
+ *       빼도 기동도 로그도 정상이라 드러나지 않는다</li>
+ * </ul>
  *
- * <p><b>아직 분리가 완성되지 않았다.</b> Boot의 기본 실행기 자동 구성은
- * {@code @ConditionalOnMissingBean(Executor.class)}이라, 아래 빈을 정의하는 것만으로 물러난다.
- * 그래서 지금은 기본 실행기가 사라지고 <b>남은 실행기가 이것뿐이라 결국 전역 기본값이 된다</b> —
- * 이름을 지정하지 않은 {@code @Async}도 여기로 온다.</p>
- *
- * <p>막는 방법은 {@code application.yaml}에 {@code spring.task.execution.mode: force} 한 줄이며
- * (Boot이 이 상황을 위해 둔 탈출구), 설정 반영이 보류되어 아직 넣지 않았다. 넣기 전까지 위
- * 문단의 의도는 <b>규약일 뿐 강제되지 않는다</b> — 기동도 로그도 정상이라 드러나지 않는다.</p>
- *
- * <p>그래서 리스너는 {@code @Async(AsyncConfig.EVENT_EXECUTOR)}처럼 <b>이름을 반드시
- * 지정해야 한다.</b> 빠뜨리면 여기 설정과 무관한 기본 실행기에서 돌고, 아래 큐 정책과
- * 스레드 이름 규칙이 적용되지 않는다.</p>
- *
- * <p>기본 설정을 쓰지 않는 것은 같은 ADR의 요구다(§5 "스레드 풀과 예외 로깅을 명시적으로
- * 관리해야 함"). 무제한 큐를 쓰면 소비가 밀릴 때 작업이 메모리에 계속 쌓이고 그 사실이
- * 드러나지 않는다. 여기서는 큐를 유한하게 두고 넘치면 <b>호출한 스레드가 직접 실행</b>하도록
- * 해, 밀리는 상황이 지연으로 드러나게 한다.</p>
- *
- * <p>예외 처리기를 명시하는 것이 핵심이다. {@code @Async} Method가 {@code void}를 반환하면
- * 던진 예외는 <b>아무도 받지 않는다</b> — 처리기가 없으면 팀 정리나 알림 발송이 실패해도
- * 로그 한 줄 남지 않는다. 이쪽은 실행기와 달리 전역이어야 맞다.</p>
+ * <p>{@code AsyncConfigTest}가 넷을 모두 고정한다. {@code @EnableAsync}가 빠지면
+ * {@code @Async}는 조용히 무시되어 리스너가 발행 스레드에서 그대로 실행된다.</p>
  */
 @Slf4j
 @Configuration
 @EnableAsync
-public class AsyncConfig implements AsyncConfigurer {
+public class AsyncConfig {
 
     /**
      * 도메인 이벤트 리스너 전용 실행기의 빈 이름.
@@ -90,10 +78,19 @@ public class AsyncConfig implements AsyncConfigurer {
      *
      * <p>{@link SimpleAsyncUncaughtExceptionHandler}를 그대로 쓰지 않는 이유는 어느 Method가
      * 실패했는지 함께 남기기 위해서다 — 리스너가 여럿이면 stack trace만으로는 구분이 어렵다.</p>
+     *
+     * <p>바깥 Class가 구현하지 않고 <b>별도 빈</b>인 것, {@link AsyncConfigurer#getAsyncExecutor()}를
+     * 재정의하지 않고 {@code null}로 두는 것 모두 의도다 (ADR 0012 §4 결정 2·3).</p>
      */
-    @Override
-    public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
-        return (throwable, method, params) ->
-                log.error("비동기 처리에 실패했습니다. method={}", method.getName(), throwable);
+    @Bean
+    public AsyncConfigurer asyncUncaughtExceptionConfigurer() {
+        return new AsyncConfigurer() {
+
+            @Override
+            public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
+                return (throwable, method, params) ->
+                        log.error("비동기 처리에 실패했습니다. method={}", method.getName(), throwable);
+            }
+        };
     }
 }

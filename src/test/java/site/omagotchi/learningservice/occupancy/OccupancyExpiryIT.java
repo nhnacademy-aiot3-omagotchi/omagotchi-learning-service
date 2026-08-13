@@ -435,11 +435,17 @@ class OccupancyExpiryIT {
         Long roomId = fixture.createMeetingRoom(cohortId, roomName, 8);
         roomOccupancyService.start(roomId, member.userId());
         Long occupancyId = activeOccupancyId(roomId);
+        OffsetDateTime startedAt = expiresAt.minusHours(2);
+        jdbcTemplate.update("""
+                UPDATE learning_service.occupancy_participants
+                   SET joined_at = ?
+                 WHERE occupancy_id = ?
+                """, startedAt, occupancyId);
         jdbcTemplate.update("""
                 UPDATE learning_service.room_occupancies
                    SET started_at = ?, expires_at = ?, reminder_sent_at = ?
                  WHERE id = ?
-                """, expiresAt.minusHours(2), expiresAt, reminderSentAt, occupancyId);
+                """, startedAt, expiresAt, reminderSentAt, occupancyId);
         return occupancyId;
     }
 

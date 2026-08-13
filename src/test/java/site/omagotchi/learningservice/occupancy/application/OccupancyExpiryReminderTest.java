@@ -129,7 +129,7 @@ class OccupancyExpiryReminderTest {
 
     @Test
     @DisplayName("종료된 점유는 락을 잡은 뒤 다시 걸러낸다.")
-    void skipsEndedOrAlreadyRemindedCandidateAfterLock() {
+    void skipsEndedCandidateAfterLock() {
         RoomOccupancy occupancy = occupancy(NOW.plusMinutes(5));
         RoomOccupancyRepository.ExpiringOccupancy candidate = candidate(occupancy);
         ReflectionTestUtils.setField(occupancy, "status", OccupancyStatus.EXPIRED);

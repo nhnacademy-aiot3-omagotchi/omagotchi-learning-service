@@ -7,6 +7,7 @@ import org.springframework.amqp.rabbit.connection.CachingConnectionFactory.Confi
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.rabbit.retry.MessageRecoverer;
 import org.springframework.amqp.rabbit.retry.RepublishMessageRecovererWithConfirms;
+import org.springframework.boot.amqp.autoconfigure.RabbitProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.NestedExceptionUtils;
@@ -19,15 +20,16 @@ public class RabbitRecoverConfig {
     private static final long CONFIRM_TIMEOUT_MS = 5_000L;
 
     @Bean
-    public MessageRecoverer messageRecoverer(RabbitTemplate rabbitTemplate, RecoveryMetrics metrics){
-        // RepublishMessageRecoverer 는 발행 후 곧바로 반환해서 브로커가 실제로 받았는지 모른다.
-        // WithConfirms 는 publisher confirm 을 기다렸다가 nack·타임아웃이면 예외를 던지므로,
-        // 정상 반환한 건수만 집계할 수 있다.
-        // ConfirmType 은 application.yaml 의 publisher-confirm-type 과 일치해야 한다.
+    public MessageRecoverer messageRecoverer(RabbitTemplate rabbitTemplate,
+                                             RecoveryMetrics metrics,
+                                             RabbitProperties rabbitProperties){
+
+        ConfirmType confirmType = requireCorrelated(rabbitProperties.getPublisherConfirmType());
+
         RepublishMessageRecovererWithConfirms delegate = new RepublishMessageRecovererWithConfirms(
                 rabbitTemplate,
                 RabbitTopologyConfig.EXCHANGE_QUALITY_DEAD_LETTER,
-                ConfirmType.CORRELATED
+                confirmType
         );
         delegate.setConfirmTimeout(CONFIRM_TIMEOUT_MS);
 
@@ -55,5 +57,14 @@ public class RabbitRecoverConfig {
             // 위에서 예외가 나면 여기 도달하지 않으므로 미발행 메시지가 섞이지 않는다.
             metrics.countedParked(root);
         };
+    }
+
+    private static ConfirmType requireCorrelated(ConfirmType confirmType) {
+        if (confirmType != ConfirmType.CORRELATED) {
+            throw new IllegalStateException(
+                    "spring.rabbitmq.publisher-confirm-type 은 correlated 여야 합니다. 현재=" + confirmType
+            );
+        }
+        return confirmType;
     }
 }

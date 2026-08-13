@@ -91,6 +91,17 @@ public class RoomOccupancyJpaPersistence implements RoomOccupancyRepository {
         return occupancyJpaRepository.findByIdForUpdate(occupancyId);
     }
 
+    @Override
+    public List<ExpiringOccupancy> findExpiringSoon(
+            OffsetDateTime now, OffsetDateTime reminderEndsAt) {
+        return occupancyJpaRepository
+                .findExpiringSoon(now, reminderEndsAt, OccupancyStatus.ACTIVE)
+                .stream()
+                .map(projection -> new ExpiringOccupancy(
+                        projection.getOccupancyId(), projection.getExpiresAt()))
+                .toList();
+    }
+
     /**
      * {@inheritDoc}
      *

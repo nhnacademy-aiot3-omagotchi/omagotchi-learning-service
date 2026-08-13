@@ -15,6 +15,7 @@ import site.omagotchi.learningservice.global.exception.ErrorCode;
 import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
+import site.omagotchi.learningservice.occupancy.application.port.OccupancyReminderSender;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.result.RoomOccupancyResult;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
@@ -68,6 +69,12 @@ class RoomOccupancyLifecycleServiceTest {
     @Mock
     private OccupancyExpiration occupancyExpiration;
 
+    @Mock
+    private OccupancyExpiryReminder occupancyExpiryReminder;
+
+    @Mock
+    private OccupancyReminderSender reminderSender;
+
     private Clock clock;
     private RoomOccupancyLifecycleService roomOccupancyLifecycleService;
 
@@ -79,6 +86,8 @@ class RoomOccupancyLifecycleServiceTest {
                 participantRepository,
                 eventPublisher,
                 occupancyExpiration,
+                occupancyExpiryReminder,
+                List.of(reminderSender),
                 clock
         );
     }
@@ -424,6 +433,59 @@ class RoomOccupancyLifecycleServiceTest {
         assertThat(roomOccupancyLifecycleService.expireAll()).isEqualTo(1);
 
         verify(occupancyExpiration).expire(healthy, now());
+    }
+
+    // ────────────────────────────── 만료 임박 알림 ──────────────────────────────
+
+    @Test
+    @DisplayName("만료 10분 이내 후보를 같은 시각 기준으로 건별 알림 처리에 넘긴다.")
+    void delegatesExpiringSoonCandidatesIndividually() {
+        RoomOccupancyRepository.ExpiringOccupancy candidate =
+                new RoomOccupancyRepository.ExpiringOccupancy(OCCUPANCY_ID, expiringIn(10));
+        given(occupancyRepository.findExpiringSoon(now(), expiringIn(10)))
+                .willReturn(List.of(candidate));
+        given(occupancyExpiryReminder.send(candidate, reminderSender)).willReturn(true);
+
+        assertThat(roomOccupancyLifecycleService.sendExpiryReminders()).isEqualTo(1);
+
+        verify(occupancyExpiryReminder).send(candidate, reminderSender);
+    }
+
+    @Test
+    @DisplayName("한 알림이 실패해도 다음 만료 임박 점유를 계속 처리한다.")
+    void continuesExpiryRemindersAfterOneFails() {
+        RoomOccupancyRepository.ExpiringOccupancy failing =
+                new RoomOccupancyRepository.ExpiringOccupancy(7L, expiringIn(5));
+        RoomOccupancyRepository.ExpiringOccupancy healthy =
+                new RoomOccupancyRepository.ExpiringOccupancy(8L, expiringIn(6));
+        given(occupancyRepository.findExpiringSoon(now(), expiringIn(10)))
+                .willReturn(List.of(failing, healthy));
+        given(occupancyExpiryReminder.send(failing, reminderSender))
+                .willThrow(new IllegalStateException("발송 실패"));
+        given(occupancyExpiryReminder.send(healthy, reminderSender)).willReturn(true);
+
+        assertThat(roomOccupancyLifecycleService.sendExpiryReminders()).isEqualTo(1);
+
+        verify(occupancyExpiryReminder).send(healthy, reminderSender);
+    }
+
+    @Test
+    @DisplayName("실제 sender 구현이 없으면 후보를 조회하거나 완료 처리하지 않는다.")
+    void doesNotConsumeCandidatesWithoutActualSender() {
+        RoomOccupancyLifecycleService withoutSender = new RoomOccupancyLifecycleService(
+                occupancyRepository,
+                participantRepository,
+                eventPublisher,
+                occupancyExpiration,
+                occupancyExpiryReminder,
+                List.of(),
+                clock
+        );
+
+        assertThat(withoutSender.sendExpiryReminders()).isZero();
+
+        verify(occupancyRepository, never()).findExpiringSoon(any(), any());
+        verify(occupancyExpiryReminder, never()).send(any(), any());
     }
 
     private RoomOccupancy occupancy(OffsetDateTime expiresAt) {

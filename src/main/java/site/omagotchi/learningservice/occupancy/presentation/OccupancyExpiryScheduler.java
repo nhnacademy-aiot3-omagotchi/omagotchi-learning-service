@@ -47,6 +47,13 @@ public class OccupancyExpiryScheduler {
     )
     public void expireStaleOccupancies() {
         try {
+            roomOccupancyLifecycleService.sendExpiryReminders();
+        } catch (Exception exception) {
+            // 알림 실패가 실제 만료 정리를 막아서는 안 된다.
+            log.error("점유 만료 임박 알림 처리에 실패했습니다. 다음 주기에 다시 시도합니다.", exception);
+        }
+
+        try {
             roomOccupancyLifecycleService.expireAll();
         } catch (Exception exception) {
             // 삼키고 다음 주기에 맡긴다. 여기서 다시 던지면 이 실행만 실패로 남고

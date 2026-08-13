@@ -9,17 +9,23 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
+import site.omagotchi.learningservice.occupancy.application.OccupancyExpiryReminder;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
+import site.omagotchi.learningservice.occupancy.application.port.OccupancyReminderSender;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
 import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -49,6 +55,9 @@ class OccupancyExpiryIT {
 
     @Autowired
     RoomOccupancyLifecycleService roomOccupancyLifecycleService;
+
+    @Autowired
+    OccupancyExpiryReminder occupancyExpiryReminder;
 
     @Autowired
     JdbcTemplate jdbcTemplate;
@@ -181,6 +190,92 @@ class OccupancyExpiryIT {
 
         assertThat(activeOccupancyRows(roomId)).isEqualTo(1);
         assertThat(openParticipantRows(roomId)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("임박 후보 조회는 10분 경계를 포함하고 만료·종료·기발송 점유를 제외한다.")
+    void expiringSoonQueryUsesExactReminderConditions() {
+        Long cohortId = fixture.createCohort("임박-조회조건");
+        OffsetDateTime now = OffsetDateTime.now();
+
+        Long withinId = startAt(cohortId, "임박-5분", now.plusMinutes(5), null);
+        Long boundaryId = startAt(cohortId, "임박-10분", now.plusMinutes(10), null);
+        Long tooEarlyId = startAt(cohortId, "임박-11분", now.plusMinutes(11), null);
+        Long exactExpiryId = startAt(cohortId, "임박-정각만료", now, null);
+        Long pastId = startAt(cohortId, "임박-과거", now.minusSeconds(1), null);
+        Long remindedId = startAt(cohortId, "임박-기발송", now.plusMinutes(5), now.minusMinutes(1));
+        Long releasedId = startAt(cohortId, "임박-종료", now.plusMinutes(5), null);
+        jdbcTemplate.update("""
+                UPDATE learning_service.room_occupancies
+                   SET status = 'RELEASED', ended_at = ?
+                 WHERE id = ?
+                """, now, releasedId);
+
+        Set<Long> ownIds = Set.of(
+                withinId, boundaryId, tooEarlyId, exactExpiryId, pastId, remindedId, releasedId);
+        List<Long> found = occupancyRepository.findExpiringSoon(now, now.plusMinutes(10)).stream()
+                .map(RoomOccupancyRepository.ExpiringOccupancy::occupancyId)
+                .filter(ownIds::contains)
+                .toList();
+
+        assertThat(found).containsExactly(withinId, boundaryId);
+    }
+
+    @Test
+    @DisplayName("임박 알림 성공은 DB에 기록되고 같은 후보를 다시 처리해도 중복 발송하지 않는다.")
+    void successfulReminderIsPersistedAndNotSentTwice() {
+        Long cohortId = fixture.createCohort("임박-성공중복방지");
+        OffsetDateTime now = OffsetDateTime.now();
+        Long occupancyId = startAt(cohortId, "임박-성공중복방지-1", now.plusMinutes(5), null);
+        RoomOccupancyRepository.ExpiringOccupancy candidate = expiringCandidate(occupancyId);
+        AtomicInteger attempts = new AtomicInteger();
+        OccupancyReminderSender sender = reminder -> attempts.incrementAndGet();
+
+        assertThat(occupancyExpiryReminder.send(candidate, sender)).isTrue();
+        assertThat(reminderSentAt(occupancyId)).isNotNull();
+
+        assertThat(occupancyExpiryReminder.send(candidate, sender)).isFalse();
+        assertThat(attempts).hasValue(1);
+        assertThat(expiringOccupancyIds()).doesNotContain(occupancyId);
+    }
+
+    @Test
+    @DisplayName("임박 알림 실패는 기록을 소진하지 않아 다음 실행에서 재시도할 수 있다.")
+    void failedReminderRemainsEligibleForRetry() {
+        Long cohortId = fixture.createCohort("임박-실패재시도");
+        OffsetDateTime now = OffsetDateTime.now();
+        Long occupancyId = startAt(cohortId, "임박-실패재시도-1", now.plusMinutes(5), null);
+        RoomOccupancyRepository.ExpiringOccupancy candidate = expiringCandidate(occupancyId);
+
+        assertThatThrownBy(() -> occupancyExpiryReminder.send(candidate, reminder -> {
+            throw new IllegalStateException("강제 발송 실패");
+        })).isInstanceOf(IllegalStateException.class);
+
+        assertThat(reminderSentAt(occupancyId)).isNull();
+        assertThat(expiringOccupancyIds()).contains(occupancyId);
+        assertThat(occupancyExpiryReminder.send(candidate, reminder -> { })).isTrue();
+        assertThat(reminderSentAt(occupancyId)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("임박 알림 트랜잭션이 실패해도 이후 만료의 EXPIRED 전이는 커밋된다.")
+    void reminderFailureDoesNotRollbackLaterExpiry() {
+        Long cohortId = fixture.createCohort("임박실패-만료격리");
+        OffsetDateTime now = OffsetDateTime.now();
+        Long occupancyId = startAt(cohortId, "임박실패-만료격리-1", now.plusMinutes(5), null);
+        RoomOccupancyRepository.ExpiringOccupancy candidate = expiringCandidate(occupancyId);
+        Long roomId = occupancySpaceId(occupancyId);
+
+        assertThatThrownBy(() -> occupancyExpiryReminder.send(candidate, reminder -> {
+            throw new IllegalStateException("강제 발송 실패");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(reminderSentAt(occupancyId)).isNull();
+
+        expire(roomId);
+        roomOccupancyLifecycleService.expireAll();
+
+        assertThat(occupancyStatus(occupancyId)).isEqualTo("EXPIRED");
+        assertThat(occupancyEndedAt(roomId)).isNotNull();
     }
 
     /**
@@ -334,11 +429,61 @@ class OccupancyExpiryIT {
                 """, spaceId);
     }
 
+    private Long startAt(
+            Long cohortId, String roomName, OffsetDateTime expiresAt, OffsetDateTime reminderSentAt) {
+        OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, roomName, 8);
+        roomOccupancyService.start(roomId, member.userId());
+        Long occupancyId = activeOccupancyId(roomId);
+        jdbcTemplate.update("""
+                UPDATE learning_service.room_occupancies
+                   SET started_at = ?, expires_at = ?, reminder_sent_at = ?
+                 WHERE id = ?
+                """, expiresAt.minusHours(2), expiresAt, reminderSentAt, occupancyId);
+        return occupancyId;
+    }
+
     private OffsetDateTime occupancyEndedAt(Long spaceId) {
         return jdbcTemplate.queryForObject("""
                 SELECT ended_at FROM learning_service.room_occupancies
                  WHERE space_id = ? AND status = 'EXPIRED'
                 """, OffsetDateTime.class, spaceId);
+    }
+
+    private RoomOccupancyRepository.ExpiringOccupancy expiringCandidate(Long occupancyId) {
+        return occupancyRepository.findExpiringSoon(
+                        OffsetDateTime.now(), OffsetDateTime.now().plusMinutes(10)).stream()
+                .filter(candidate -> candidate.occupancyId().equals(occupancyId))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private List<Long> expiringOccupancyIds() {
+        OffsetDateTime now = OffsetDateTime.now();
+        return occupancyRepository.findExpiringSoon(now, now.plusMinutes(10)).stream()
+                .map(RoomOccupancyRepository.ExpiringOccupancy::occupancyId)
+                .toList();
+    }
+
+    private OffsetDateTime reminderSentAt(Long occupancyId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT reminder_sent_at FROM learning_service.room_occupancies
+                 WHERE id = ?
+                """, OffsetDateTime.class, occupancyId);
+    }
+
+    private Long occupancySpaceId(Long occupancyId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT space_id FROM learning_service.room_occupancies
+                 WHERE id = ?
+                """, Long.class, occupancyId);
+    }
+
+    private String occupancyStatus(Long occupancyId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT status FROM learning_service.room_occupancies
+                 WHERE id = ?
+                """, String.class, occupancyId);
     }
 
     private OffsetDateTime participantLeftAt(Long spaceId) {

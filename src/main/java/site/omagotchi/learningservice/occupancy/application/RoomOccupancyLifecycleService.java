@@ -9,6 +9,7 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
+import site.omagotchi.learningservice.occupancy.application.port.OccupancyReminderSender;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.result.RoomOccupancyResult;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
@@ -43,6 +44,8 @@ public class RoomOccupancyLifecycleService {
     private final OccupancyParticipantRepository participantRepository;
     private final OccupancyEventPublisher eventPublisher;
     private final OccupancyExpiration occupancyExpiration;
+    private final OccupancyExpiryReminder occupancyExpiryReminder;
+    private final List<OccupancyReminderSender> reminderSenders;
     private final Clock clock;
 
     /**
@@ -163,6 +166,52 @@ public class RoomOccupancyLifecycleService {
             log.info("만료된 점유 {}건을 정리했습니다.", expired);
         }
         return expired;
+    }
+
+    /**
+     * 만료까지 10분 이하로 남은 ACTIVE 점유의 점유자에게 알림을 보낸다 (MR-12).
+     *
+     * <p>실제 발송 계약 구현이 없으면 후보를 조회하거나 {@code reminder_sent_at}을 소진하지
+     * 않는다. 구현이 둘 이상이면 어느 발송의 성공을 완료로 볼지 계약이 모호하므로 실패시킨다.</p>
+     *
+     * <p>후보는 한 번에 찾되 발송은 {@link OccupancyExpiryReminder}가 건별 트랜잭션에서
+     * 처리한다. 한 건의 발송 실패는 다음 후보를 막지 않으며, 실패한 점유는 완료 기록이
+     * 없어서 다음 주기에 다시 시도된다.</p>
+     *
+     * @return 실제 발송에 성공하고 완료 시각까지 기록한 점유 수
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public int sendExpiryReminders() {
+        if (reminderSenders.isEmpty()) {
+            log.debug("점유 만료 임박 알림 sender가 없어 이번 주기를 건너뜁니다.");
+            return 0;
+        }
+        if (reminderSenders.size() > 1) {
+            throw new IllegalStateException("점유 만료 임박 알림 sender는 하나만 등록할 수 있습니다.");
+        }
+
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        OffsetDateTime reminderEndsAt = now.plus(RoomOccupancy.EXPIRY_REMINDER_WINDOW);
+        List<RoomOccupancyRepository.ExpiringOccupancy> candidates =
+                occupancyRepository.findExpiringSoon(now, reminderEndsAt);
+        OccupancyReminderSender sender = reminderSenders.getFirst();
+
+        int sent = 0;
+        for (RoomOccupancyRepository.ExpiringOccupancy candidate : candidates) {
+            try {
+                if (occupancyExpiryReminder.send(candidate, sender)) {
+                    sent++;
+                }
+            } catch (Exception exception) {
+                log.error("점유 만료 임박 알림에 실패했습니다. occupancyId={}",
+                        candidate.occupancyId(), exception);
+            }
+        }
+
+        if (sent > 0) {
+            log.info("점유 만료 임박 알림 {}건을 발송했습니다.", sent);
+        }
+        return sent;
     }
 
     // ────────────────────────────── 내부 헬퍼 ──────────────────────────────

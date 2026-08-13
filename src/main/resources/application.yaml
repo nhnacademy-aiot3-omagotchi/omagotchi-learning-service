@@ -108,3 +108,8 @@ omagotchi:
       fixed-delay: ${OCCUPANCY_EXPIRY_FIXED_DELAY:60000}
       # 기동 직후에는 Flyway·연결 풀 준비와 겹치지 않게 미룬다
       initial-delay: ${OCCUPANCY_EXPIRY_INITIAL_DELAY:30000}
+    telegram:
+      # 실제 발송 테스트에서만 켠다. false이면 sender Bean 자체를 등록하지 않는다
+      enabled: ${OCCUPANCY_TELEGRAM_ENABLED:false}
+      bot-token: ${TELEGRAM_BOT_TOKEN:}
+      chat-id: ${TELEGRAM_CHAT_ID:}

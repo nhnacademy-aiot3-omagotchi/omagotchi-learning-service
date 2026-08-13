@@ -64,6 +64,28 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
     @Query("select o from RoomOccupancy o where o.id = :id")
     Optional<RoomOccupancy> findByIdForUpdate(@Param("id") Long id);
 
+    /** 만료 임박 알림을 아직 보내지 않은 ACTIVE 점유 후보 (MR-12). */
+    @Query("""
+                SELECT o.id AS occupancyId, o.expiresAt AS expiresAt
+                  FROM RoomOccupancy o
+                 WHERE o.status = :active
+                   AND o.endedAt IS NULL
+                   AND o.expiresAt > :now
+                   AND o.expiresAt <= :reminderEndsAt
+                   AND o.reminderSentAt IS NULL
+                 ORDER BY o.id ASC""")
+    List<ExpiringOccupancyProjection> findExpiringSoon(
+            @Param("now") OffsetDateTime now,
+            @Param("reminderEndsAt") OffsetDateTime reminderEndsAt,
+            @Param("active") OccupancyStatus active
+    );
+
+    interface ExpiringOccupancyProjection {
+        Long getOccupancyId();
+
+        OffsetDateTime getExpiresAt();
+    }
+
     /**
      * 여러 공간의 활성 점유를 배치로 읽는다 (공간 목록의 사용 상태 계산용).
      *

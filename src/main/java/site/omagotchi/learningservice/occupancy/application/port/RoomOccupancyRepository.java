@@ -117,6 +117,18 @@ public interface RoomOccupancyRepository {
 
 
     /**
+     * 만료 임박 알림 후보를 찾는다 (MR-12).
+     *
+     * <p>후보 조건은 ACTIVE, {@code ended_at IS NULL},
+     * {@code now < expires_at <= reminderEndsAt}, {@code reminder_sent_at IS NULL}이다.
+     * 조회 뒤 연장·반납·다른 인스턴스의 발송이 끼어들 수 있으므로, 호출부는 행을 잠근 뒤
+     * 현재 상태와 후보의 만료 시각을 다시 확인해야 한다.</p>
+     */
+    List<ExpiringOccupancy> findExpiringSoon(
+            OffsetDateTime now, OffsetDateTime reminderEndsAt);
+
+
+    /**
      * 참여자 관리에 필요한 점유 정보.
      *
      * <p>기수를 담지 않는다. 점유 행에 {@code cohort_id}가 없고(ERD v3) 기수는
@@ -124,6 +136,10 @@ public interface RoomOccupancyRepository {
      * 이 값을 받아 기수 파트에 되묻는다.</p>
      */
     record ActiveOccupancy(Long id, Long occupierMembershipId, UUID occupierUserId) {
+    }
+
+    /** 만료 임박 조회 시점의 후보. {@code expiresAt}은 연장 경합 재검증에 사용한다. */
+    record ExpiringOccupancy(Long occupancyId, OffsetDateTime expiresAt) {
     }
 
 

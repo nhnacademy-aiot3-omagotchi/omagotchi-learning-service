@@ -29,12 +29,14 @@ class OccupancyExpirySchedulerTest {
     private OccupancyExpiryScheduler occupancyExpiryScheduler;
 
     @Test
-    @DisplayName("주기 실행은 만료 정리를 그대로 위임한다.")
+    @DisplayName("주기 실행은 임박 알림과 만료 정리를 각각 위임한다.")
     void scheduledRunDelegatesToExpireAll() {
+        given(roomOccupancyLifecycleService.sendExpiryReminders()).willReturn(1);
         given(roomOccupancyLifecycleService.expireAll()).willReturn(2);
 
         occupancyExpiryScheduler.expireStaleOccupancies();
 
+        verify(roomOccupancyLifecycleService).sendExpiryReminders();
         verify(roomOccupancyLifecycleService).expireAll();
     }
 
@@ -53,5 +55,17 @@ class OccupancyExpirySchedulerTest {
 
         assertThatCode(occupancyExpiryScheduler::expireStaleOccupancies)
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("임박 알림이 실패해도 만료 정리는 계속 실행한다.")
+    void expiryReminderFailureDoesNotBlockExpiration() {
+        willThrow(new IllegalStateException("알림 실패"))
+                .given(roomOccupancyLifecycleService).sendExpiryReminders();
+
+        assertThatCode(occupancyExpiryScheduler::expireStaleOccupancies)
+                .doesNotThrowAnyException();
+
+        verify(roomOccupancyLifecycleService).expireAll();
     }
 }

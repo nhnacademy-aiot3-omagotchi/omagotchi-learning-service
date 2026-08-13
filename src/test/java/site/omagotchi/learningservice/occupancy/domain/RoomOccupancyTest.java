@@ -74,6 +74,38 @@ class RoomOccupancyTest {
     }
 
     @Test
+    @DisplayName("만료 10분 전 경계부터 만료 직전까지 임박 알림 대상이다.")
+    void expiryReminderWindowIncludesTenMinuteBoundary() {
+        RoomOccupancy occupancy = start();
+
+        assertThat(occupancy.isExpiryReminderDueAt(EXPIRES_AT.minusMinutes(10).minusNanos(1)))
+                .isFalse();
+        assertThat(occupancy.isExpiryReminderDueAt(EXPIRES_AT.minusMinutes(10))).isTrue();
+        assertThat(occupancy.isExpiryReminderDueAt(EXPIRES_AT.minusNanos(1))).isTrue();
+    }
+
+    @Test
+    @DisplayName("만료 시각과 그 이후에는 임박 알림 대상이 아니다.")
+    void expiryReminderExcludesExpiredOccupancy() {
+        RoomOccupancy occupancy = start();
+
+        assertThat(occupancy.isExpiryReminderDueAt(EXPIRES_AT)).isFalse();
+        assertThat(occupancy.isExpiryReminderDueAt(EXPIRES_AT.plusSeconds(1))).isFalse();
+    }
+
+    @Test
+    @DisplayName("종료됐거나 이미 알림을 보낸 점유는 임박 알림 대상이 아니다.")
+    void expiryReminderExcludesEndedOrAlreadyRemindedOccupancy() {
+        RoomOccupancy reminded = start();
+        reminded.markExpiryReminderSent(EXPIRES_AT.minusMinutes(10));
+        assertThat(reminded.isExpiryReminderDueAt(EXPIRES_AT.minusMinutes(5))).isFalse();
+
+        RoomOccupancy released = start();
+        released.release(EXPIRES_AT.minusMinutes(5));
+        assertThat(released.isExpiryReminderDueAt(EXPIRES_AT.minusMinutes(5))).isFalse();
+    }
+
+    @Test
     @DisplayName("남은 시간은 만료까지의 초이며 만료 후에는 0이다.")
     void remainingSecondsIsZeroAfterExpiry() {
         RoomOccupancy occupancy = start();
@@ -165,7 +197,7 @@ class RoomOccupancyTest {
 
     /** 남겨두면 연장한 점유는 두 번 다시 임박 알림을 받지 못한다 (MR-12). */
     @Test
-    @DisplayName("연장하면 임박 알림 발송 기록이 지워진다.")
+    @DisplayName("연장하면 임박 알림 기록이 지워지고 새 만료 시각에 다시 대상이 된다.")
     void extendClearsReminderSentAt() {
         RoomOccupancy occupancy = start();
         ReflectionTestUtils.setField(occupancy, "reminderSentAt", EXPIRES_AT.minusMinutes(10));
@@ -173,6 +205,8 @@ class RoomOccupancyTest {
         occupancy.extend();
 
         assertThat(occupancy.getReminderSentAt()).isNull();
+        assertThat(occupancy.isExpiryReminderDueAt(
+                occupancy.getExpiresAt().minusMinutes(10))).isTrue();
     }
 
     @Test

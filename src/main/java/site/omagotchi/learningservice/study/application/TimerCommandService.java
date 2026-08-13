@@ -37,12 +37,9 @@ public class TimerCommandService {
     private final TimerTimePolicy timerTimePolicy;
 
     public TimerStateResult start(
-            UUID commandId,
             UUID userId,
             Long cohortId
     ) {
-        // TODO: command_receipts 구현 후 commandId 기준 영수증 처리 연결
-
         Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
         studyWriteLock.acquire(cohortMembershipId);
 
@@ -72,13 +69,10 @@ public class TimerCommandService {
     }
 
     public void stop(
-            UUID commandId,
             UUID userId,
             Long cohortId,
             UUID timerRunId
     ) {
-        // TODO: command_receipts 구현 후 commandId 기준 영수증 처리 연결
-
         Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
         studyWriteLock.acquire(cohortMembershipId);
 
@@ -94,13 +88,10 @@ public class TimerCommandService {
     }
 
     public void discard(
-            UUID commandId,
             UUID userId,
             Long cohortId,
             UUID timerRunId
     ) {
-        // TODO: command_receipts 구현 후 commandId 기준 영수증 처리 연결
-
         Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
         studyWriteLock.acquire(cohortMembershipId);
 

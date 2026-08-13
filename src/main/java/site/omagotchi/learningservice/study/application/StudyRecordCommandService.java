@@ -35,13 +35,10 @@ public class StudyRecordCommandService {
     private final StudyWriteLock studyWriteLock;
 
     public StudyRecordResult create(
-            UUID commandId,
             UUID userId,
             Long cohortId,
             CreateStudyRecordCommand command
     ) {
-        // TODO(REC-009, SYN-002): commandId 영수증으로 같은 요청의 중복 저장을 방지한다.
-
         // membershipId 검증 및 변환
         Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
 
@@ -81,14 +78,11 @@ public class StudyRecordCommandService {
     }
 
     public StudyRecordResult update(
-            UUID commandId,
             UUID userId,
             Long cohortId,
             UUID studyRecordId,
             UpdateStudyRecordCommand command
     ) {
-        // TODO(SYN-002): commandId 영수증으로 같은 수정 요청의 중복 반영을 방지한다.
-
         // membershipId 검증 및 변환
         Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
 
@@ -130,14 +124,11 @@ public class StudyRecordCommandService {
     }
 
     public void delete(
-            UUID commandId,
             UUID userId,
             Long cohortId,
             UUID studyRecordId,
             Long expectedVersion
     ) {
-        // TODO(SYN-002): commandId 영수증으로 같은 삭제 요청의 중복 반영을 방지한다.
-
         // membershipId 검증 및 변환
         Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
 

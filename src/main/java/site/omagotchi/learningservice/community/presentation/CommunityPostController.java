@@ -38,7 +38,7 @@ import java.util.stream.IntStream;
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/community/posts")
+@RequestMapping("/api/v1/community/posts")
 public class CommunityPostController {
 
     private final CommunityPostQueryService communityPostQueryService;

@@ -1,8 +1,13 @@
 package site.omagotchi.learningservice.occupancy.presentation;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.test.context.TestSecurityContextHolder;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
@@ -52,7 +57,55 @@ class RoomOccupancyControllerTest {
         mockMvc = standaloneSetup(new RoomOccupancyController(
                         roomOccupancyService, roomOccupancyLifecycleService))
                 .setControllerAdvice(new GlobalExceptionHandler())
+                // @AuthenticationPrincipal은 Security의 Resolver가 있어야 풀린다.
+                // standaloneSetup은 Spring Security 필터를 끼우지 않으므로 직접 등록한다.
+                .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .build();
+
+        authenticateAs(USER_ID);
+    }
+
+    /**
+     * <b>헤더로는 요청자를 바꿀 수 없어야 한다.</b> 게이트웨이가 들어오는 {@code X-User-Id}를
+     * 제거하므로 정상 경로에서는 애초에 도달하지 않지만, 게이트웨이를 우회한 요청이 헤더로
+     * 남을 사칭해 회의실을 잡는 것을 막는 것이 이 검증의 요점이다.
+     */
+    @Test
+    @DisplayName("위조된 X-User-Id 헤더가 있어도 JWT의 주체로 점유한다.")
+    void usesJwtSubjectEvenWhenUserHeaderIsSpoofed() throws Exception {
+        UUID spoofed = UUID.fromString("99999999-9999-9999-9999-999999999999");
+        when(roomOccupancyService.start(1L, USER_ID)).thenReturn(result());
+
+        mockMvc.perform(post(PATH).header("X-User-Id", spoofed))
+                .andExpect(status().isCreated());
+
+        verify(roomOccupancyService).start(1L, USER_ID);
+    }
+
+    /**
+     * 보안 컨텍스트는 스레드에 붙으므로 반드시 비운다. 남기면 다음 테스트가 앞 테스트의
+     * 요청자로 실행되어, 인증을 지워도 통과하는 테스트가 생긴다.
+     */
+    @AfterEach
+    void tearDown() {
+        TestSecurityContextHolder.clearContext();
+    }
+
+    /**
+     * 요청자를 Access JWT로 세운다.
+     *
+     * <p>{@code standaloneSetup}은 Spring Security 필터를 끼우지 않아
+     * {@code SecurityMockMvcRequestPostProcessors.jwt()}가 동작하지 않는다 — 그 후처리기는
+     * 필터 체인이 읽어 가는 자리에 컨텍스트를 넣기 때문이다. 여기서는 컨텍스트를 직접 세우고
+     * {@code AuthenticationPrincipalArgumentResolver}가 그것을 읽게 한다.</p>
+     */
+    private static void authenticateAs(UUID userId) {
+        Jwt token = Jwt.withTokenValue("test-token")
+                .header("alg", "RS256")
+                .subject(userId.toString())
+                .claim("role", "USER")
+                .build();
+        TestSecurityContextHolder.setAuthentication(new JwtAuthenticationToken(token));
     }
 
     @Test
@@ -60,7 +113,7 @@ class RoomOccupancyControllerTest {
     void returns201WithOccupancyInfoOnSuccess() throws Exception {
         when(roomOccupancyService.start(any(), any())).thenReturn(result());
 
-        mockMvc.perform(post(PATH).header("X-User-Id", USER_ID))
+        mockMvc.perform(post(PATH))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.occupancyId").value(100))
                 .andExpect(jsonPath("$.spaceId").value(1))
@@ -75,7 +128,7 @@ class RoomOccupancyControllerTest {
     void callsServiceWithPathSpaceIdAndHeaderUserId() throws Exception {
         when(roomOccupancyService.start(any(), any())).thenReturn(result());
 
-        mockMvc.perform(post(PATH).header("X-User-Id", USER_ID))
+        mockMvc.perform(post(PATH))
                 .andExpect(status().isCreated());
 
         verify(roomOccupancyService).start(1L, USER_ID);
@@ -86,7 +139,7 @@ class RoomOccupancyControllerTest {
     void responseExcludesOccupierAndParticipantInfo() throws Exception {
         when(roomOccupancyService.start(any(), any())).thenReturn(result());
 
-        mockMvc.perform(post(PATH).header("X-User-Id", USER_ID))
+        mockMvc.perform(post(PATH))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.occupierUserId").doesNotExist())
                 .andExpect(jsonPath("$.occupierMembershipId").doesNotExist())
@@ -127,7 +180,7 @@ class RoomOccupancyControllerTest {
         when(roomOccupancyService.start(any(), any()))
                 .thenThrow(new IllegalStateException("출결 모듈 조회 실패"));
 
-        mockMvc.perform(post(PATH).header("X-User-Id", USER_ID))
+        mockMvc.perform(post(PATH))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("COMMON_INTERNAL_SERVER_ERROR"));
     }
@@ -143,7 +196,7 @@ class RoomOccupancyControllerTest {
     void returns200WithUpdatedExpiryOnExtendSuccess() throws Exception {
         when(roomOccupancyLifecycleService.extend(any(), any())).thenReturn(extendedResult());
 
-        mockMvc.perform(post(PATH + "/extend").header("X-User-Id", USER_ID))
+        mockMvc.perform(post(PATH + "/extend"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.extensionCount").value(1))
                 .andExpect(jsonPath("$.remainingSeconds").value(1800));
@@ -157,7 +210,7 @@ class RoomOccupancyControllerTest {
         when(roomOccupancyLifecycleService.extend(any(), any()))
                 .thenThrow(new BusinessException(OccupancyErrorCode.EXTENSION_TOO_EARLY));
 
-        mockMvc.perform(post(PATH + "/extend").header("X-User-Id", USER_ID))
+        mockMvc.perform(post(PATH + "/extend"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("OCCUPANCY_EXTENSION_TOO_EARLY"));
     }
@@ -168,7 +221,7 @@ class RoomOccupancyControllerTest {
         when(roomOccupancyLifecycleService.extend(any(), any()))
                 .thenThrow(new BusinessException(OccupancyErrorCode.EXTENSION_LIMIT_EXCEEDED));
 
-        mockMvc.perform(post(PATH + "/extend").header("X-User-Id", USER_ID))
+        mockMvc.perform(post(PATH + "/extend"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("OCCUPANCY_EXTENSION_LIMIT_EXCEEDED"));
     }
@@ -177,7 +230,7 @@ class RoomOccupancyControllerTest {
     @Test
     @DisplayName("반납에 성공하면 204를 응답한다.")
     void returns204OnReleaseSuccess() throws Exception {
-        mockMvc.perform(post(PATH + "/release").header("X-User-Id", USER_ID))
+        mockMvc.perform(post(PATH + "/release"))
                 .andExpect(status().isNoContent());
 
         verify(roomOccupancyLifecycleService).release(1L, USER_ID);
@@ -189,7 +242,7 @@ class RoomOccupancyControllerTest {
         doThrow(new BusinessException(OccupancyErrorCode.NOT_OCCUPIER))
                 .when(roomOccupancyLifecycleService).release(any(), any());
 
-        mockMvc.perform(post(PATH + "/release").header("X-User-Id", USER_ID))
+        mockMvc.perform(post(PATH + "/release"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("OCCUPANCY_NOT_OCCUPIER"));
     }
@@ -200,7 +253,7 @@ class RoomOccupancyControllerTest {
         doThrow(new BusinessException(OccupancyErrorCode.OCCUPANCY_ENDED))
                 .when(roomOccupancyLifecycleService).release(any(), any());
 
-        mockMvc.perform(post(PATH + "/release").header("X-User-Id", USER_ID))
+        mockMvc.perform(post(PATH + "/release"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("OCCUPANCY_ENDED"));
     }
@@ -221,7 +274,7 @@ class RoomOccupancyControllerTest {
         when(roomOccupancyService.start(any(), any()))
                 .thenThrow(new BusinessException(errorCode));
 
-        mockMvc.perform(post(PATH).header("X-User-Id", USER_ID))
+        mockMvc.perform(post(PATH))
                 .andExpect(status().is(expectedStatus))
                 .andExpect(jsonPath("$.code").value(errorCode.code()))
                 .andExpect(jsonPath("$.message").value(errorCode.message()))
@@ -239,4 +292,5 @@ class RoomOccupancyControllerTest {
                 7200L
         );
     }
+
 }

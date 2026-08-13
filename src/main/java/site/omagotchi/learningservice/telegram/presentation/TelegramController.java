@@ -18,7 +18,7 @@ import site.omagotchi.learningservice.telegram.presentation.dto.request.UpdateTe
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/telegram")
+@RequestMapping("/api/v1/telegram")
 public class TelegramController {
 
     private final TelegramUserLinkService telegramUserLinkService;

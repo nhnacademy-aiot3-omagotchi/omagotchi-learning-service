@@ -74,14 +74,14 @@ class SpaceAdminControllerTest {
                         SpaceErrorCode.DUPLICATE_NAME
                 ));
 
-        mockMvc.perform(post("/api/admin/spaces")
+        mockMvc.perform(post("/api/v1/admin/spaces")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SPACE_DUPLICATE_NAME"))
                 .andExpect(jsonPath("$.message")
                         .value("이미 사용 중인 공간 이름입니다."))
-                .andExpect(jsonPath("$.path").value("/api/admin/spaces"));
+                .andExpect(jsonPath("$.path").value("/api/v1/admin/spaces"));
     }
 
     @Test
@@ -90,13 +90,13 @@ class SpaceAdminControllerTest {
                 .when(spaceCommandService)
                 .delete(999L, USER_ID, GlobalRole.USER);
 
-        mockMvc.perform(delete("/api/admin/spaces/999"))
+        mockMvc.perform(delete("/api/v1/admin/spaces/999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("SPACE_NOT_FOUND"))
                 .andExpect(jsonPath("$.message")
                         .value("공간을 찾을 수 없습니다."))
                 .andExpect(jsonPath("$.path")
-                        .value("/api/admin/spaces/999"));
+                        .value("/api/v1/admin/spaces/999"));
     }
 
     @Test
@@ -110,14 +110,14 @@ class SpaceAdminControllerTest {
                         SpaceErrorCode.INVALID_NAME
                 ));
 
-        mockMvc.perform(post("/api/admin/spaces")
+        mockMvc.perform(post("/api/v1/admin/spaces")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("SPACE_INVALID_NAME"))
                 .andExpect(jsonPath("$.message")
                         .value("공간 이름이 올바르지 않습니다."))
-                .andExpect(jsonPath("$.path").value("/api/admin/spaces"));
+                .andExpect(jsonPath("$.path").value("/api/v1/admin/spaces"));
     }
 
     @Test
@@ -131,7 +131,7 @@ class SpaceAdminControllerTest {
                         SpaceErrorCode.INVALID_CAPACITY
                 ));
 
-        mockMvc.perform(post("/api/admin/spaces")
+        mockMvc.perform(post("/api/v1/admin/spaces")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validRequest()))
                 .andExpect(status().isBadRequest())
@@ -139,12 +139,12 @@ class SpaceAdminControllerTest {
                         .value("SPACE_INVALID_CAPACITY"))
                 .andExpect(jsonPath("$.message")
                         .value("공간 최대 인원이 올바르지 않습니다."))
-                .andExpect(jsonPath("$.path").value("/api/admin/spaces"));
+                .andExpect(jsonPath("$.path").value("/api/v1/admin/spaces"));
     }
 
     @Test
     void keepsBeanValidationResponseSeparateFromDomainErrors() throws Exception {
-        mockMvc.perform(post("/api/admin/spaces")
+        mockMvc.perform(post("/api/v1/admin/spaces")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -156,7 +156,7 @@ class SpaceAdminControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code")
                         .value("COMMON_INVALID_REQUEST"))
-                .andExpect(jsonPath("$.path").value("/api/admin/spaces"));
+                .andExpect(jsonPath("$.path").value("/api/v1/admin/spaces"));
 
         verify(spaceCommandService, never())
                 .create(
@@ -175,7 +175,7 @@ class SpaceAdminControllerTest {
         ))
                 .thenReturn(space(SpaceOperationalStatus.ACTIVE, null));
 
-        mockMvc.perform(patch("/api/admin/spaces/1/activate"))
+        mockMvc.perform(patch("/api/v1/admin/spaces/1/activate"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.operationalStatus").value("ACTIVE"))
@@ -195,7 +195,7 @@ class SpaceAdminControllerTest {
                         "정기 점검"
                 ));
 
-        mockMvc.perform(patch("/api/admin/spaces/1/deactivate")
+        mockMvc.perform(patch("/api/v1/admin/spaces/1/deactivate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"inactiveReason":"정기 점검"}
@@ -208,7 +208,7 @@ class SpaceAdminControllerTest {
     @Test
     void rejectsNullEmptyAndBlankDeactivationReasonAtRequestBoundary()
             throws Exception {
-        mockMvc.perform(patch("/api/admin/spaces/1/deactivate")
+        mockMvc.perform(patch("/api/v1/admin/spaces/1/deactivate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"inactiveReason":null}
@@ -216,7 +216,7 @@ class SpaceAdminControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code")
                         .value("COMMON_INVALID_REQUEST"));
-        mockMvc.perform(patch("/api/admin/spaces/1/deactivate")
+        mockMvc.perform(patch("/api/v1/admin/spaces/1/deactivate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"inactiveReason":""}
@@ -224,7 +224,7 @@ class SpaceAdminControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code")
                         .value("COMMON_INVALID_REQUEST"));
-        mockMvc.perform(patch("/api/admin/spaces/1/deactivate")
+        mockMvc.perform(patch("/api/v1/admin/spaces/1/deactivate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"inactiveReason":"   "}
@@ -254,7 +254,7 @@ class SpaceAdminControllerTest {
                         SpaceErrorCode.ACTIVE_OCCUPANCY_EXISTS
                 ));
 
-        mockMvc.perform(patch("/api/admin/spaces/1/deactivate")
+        mockMvc.perform(patch("/api/v1/admin/spaces/1/deactivate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"inactiveReason":"점검"}
@@ -278,7 +278,7 @@ class SpaceAdminControllerTest {
                 GlobalRole.SYSTEM_ADMIN
         )).thenReturn(lab(null));
 
-        mockMvc.perform(put("/api/admin/spaces/1/cohort")
+        mockMvc.perform(put("/api/v1/admin/spaces/1/cohort")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"cohortId":42}
@@ -288,7 +288,7 @@ class SpaceAdminControllerTest {
                 .andExpect(jsonPath("$.cohortId").value(42))
                 .andExpect(jsonPath("$.updatedAt").exists());
 
-        mockMvc.perform(delete("/api/admin/spaces/1/cohort")
+        mockMvc.perform(delete("/api/v1/admin/spaces/1/cohort")
                         .principal(authentication(
                                 USER_ID,
                                 GlobalRole.SYSTEM_ADMIN
@@ -301,7 +301,7 @@ class SpaceAdminControllerTest {
     @Test
     void rejectsMissingAssignmentCohortIdAtRequestBoundary()
             throws Exception {
-        mockMvc.perform(put("/api/admin/spaces/1/cohort")
+        mockMvc.perform(put("/api/v1/admin/spaces/1/cohort")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
@@ -325,13 +325,13 @@ class SpaceAdminControllerTest {
                 {"name":"회의실 A","type":null,"capacity":8}
                 """;
 
-        mockMvc.perform(put("/api/admin/spaces/1")
+        mockMvc.perform(put("/api/v1/admin/spaces/1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(missingType))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code")
                         .value("COMMON_INVALID_REQUEST"));
-        mockMvc.perform(put("/api/admin/spaces/1")
+        mockMvc.perform(put("/api/v1/admin/spaces/1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(nullType))
                 .andExpect(status().isBadRequest())
@@ -349,7 +349,7 @@ class SpaceAdminControllerTest {
 
     @Test
     void rejectsUnknownUpdateTypeString() throws Exception {
-        mockMvc.perform(put("/api/admin/spaces/1")
+        mockMvc.perform(put("/api/v1/admin/spaces/1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {

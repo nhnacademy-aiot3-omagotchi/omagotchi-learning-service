@@ -90,7 +90,7 @@ class CommunityPostControllerTest {
                 )
         ), 1, 10, 11, 2));
 
-        mockMvc.perform(get("/api/community/posts")
+        mockMvc.perform(get("/api/v1/community/posts")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
                         .param("page", "1")
                         .param("size", "10")
@@ -131,7 +131,7 @@ class CommunityPostControllerTest {
                         Instant.parse("2026-08-08T00:00:00Z")
                 ));
 
-        mockMvc.perform(get("/api/community/posts/1")
+        mockMvc.perform(get("/api/v1/community/posts/1")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.postId").value(1))
@@ -157,7 +157,7 @@ class CommunityPostControllerTest {
                 ))
         )).willReturn(detail(1L, CommunityPostType.FREE, "자유글", "내용"));
 
-        mockMvc.perform(post("/api/community/posts")
+        mockMvc.perform(post("/api/v1/community/posts")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
                         .header("X-User-Id", "00000000-0000-0000-0000-000000000099")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -197,7 +197,7 @@ class CommunityPostControllerTest {
                 eq(new UpdateCommunityPostCommand("수정", "수정 내용"))
         )).willReturn(detail(1L, CommunityPostType.FREE, "수정", "수정 내용"));
 
-        mockMvc.perform(patch("/api/community/posts/1")
+        mockMvc.perform(patch("/api/v1/community/posts/1")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -214,7 +214,7 @@ class CommunityPostControllerTest {
     @Test
     @DisplayName("게시글 삭제 요청을 서비스에 위임한다")
     void deletesPost() throws Exception {
-        mockMvc.perform(delete("/api/community/posts/1")
+        mockMvc.perform(delete("/api/v1/community/posts/1")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isNoContent());
 
@@ -236,7 +236,7 @@ class CommunityPostControllerTest {
                 eq(new PinCommunityPostCommand(true))
         )).willReturn(detail(1L, CommunityPostType.NOTICE, "공지", "내용"));
 
-        mockMvc.perform(patch("/api/community/posts/1/pin")
+        mockMvc.perform(patch("/api/v1/community/posts/1/pin")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"pinned\":true}"))

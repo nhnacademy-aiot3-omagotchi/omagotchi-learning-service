@@ -13,7 +13,6 @@ Accept: application/json
 # @name createStudyRecord
 POST {{baseUrl}}/api/v1/cohorts/{{cohortId}}/study-records
 Authorization: Bearer {{userAccessToken}}
-X-Command-Id: {{$uuid}}
 Content-Type: application/json
 Accept: application/json
 
@@ -39,7 +38,6 @@ Accept: application/json
 # @name updateStudyRecord
 PUT {{baseUrl}}/api/v1/cohorts/{{cohortId}}/study-records/{{studyRecordId}}
 Authorization: Bearer {{userAccessToken}}
-X-Command-Id: {{$uuid}}
 Content-Type: application/json
 Accept: application/json
 
@@ -59,7 +57,6 @@ Accept: application/json
 ### 수정한 공부 기록 삭제
 DELETE {{baseUrl}}/api/v1/cohorts/{{cohortId}}/study-records/{{studyRecordId}}
 Authorization: Bearer {{userAccessToken}}
-X-Command-Id: {{$uuid}}
 If-Match: {{studyRecordVersion}}
 
 ### 삭제된 공부 기록 조회

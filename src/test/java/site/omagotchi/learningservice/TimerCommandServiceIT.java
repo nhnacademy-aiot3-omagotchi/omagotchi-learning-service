@@ -47,9 +47,6 @@ class TimerCommandServiceIT {
     private static final UUID USER_ID = UUID.fromString(
             "00000000-0000-0000-0000-000000000001"
     );
-    private static final UUID COMMAND_ID = UUID.fromString(
-            "00000000-0000-0000-0000-000000000002"
-    );
     private static final Instant STARTED_AT = Instant.parse("2000-01-01T18:59:00Z");
     private static final Instant BOUNDARY = Instant.parse("2000-01-01T19:00:00Z");
     private static final Instant ENDED_AT = Instant.parse("2000-01-01T19:01:00Z");
@@ -96,7 +93,6 @@ class TimerCommandServiceIT {
         given(clock.instant()).willReturn(ENDED_AT);
 
         timerCommandService.stop(
-                COMMAND_ID,
                 USER_ID,
                 COHORT_ID,
                 timerRun.getId()
@@ -135,7 +131,6 @@ class TimerCommandServiceIT {
         given(clock.instant()).willReturn(SINGLE_RECORD_ENDED_AT);
 
         timerCommandService.stop(
-                COMMAND_ID,
                 USER_ID,
                 COHORT_ID,
                 timerRun.getId()
@@ -166,12 +161,10 @@ class TimerCommandServiceIT {
         given(clock.instant()).willReturn(startedAt, endedAt);
 
         TimerStateResult started = timerCommandService.start(
-                COMMAND_ID,
                 USER_ID,
                 COHORT_ID
         );
         timerCommandService.stop(
-                COMMAND_ID,
                 USER_ID,
                 COHORT_ID,
                 started.timerRunId()
@@ -209,11 +202,11 @@ class TimerCommandServiceIT {
                 .when(studyRecordRepository).save(any(StudyRecord.class));
 
         // 예외 던져짐 확인
+        UUID timerRunId = timerRun.getId();
         assertThrows(RuntimeException.class, () -> timerCommandService.stop(
-                COMMAND_ID,
                 USER_ID,
                 COHORT_ID,
-                timerRun.getId()
+                timerRunId
         ));
 
         // 원자적 롤백 검증

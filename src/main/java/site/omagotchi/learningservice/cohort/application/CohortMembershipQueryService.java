@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -139,5 +140,38 @@ public class CohortMembershipQueryService {
         }
         return membershipRepository.findAllById(membershipIds).stream()
                 .collect(Collectors.toMap(CohortMembership::getId, CohortMembership::getCohortId));
+    }
+
+    /**
+     * 이 중 더 이상 유효하지 않은 소속만 골라낸다.
+     *
+     * <p>후속 정리의 정합성 스윕이 소비처다 (ADR space-team/0013). 팀·점유는 소속을
+     * {@code cohort_membership_id}로 키잡고 있어 "내 행이 가리키는 소속이 아직 살아 있나"를
+     * 물어야 하는데, 그 판정을 각 파트가 {@code cohort_memberships}를 직접 조인해서 하면
+     * 남의 테이블을 알게 된다. 여기서 답하면 소비처는 자기 테이블만 읽으면 된다.</p>
+     *
+     * <p><b>활성이 아닌 것을 돌려주지, 활성인 것을 돌려주고 여집합을 맡기지 않는다.</b>
+     * 여집합 방식이면 이 조회가 실패하거나 빈 결과를 주는 순간 <b>전부가 정리 대상</b>이
+     * 되어 살아 있는 팀원까지 지워진다. 이쪽은 같은 상황에서 정리 대상이 0건이 되므로
+     * 안전 측으로 기운다.</p>
+     *
+     * <p><b>배치인 것이 계약의 일부다.</b> 스윕이 한 주기에 N건을 훑어도 호출은 1회여야
+     * 한다 — 건별로 {@link #findActiveMembership(Long)}을 부르면 그대로 N+1이 된다.</p>
+     *
+     * <p>존재하지 않는 식별자는 결과에 담기지 않는다. `team_members`·`occupancy_participants`의
+     * FK가 {@code ON DELETE CASCADE}라 소속 행이 사라지면 참조 행도 함께 사라지므로,
+     * "행은 없는데 참조만 남은" 상태는 발생하지 않는다.</p>
+     *
+     * @param membershipIds 검사할 소속 식별자. 비어 있으면 빈 결과
+     * @return 그중 {@code ACTIVE}가 아닌 것. 정리 대상이다
+     */
+    public Set<Long> findInactiveMembershipIds(Collection<Long> membershipIds) {
+        if (membershipIds == null || membershipIds.isEmpty()) {
+            return Set.of();
+        }
+        return membershipRepository.findAllById(membershipIds).stream()
+                .filter(membership -> membership.getStatus() != CohortMembershipStatus.ACTIVE)
+                .map(CohortMembership::getId)
+                .collect(Collectors.toUnmodifiableSet());
     }
 }

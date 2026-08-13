@@ -82,7 +82,7 @@ class CohortControllerTest {
         given(attendancePolicyService.getPolicy(COHORT_ID, USER_ID))
                 .willReturn(policyResponse());
 
-        mockMvc.perform(get("/api/cohorts/{cohortId}/attendance-policy", COHORT_ID)
+        mockMvc.perform(get("/api/v1/cohorts/{cohortId}/attendance-policy", COHORT_ID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cohortId").value(COHORT_ID))
@@ -110,7 +110,7 @@ class CohortControllerTest {
                 eq(USER_ID)
         )).willReturn(policyResponse());
 
-        mockMvc.perform(put("/api/cohorts/{cohortId}/attendance-policy", COHORT_ID)
+        mockMvc.perform(put("/api/v1/cohorts/{cohortId}/attendance-policy", COHORT_ID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -157,7 +157,7 @@ class CohortControllerTest {
                         OffsetDateTime.parse("2026-08-10T09:00:00+09:00")
                 )));
 
-        mockMvc.perform(get("/api/cohorts/{cohortId}/audit-logs", COHORT_ID)
+        mockMvc.perform(get("/api/v1/cohorts/{cohortId}/audit-logs", COHORT_ID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(1))

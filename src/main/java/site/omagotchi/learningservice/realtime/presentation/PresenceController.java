@@ -14,7 +14,7 @@ import site.omagotchi.learningservice.realtime.application.CohortPresenceService
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/cohorts/me/presence")
+@RequestMapping("/api/v1/cohorts/me/presence")
 public class PresenceController {
 
     private final CohortPresenceService presenceService;

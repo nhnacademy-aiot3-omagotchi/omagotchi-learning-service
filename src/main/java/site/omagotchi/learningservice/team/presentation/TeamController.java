@@ -3,7 +3,10 @@ package site.omagotchi.learningservice.team.presentation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.team.application.TeamMasterService;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
@@ -23,9 +26,9 @@ import java.util.UUID;
  * {@code ErrorType}에 따라 400/403/404/409로 옮긴다. 그래서 여기에는
  * try-catch도, ResponseEntity 분기도 없다.</p>
  *
- * <p><b>TODO</b>: 요청자 식별을 {@code X-User-Id} 헤더로 받는 것은 인증 파트 연동 전까지의
- * 임시 조치다. 게이트웨이를 거치지 않으면 헤더를 위조할 수 있으므로 그대로 배포하면 안 된다.
- * JWT 인증이 붙으면 이 파라미터는 {@code @AuthenticationPrincipal}로 교체된다.</p>
+ * <p><b>요청자는 Access JWT에서만 읽는다.</b> 헤더로 받으면 게이트웨이를 우회한 요청이
+ * 남의 계정을 사칭할 수 있다. 게이트웨이도 같은 이유로 들어오는 {@code X-User-Id}를
+ * 제거하므로(default-filters), 헤더에 의존하면 정상 경로에서는 오히려 동작하지 않는다.</p>
  */
 @RestController
 @RequestMapping("/api/v1/teams")
@@ -49,11 +52,11 @@ public class TeamController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TeamResponse create(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CreateTeamRequest request
     ) {
         return TeamResponse.from(
-                teamService.create(request.cohortId(), request.name(), userId));
+                teamService.create(request.cohortId(), request.name(), requesterId(jwt)));
     }
 
     /**
@@ -63,8 +66,8 @@ public class TeamController {
      * 소속이 없으면 404가 아니라 빈 배열을 준다 — "없음"은 오류가 아니다.</p>
      */
     @GetMapping("/me")
-    public List<TeamResponse> getMyTeams(@RequestHeader("X-User-Id") UUID userId) {
-        return teamService.getMyTeams(userId).stream()
+    public List<TeamResponse> getMyTeams(@AuthenticationPrincipal Jwt jwt) {
+        return teamService.getMyTeams(requesterId(jwt)).stream()
                 .map(TeamResponse::from)
                 .toList();
     }
@@ -78,9 +81,9 @@ public class TeamController {
     @GetMapping("/{team-id}")
     public TeamDetailResponse getTeam(
             @PathVariable("team-id") Long teamId,
-            @RequestHeader("X-User-Id") UUID userId
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        return TeamDetailResponse.from(teamService.getTeam(teamId, userId));
+        return TeamDetailResponse.from(teamService.getTeam(teamId, requesterId(jwt)));
     }
 
     /**
@@ -94,10 +97,10 @@ public class TeamController {
     @ResponseStatus(HttpStatus.CREATED)
     public void addMember(
             @PathVariable("team-id") Long teamId,
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody AddTeamMemberRequest request
             ) {
-        teamMemberService.addMember(teamId, request.targetUserId(), userId);
+        teamMemberService.addMember(teamId, request.targetUserId(), requesterId(jwt));
     }
 
     /**
@@ -114,9 +117,9 @@ public class TeamController {
     public void kickMember(
             @PathVariable("team-id") Long teamId,
             @PathVariable("member-id") Long memberId,
-            @RequestHeader("X-User-Id") UUID userId
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        teamMemberService.kickMember(teamId, memberId, userId);
+        teamMemberService.kickMember(teamId, memberId, requesterId(jwt));
     }
 
     /**
@@ -132,9 +135,9 @@ public class TeamController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void leave(
             @PathVariable("team-id") Long teamId,
-            @RequestHeader("X-User-Id") UUID userId
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        teamMemberService.leave(teamId, userId);
+        teamMemberService.leave(teamId, requesterId(jwt));
     }
 
     /**
@@ -153,9 +156,9 @@ public class TeamController {
     public void delegate(
             @PathVariable("team-id") Long teamId,
             @PathVariable("member-id") Long memberId,
-            @RequestHeader("X-User-Id") UUID userId
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        teamMasterService.delegate(teamId, memberId, userId);
+        teamMasterService.delegate(teamId, memberId, requesterId(jwt));
     }
 
     /**
@@ -174,8 +177,20 @@ public class TeamController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void disband(
             @PathVariable("team-id") Long teamId,
-            @RequestHeader("X-User-Id") UUID userId
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        teamMasterService.disband(teamId, userId);
+        teamMasterService.disband(teamId, requesterId(jwt));
+    }
+
+    /**
+     * Access JWT의 {@code sub}에서 요청자 계정을 읽는다.
+     *
+     * <p>{@code null} 검사를 두지 않는 것이 의도다. 이 컨트롤러의 모든 경로가
+     * {@code SecurityConfig}의 {@code anyRequest().authenticated()}에 걸려 있어 인증 없이는
+     * 도달하지 않는다 — 여기서 {@code null}이면 보안 설정이 뚫린 것이고, 조용히 넘기는 것보다
+     * 예외로 드러나는 편이 낫다.</p>
+     */
+    private static UUID requesterId(Jwt jwt) {
+        return AuthenticatedUser.from(jwt).userId();
     }
 }

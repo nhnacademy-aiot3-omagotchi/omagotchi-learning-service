@@ -1,9 +1,14 @@
 package site.omagotchi.learningservice.occupancy.presentation;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.test.context.TestSecurityContextHolder;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
@@ -43,14 +48,44 @@ class OccupancyParticipantControllerTest {
         occupancyParticipantService = mock(OccupancyParticipantService.class);
         mockMvc = standaloneSetup(new OccupancyParticipantController(occupancyParticipantService))
                 .setControllerAdvice(new GlobalExceptionHandler())
+                // @AuthenticationPrincipal은 Security의 Resolver가 있어야 풀린다.
+                // standaloneSetup은 Spring Security 필터를 끼우지 않으므로 직접 등록한다.
+                .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .build();
+
+        authenticateAs(REQUESTER_ID);
+    }
+
+    /**
+     * 보안 컨텍스트는 스레드에 붙으므로 반드시 비운다. 남기면 다음 테스트가 앞 테스트의
+     * 요청자로 실행되어, 인증을 지워도 통과하는 테스트가 생긴다.
+     */
+    @AfterEach
+    void tearDown() {
+        TestSecurityContextHolder.clearContext();
+    }
+
+    /**
+     * 요청자를 Access JWT로 세운다.
+     *
+     * <p>{@code standaloneSetup}은 Spring Security 필터를 끼우지 않아
+     * {@code SecurityMockMvcRequestPostProcessors.jwt()}가 동작하지 않는다 — 그 후처리기는
+     * 필터 체인이 읽어 가는 자리에 컨텍스트를 넣기 때문이다. 여기서는 컨텍스트를 직접 세우고
+     * {@code AuthenticationPrincipalArgumentResolver}가 그것을 읽게 한다.</p>
+     */
+    private static void authenticateAs(UUID userId) {
+        Jwt token = Jwt.withTokenValue("test-token")
+                .header("alg", "RS256")
+                .subject(userId.toString())
+                .claim("role", "USER")
+                .build();
+        TestSecurityContextHolder.setAuthentication(new JwtAuthenticationToken(token));
     }
 
     @Test
     @DisplayName("참여자를 추가하면 201을 응답한다.")
     void returns201OnAddParticipant() throws Exception {
         mockMvc.perform(post(PATH)
-                        .header("X-User-Id", REQUESTER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"targetUserId\":\"" + TARGET_ID + "\"}"))
                 .andExpect(status().isCreated());
@@ -62,7 +97,6 @@ class OccupancyParticipantControllerTest {
     @DisplayName("대상 없이 추가를 요청하면 400을 응답한다.")
     void returns400WhenTargetMissing() throws Exception {
         mockMvc.perform(post(PATH)
-                        .header("X-User-Id", REQUESTER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());
@@ -96,7 +130,7 @@ class OccupancyParticipantControllerTest {
     @Test
     @DisplayName("본인을 지정해 이탈하면 204를 응답한다.")
     void returns204OnSelfLeave() throws Exception {
-        mockMvc.perform(delete(PATH + "/" + REQUESTER_ID).header("X-User-Id", REQUESTER_ID))
+        mockMvc.perform(delete(PATH + "/" + REQUESTER_ID))
                 .andExpect(status().isNoContent());
 
         verify(occupancyParticipantService).remove(1L, REQUESTER_ID, REQUESTER_ID);
@@ -105,7 +139,7 @@ class OccupancyParticipantControllerTest {
     @Test
     @DisplayName("다른 사람을 지정해 제외하면 204를 응답한다.")
     void returns204OnKickingOther() throws Exception {
-        mockMvc.perform(delete(PATH + "/" + TARGET_ID).header("X-User-Id", REQUESTER_ID))
+        mockMvc.perform(delete(PATH + "/" + TARGET_ID))
                 .andExpect(status().isNoContent());
 
         verify(occupancyParticipantService).remove(1L, TARGET_ID, REQUESTER_ID);
@@ -117,7 +151,7 @@ class OccupancyParticipantControllerTest {
         doThrow(new BusinessException(OccupancyErrorCode.OCCUPIER_CANNOT_LEAVE))
                 .when(occupancyParticipantService).remove(any(), any(), any());
 
-        mockMvc.perform(delete(PATH + "/" + REQUESTER_ID).header("X-User-Id", REQUESTER_ID))
+        mockMvc.perform(delete(PATH + "/" + REQUESTER_ID))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("OCCUPANCY_OCCUPIER_CANNOT_LEAVE"));
     }
@@ -128,7 +162,7 @@ class OccupancyParticipantControllerTest {
         doThrow(new BusinessException(OccupancyErrorCode.PARTICIPANT_NOT_FOUND))
                 .when(occupancyParticipantService).remove(any(), any(), any());
 
-        mockMvc.perform(delete(PATH + "/" + TARGET_ID).header("X-User-Id", REQUESTER_ID))
+        mockMvc.perform(delete(PATH + "/" + TARGET_ID))
                 .andExpect(status().isNotFound());
     }
 
@@ -137,11 +171,11 @@ class OccupancyParticipantControllerTest {
                 .when(occupancyParticipantService).add(any(), any(), any());
 
         mockMvc.perform(post(PATH)
-                        .header("X-User-Id", REQUESTER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"targetUserId\":\"" + TARGET_ID + "\"}"))
                 .andExpect(status().is(expectedStatus))
                 .andExpect(jsonPath("$.code").value(errorCode.code()))
                 .andExpect(jsonPath("$.path").value(PATH));
     }
+
 }

@@ -2,7 +2,10 @@ package site.omagotchi.learningservice.occupancy.presentation;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
 import site.omagotchi.learningservice.occupancy.presentation.response.RoomOccupancyResponse;
@@ -21,9 +24,10 @@ import java.util.UUID;
  * <p>요청 본문이 없는 것이 의도다 (명세서 02). 기수 식별자를 받으면 출근한 기수와 다른
  * 기수로 점유하는 경로가 열린다 — 점유자 멤버십은 열린 재실 구간에서 도출한다.</p>
  *
- * <p><b>TODO</b>: 요청자 식별을 {@code X-User-Id} 헤더로 받는 것은 인증 파트 연동 전까지의
- * 임시 조치다. 게이트웨이를 거치지 않으면 헤더를 위조할 수 있으므로 그대로 배포하면 안 된다.
- * JWT 인증이 붙으면 {@code TeamController}와 함께 {@code @AuthenticationPrincipal}로 교체한다.</p>
+ * <p><b>요청자는 Access JWT에서만 읽는다.</b> 헤더로 받으면 게이트웨이를 우회한 요청이
+ * 남의 계정을 사칭해 회의실을 잡거나 남의 점유를 반납할 수 있다. 게이트웨이도 같은 이유로
+ * 들어오는 {@code X-User-Id}를 제거하므로(default-filters), 헤더에 의존하면 정상 경로에서는
+ * 오히려 동작하지 않는다.</p>
  */
 @RestController
 @RequestMapping("/api/v1/spaces/{space-id}/occupancies")
@@ -42,9 +46,9 @@ public class RoomOccupancyController {
     @ResponseStatus(HttpStatus.CREATED)
     public RoomOccupancyResponse start(
             @PathVariable("space-id") Long spaceId,
-            @RequestHeader("X-User-Id") UUID userId
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        return RoomOccupancyResponse.from(roomOccupancyService.start(spaceId, userId));
+        return RoomOccupancyResponse.from(roomOccupancyService.start(spaceId, requesterId(jwt)));
     }
 
     /**
@@ -59,9 +63,9 @@ public class RoomOccupancyController {
     @PostMapping("/extend")
     public RoomOccupancyResponse extend(
             @PathVariable("space-id") Long spaceId,
-            @RequestHeader("X-User-Id") UUID userId
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        return RoomOccupancyResponse.from(roomOccupancyLifecycleService.extend(spaceId, userId));
+        return RoomOccupancyResponse.from(roomOccupancyLifecycleService.extend(spaceId, requesterId(jwt)));
     }
 
     /**
@@ -76,8 +80,20 @@ public class RoomOccupancyController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void release(
             @PathVariable("space-id") Long spaceId,
-            @RequestHeader("X-User-Id") UUID userId
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        roomOccupancyLifecycleService.release(spaceId, userId);
+        roomOccupancyLifecycleService.release(spaceId, requesterId(jwt));
+    }
+
+    /**
+     * Access JWT의 {@code sub}에서 요청자 계정을 읽는다.
+     *
+     * <p>{@code null} 검사를 두지 않는 것이 의도다. 이 컨트롤러의 모든 경로가
+     * {@code SecurityConfig}의 {@code anyRequest().authenticated()}에 걸려 있어 인증 없이는
+     * 도달하지 않는다 — 여기서 {@code null}이면 보안 설정이 뚫린 것이고, 조용히 넘기는 것보다
+     * 예외로 드러나는 편이 낫다.</p>
+     */
+    private static UUID requesterId(Jwt jwt) {
+        return AuthenticatedUser.from(jwt).userId();
     }
 }

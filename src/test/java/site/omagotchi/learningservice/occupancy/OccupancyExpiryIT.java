@@ -210,6 +210,12 @@ class OccupancyExpiryIT {
                    SET status = 'RELEASED', ended_at = ?
                  WHERE id = ?
                 """, now, releasedId);
+        jdbcTemplate.update("""
+                UPDATE learning_service.occupancy_participants
+                   SET left_at = ?
+                 WHERE occupancy_id = ?
+                   AND left_at IS NULL
+                """, now, releasedId);
 
         Set<Long> ownIds = Set.of(
                 withinId, boundaryId, tooEarlyId, exactExpiryId, pastId, remindedId, releasedId);

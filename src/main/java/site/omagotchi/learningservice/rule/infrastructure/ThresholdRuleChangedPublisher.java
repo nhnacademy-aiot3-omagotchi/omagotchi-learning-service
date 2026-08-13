@@ -3,16 +3,19 @@ package site.omagotchi.learningservice.rule.infrastructure;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 import site.omagotchi.learningservice.rule.application.event.ThresholdRuleChangedEvent;
 
+import java.util.concurrent.TimeUnit;
+
 @Slf4j
 @Component
 public class ThresholdRuleChangedPublisher {
-
+    private static final long CONFIRM_TIME_OUT_MS = 5000L;
     private final RabbitTemplate rabbitTemplate;
     private final Counter publishFailed;
 
@@ -34,8 +37,23 @@ public class ThresholdRuleChangedPublisher {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void on(ThresholdRuleChangedEvent event){
+        CorrelationData correlation = new CorrelationData(event.ruleId() + ":" + event.ruleVersion());
+
         try{
-            rabbitTemplate.convertAndSend(RabbitTopologyConfig.EXCHANGE_RULE_CHANGED, "", ThresholdRuleChangedMessage.from(event));
+            rabbitTemplate.convertAndSend(
+                    RabbitTopologyConfig.EXCHANGE_RULE_CHANGED,
+                    "",
+                    ThresholdRuleChangedMessage.from(event),
+                    correlation
+            );
+
+            CorrelationData.Confirm confirm =
+                    correlation.getFuture().get(CONFIRM_TIME_OUT_MS, TimeUnit.MILLISECONDS);
+
+            if(!confirm.ack()){
+                publishFailed.increment();
+                log.error("rule.changed 브로커 응답 실패 ruleId={} v={}, resason={}", event.ruleId(), event.ruleVersion(), confirm.reason());
+            }
             log.info("rule.changed 발행 ruleId={}, v={}", event.ruleId(), event.ruleVersion());
 
         }catch (Exception e){

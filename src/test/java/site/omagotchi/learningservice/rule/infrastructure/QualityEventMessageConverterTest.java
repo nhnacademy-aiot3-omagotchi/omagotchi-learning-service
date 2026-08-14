@@ -8,6 +8,7 @@ import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import site.omagotchi.learningservice.global.config.AmqpMessageConverterConfig;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -34,7 +35,7 @@ class QualityEventMessageConverterTest {
     // 큐·익스체인지 빈은 객체일 뿐이라 브로커 연결이 필요 없다.
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class))
-            .withUserConfiguration(RabbitTopologyConfig.class);
+            .withUserConfiguration(AmqpMessageConverterConfig.class);
 
     @Test
     @DisplayName("rule-service 페이로드를 이벤트로 복원한다")

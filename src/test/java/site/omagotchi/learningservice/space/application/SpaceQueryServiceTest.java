@@ -164,6 +164,44 @@ class SpaceQueryServiceTest {
     }
 
     /**
+     * 점유자의 기수를 알 수 없는 경우 — {@code SpaceOccupancyView.of}가 문서화한 계약이다.
+     *
+     * <p>멤버십이 이미 정리되면 {@code occupierCohortId}가 {@code null}로 온다. 그때는 어느
+     * 기수와도 일치하지 않으므로 감춰야 하는데, <b>불변 Set의 {@code contains(null)}은 NPE라</b>
+     * 검사 순서를 뒤집으면 점유 하나 때문에 목록 조회 전체가 500이 된다.</p>
+     */
+    @Test
+    @DisplayName("점유자의 기수를 알 수 없으면 500이 아니라 개인정보를 가린다")
+    void hidesOccupantsWhenOccupierCohortIsUnknown() {
+        stubMeetingWithOccupancy(null);
+        when(cohortAccessPort.findActiveCohortIds(REQUESTER_ID))
+                .thenReturn(List.of(MY_COHORT));
+
+        SpaceListResult result = spaceQueryService.getSpaceList(REQUESTER_ID).getFirst();
+
+        assertThat(result.status()).isEqualTo(SpaceUsageStatus.OCCUPIED);
+        assertOccupantsHidden(result);
+    }
+
+    /**
+     * 같은 상황을 비로그인 경로에서도 확인한다.
+     *
+     * <p>이쪽은 {@code Set.of()}를 쓰는데 <b>빈 불변 Set도 {@code contains(null)}에서 NPE다.</b>
+     * "비어 있으니 안전하겠지"가 성립하지 않아 따로 고정한다.</p>
+     */
+    @Test
+    @DisplayName("비로그인 요청에서 점유자 기수가 없어도 목록이 깨지지 않는다")
+    void hidesOccupantsWhenBothRequesterAndOccupierCohortAreUnknown() {
+        stubMeetingWithOccupancy(null);
+
+        SpaceListResult result = spaceQueryService.getSpaceList(null).getFirst();
+
+        assertThat(result.status()).isEqualTo(SpaceUsageStatus.OCCUPIED);
+        assertOccupantsHidden(result);
+        verifyNoInteractions(cohortAccessPort);
+    }
+
+    /**
      * 비활성 판정이 점유 판정보다 앞선다. 비활성화 직전에 시작된 점유가 남아 있어도
      * 화면에는 "이용 불가"가 맞다.
      */

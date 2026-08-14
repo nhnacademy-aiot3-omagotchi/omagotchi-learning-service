@@ -259,7 +259,7 @@ public class SpaceCommandService {
 
     private void ensureNotDeleted(Space space) {
         if (space.isDeleted()) {
-            throw new BusinessException(SpaceErrorCode.DELETED_SPACE);
+            throw new BusinessException(SpaceErrorCode.NOT_FOUND);
         }
     }
 

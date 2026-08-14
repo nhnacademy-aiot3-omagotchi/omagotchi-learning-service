@@ -25,13 +25,6 @@ public class SpaceQueryService {
     private final SpaceCohortAccessPort cohortAccessPort;
     private final Clock clock;
 
-    /**
-     * 삭제되지 않은 전체 공간과 현재 사용 상태를 조회한다.
-     */
-    public List<SpaceListResult> getSpaceList() {
-        return getSpaceList(null);
-    }
-
     public List<SpaceListResult> getSpaceList(UUID requesterUserId) {
         ZonedDateTime now = ZonedDateTime.now(clock);
         Set<Long> requesterCohortIds = requesterUserId == null

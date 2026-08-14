@@ -3,7 +3,6 @@ package site.omagotchi.learningservice.space.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
@@ -32,13 +31,11 @@ public class SpaceCommandService {
 
     public Space create(
             CreateSpaceCommand command,
-            UUID actorUserId,
-            GlobalRole globalRole
+            UUID actorUserId
     ) {
         Long cohortId = resolveCreationCohortId(
                 command.cohortId(),
-                actorUserId,
-                globalRole
+                actorUserId
         );
 
         SpaceAttributes attributes = validateSpaceAttributes(
@@ -65,12 +62,11 @@ public class SpaceCommandService {
     public Space update(
             Long spaceId,
             UpdateSpaceCommand command,
-            UUID actorUserId,
-            GlobalRole globalRole
+            UUID actorUserId
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
-        requireSpaceManager(existingSpace, actorUserId, globalRole, false);
+        requireSpaceManager(existingSpace, actorUserId, false);
 
         SpaceAttributes attributes = validateSpaceAttributes(
                 command.name(),
@@ -98,12 +94,6 @@ public class SpaceCommandService {
         if (changesType && existingSpace.isActive()) {
             throw new BusinessException(
                     SpaceErrorCode.ACTIVE_TYPE_CHANGE_NOT_ALLOWED
-            );
-        }
-
-        if (changesType && existingSpace.isAssignedLab()) {
-            throw new BusinessException(
-                    SpaceErrorCode.ASSIGNED_LAB_TYPE_CHANGE_NOT_ALLOWED
             );
         }
 
@@ -139,12 +129,11 @@ public class SpaceCommandService {
 
     public void delete(
             Long spaceId,
-            UUID actorUserId,
-            GlobalRole globalRole
+            UUID actorUserId
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
-        requireSpaceManager(existingSpace, actorUserId, globalRole, true);
+        requireSpaceManager(existingSpace, actorUserId, true);
 
         ZonedDateTime now =
                 ZonedDateTime.now(clock);
@@ -165,12 +154,11 @@ public class SpaceCommandService {
 
     public Space activate(
             Long spaceId,
-            UUID actorUserId,
-            GlobalRole globalRole
+            UUID actorUserId
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
-        requireSpaceManager(existingSpace, actorUserId, globalRole, false);
+        requireSpaceManager(existingSpace, actorUserId, false);
         ZonedDateTime now = ZonedDateTime.now(clock);
 
         if (existingSpace.isActive()) {
@@ -183,12 +171,11 @@ public class SpaceCommandService {
     public Space deactivate(
             Long spaceId,
             String reason,
-            UUID actorUserId,
-            GlobalRole globalRole
+            UUID actorUserId
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
-        requireSpaceManager(existingSpace, actorUserId, globalRole, false);
+        requireSpaceManager(existingSpace, actorUserId, false);
         ZonedDateTime now = ZonedDateTime.now(clock);
 
         if (existingSpace.isInactive()) {
@@ -211,24 +198,22 @@ public class SpaceCommandService {
     public Space assignCohort(
             Long spaceId,
             Long cohortId,
-            UUID actorUserId,
-            GlobalRole globalRole
+            UUID actorUserId
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
         requireExistingCohort(cohortId);
 
         if (existingSpace.getCohortId() == null) {
-            requireCohortManager(cohortId, actorUserId, globalRole);
+            requireCohortManager(cohortId, actorUserId);
         } else {
             requireCohortManager(
                     existingSpace.getCohortId(),
-                    actorUserId,
-                    globalRole
+                    actorUserId
             );
 
             if (!existingSpace.getCohortId().equals(cohortId)) {
-                requireCohortManager(cohortId, actorUserId, globalRole);
+                requireCohortManager(cohortId, actorUserId);
             }
         }
 
@@ -246,29 +231,18 @@ public class SpaceCommandService {
 
     public Space unassignCohort(
             Long spaceId,
-            UUID actorUserId,
-            GlobalRole globalRole
+            UUID actorUserId
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
-
-        if (existingSpace.getCohortId() == null) {
-            if (!cohortAccessPort.isSystemAdmin(globalRole)) {
-                throw new BusinessException(SpaceErrorCode.ACCESS_DENIED);
-            }
-        } else {
-            requireCohortManager(
-                    existingSpace.getCohortId(),
-                    actorUserId,
-                    globalRole
-            );
-        }
 
         ensureLab(existingSpace);
 
         if (existingSpace.getCohortId() == null) {
             throw new BusinessException(SpaceErrorCode.LAB_NOT_ASSIGNED);
         }
+
+        requireCohortManager(existingSpace.getCohortId(), actorUserId);
 
         return spaceRepository.save(existingSpace.unassignCohort(
                 ZonedDateTime.now(clock)
@@ -303,7 +277,6 @@ public class SpaceCommandService {
     private void requireSpaceManager(
             Space space,
             UUID actorUserId,
-            GlobalRole globalRole,
             boolean deleteCommand
     ) {
         if (space.getCohortId() == null) {
@@ -313,22 +286,18 @@ public class SpaceCommandService {
                 );
             }
 
-            if (!cohortAccessPort.isSystemAdmin(globalRole)) {
-                throw new BusinessException(SpaceErrorCode.ACCESS_DENIED);
-            }
-
+            requireAnyCohortManager(actorUserId);
             return;
         }
 
         requireCohortManager(
-                space.getCohortId(), actorUserId, globalRole
+                space.getCohortId(), actorUserId
         );
     }
 
     private Long resolveCreationCohortId(
             Long requestedCohortId,
-            UUID actorUserId,
-            GlobalRole globalRole
+            UUID actorUserId
     ) {
         if (requestedCohortId == null) {
             List<Long> managedCohortIds = cohortAccessPort
@@ -352,22 +321,32 @@ public class SpaceCommandService {
         requireExistingCohort(requestedCohortId);
         requireCohortManager(
                 requestedCohortId,
-                actorUserId,
-                globalRole
+                actorUserId
         );
         return requestedCohortId;
     }
 
     private void requireCohortManager(
             Long cohortId,
-            UUID actorUserId,
-            GlobalRole globalRole
+            UUID actorUserId
     ) {
-        if (cohortAccessPort.isSystemAdmin(globalRole)) {
-            return;
-        }
-
         if (!cohortAccessPort.isActiveManager(cohortId, actorUserId)) {
+            throw new BusinessException(SpaceErrorCode.ACCESS_DENIED);
+        }
+    }
+
+    /**
+     * 관리 주체 기수가 없는 공간(시드·미배정 실습실)의 관리 권한.
+     *
+     * <p>소유 기수가 없어 권한을 좁힐 수단이 없으므로 기수 매니저 누구나 수정·활성화·비활성화할
+     * 수 있다 (RM-16). 되돌릴 수 없는 삭제만 소유 기반으로 막는다 (RM-25) — 호출부가
+     * {@code deleteCommand}로 먼저 걸러낸다.</p>
+     *
+     * <p>시스템 관리자에게 예외를 주지 않는다. RM-17이 미수용이며
+     * <b>"시스템 관리자는 기수 내의 일에 관여할 수 없음"</b>으로 확정됐다 (명세 01 §4).</p>
+     */
+    private void requireAnyCohortManager(UUID actorUserId) {
+        if (cohortAccessPort.findActiveManagedCohortIds(actorUserId).isEmpty()) {
             throw new BusinessException(SpaceErrorCode.ACCESS_DENIED);
         }
     }

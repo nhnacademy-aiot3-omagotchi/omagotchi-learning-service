@@ -3,7 +3,6 @@ package site.omagotchi.learningservice.space.infrastructure.cohort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
-import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPort;
 
@@ -19,16 +18,6 @@ public class SpaceCohortAccessReader implements SpaceCohortAccessPort {
     @Override
     public boolean exists(Long cohortId) {
         return cohortAccessService.exists(cohortId);
-    }
-
-    @Override
-    public boolean isSystemAdmin(GlobalRole globalRole) {
-        try {
-            cohortAccessService.requireSystemAdmin(globalRole);
-            return true;
-        } catch (BusinessException exception) {
-            return false;
-        }
     }
 
     @Override

@@ -193,12 +193,6 @@ public class Space {
             );
         }
 
-        if (spaceType != newType && isAssignedLab()) {
-            throw new IllegalStateException(
-                    "기수에 배정된 실습실의 유형은 변경할 수 없습니다."
-            );
-        }
-
         return new Space(
                 id,
                 cohortId,

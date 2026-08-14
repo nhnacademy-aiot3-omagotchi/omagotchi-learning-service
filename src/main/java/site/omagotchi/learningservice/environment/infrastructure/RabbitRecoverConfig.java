@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.rule.infrastructure;
+package site.omagotchi.learningservice.environment.infrastructure;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.ImmediateRequeueAmqpException;
@@ -11,7 +11,6 @@ import org.springframework.boot.amqp.autoconfigure.RabbitProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.NestedExceptionUtils;
-import site.omagotchi.learningservice.environment.infrastructure.QualityTopologyConfig;
 
 @Slf4j
 @Configuration

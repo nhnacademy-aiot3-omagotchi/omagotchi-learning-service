@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.rule.infrastructure;
+package site.omagotchi.learningservice.environment.presentation.message;
 
 import java.time.Instant;
 

@@ -8,6 +8,7 @@ import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import site.omagotchi.learningservice.environment.presentation.message.QualityEvent;
 import site.omagotchi.learningservice.global.config.AmqpMessageConverterConfig;
 
 import java.nio.charset.StandardCharsets;

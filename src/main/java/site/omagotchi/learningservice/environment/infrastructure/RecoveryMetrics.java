@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.rule.infrastructure;
+package site.omagotchi.learningservice.environment.infrastructure;
 
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -7,7 +7,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
-import site.omagotchi.learningservice.environment.infrastructure.QualityTopologyConfig;
 
 @Slf4j
 @Component

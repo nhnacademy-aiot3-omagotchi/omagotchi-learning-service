@@ -4,8 +4,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import site.omagotchi.learningservice.rule.infrastructure.QualityEvent;
-import site.omagotchi.learningservice.rule.presentation.QualityDataConsumer;
+import site.omagotchi.learningservice.environment.presentation.message.QualityEvent;
+import site.omagotchi.learningservice.environment.presentation.message.QualityMessageConsumer;
 
 import java.time.Instant;
 
@@ -21,7 +21,7 @@ class QualityDataConsumerTest {
     private static final Instant MEASURED_AT = Instant.parse("2026-08-10T00:00:00Z");
     private static final Instant RECEIVED_AT = Instant.parse("2026-08-10T00:00:01Z");
 
-    private final QualityDataConsumer consumer = new QualityDataConsumer();
+    private final QualityMessageConsumer consumer = new QualityMessageConsumer();
 
     @ParameterizedTest
     @EnumSource(QualityEvent.Type.class)

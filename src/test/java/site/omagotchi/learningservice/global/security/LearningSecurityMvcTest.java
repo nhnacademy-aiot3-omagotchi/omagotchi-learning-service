@@ -12,7 +12,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.space.application.SpaceCommandService;
 import site.omagotchi.learningservice.space.application.SpaceQueryService;
 import site.omagotchi.learningservice.space.presentation.SpaceAdminController;
@@ -179,9 +178,7 @@ class LearningSecurityMvcTest {
 
         verify(spaceCommandService).delete(
                 1L,
-                USER_ID,
-                GlobalRole.USER
-        );
+                USER_ID);
     }
 
     @Test

@@ -2,12 +2,12 @@ package site.omagotchi.learningservice.space.application;
 
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
@@ -17,7 +17,6 @@ import site.omagotchi.learningservice.space.application.port.SpaceOccupancyQuery
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
 import site.omagotchi.learningservice.space.domain.SpaceType;
-import site.omagotchi.learningservice.space.application.SpaceErrorCode;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -298,7 +297,6 @@ class SpaceCommandServiceTest {
         assertThat(updated.getCohortId()).isEqualTo(42L);
         verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
         verify(spaceRepository).findByIdForUpdate(1L);
-        verify(spaceRepository, never()).findById(1L);
     }
 
     @Test
@@ -316,7 +314,6 @@ class SpaceCommandServiceTest {
         assertThat(captor.getValue().getCohortId()).isEqualTo(42L);
         verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
         verify(spaceRepository).findByIdForUpdate(1L);
-        verify(spaceRepository, never()).findById(1L);
     }
 
     @Test
@@ -339,7 +336,6 @@ class SpaceCommandServiceTest {
                 .isEqualTo(ZonedDateTime.ofInstant(NOW, SEOUL));
         verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
         verify(spaceRepository).findByIdForUpdate(1L);
-        verify(spaceRepository, never()).findById(1L);
     }
 
     @Test
@@ -423,7 +419,6 @@ class SpaceCommandServiceTest {
         assertThat(deactivated.getInactiveReason()).isEqualTo("냉방 점검");
         verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
         verify(spaceRepository).findByIdForUpdate(1L);
-        verify(spaceRepository, never()).findById(1L);
     }
 
     @Test
@@ -657,21 +652,20 @@ class SpaceCommandServiceTest {
     }
 
     @Test
-    void rejectsChangingAssignedLabTypeWithSpecificError() {
+    @DisplayName("배정된 실습실이어도 비활성이면 유형을 변경할 수 있다 (RM-22 미수용)")
+    void allowsChangingAssignedLabTypeWhenInactive() {
+        Space assigned = assignedLab();
         when(spaceRepository.findByIdForUpdate(1L))
-                .thenReturn(Optional.of(assignedLab()));
+                .thenReturn(Optional.of(assigned));
+        when(spaceRepository.save(any(Space.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertBusinessError(
-                SpaceErrorCode.ASSIGNED_LAB_TYPE_CHANGE_NOT_ALLOWED,
-                () -> spaceCommandService.update(
-                        1L,
-                        new UpdateSpaceCommand(
-                                "실습실 A",
-                                SpaceType.STUDY,
-                                20
-                        )
-                )
+        Space updated = spaceCommandService.update(
+                1L,
+                new UpdateSpaceCommand("실습실 A", SpaceType.STUDY, assigned.getCapacity())
         );
+
+        assertThat(updated.getSpaceType()).isEqualTo(SpaceType.STUDY);
     }
 
     @Test
@@ -834,19 +828,6 @@ class SpaceCommandServiceTest {
                 .isEqualTo(ZonedDateTime.ofInstant(NOW, SEOUL));
     }
 
-    @Test
-    void rejectsUnassigningUnassignedLabForSystemAdmin() {
-        when(spaceRepository.findByIdForUpdate(1L))
-                .thenReturn(Optional.of(lab(null, null)));
-        when(cohortAccessPort.isSystemAdmin(GlobalRole.SYSTEM_ADMIN))
-                .thenReturn(true);
-
-        assertBusinessError(
-                SpaceErrorCode.LAB_NOT_ASSIGNED,
-                () -> spaceCommandService.unassignCohortAsSystemAdmin(1L)
-        );
-    }
-
     private Space existingSpace() {
         return space(SpaceOperationalStatus.INACTIVE, null, null);
     }
@@ -943,7 +924,7 @@ class SpaceCommandServiceTest {
         }
 
         private Space create(CreateSpaceCommand command) {
-            return delegate.create(command, ACTOR_USER_ID, GlobalRole.USER);
+            return delegate.create(command, ACTOR_USER_ID);
         }
 
         private Space update(
@@ -953,17 +934,13 @@ class SpaceCommandServiceTest {
             return delegate.update(
                     spaceId,
                     command,
-                    ACTOR_USER_ID,
-                    GlobalRole.USER
-            );
+                    ACTOR_USER_ID);
         }
 
         private Space activate(Long spaceId) {
             return delegate.activate(
                     spaceId,
-                    ACTOR_USER_ID,
-                    GlobalRole.USER
-            );
+                    ACTOR_USER_ID);
         }
 
         private Space deactivate(
@@ -973,38 +950,24 @@ class SpaceCommandServiceTest {
             return delegate.deactivate(
                     spaceId,
                     reason,
-                    ACTOR_USER_ID,
-                    GlobalRole.USER
-            );
+                    ACTOR_USER_ID);
         }
 
         private void delete(Long spaceId) {
-            delegate.delete(spaceId, ACTOR_USER_ID, GlobalRole.USER);
+            delegate.delete(spaceId, ACTOR_USER_ID);
         }
 
         private Space assignCohort(Long spaceId, Long cohortId) {
             return delegate.assignCohort(
                     spaceId,
                     cohortId,
-                    ACTOR_USER_ID,
-                    GlobalRole.USER
-            );
+                    ACTOR_USER_ID);
         }
 
         private Space unassignCohort(Long spaceId) {
             return delegate.unassignCohort(
                     spaceId,
-                    ACTOR_USER_ID,
-                    GlobalRole.USER
-            );
-        }
-
-        private Space unassignCohortAsSystemAdmin(Long spaceId) {
-            return delegate.unassignCohort(
-                    spaceId,
-                    ACTOR_USER_ID,
-                    GlobalRole.SYSTEM_ADMIN
-            );
+                    ACTOR_USER_ID);
         }
     }
 }

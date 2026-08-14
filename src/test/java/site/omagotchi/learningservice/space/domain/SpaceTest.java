@@ -96,50 +96,60 @@ class SpaceTest {
     }
 
     @Test
-    void rejectsInvalidCreationArguments() {
+    void rejectsInvalidAttributesOnCreation() {
+        String tooLongName = "가".repeat(51);
+
         assertThatThrownBy(() -> Space.create(
                 null, SpaceType.MEETING, 8, 42L, CREATED_AT
-        )).isInstanceOf(IllegalArgumentException.class);
+        )).isInstanceOf(SpaceValidationException.class);
         assertThatThrownBy(() -> Space.create(
                 "   ", SpaceType.MEETING, 8, 42L, CREATED_AT
-        )).isInstanceOf(IllegalArgumentException.class);
+        )).isInstanceOf(SpaceValidationException.class);
         assertThatThrownBy(() -> Space.create(
-                "가".repeat(51), SpaceType.MEETING, 8, 42L, CREATED_AT
-        )).isInstanceOf(IllegalArgumentException.class);
+                tooLongName, SpaceType.MEETING, 8, 42L, CREATED_AT
+        )).isInstanceOf(SpaceValidationException.class);
         assertThatThrownBy(() -> Space.create(
                 "회의실 A", null, 8, 42L, CREATED_AT
-        )).isInstanceOf(IllegalArgumentException.class);
+        )).isInstanceOf(SpaceValidationException.class);
         assertThatThrownBy(() -> Space.create(
                 "회의실 A", SpaceType.MEETING, null, 42L, CREATED_AT
-        )).isInstanceOf(IllegalArgumentException.class);
+        )).isInstanceOf(SpaceValidationException.class);
         assertThatThrownBy(() -> Space.create(
                 "회의실 A", SpaceType.MEETING, 0, 42L, CREATED_AT
-        )).isInstanceOf(IllegalArgumentException.class);
+        )).isInstanceOf(SpaceValidationException.class);
         assertThatThrownBy(() -> Space.create(
                 "회의실 A", SpaceType.MEETING, -1, 42L, CREATED_AT
-        )).isInstanceOf(IllegalArgumentException.class);
+        )).isInstanceOf(SpaceValidationException.class);
+    }
+
+    @Test
+    void rejectsInvalidCohortIdOnCreation() {
         assertThatThrownBy(() -> Space.create(
                 "회의실 A", SpaceType.MEETING, 8, null, CREATED_AT
-        )).isInstanceOf(IllegalArgumentException.class);
+        )).isInstanceOf(IllegalArgumentException.class)
+                .isNotInstanceOf(SpaceValidationException.class);
     }
 
     @Test
     void protectsStateTransitionInvariants() {
-        assertThatThrownBy(() -> activeSpace().changeCapacity(7, UPDATED_AT))
+        Space active = activeSpace();
+        Space managed = managedSpace();
+
+        assertThatThrownBy(() -> active.changeCapacity(7, UPDATED_AT))
                 .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> activeSpace().changeType(
+        assertThatThrownBy(() -> active.changeType(
                 SpaceType.STUDY,
                 UPDATED_AT
         )).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> activeSpace().delete(UPDATED_AT))
+        assertThatThrownBy(() -> active.delete(UPDATED_AT))
                 .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> activeSpace().activate(UPDATED_AT))
+        assertThatThrownBy(() -> active.activate(UPDATED_AT))
                 .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> managedSpace().deactivate(
+        assertThatThrownBy(() -> managed.deactivate(
                 "점검",
                 UPDATED_AT
         )).isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> activeSpace().deactivate(
+        assertThatThrownBy(() -> active.deactivate(
                 "   ",
                 UPDATED_AT
         )).isInstanceOf(IllegalArgumentException.class);
@@ -165,10 +175,10 @@ class SpaceTest {
         assertThat(assignedLab.delete(UPDATED_AT).isDeleted()).isTrue();
         assertThatThrownBy(() -> unmanagedLab.delete(UPDATED_AT))
                 .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> assignedLab.changeType(
-                SpaceType.STUDY,
-                UPDATED_AT
-        )).isInstanceOf(IllegalStateException.class);
+
+        // 배정 여부는 유형 변경의 게이팅 조건이 아니다 — RM-22 미수용, RM-14(비활성 상태)로 대체
+        assertThat(assignedLab.changeType(SpaceType.STUDY, UPDATED_AT)
+                .getSpaceType()).isEqualTo(SpaceType.STUDY);
     }
 
     @Test
@@ -185,11 +195,15 @@ class SpaceTest {
 
     @Test
     void protectsLabAssignmentInvariants() {
-        assertThatThrownBy(() -> managedSpace().assignCohort(42L, UPDATED_AT))
+        Space managed = managedSpace();
+        Space assignedLab = lab(42L);
+        Space unmanagedLab = lab(null);
+
+        assertThatThrownBy(() -> managed.assignCohort(42L, UPDATED_AT))
                 .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> lab(42L).assignCohort(43L, UPDATED_AT))
+        assertThatThrownBy(() -> assignedLab.assignCohort(43L, UPDATED_AT))
                 .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> lab(null).unassignCohort(UPDATED_AT))
+        assertThatThrownBy(() -> unmanagedLab.unassignCohort(UPDATED_AT))
                 .isInstanceOf(IllegalStateException.class);
     }
 

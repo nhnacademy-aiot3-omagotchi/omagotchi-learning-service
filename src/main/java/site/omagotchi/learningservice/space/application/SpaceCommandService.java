@@ -259,6 +259,7 @@ public class SpaceCommandService {
 
     private void ensureNotDeleted(Space space) {
         if (space.isDeleted()) {
+            log.info("삭제된 공간에 대한 명령 요청 spaceId={}", space.getId());
             throw new BusinessException(SpaceErrorCode.NOT_FOUND);
         }
     }

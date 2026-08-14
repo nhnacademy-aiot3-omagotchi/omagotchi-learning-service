@@ -19,10 +19,10 @@ public class Space {
 
     /**
      * 공간의 운영 상태.
-     *
+     * <p>
      * ACTIVE:
      * 신규 점유 또는 재실 신청 가능
-     *
+     * <p>
      * INACTIVE:
      * 신규 점유 또는 재실 신청 불가
      */
@@ -30,7 +30,7 @@ public class Space {
 
     /**
      * 공간의 비활성 사유.
-     *
+     * <p>
      * 생성 직후의 비활성 공간은 사유가 없을 수 있지만,
      * 명시적인 비활성화 요청에는 사유가 필수다.
      */
@@ -88,7 +88,7 @@ public class Space {
 
     /**
      * 신규 공간을 생성한다.
-     *
+     * <p>
      * 신규 공간은 기본적으로 비활성 상태로 생성한다.
      */
     public static Space create(
@@ -152,7 +152,7 @@ public class Space {
 
     /**
      * 공간 이름을 변경한 새로운 객체를 반환한다.
-     *
+     * <p>
      * 이름 변경은 활성·비활성 상태와 관계없이 가능하다.
      */
     public Space changeName(
@@ -177,7 +177,7 @@ public class Space {
 
     /**
      * 공간 유형을 변경한 새로운 객체를 반환한다.
-     *
+     * <p>
      * 실제 유형 변경은 비활성 공간에서만 가능하며,
      * 기수에 배정된 실습실은 유형을 변경할 수 없다.
      */
@@ -203,7 +203,7 @@ public class Space {
 
     /**
      * 공간 최대 인원을 변경한 새로운 객체를 반환한다.
-     *
+     * <p>
      * 활성 공간은 정원을 늘리거나 유지할 수 있지만
      * 축소할 수 없다.
      */
@@ -229,7 +229,7 @@ public class Space {
 
     /**
      * 공간을 활성화한 새로운 객체를 반환한다.
-     *
+     * <p>
      * 활성화되면 기존 비활성 사유는 제거한다.
      */
     public Space activate(ZonedDateTime updatedAt) {
@@ -255,7 +255,7 @@ public class Space {
 
     /**
      * 공간을 비활성화한 새로운 객체를 반환한다.
-     *
+     * <p>
      * 활성 점유 여부처럼 외부 조회가 필요한 조건은
      * Application 계층에서 검증한다.
      */
@@ -291,7 +291,7 @@ public class Space {
 
     /**
      * 공간을 소프트 삭제한 새로운 객체를 반환한다.
-     *
+     * <p>
      * 삭제는 비활성 상태이며 관리 주체 기수가 있는 공간에만 가능하다.
      */
     public Space delete(ZonedDateTime deletedAt) {
@@ -435,7 +435,7 @@ public class Space {
 
     /**
      * 비활성 사유를 정규화한다.
-     *
+     * <p>
      * 활성 상태에서는 비활성 사유를 항상 null로 만든다.
      * 비활성 상태에서 null 또는 공백만 입력되면 null로 저장한다.
      */

@@ -11,6 +11,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.rule.application.command.CreateThresholdRuleCommand;
 import site.omagotchi.learningservice.rule.application.command.UpdateThresholdRuleCommand;
+import site.omagotchi.learningservice.rule.application.port.ThresholdRuleEventPublisher;
 import site.omagotchi.learningservice.rule.application.result.UpdateThresholdRuleResult;
 import site.omagotchi.learningservice.rule.domain.Operator;
 import site.omagotchi.learningservice.rule.domain.ThresholdRule;
@@ -50,8 +51,12 @@ class ThresholdRuleServiceTest {
     @Mock
     private ThresholdRuleHistoryRepository thresholdRuleHistoryRepository;
 
+    @Mock
+    private ThresholdRuleEventPublisher publisher;
+
     @InjectMocks
     private ThresholdRuleService thresholdRuleService;
+
 
     @Nested
     @DisplayName("생성")

@@ -75,37 +75,56 @@ class ThresholdRuleHistoryTest {
     }
 
     @Test
-    @DisplayName("룰이 식별되지 않거나 변경 유형이 없으면 거부한다")
-    void rejectsUnidentified() {
-        ThresholdRule thresholdRule = ThresholdRule.create(
-                DEVICE_EUI,
-                METRIC,
-                Operator.GT,
-                THRESHOLD,
-                REQUESTER_ID
+    @DisplayName("룰이 없으면 인자 오류로 거부한다")
+    void rejectsNullRule() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> ThresholdRuleHistory.record(null, ChangeType.CREATED, REQUESTER_ID, REQUEST_ID)
         );
-
-        assertThrows(IllegalArgumentException.class,  () -> ThresholdRuleHistory.record(thresholdRule, ChangeType.CREATED, REQUESTER_ID, REQUEST_ID));
-
-        ReflectionTestUtils.setField(thresholdRule, "id", RULE_ID);
-        ReflectionTestUtils.setField(thresholdRule, "version", RULE_VERSION);
-
-        assertThrows(IllegalArgumentException.class, () -> ThresholdRuleHistory.record(thresholdRule, null, REQUESTER_ID, REQUEST_ID));
     }
 
     @Test
-    @DisplayName("버전이 확정되지 않았으면 flush 누락으로 보고 거부한다")
-    void rejectsUnflushed() {
-        ThresholdRule thresholdRule = ThresholdRule.create(
-                DEVICE_EUI,
-                METRIC,
-                Operator.GT,
-                THRESHOLD,
-                REQUESTER_ID
+    @DisplayName("변경 유형이 없으면 인자 오류로 거부한다")
+    void rejectsNullChangeType() {
+        // 룰은 흠잡을 데 없는 상태여야 changeType 때문에 걸렸다고 말할 수 있다
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> ThresholdRuleHistory.record(savedRule(), null, REQUESTER_ID, REQUEST_ID)
         );
+    }
 
+    @Test
+    @DisplayName("저장 전이면 식별자 미확정 상태 오류로 거부한다")
+    void rejectsUnsavedRule() {
+        ThresholdRule thresholdRule = newRule();   // id·version 둘 다 없음
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> ThresholdRuleHistory.record(thresholdRule, ChangeType.CREATED, REQUESTER_ID, REQUEST_ID)
+        );
+    }
+
+    @Test
+    @DisplayName("flush 전이면 버전 미확정 상태 오류로 거부한다")
+    void rejectsUnflushedRule() {
+        ThresholdRule thresholdRule = newRule();
+        ReflectionTestUtils.setField(thresholdRule, "id", RULE_ID);   // id 만, version 은 아직 없음
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> ThresholdRuleHistory.record(thresholdRule, ChangeType.CREATED, REQUESTER_ID, REQUEST_ID)
+        );
+    }
+
+    private ThresholdRule newRule() {
+        return ThresholdRule.create(DEVICE_EUI, METRIC, Operator.GT, THRESHOLD, REQUESTER_ID);
+    }
+
+    /** id·version 이 DB 에서 채워진 상태를 흉내낸다. */
+    private ThresholdRule savedRule() {
+        ThresholdRule thresholdRule = newRule();
         ReflectionTestUtils.setField(thresholdRule, "id", RULE_ID);
-        assertThrows(IllegalStateException.class, () -> ThresholdRuleHistory.record(thresholdRule, ChangeType.CREATED, REQUESTER_ID, REQUEST_ID));
-
+        ReflectionTestUtils.setField(thresholdRule, "version", RULE_VERSION);
+        return thresholdRule;
     }
 }

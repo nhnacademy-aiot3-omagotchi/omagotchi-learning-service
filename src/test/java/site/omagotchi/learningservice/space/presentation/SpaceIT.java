@@ -582,7 +582,7 @@ class SpaceIT {
 
             if ("DELETE_SUCCESS".equals(deleteResult)) {
                 assertThat(activateResult)
-                        .isEqualTo("SPACE_ALREADY_DELETED");
+                        .isEqualTo("SPACE_NOT_FOUND");
                 assertThat(finalState.status()).isEqualTo("INACTIVE");
                 assertThat(finalState.deletedAt()).isNotNull();
             } else {
@@ -651,7 +651,7 @@ class SpaceIT {
 
             assertThat(deleteResult).isEqualTo("DELETE_SUCCESS");
             assertThat(updateResult)
-                    .isIn("UPDATE_SUCCESS", "SPACE_ALREADY_DELETED");
+                    .isIn("UPDATE_SUCCESS", "SPACE_NOT_FOUND");
             assertThat(finalState.deletedAt()).isNotNull();
 
             if ("UPDATE_SUCCESS".equals(updateResult)) {
@@ -1139,7 +1139,7 @@ class SpaceIT {
                         .content(request))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code")
-                        .value("SPACE_ALREADY_DELETED"));
+                        .value("SPACE_NOT_FOUND"));
 
         mockMvc.perform(put(
                         "/api/v1/admin/spaces/{space-id}/cohort",

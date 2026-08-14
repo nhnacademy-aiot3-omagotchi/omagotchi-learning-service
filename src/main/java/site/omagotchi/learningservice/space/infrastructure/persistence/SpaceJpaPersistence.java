@@ -47,15 +47,6 @@ public class SpaceJpaPersistence
     }
 
     @Override
-    public Optional<Space> findById(
-            Long spaceId
-    ) {
-        return springDataSpaceRepository
-                .findById(spaceId)
-                .map(spacePersistenceMapper::toDomain);
-    }
-
-    @Override
     public Optional<Space> findByIdForUpdate(Long spaceId) {
         return springDataSpaceRepository
                 .findByIdForUpdate(spaceId)

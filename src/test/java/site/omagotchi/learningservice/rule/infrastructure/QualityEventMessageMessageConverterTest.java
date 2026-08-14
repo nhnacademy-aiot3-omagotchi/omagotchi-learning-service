@@ -8,7 +8,8 @@ import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import site.omagotchi.learningservice.environment.presentation.message.QualityEvent;
+import site.omagotchi.learningservice.environment.domain.SensorEventType;
+import site.omagotchi.learningservice.environment.presentation.message.QualityEventMessage;
 import site.omagotchi.learningservice.global.config.AmqpMessageConverterConfig;
 
 import java.nio.charset.StandardCharsets;
@@ -24,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 프로덕션과 다른 직렬화기를 검증하게 된다.
  */
 @DisplayName("품질 이벤트 메세지 변환")
-class QualityEventMessageConverterTest {
+class QualityEventMessageMessageConverterTest {
 
     private static final String TRACE_ID = "trace-0001";
     private static final String DEVICE_EUI = "0011223344556677";
@@ -44,11 +45,11 @@ class QualityEventMessageConverterTest {
         contextRunner.run(context -> {
             JacksonJsonMessageConverter converter = context.getBean(JacksonJsonMessageConverter.class);
 
-            QualityEvent event = (QualityEvent) converter.fromMessage(rulePayloadMessage());
+            QualityEventMessage event = (QualityEventMessage) converter.fromMessage(rulePayloadMessage());
 
             assertThat(event.version()).isEqualTo(1);
             assertThat(event.traceId()).isEqualTo(TRACE_ID);
-            assertThat(event.type()).isEqualTo(QualityEvent.Type.RULE_HIT);
+            assertThat(event.type()).isEqualTo(SensorEventType.RULE_HIT);
             assertThat(event.deviceEui()).isEqualTo(DEVICE_EUI);
             assertThat(event.measurement()).isEqualTo(MEASUREMENT);
             assertThat(event.value()).isEqualTo(4_200.0);
@@ -70,9 +71,9 @@ class QualityEventMessageConverterTest {
 
             Message message = rulePayloadMessage();
             message.getMessageProperties()
-                    .setHeader("__TypeId__", "site.omagotchi.ruleservice.quality.domain.QualityEvent");
+                    .setHeader("__TypeId__", "site.omagotchi.ruleservice.quality.domain.QualityEventMessage");
 
-            assertThat(converter.fromMessage(message)).isInstanceOf(QualityEvent.class);
+            assertThat(converter.fromMessage(message)).isInstanceOf(QualityEventMessage.class);
         });
     }
 
@@ -100,9 +101,9 @@ class QualityEventMessageConverterTest {
                     }
                     """);
 
-            QualityEvent event = (QualityEvent) converter.fromMessage(message);
+            QualityEventMessage event = (QualityEventMessage) converter.fromMessage(message);
 
-            assertThat(event.type()).isEqualTo(QualityEvent.Type.ANOMALY);
+            assertThat(event.type()).isEqualTo(SensorEventType.ANOMALY);
         });
     }
 
@@ -128,8 +129,8 @@ class QualityEventMessageConverterTest {
     private Message message(String payload) {
         MessageProperties properties = new MessageProperties();
         properties.setContentType(MessageProperties.CONTENT_TYPE_JSON);
-        // 리스너 어댑터가 consume(QualityEvent, ...) 시그니처를 보고 채워 넣는 값
-        properties.setInferredArgumentType(QualityEvent.class);
+        // 리스너 어댑터가 consume(QualityEventMessage, ...) 시그니처를 보고 채워 넣는 값
+        properties.setInferredArgumentType(QualityEventMessage.class);
 
         return new Message(payload.getBytes(StandardCharsets.UTF_8), properties);
     }

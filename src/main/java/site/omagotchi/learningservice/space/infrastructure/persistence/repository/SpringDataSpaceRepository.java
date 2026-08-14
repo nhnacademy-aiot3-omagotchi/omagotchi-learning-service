@@ -48,11 +48,6 @@ public interface SpringDataSpaceRepository
             @Param("spaceId") Long spaceId
     );
 
-    Optional<SpaceJpaEntity>
-    findByIdAndDeletedAtIsNull(
-            Long spaceId
-    );
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT space FROM SpaceJpaEntity space WHERE space.id = :spaceId")
     Optional<SpaceJpaEntity> findByIdForUpdate(

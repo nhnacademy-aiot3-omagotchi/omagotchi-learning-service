@@ -68,7 +68,7 @@ class SpaceQueryServiceTest {
         when(spaceQueryPort.findAllSpacesWithStatus(Set.of(), SEOUL_NOW))
                 .thenReturn(expected);
 
-        List<SpaceListResult> actual = spaceQueryService.getSpaceList();
+        List<SpaceListResult> actual = spaceQueryService.getSpaceList(null);
 
         assertThat(actual).isSameAs(expected);
         verify(spaceQueryPort).findAllSpacesWithStatus(Set.of(), SEOUL_NOW);
@@ -81,7 +81,7 @@ class SpaceQueryServiceTest {
         when(spaceQueryPort.findAllSpacesWithStatus(Set.of(), SEOUL_NOW))
                 .thenReturn(List.of());
 
-        assertThat(spaceQueryService.getSpaceList()).isEmpty();
+        assertThat(spaceQueryService.getSpaceList(null)).isEmpty();
 
         verify(spaceQueryPort).findAllSpacesWithStatus(Set.of(), SEOUL_NOW);
         verifyNoInteractions(cohortAccessPort);

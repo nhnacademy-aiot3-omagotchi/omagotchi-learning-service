@@ -484,8 +484,11 @@ class SpaceIT {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void concurrentAssignmentsToSameLabAllowOnlyOneRequest()
             throws Exception {
-        Long firstCohortId = insertCohortWithManager(UUID.randomUUID());
-        Long secondCohortId = insertCohortWithManager(UUID.randomUUID());
+        // 미배정 실습실은 기수 매니저 누구나 배정할 수 있다 (RM-16).
+        // 두 요청이 서로 다른 기수를 노리므로 요청자는 두 기수 모두의 매니저여야 한다.
+        UUID managerId = UUID.randomUUID();
+        Long firstCohortId = insertCohortWithManager(managerId);
+        Long secondCohortId = insertCohortWithManager(managerId);
         Long labId = insertTypedSpace(
                 "통합 동시 배정 실습실 " + UUID.randomUUID(),
                 "LAB",
@@ -493,7 +496,6 @@ class SpaceIT {
                 null,
                 null
         );
-        UUID systemAdminId = UUID.randomUUID();
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);
@@ -503,14 +505,14 @@ class SpaceIT {
             Future<String> first = executor.submit(() -> assignAfterSignal(
                     labId,
                     firstCohortId,
-                    systemAdminId,
+                    managerId,
                     ready,
                     start
             ));
             Future<String> second = executor.submit(() -> assignAfterSignal(
                     labId,
                     secondCohortId,
-                    systemAdminId,
+                    managerId,
                     ready,
                     start
             ));
@@ -541,7 +543,8 @@ class SpaceIT {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void deleteAndActivateDoNotCreateDeletedActiveSpace()
             throws Exception {
-        Long cohortId = insertCohortWithManager(UUID.randomUUID());
+        UUID managerId = UUID.randomUUID();
+        Long cohortId = insertCohortWithManager(managerId);
         Long spaceId = insertTypedSpace(
                 "통합 삭제 활성화 경쟁 " + UUID.randomUUID(),
                 "MEETING",
@@ -549,7 +552,6 @@ class SpaceIT {
                 cohortId,
                 null
         );
-        UUID systemAdminId = UUID.randomUUID();
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);
@@ -559,14 +561,14 @@ class SpaceIT {
             Future<String> deletion = executor.submit(() ->
                     deleteAfterSignal(
                             spaceId,
-                            systemAdminId,
+                            managerId,
                             ready,
                             start
                     ));
             Future<String> activation = executor.submit(() ->
                     activateAfterSignal(
                             spaceId,
-                            systemAdminId,
+                            managerId,
                             ready,
                             start
                     ));
@@ -580,7 +582,7 @@ class SpaceIT {
 
             if ("DELETE_SUCCESS".equals(deleteResult)) {
                 assertThat(activateResult)
-                        .isEqualTo("SPACE_ALREADY_DELETED");
+                        .isEqualTo("SPACE_NOT_FOUND");
                 assertThat(finalState.status()).isEqualTo("INACTIVE");
                 assertThat(finalState.deletedAt()).isNotNull();
             } else {
@@ -606,7 +608,8 @@ class SpaceIT {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void deleteAndUpdateDoNotReviveDeletedSpace()
             throws Exception {
-        Long cohortId = insertCohortWithManager(UUID.randomUUID());
+        UUID managerId = UUID.randomUUID();
+        Long cohortId = insertCohortWithManager(managerId);
         String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
         String originalName = "삭제수정-" + uniqueSuffix;
         String updatedName = originalName + "-수정";
@@ -617,7 +620,6 @@ class SpaceIT {
                 cohortId,
                 null
         );
-        UUID systemAdminId = UUID.randomUUID();
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch ready = new CountDownLatch(2);
@@ -627,7 +629,7 @@ class SpaceIT {
             Future<String> deletion = executor.submit(() ->
                     deleteAfterSignal(
                             spaceId,
-                            systemAdminId,
+                            managerId,
                             ready,
                             start
                     ));
@@ -635,7 +637,7 @@ class SpaceIT {
                     updateAfterSignal(
                             spaceId,
                             updatedName,
-                            systemAdminId,
+                            managerId,
                             ready,
                             start
                     ));
@@ -649,7 +651,7 @@ class SpaceIT {
 
             assertThat(deleteResult).isEqualTo("DELETE_SUCCESS");
             assertThat(updateResult)
-                    .isIn("UPDATE_SUCCESS", "SPACE_ALREADY_DELETED");
+                    .isIn("UPDATE_SUCCESS", "SPACE_NOT_FOUND");
             assertThat(finalState.deletedAt()).isNotNull();
 
             if ("UPDATE_SUCCESS".equals(updateResult)) {
@@ -753,7 +755,7 @@ class SpaceIT {
                 """, spaceId);
         assignManagementCohort(spaceId);
 
-        mockMvc.perform(patch(
+        mockMvc.perform(post(
                         "/api/v1/admin/spaces/{space-id}/activate",
                         spaceId
                 ))
@@ -771,7 +773,7 @@ class SpaceIT {
         );
         assignManagementCohort(spaceId);
 
-        mockMvc.perform(patch(
+        mockMvc.perform(post(
                         "/api/v1/admin/spaces/{space-id}/deactivate",
                         spaceId
                 ).contentType(MediaType.APPLICATION_JSON)
@@ -799,7 +801,7 @@ class SpaceIT {
         );
         assignManagementCohort(spaceId);
 
-        mockMvc.perform(patch(
+        mockMvc.perform(post(
                         "/api/v1/admin/spaces/{space-id}/deactivate",
                         spaceId
                 ).contentType(MediaType.APPLICATION_JSON)
@@ -994,7 +996,7 @@ class SpaceIT {
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_ACCESS_DENIED"));
 
-        mockMvc.perform(patch(
+        mockMvc.perform(post(
                         "/api/v1/admin/spaces/{space-id}/activate",
                         otherSpaceId
                 ))
@@ -1002,7 +1004,7 @@ class SpaceIT {
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_ACCESS_DENIED"));
 
-        mockMvc.perform(patch(
+        mockMvc.perform(post(
                         "/api/v1/admin/spaces/{space-id}/deactivate",
                         otherSpaceId
                 ).contentType(MediaType.APPLICATION_JSON)
@@ -1079,8 +1081,7 @@ class SpaceIT {
                         "/api/v1/admin/spaces/{space-id}/cohort",
                         labId
                 ))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.cohortId").isEmpty());
+                .andExpect(status().isNoContent());
 
         assertThat(readCohortId(labId)).isNull();
     }
@@ -1136,9 +1137,9 @@ class SpaceIT {
                         deletedLabId
                 ).contentType(MediaType.APPLICATION_JSON)
                         .content(request))
-                .andExpect(status().isConflict())
+                .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code")
-                        .value("SPACE_ALREADY_DELETED"));
+                        .value("SPACE_NOT_FOUND"));
 
         mockMvc.perform(put(
                         "/api/v1/admin/spaces/{space-id}/cohort",
@@ -1188,8 +1189,7 @@ class SpaceIT {
         mockMvc.perform(delete(
                         "/api/v1/admin/spaces/{space-id}/cohort",
                         unassignedLabId
-                ).with(user(UUID.randomUUID().toString())
-                        .roles("SYSTEM_ADMIN")))
+                ))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_LAB_NOT_ASSIGNED"));
@@ -1229,19 +1229,22 @@ class SpaceIT {
     }
 
     @Test
-    void systemAdminCanManageSeedSpaceButCannotDeleteIt()
+    void anyCohortManagerCanManageSeedSpaceButNobodyCanDeleteIt()
             throws Exception {
+        // 관리 주체가 없는 공간은 기수 매니저 누구나 관리할 수 있다 (RM-16).
+        // 요청자가 어느 기수의 매니저이기만 하면 된다 — 그 기수와 공간은 무관하다.
+        // 판정 기준은 공간 생성(cohortId 생략)과 같은 "활성 기수의 매니저"다.
+        activateCohort(insertManagementCohort());
         Long seedSpaceId = insertSpace(
-                "통합 시스템 관리자 시드 공간",
+                "통합 시드 공간 관리",
                 "INACTIVE",
                 null
         );
 
-        mockMvc.perform(patch(
+        mockMvc.perform(post(
                         "/api/v1/admin/spaces/{space-id}/activate",
                         seedSpaceId
-                ).with(user(UUID.randomUUID().toString())
-                        .roles("SYSTEM_ADMIN")))
+                ))
                 .andExpect(status().isOk());
 
         jdbcTemplate.update("""
@@ -1253,9 +1256,8 @@ class SpaceIT {
         mockMvc.perform(delete(
                         "/api/v1/admin/spaces/{space-id}",
                         seedSpaceId
-                ).with(user(UUID.randomUUID().toString())
-                        .roles("SYSTEM_ADMIN")))
-                .andExpect(status().isConflict())
+                ))
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_UNMANAGED_DELETE_NOT_ALLOWED"));
     }
@@ -1269,13 +1271,13 @@ class SpaceIT {
         );
 
         mockMvc.perform(delete("/api/v1/admin/spaces/{space-id}", spaceId))
-                .andExpect(status().isConflict())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code")
                         .value("SPACE_UNMANAGED_DELETE_NOT_ALLOWED"));
     }
 
     @Test
-    void assignedLabRejectsTypeChangeButCanBeDeletedWhenInactive()
+    void assignedLabAllowsTypeChangeAndDeleteWhenInactive()
             throws Exception {
         Long spaceId = insertAssignedLab("통합 배정 실습실 보호");
 
@@ -1288,10 +1290,8 @@ class SpaceIT {
                                   "capacity":20
                                 }
                                 """))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value(
-                        "SPACE_ASSIGNED_LAB_TYPE_CHANGE_NOT_ALLOWED"
-                ));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.type").value("STUDY"));
 
         mockMvc.perform(delete("/api/v1/admin/spaces/{space-id}", spaceId))
                 .andExpect(status().isNoContent());
@@ -1305,7 +1305,7 @@ class SpaceIT {
 
     private void assertDeactivationSucceeds(Long spaceId) throws Exception {
         assignManagementCohort(spaceId);
-        mockMvc.perform(patch(
+        mockMvc.perform(post(
                         "/api/v1/admin/spaces/{space-id}/deactivate",
                         spaceId
                 ).contentType(MediaType.APPLICATION_JSON)
@@ -1617,8 +1617,7 @@ class SpaceIT {
             spaceCommandService.assignCohort(
                     spaceId,
                     cohortId,
-                    actorUserId,
-                    GlobalRole.SYSTEM_ADMIN
+                    actorUserId
             );
             return "SUCCESS";
         } catch (BusinessException exception) {
@@ -1640,8 +1639,7 @@ class SpaceIT {
         try {
             spaceCommandService.delete(
                     spaceId,
-                    actorUserId,
-                    GlobalRole.SYSTEM_ADMIN
+                    actorUserId
             );
             return "DELETE_SUCCESS";
         } catch (BusinessException exception) {
@@ -1663,8 +1661,7 @@ class SpaceIT {
         try {
             spaceCommandService.activate(
                     spaceId,
-                    actorUserId,
-                    GlobalRole.SYSTEM_ADMIN
+                    actorUserId
             );
             return "ACTIVATE_SUCCESS";
         } catch (BusinessException exception) {
@@ -1692,8 +1689,7 @@ class SpaceIT {
                             SpaceType.MEETING,
                             8
                     ),
-                    actorUserId,
-                    GlobalRole.SYSTEM_ADMIN
+                    actorUserId
             );
             return "UPDATE_SUCCESS";
         } catch (BusinessException exception) {

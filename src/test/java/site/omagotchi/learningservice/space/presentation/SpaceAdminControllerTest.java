@@ -30,7 +30,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -57,9 +56,7 @@ class SpaceAdminControllerTest {
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .defaultRequest(get("/")
                         .principal(authentication(
-                                USER_ID,
-                                GlobalRole.USER
-                        )))
+                                USER_ID, GlobalRole.USER)))
                 .build();
     }
 
@@ -67,9 +64,7 @@ class SpaceAdminControllerTest {
     void mapsDuplicateSpaceNameToConflictResponse() throws Exception {
         when(spaceCommandService.create(
                 any(CreateSpaceCommand.class),
-                any(UUID.class),
-                any(GlobalRole.class)
-        ))
+                any(UUID.class)))
                 .thenThrow(new BusinessException(
                         SpaceErrorCode.DUPLICATE_NAME
                 ));
@@ -88,7 +83,7 @@ class SpaceAdminControllerTest {
     void mapsSpaceNotFoundToNotFoundResponse() throws Exception {
         doThrow(new BusinessException(SpaceErrorCode.NOT_FOUND))
                 .when(spaceCommandService)
-                .delete(999L, USER_ID, GlobalRole.USER);
+                .delete(999L, USER_ID);
 
         mockMvc.perform(delete("/api/v1/admin/spaces/999"))
                 .andExpect(status().isNotFound())
@@ -103,9 +98,7 @@ class SpaceAdminControllerTest {
     void mapsInvalidSpaceNameToBadRequestResponse() throws Exception {
         when(spaceCommandService.create(
                 any(CreateSpaceCommand.class),
-                any(UUID.class),
-                any(GlobalRole.class)
-        ))
+                any(UUID.class)))
                 .thenThrow(new BusinessException(
                         SpaceErrorCode.INVALID_NAME
                 ));
@@ -124,9 +117,7 @@ class SpaceAdminControllerTest {
     void mapsInvalidSpaceCapacityToBadRequestResponse() throws Exception {
         when(spaceCommandService.create(
                 any(CreateSpaceCommand.class),
-                any(UUID.class),
-                any(GlobalRole.class)
-        ))
+                any(UUID.class)))
                 .thenThrow(new BusinessException(
                         SpaceErrorCode.INVALID_CAPACITY
                 ));
@@ -161,21 +152,17 @@ class SpaceAdminControllerTest {
         verify(spaceCommandService, never())
                 .create(
                         any(CreateSpaceCommand.class),
-                        any(UUID.class),
-                        any(GlobalRole.class)
-                );
+                        any(UUID.class));
     }
 
     @Test
     void activatesSpaceAndReturnsChangedStatus() throws Exception {
         when(spaceCommandService.activate(
                 1L,
-                USER_ID,
-                GlobalRole.USER
-        ))
+                USER_ID))
                 .thenReturn(space(SpaceOperationalStatus.ACTIVE, null));
 
-        mockMvc.perform(patch("/api/v1/admin/spaces/1/activate"))
+        mockMvc.perform(post("/api/v1/admin/spaces/1/activate"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.operationalStatus").value("ACTIVE"))
@@ -187,15 +174,13 @@ class SpaceAdminControllerTest {
         when(spaceCommandService.deactivate(
                 1L,
                 "정기 점검",
-                USER_ID,
-                GlobalRole.USER
-        ))
+                USER_ID))
                 .thenReturn(space(
                         SpaceOperationalStatus.INACTIVE,
                         "정기 점검"
                 ));
 
-        mockMvc.perform(patch("/api/v1/admin/spaces/1/deactivate")
+        mockMvc.perform(post("/api/v1/admin/spaces/1/deactivate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"inactiveReason":"정기 점검"}
@@ -208,7 +193,7 @@ class SpaceAdminControllerTest {
     @Test
     void rejectsNullEmptyAndBlankDeactivationReasonAtRequestBoundary()
             throws Exception {
-        mockMvc.perform(patch("/api/v1/admin/spaces/1/deactivate")
+        mockMvc.perform(post("/api/v1/admin/spaces/1/deactivate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"inactiveReason":null}
@@ -216,7 +201,7 @@ class SpaceAdminControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code")
                         .value("COMMON_INVALID_REQUEST"));
-        mockMvc.perform(patch("/api/v1/admin/spaces/1/deactivate")
+        mockMvc.perform(post("/api/v1/admin/spaces/1/deactivate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"inactiveReason":""}
@@ -224,7 +209,7 @@ class SpaceAdminControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code")
                         .value("COMMON_INVALID_REQUEST"));
-        mockMvc.perform(patch("/api/v1/admin/spaces/1/deactivate")
+        mockMvc.perform(post("/api/v1/admin/spaces/1/deactivate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"inactiveReason":"   "}
@@ -237,9 +222,7 @@ class SpaceAdminControllerTest {
                 .deactivate(
                         any(Long.class),
                         any(String.class),
-                        any(UUID.class),
-                        any(GlobalRole.class)
-                );
+                        any(UUID.class));
     }
 
     @Test
@@ -247,14 +230,12 @@ class SpaceAdminControllerTest {
         when(spaceCommandService.deactivate(
                 1L,
                 "점검",
-                USER_ID,
-                GlobalRole.USER
-        ))
+                USER_ID))
                 .thenThrow(new BusinessException(
                         SpaceErrorCode.ACTIVE_OCCUPANCY_EXISTS
                 ));
 
-        mockMvc.perform(patch("/api/v1/admin/spaces/1/deactivate")
+        mockMvc.perform(post("/api/v1/admin/spaces/1/deactivate")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"inactiveReason":"점검"}
@@ -269,14 +250,10 @@ class SpaceAdminControllerTest {
         when(spaceCommandService.assignCohort(
                 1L,
                 42L,
-                USER_ID,
-                GlobalRole.USER
-        )).thenReturn(lab(42L));
+                USER_ID)).thenReturn(lab(42L));
         when(spaceCommandService.unassignCohort(
                 1L,
-                USER_ID,
-                GlobalRole.SYSTEM_ADMIN
-        )).thenReturn(lab(null));
+                USER_ID)).thenReturn(lab(null));
 
         mockMvc.perform(put("/api/v1/admin/spaces/1/cohort")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -290,12 +267,8 @@ class SpaceAdminControllerTest {
 
         mockMvc.perform(delete("/api/v1/admin/spaces/1/cohort")
                         .principal(authentication(
-                                USER_ID,
-                                GlobalRole.SYSTEM_ADMIN
-                        )))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.cohortId").isEmpty());
+                                USER_ID, GlobalRole.USER)))
+                .andExpect(status().isNoContent());
     }
 
     @Test
@@ -311,9 +284,7 @@ class SpaceAdminControllerTest {
         verify(spaceCommandService, never()).assignCohort(
                 any(Long.class),
                 any(Long.class),
-                any(UUID.class),
-                any(GlobalRole.class)
-        );
+                any(UUID.class));
     }
 
     @Test
@@ -342,9 +313,7 @@ class SpaceAdminControllerTest {
                 .update(
                         any(Long.class),
                         any(UpdateSpaceCommand.class),
-                        any(UUID.class),
-                        any(GlobalRole.class)
-                );
+                        any(UUID.class));
     }
 
     @Test
@@ -366,9 +335,7 @@ class SpaceAdminControllerTest {
                 .update(
                         any(Long.class),
                         any(UpdateSpaceCommand.class),
-                        any(UUID.class),
-                        any(GlobalRole.class)
-                );
+                        any(UUID.class));
     }
 
     private String validRequest() {

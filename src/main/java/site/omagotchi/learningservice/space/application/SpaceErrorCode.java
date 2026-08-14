@@ -57,11 +57,6 @@ public enum SpaceErrorCode implements ErrorCode {
             "SPACE_ACCESS_DENIED",
             "해당 공간을 관리할 권한이 없습니다."
     ),
-    DELETED_SPACE(
-            ErrorType.CONFLICT,
-            "SPACE_ALREADY_DELETED",
-            "삭제된 공간은 변경할 수 없습니다."
-    ),
     ALREADY_ACTIVE(
             ErrorType.CONFLICT,
             "SPACE_ALREADY_ACTIVE",
@@ -97,20 +92,12 @@ public enum SpaceErrorCode implements ErrorCode {
             "SPACE_ACTIVE_DELETE_NOT_ALLOWED",
             "활성 공간은 삭제할 수 없습니다."
     ),
+    // 관리 주체가 없다는 것은 "이 요청자에게 권한이 없다"가 아니라 "누구에게도 없다"는 뜻이라
+    // 상태가 아닌 권한 문제다 — 명세 01 §5 "관리 주체 없는 공간 삭제 → 403, 비활성화로 대체 안내".
     UNMANAGED_SPACE_DELETE_NOT_ALLOWED(
-            ErrorType.CONFLICT,
+            ErrorType.AUTHORIZATION,
             "SPACE_UNMANAGED_DELETE_NOT_ALLOWED",
-            "관리 주체가 없는 공간은 삭제할 수 없습니다."
-    ),
-    UNMANAGED_SPACE_COMMAND_NOT_ALLOWED(
-            ErrorType.CONFLICT,
-            "SPACE_UNMANAGED_COMMAND_NOT_ALLOWED",
-            "관리 주체 기수가 없는 공간은 변경할 수 없습니다."
-    ),
-    ASSIGNED_LAB_TYPE_CHANGE_NOT_ALLOWED(
-            ErrorType.CONFLICT,
-            "SPACE_ASSIGNED_LAB_TYPE_CHANGE_NOT_ALLOWED",
-            "기수에 배정된 실습실은 공간 유형을 변경할 수 없습니다."
+            "관리 주체가 없는 공간은 삭제할 수 없습니다. 비활성화를 이용하세요."
     ),
     LAB_ALREADY_ASSIGNED(
             ErrorType.CONFLICT,

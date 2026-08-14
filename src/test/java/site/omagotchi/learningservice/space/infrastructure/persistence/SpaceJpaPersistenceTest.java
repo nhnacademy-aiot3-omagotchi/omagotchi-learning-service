@@ -14,8 +14,6 @@ import site.omagotchi.learningservice.space.infrastructure.persistence.entity.Sp
 import site.omagotchi.learningservice.space.infrastructure.persistence.mapper.SpacePersistenceMapper;
 import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataSpaceRepository;
 
-import java.util.Optional;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -96,16 +94,5 @@ class SpaceJpaPersistenceTest {
                 .thenThrow(unexpected);
 
         assertThatThrownBy(() -> adapter.save(space)).isSameAs(unexpected);
-    }
-
-    @Test
-    void findByIdUsesUnfilteredRepositoryLookup() {
-        SpaceJpaEntity entity = mock(SpaceJpaEntity.class);
-        Space space = mock(Space.class);
-        when(springDataSpaceRepository.findById(1L))
-                .thenReturn(Optional.of(entity));
-        when(spacePersistenceMapper.toDomain(entity)).thenReturn(space);
-
-        assertThat(adapter.findById(1L)).containsSame(space);
     }
 }

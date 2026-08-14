@@ -3,17 +3,15 @@ package site.omagotchi.learningservice.occupancy.application.port;
 import java.util.Optional;
 
 /**
- * 공간 조회 파사드. 점유 모듈이 {@code space} 파트에 의존하는 유일한 통로다.
+ * 공간 조회 경계. 점유 모듈이 {@code space} 파트에 의존하는 유일한 통로다.
  *
  * <p>읽기 전용인 것이 설계의 결과다. 점유·연장·반납·강제종료 어느 것도
  * {@code spaces}에 쓰기를 하지 않는다 — 공간의 사용 상태를 컬럼으로 저장하지 않고
  * 활성 점유 존재 여부로 매 조회 시 파생 계산하기로 했기 때문이다 (명세서 01, SSOT 원칙).</p>
  *
- * <p>엔티티가 아니라 값({@link MeetingRoom})을 반환한다. {@code SpaceJpaEntity}를 받으면
- * 그 인스턴스가 영속성 컨텍스트 1차 캐시에 올라가, 뒤이은 {@link #lock(Long)}이
- * {@code SELECT ... FOR UPDATE}를 실제로 실행해도 Hibernate가 캐시 인스턴스를 그대로
- * 돌려준다. 그러면 락 획득 후 상태 재확인이 락 이전 스냅샷을 보게 되어 방어가 무력화된다
- * ({@code TeamJpaRepository.findActiveCohortId} 주석 참고).</p>
+ * <p>구현({@code SpaceAccessReader})은 {@code space}의 공개 Application 계약인
+ * {@code SpaceAccessService}에 위임한다. 이 Port가 유지되는 이유는 점유의 Use Case가
+ * 남의 결과 Type을 직접 받지 않게 하기 위해서다.</p>
  */
 public interface SpaceReader {
 

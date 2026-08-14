@@ -80,7 +80,7 @@ public class RoomOccupancyJpaPersistence implements RoomOccupancyRepository {
      * {@inheritDoc}
      *
      * <p>트랜잭션 밖에서 부르면 락이 즉시 해제되어 아무것도 보장하지 못하므로 조용히
-     * 통과시키지 않고 명시적으로 막는다 ({@code SpaceNativeQueryReader#lock}과 같은 방어).</p>
+     * 통과시키지 않고 명시적으로 막는다 ({@code SpaceAccessNativeQueryReader#lock}과 같은 방어).</p>
      */
     @Override
     public Optional<RoomOccupancy> lockById(Long occupancyId) {

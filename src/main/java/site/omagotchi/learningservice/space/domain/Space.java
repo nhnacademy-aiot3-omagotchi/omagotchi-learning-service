@@ -187,12 +187,6 @@ public class Space {
     ) {
         ensureNotDeleted();
 
-        if (spaceType != newType && isActive()) {
-            throw new IllegalStateException(
-                    "활성 공간의 유형은 변경할 수 없습니다."
-            );
-        }
-
         return new Space(
                 id,
                 cohortId,
@@ -218,14 +212,6 @@ public class Space {
             ZonedDateTime updatedAt
     ) {
         ensureNotDeleted();
-
-        if (newCapacity != null
-                && newCapacity < capacity
-                && isActive()) {
-            throw new IllegalStateException(
-                    "활성 공간의 최대 인원은 줄일 수 없습니다."
-            );
-        }
 
         return new Space(
                 id,

@@ -8,7 +8,7 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
 import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPort;
-import site.omagotchi.learningservice.space.application.port.SpaceOccupancyQueryPort;
+import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceAttributes;
@@ -27,7 +27,7 @@ import java.util.UUID;
 public class SpaceCommandService {
 
     private final SpaceRepository spaceRepository;
-    private final SpaceOccupancyQueryPort spaceOccupancyQueryPort;
+    private final OccupancyQueryService occupancyQueryService;
     private final SpaceCohortAccessPort cohortAccessPort;
     private final Clock clock;
 
@@ -270,7 +270,7 @@ public class SpaceCommandService {
             Long spaceId,
             ZonedDateTime now
     ) {
-        if (spaceOccupancyQueryPort.existsActiveOccupancy(spaceId, now)) {
+        if (occupancyQueryService.existsActive(spaceId, now.toOffsetDateTime())) {
             throw new BusinessException(
                     SpaceErrorCode.ACTIVE_OCCUPANCY_EXISTS
             );

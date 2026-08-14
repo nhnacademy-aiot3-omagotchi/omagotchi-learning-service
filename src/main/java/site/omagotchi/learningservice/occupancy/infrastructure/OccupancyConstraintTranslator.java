@@ -18,7 +18,7 @@ import java.util.Locale;
  *
  * <p>V6 주석대로 이 유니크들은 테이블 제약이 아니라 부분 인덱스이므로, PostgreSQL이
  * 23505와 함께 넘기는 이름은 "인덱스명"이다. 이름은 통합 DDL이 아니라
- * {@code V6__create_space_team_index.sql}을 정본으로 삼는다 — ERD 문서에는
+ * {@code V7__create_space_team_index.sql}을 정본으로 삼는다 — ERD 문서에는
  * {@code uq_occupancies_*}로 적혀 있지만 실제 인덱스는 {@code uq_room_occupancies_*}다.</p>
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)

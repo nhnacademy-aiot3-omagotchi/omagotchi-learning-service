@@ -12,6 +12,7 @@ import site.omagotchi.learningservice.space.infrastructure.persistence.entity.Sp
 import site.omagotchi.learningservice.space.infrastructure.persistence.mapper.SpacePersistenceMapper;
 import site.omagotchi.learningservice.space.infrastructure.persistence.repository.SpringDataSpaceRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -51,6 +52,15 @@ public class SpaceJpaPersistence
         return springDataSpaceRepository
                 .findByIdForUpdate(spaceId)
                 .map(spacePersistenceMapper::toDomain);
+    }
+
+    @Override
+    public List<Space> findAllNotDeleted() {
+        return springDataSpaceRepository
+                .findAllByDeletedAtIsNullOrderByIdAsc()
+                .stream()
+                .map(spacePersistenceMapper::toDomain)
+                .toList();
     }
 
     @Override

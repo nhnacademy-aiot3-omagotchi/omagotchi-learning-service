@@ -13,7 +13,7 @@ import site.omagotchi.learningservice.space.application.command.CreateSpaceComma
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
 import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPort;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
-import site.omagotchi.learningservice.space.application.port.SpaceOccupancyQueryPort;
+import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
 import site.omagotchi.learningservice.space.domain.SpaceType;
@@ -21,6 +21,7 @@ import site.omagotchi.learningservice.space.domain.SpaceType;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -48,7 +49,7 @@ class SpaceCommandServiceTest {
     private SpaceRepository spaceRepository;
 
     @Mock
-    private SpaceOccupancyQueryPort spaceOccupancyQueryPort;
+    private OccupancyQueryService occupancyQueryService;
 
     @Mock
     private SpaceCohortAccessPort cohortAccessPort;
@@ -60,7 +61,7 @@ class SpaceCommandServiceTest {
         Clock clock = Clock.fixed(NOW, SEOUL);
         SpaceCommandService delegate = new SpaceCommandService(
                 spaceRepository,
-                spaceOccupancyQueryPort,
+                occupancyQueryService,
                 cohortAccessPort,
                 clock
         );
@@ -455,9 +456,9 @@ class SpaceCommandServiceTest {
                         null,
                         null
                 )));
-        when(spaceOccupancyQueryPort.existsActiveOccupancy(
+        when(occupancyQueryService.existsActive(
                 any(Long.class),
-                any(ZonedDateTime.class)
+                any(OffsetDateTime.class)
         )).thenReturn(true);
 
         assertBusinessError(
@@ -512,9 +513,9 @@ class SpaceCommandServiceTest {
     void rejectsTypeChangeWhenActiveOccupancyExists() {
         when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(existingSpace()));
-        when(spaceOccupancyQueryPort.existsActiveOccupancy(
+        when(occupancyQueryService.existsActive(
                 any(Long.class),
-                any(ZonedDateTime.class)
+                any(OffsetDateTime.class)
         )).thenReturn(true);
 
         assertBusinessError(
@@ -551,10 +552,10 @@ class SpaceCommandServiceTest {
         );
 
         assertThat(updated.getCapacity()).isEqualTo(9);
-        verify(spaceOccupancyQueryPort, never())
-                .existsActiveOccupancy(
+        verify(occupancyQueryService, never())
+                .existsActive(
                         any(Long.class),
-                        any(ZonedDateTime.class)
+                        any(OffsetDateTime.class)
                 );
     }
 
@@ -578,10 +579,10 @@ class SpaceCommandServiceTest {
                         )
                 )
         );
-        verify(spaceOccupancyQueryPort, never())
-                .existsActiveOccupancy(
+        verify(occupancyQueryService, never())
+                .existsActive(
                         any(Long.class),
-                        any(ZonedDateTime.class)
+                        any(OffsetDateTime.class)
                 );
         verify(spaceRepository, never()).save(any(Space.class));
     }
@@ -595,9 +596,9 @@ class SpaceCommandServiceTest {
 
         spaceCommandService.delete(1L);
 
-        verify(spaceOccupancyQueryPort).existsActiveOccupancy(
+        verify(occupancyQueryService).existsActive(
                 any(Long.class),
-                any(ZonedDateTime.class)
+                any(OffsetDateTime.class)
         );
     }
 
@@ -605,9 +606,9 @@ class SpaceCommandServiceTest {
     void rejectsDeletingSpaceWhenActiveOccupancyExists() {
         when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(existingSpace()));
-        when(spaceOccupancyQueryPort.existsActiveOccupancy(
+        when(occupancyQueryService.existsActive(
                 any(Long.class),
-                any(ZonedDateTime.class)
+                any(OffsetDateTime.class)
         )).thenReturn(true);
 
         assertBusinessError(

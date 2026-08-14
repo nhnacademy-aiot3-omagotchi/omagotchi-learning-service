@@ -57,31 +57,29 @@ public class ThresholdRuleHistory {
         this.changedAt = OffsetDateTime.now();
     }
 
-    /**
-     * 변경이 적용된 룰의 현재 상태를 그대로 이력으로 남긴다.
-     *
-     * rule.version 은 낙관적 락 버전이라 flush 시점에 증가하므로,
-     * 호출 전에 반드시 flush 가 끝나 있어야 한다. 그러지 않으면
-     * 갱신 이전 버전이 기록되고 uq_threshold_rule_history_version 에 걸린다.
-     *
-     * 룰 갱신과 이 행의 INSERT 는 같은 트랜잭션이어야 한다 (트리거 미사용).
-     */
     public static ThresholdRuleHistory record(
             ThresholdRule rule,
             ChangeType changeType,
             UUID changedByUserId,
             String requestId
     ) {
-        if (rule == null || rule.getId() == null) {
-            throw new IllegalArgumentException("이력 기록 대상 룰이 식별되지 않았습니다.");
+
+        if (rule == null) {
+            throw new IllegalArgumentException("이력 기록 대상 룰은 필수입니다.");
+        }
+        if (changeType == null) {
+            throw new IllegalArgumentException("변경 유형은 필수입니다.");
+        }
+
+        if (rule.getId() == null) {
+            throw new IllegalStateException(
+                    "룰 식별자가 확정되지 않았습니다. 이력 기록 전에 저장이 필요합니다."
+            );
         }
         if (rule.getVersion() == null) {
             throw new IllegalStateException(
                     "룰 버전이 확정되지 않았습니다. 이력 기록 전에 flush 가 필요합니다."
             );
-        }
-        if (changeType == null) {
-            throw new IllegalArgumentException("변경 유형은 필수입니다.");
         }
 
         ThresholdRuleHistory history = new ThresholdRuleHistory();

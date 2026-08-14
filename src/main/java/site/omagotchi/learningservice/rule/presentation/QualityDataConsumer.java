@@ -1,10 +1,10 @@
-package site.omagotchi.learningservice.rule.application;
+package site.omagotchi.learningservice.rule.presentation;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
-import site.omagotchi.learningservice.rule.domain.QualityEvent;
+import site.omagotchi.learningservice.rule.infrastructure.QualityEvent;
 
 //TODO: 현재는 소비는 하되 관리자쪽에 어떻게 표현할지 확정된게 없음. 로그만 찍도록 일단 세팅
 @Slf4j

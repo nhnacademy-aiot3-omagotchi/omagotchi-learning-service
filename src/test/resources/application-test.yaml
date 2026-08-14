@@ -11,6 +11,7 @@ spring:
     redis:
       host: localhost
       port: 6379
+      database: 0
       username: ""
       password: ""
       connect-timeout: 1s

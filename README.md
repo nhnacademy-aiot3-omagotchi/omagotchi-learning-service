@@ -1,60 +1,130 @@
 # Learning Service
 
-교육 기수, 학습, 출결, 공간·팀과 게이미피케이션 데이터를 소유하는 서비스입니다. 현재 기반에는 PostgreSQL 18.1, Flyway와 교육 기수·소속 Migration이 포함되어 있습니다.
+교육 기수·학습·출결·공간·팀·게이미피케이션 데이터 소유 서비스.
+
+## 담당 범위
+
+- 교육 기수·소속·가입 요청
+- 학습 타이머·기록·통계
+- 출결·재실·공간 점유
+- 공간·팀·팀원 수명주기
+- 커뮤니티·이미지 첨부
+- Redis Presence·WebSocket
+- 캐릭터·퀘스트·랭킹
+- Telegram·RabbitMQ·Rule 기준값 연동
+
+## 기술 구성
+
+- Java 21, Spring Boot 4.1
+- Spring Security, OAuth2 Resource Server
+- Spring Data JPA, PostgreSQL 18.1, Flyway
+- Redis, RabbitMQ, STOMP WebSocket
+- Eureka Client, Testcontainers
 
 ## 빠른 검증
 
-Java 21과 Docker가 실행 중인 상태에서 다음 명령을 사용합니다. Testcontainers가 임시 PostgreSQL 18.1을 준비하므로 로컬 DB가 필요하지 않습니다.
+- 선행 조건: Docker 호환 Container Runtime 실행
+- 테스트 DB: Testcontainers에서 임시 생성
+- 로컬 PostgreSQL·Redis: 불필요
 
 ```bash
 ./mvnw verify
 ```
 
-테스트는 Flyway V1·V2 적용, `learning_service.cohorts` 생성, 계정 논리 참조 컬럼의 UUID 타입과 PostgreSQL 버전을 확인합니다.
-
-## 일반 애플리케이션 실행
-
-`local` profile은 저장소 루트의 `.env.local`을 읽습니다.
+## 로컬 실행
 
 ```bash
 cp .env.local.example .env.local
 ./mvnw -Dspring-boot.run.profiles=local spring-boot:run
 ```
 
-`.env.local`의 DB 접속값은 개인 로컬 PostgreSQL 또는 팀 Compose 환경에 맞게 설정합니다. 학교 DB는 데이터베이스 이름과 `learning_service` schema 생성 권한을 확인하기 전까지 연결하지 않습니다.
+- Profile: `local`
+- 설정 파일: 저장소 루트 `.env.local`
+- 기본 Port: `8084`
+- 기본 DB: `jdbc:postgresql://localhost:5432/learning_service`
+- Redis 논리 DB: `REDIS_DATABASE`, 로컬 기본값 `0`
+- Eureka: 기본 비활성화
+- Health: <http://localhost:8084/actuator/health>
 
-Redis Presence 기능을 사용하는 현재 애플리케이션은 로컬 Redis도 필요합니다. `REDIS_HOST`와 `REDIS_PORT`는 필수이며, 인증 없는 Redis는 username/password를 생략할 수 있습니다. 연결 timeout과 SSL은 필요할 때만 `.env.local`에서 기본값을 덮어씁니다.
+### JWT Public Key
 
-### 로컬 JWT 공개키
+- 용도: Identity Access JWT 검증
+- 기본 경로: `../identity-service/secrets/jwt-public.pem`
+- Private Key의 Learning 복사 금지
+- 경로 변경: `.env.local`의 `JWT_PUBLIC_KEY_LOCATION`
 
-`identity-service`와 `learning-service`가 같은 상위 디렉터리에 있다고 가정합니다. Identity에서 로컬 RSA key pair를 한 번 생성하면 Learning은 private key를 복사하지 않고 다음 public key를 직접 참조합니다.
+### 외부 자원
 
-```text
-../identity-service/secrets/jwt-public.pem
-```
+- PostgreSQL: 영속 Domain 데이터
+- Redis: WebSocket Presence·Session TTL
+- RabbitMQ: Rule 품질 데이터 소비·복구 Queue
+- 첨부파일: `COMMUNITY_ATTACHMENT_STORAGE_ROOT`
+- Telegram: 사용자 연동·Webhook
 
-아직 로컬 key pair가 없다면 `identity-service` 저장소에서 생성합니다.
+## 환경 Profile
 
-```bash
-mkdir -p secrets
-chmod 700 secrets
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out secrets/jwt-private.pem
-openssl pkey -in secrets/jwt-private.pem -pubout -out secrets/jwt-public.pem
-chmod 600 secrets/jwt-private.pem secrets/jwt-public.pem
-```
+- `local`: `.env.local`, 로컬 PostgreSQL·Redis·RabbitMQ
+- `dev`: `.env.dev`, 공유 개발 자원, Flyway 기본 비활성화
+- `test`: Testcontainers DB·테스트 Key, 외부 자원 미사용
+- `prod`: 운영 환경변수·Mount된 JWT Public Key, Eureka 활성화
 
-`local` profile의 기본 공개키 경로와 `.env.local.example`은 이 파일을 가리킵니다. 경로를 바꿔야 할 때만 `.env.local`의 `JWT_PUBLIC_KEY_LOCATION`을 변경합니다.
+## HTTP 경계
 
-## 환경별 설정 계약
+- 기본 Prefix: `/api/v1`
+- 일반 보호 API: Access JWT 필수
+- 관리자 API: `SYSTEM_ADMIN` 또는 기수 관리자 정책
+- 공개 조회: `GET /api/v1/spaces`
+- Telegram Webhook: `POST /api/v1/webhooks/telegram`, Access JWT 예외
+- WebSocket Handshake: `/ws/**`
+- 내부 사용자 식별자: Access JWT의 `sub` UUID
 
-- `local`: 필수 `./.env.local`을 읽고 Eureka는 기본적으로 비활성화합니다.
-- `test`: `.env.local`을 읽지 않고 `application-test.yaml`, Testcontainers PostgreSQL과 테스트 RSA Key만 사용합니다.
-- `prod`: 별도 env 파일을 import하지 않습니다. DB·Redis·Eureka·JWT·Telegram·첨부파일 저장소 설정은 환경변수와 Mount된 공개키로 주입해야 합니다.
+주요 Resource:
 
-공통 `application.yaml`에는 운영 필수값의 fallback이 없습니다. 값 누락, 잘못된 Duration 또는 읽을 수 없는 JWT 공개키는 요청을 받기 전에 애플리케이션 시작을 실패시킵니다. 실제 Credential과 Key 파일은 `.env.local.example`이나 Git에 기록하지 않습니다.
+- `/api/v1/cohorts/**`: 기수·소속·출결 정책
+- `/api/v1/cohorts/{cohortId}/attendance-records/**`: 출결
+- `/api/v1/cohorts/{cohortId}/timer/**`: 학습 타이머
+- `/api/v1/cohorts/{cohortId}/study-statistics/**`: 학습 통계
+- `/api/v1/spaces/**`: 공간·점유
+- `/api/v1/teams/**`: 팀·팀원
+- `/api/v1/community/posts/**`: 커뮤니티
+- `/api/v1/gamification/**`: 캐릭터·퀘스트
+- `/api/v1/telegram/**`: 사용자 Telegram 연동
+- `/api/v1/threshold-rules/**`: 센서 임계치 기준
 
-## Migration 규칙
+- 최신 세부 계약: Spring REST Docs 기반 산출물로 관리 예정
+- `docs/api/`: 과거 작업 참고 자료, 최신 계약 근거로 사용 금지
 
-실행 SQL은 `src/main/resources/db/migration/`에서 관리합니다. 공유 브랜치나 공용 환경에 적용된 파일은 수정하지 않고, 변경이 필요하면 다음 버전의 Migration을 추가합니다. Entity는 테이블을 만들지 않으며 `ddl-auto: validate`로 Migration 결과와 일치하는지만 검사합니다.
+## Database·Migration
 
-다른 서비스가 소유한 데이터에는 Foreign Key와 JPA 연관관계를 만들지 않습니다. Identity의 사용자는 JWT `sub`와 같은 UUID `userId` 값으로만 논리 참조합니다. `cohort_memberships.id`처럼 Learning 내부 관계에 사용하는 PK는 기존 `BIGINT`를 유지합니다.
+- Schema: `learning_service`
+- Migration: `src/main/resources/db/migration/`
+- JPA 정책: `ddl-auto=validate`
+- JDBC 시간대: `UTC`
+- Identity 사용자 참조: JWT `sub`와 동일한 UUID `userId`
+- 서비스 간 참조: Foreign Key 대신 논리 식별자 사용
+- 적용 완료 Migration의 변경 금지
+- Schema 변경의 신규 Version Migration 추가
+
+## 코드 구조
+
+- 교육: `cohort`, `attendance`, `study`, `statistics`
+- 공간: `space`, `occupancy`, `team`
+- 사용자 기능: `community`, `gamification`, `ranking`, `user`
+- 연동: `realtime`, `telegram`, `rule`
+- 공통: `global.security`, `global.exception`, `global.config`, `global.logging`
+- 내부 계층: `domain` → `application` → `infrastructure`·`presentation`
+
+## 운영 원칙
+
+- 실제 Credential·Token·JWT Key의 기록 금지
+- Frontend Session과 Learning Presence의 Redis 논리 DB 분리
+- Telegram Webhook의 Access JWT 예외와 제공자 검증의 분리
+- 공유 DB Migration의 담당 절차 외 실행 금지
+- 운영 첨부파일 Volume 연결
+
+## 관련 문서
+
+- [Backend Code Structure](https://github.com/nhnacademy-aiot3-omagotchi/docs/blob/main/50-guides/10-backend-code-structure.md)
+- [공통 예외 처리](https://github.com/nhnacademy-aiot3-omagotchi/docs/blob/main/50-guides/04-error-handling.md)
+- [REST API Convention](https://github.com/nhnacademy-aiot3-omagotchi/docs/blob/main/50-guides/09-rest-api-convention.md)
+- [HTTP Request ID](https://github.com/nhnacademy-aiot3-omagotchi/docs/blob/main/50-guides/08-http-request-id.md)

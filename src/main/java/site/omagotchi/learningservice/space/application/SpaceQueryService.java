@@ -98,7 +98,12 @@ public class SpaceQueryService {
                 ? occupancy.expiresAt().atZoneSameInstant(now.getZone())
                 : null;
 
+        // 점유자의 기수를 알 수 없으면(멤버십이 이미 정리됨) 어느 기수와도 일치시키지 않는다 —
+        // 판정할 수 없으면 감추는 것이 SpaceOccupancyView.of의 계약이다.
+        // null 검사가 앞에 와야 하는 것도 계약의 일부다: 불변 Set의 contains(null)은
+        // 빈 Set이어도 NPE라, 순서를 뒤집으면 점유 하나 때문에 목록 전체가 500이 된다.
         boolean sameCohort = occupied
+                && occupancy.occupierCohortId() != null
                 && requesterCohortIds.contains(occupancy.occupierCohortId());
 
         return new SpaceListResult(

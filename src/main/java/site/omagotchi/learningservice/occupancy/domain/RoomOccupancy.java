@@ -48,6 +48,9 @@ public class RoomOccupancy {
     /** 1회 연장으로 늘어나는 시간 (MR-06). */
     public static final Duration EXTENSION_UNIT = Duration.ofMinutes(30);
 
+    /** 점유자에게 만료 임박 알림을 보내기 시작하는 시점 (MR-12). */
+    public static final Duration EXPIRY_REMINDER_WINDOW = Duration.ofMinutes(10);
+
     /**
      * 연장 가능 시점 — 만료 이 시간 전부터 허용한다 (MR-06).
      *
@@ -132,6 +135,32 @@ public class RoomOccupancy {
      */
     public boolean isExpiredAt(OffsetDateTime now) {
         return !expiresAt.isAfter(now);
+    }
+
+    /**
+     * 기준 시각에 만료 임박 알림을 보낼 수 있는가 (MR-12).
+     *
+     * <p>정확한 범위는 {@code now < expiresAt <= now + 10분}이다. 이미 만료된 점유와
+     * 종료된 점유, 이미 같은 만료 시각의 알림을 보낸 점유는 대상이 아니다.</p>
+     */
+    public boolean isExpiryReminderDueAt(OffsetDateTime now) {
+        Objects.requireNonNull(now, "기준 시각은 필수");
+        return isActive()
+                && endedAt == null
+                && expiresAt.isAfter(now)
+                && !expiresAt.isAfter(now.plus(EXPIRY_REMINDER_WINDOW))
+                && reminderSentAt == null;
+    }
+
+    /** 실제 알림 발송에 성공한 시각을 기록한다 (MR-12). */
+    public void markExpiryReminderSent(OffsetDateTime sentAt) {
+        if (!isActive()) {
+            throw new IllegalStateException("종료된 점유에는 만료 임박 알림을 기록할 수 없습니다.");
+        }
+        if (reminderSentAt != null) {
+            throw new IllegalStateException("만료 임박 알림이 이미 기록되었습니다.");
+        }
+        this.reminderSentAt = Objects.requireNonNull(sentAt, "알림 발송 시각은 필수");
     }
 
     /** 요청자가 점유자 본인인가 (MR-06, MR-14의 403 판정에서 쓴다). */

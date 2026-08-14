@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
@@ -11,7 +12,7 @@ import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecyc
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.inOrder;
 
 /**
  * 만료 정리 진입점.
@@ -29,13 +30,16 @@ class OccupancyExpirySchedulerTest {
     private OccupancyExpiryScheduler occupancyExpiryScheduler;
 
     @Test
-    @DisplayName("주기 실행은 만료 정리를 그대로 위임한다.")
-    void scheduledRunDelegatesToExpireAll() {
+    @DisplayName("주기 실행은 임박 알림과 만료 정리를 각각 위임한다.")
+    void scheduledRunSendsRemindersBeforeExpiringOccupancies() {
+        given(roomOccupancyLifecycleService.sendExpiryReminders()).willReturn(1);
         given(roomOccupancyLifecycleService.expireAll()).willReturn(2);
 
         occupancyExpiryScheduler.expireStaleOccupancies();
 
-        verify(roomOccupancyLifecycleService).expireAll();
+        InOrder inOrder = inOrder(roomOccupancyLifecycleService);
+        inOrder.verify(roomOccupancyLifecycleService).sendExpiryReminders();
+        inOrder.verify(roomOccupancyLifecycleService).expireAll();
     }
 
     /**
@@ -53,5 +57,19 @@ class OccupancyExpirySchedulerTest {
 
         assertThatCode(occupancyExpiryScheduler::expireStaleOccupancies)
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("임박 알림이 실패해도 만료 정리는 계속 실행한다.")
+    void expiryReminderFailureDoesNotBlockExpiration() {
+        willThrow(new IllegalStateException("알림 실패"))
+                .given(roomOccupancyLifecycleService).sendExpiryReminders();
+
+        assertThatCode(occupancyExpiryScheduler::expireStaleOccupancies)
+                .doesNotThrowAnyException();
+
+        InOrder inOrder = inOrder(roomOccupancyLifecycleService);
+        inOrder.verify(roomOccupancyLifecycleService).sendExpiryReminders();
+        inOrder.verify(roomOccupancyLifecycleService).expireAll();
     }
 }

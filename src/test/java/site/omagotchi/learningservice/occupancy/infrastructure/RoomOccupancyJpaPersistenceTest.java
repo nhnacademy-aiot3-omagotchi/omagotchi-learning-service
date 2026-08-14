@@ -223,6 +223,19 @@ class RoomOccupancyJpaPersistenceTest {
         verify(occupancyJpaRepository, never()).expireById(any(), any(), any(), any());
     }
 
+    @Test
+    @DisplayName("만료 임박 후보 조회는 10분 경계와 ACTIVE 상태를 그대로 위임한다.")
+    void findExpiringSoonDelegatesBoundaryAndMapsProjection() {
+        OffsetDateTime reminderEndsAt = NOW.plusMinutes(10);
+        given(occupancyJpaRepository.findExpiringSoon(
+                NOW, reminderEndsAt, OccupancyStatus.ACTIVE))
+                .willReturn(List.of(expiring(100L, reminderEndsAt)));
+
+        assertThat(roomOccupancyJpaPersistence.findExpiringSoon(NOW, reminderEndsAt))
+                .containsExactly(new RoomOccupancyRepository.ExpiringOccupancy(
+                        100L, reminderEndsAt));
+    }
+
     /**
      * 영향 행 수가 그대로 계약이다. 0행은 연장·반납·타 인스턴스 선처리 중 하나이며,
      * 호출부가 이 값으로 참여자 마감과 이벤트 발행 여부를 정한다.
@@ -255,6 +268,21 @@ class RoomOccupancyJpaPersistenceTest {
             @Override
             public OffsetDateTime getEndedAt() {
                 return endedAt;
+            }
+        };
+    }
+
+    private RoomOccupancyJpaRepository.ExpiringOccupancyProjection expiring(
+            Long occupancyId, OffsetDateTime expiresAt) {
+        return new RoomOccupancyJpaRepository.ExpiringOccupancyProjection() {
+            @Override
+            public Long getOccupancyId() {
+                return occupancyId;
+            }
+
+            @Override
+            public OffsetDateTime getExpiresAt() {
+                return expiresAt;
             }
         };
     }

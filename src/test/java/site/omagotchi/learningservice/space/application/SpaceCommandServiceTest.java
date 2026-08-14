@@ -363,7 +363,7 @@ class SpaceCommandServiceTest {
                 )));
 
         assertBusinessError(
-                SpaceErrorCode.DELETED_SPACE,
+                SpaceErrorCode.NOT_FOUND,
                 () -> spaceCommandService.activate(1L)
         );
     }
@@ -378,7 +378,7 @@ class SpaceCommandServiceTest {
                 )));
 
         assertBusinessError(
-                SpaceErrorCode.DELETED_SPACE,
+                SpaceErrorCode.NOT_FOUND,
                 () -> spaceCommandService.deactivate(1L, "점검")
         );
     }
@@ -393,7 +393,7 @@ class SpaceCommandServiceTest {
                 )));
 
         assertBusinessError(
-                SpaceErrorCode.DELETED_SPACE,
+                SpaceErrorCode.NOT_FOUND,
                 () -> spaceCommandService.delete(1L)
         );
     }
@@ -628,7 +628,7 @@ class SpaceCommandServiceTest {
                 )));
 
         assertBusinessError(
-                SpaceErrorCode.DELETED_SPACE,
+                SpaceErrorCode.NOT_FOUND,
                 () -> spaceCommandService.update(
                         1L,
                         new UpdateSpaceCommand(
@@ -783,7 +783,7 @@ class SpaceCommandServiceTest {
                 )));
 
         assertBusinessError(
-                SpaceErrorCode.DELETED_SPACE,
+                SpaceErrorCode.NOT_FOUND,
                 () -> spaceCommandService.assignCohort(1L, 42L)
         );
     }

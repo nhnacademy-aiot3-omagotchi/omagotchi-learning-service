@@ -11,7 +11,8 @@ import site.omagotchi.learningservice.cohort.application.result.CohortMembership
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
-import site.omagotchi.learningservice.occupancy.application.port.SpaceReader;
+import site.omagotchi.learningservice.space.application.SpaceAccessService;
+import site.omagotchi.learningservice.space.application.result.SpaceAccessView;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
@@ -42,7 +43,7 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class OccupancyParticipantService {
 
-    private final SpaceReader spaceReader;
+    private final SpaceAccessService spaceAccessService;
     private final AttendancePresenceQueryService attendancePresenceQueryService;
     private final CohortMembershipQueryService cohortMembershipQueryService;
     private final RoomOccupancyRepository occupancyRepository;
@@ -74,7 +75,7 @@ public class OccupancyParticipantService {
         RoomOccupancyRepository.ActiveOccupancy occupancy = findActiveOccupancy(spaceId);
         requireOccupier(occupancy, requesterUserId);
 
-        SpaceReader.MeetingRoom room = spaceReader.find(spaceId)
+        SpaceAccessView room = spaceAccessService.find(spaceId)
                 .orElseThrow(() -> new BusinessException(OccupancyErrorCode.SPACE_NOT_FOUND));
 
         // 점유자 본인의 멤버십이 이미 비활성이면 대상과 무관하게 점유 자체가 유효하지

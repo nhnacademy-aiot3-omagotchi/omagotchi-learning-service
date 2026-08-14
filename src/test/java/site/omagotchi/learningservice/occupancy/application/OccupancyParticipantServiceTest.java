@@ -18,7 +18,8 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
-import site.omagotchi.learningservice.occupancy.application.port.SpaceReader;
+import site.omagotchi.learningservice.space.application.SpaceAccessService;
+import site.omagotchi.learningservice.space.application.result.SpaceAccessView;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
@@ -66,7 +67,7 @@ class OccupancyParticipantServiceTest {
     private static final UUID STRANGER_USER_ID = UUID.randomUUID();
 
     @Mock
-    private SpaceReader spaceReader;
+    private SpaceAccessService spaceAccessService;
 
     @Mock
     private AttendancePresenceQueryService attendancePresenceQueryService;
@@ -87,7 +88,7 @@ class OccupancyParticipantServiceTest {
     void setUp() {
         clock = Clock.fixed(NOW, SEOUL);
         occupancyParticipantService = new OccupancyParticipantService(
-                spaceReader,
+                spaceAccessService,
                 attendancePresenceQueryService,
                 cohortMembershipQueryService,
                 occupancyRepository,
@@ -145,7 +146,7 @@ class OccupancyParticipantServiceTest {
     @DisplayName("점유자와 다른 기수의 사용자는 참여자로 추가할 수 없다.")
     void cannotAddUserFromDifferentCohortThanOccupier() {
         givenActiveOccupancy();
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room()));
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
         givenTargetPresent();
         givenCohort(TARGET_MEMBERSHIP_ID, OTHER_COHORT_ID);
@@ -163,7 +164,7 @@ class OccupancyParticipantServiceTest {
     @DisplayName("대상의 멤버십이 활성이 아니면 추가할 수 없다.")
     void cannotAddWhenTargetMembershipInactive() {
         givenActiveOccupancy();
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room()));
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
         givenTargetPresent();
         given(cohortMembershipQueryService.findActiveMembership(TARGET_MEMBERSHIP_ID))
@@ -183,7 +184,7 @@ class OccupancyParticipantServiceTest {
     @DisplayName("점유자의 멤버십이 활성이 아니면 대상과 무관하게 전용 코드로 실패한다.")
     void failsWithDedicatedCodeWhenOccupierMembershipInactive() {
         givenActiveOccupancy();
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room()));
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room()));
         given(cohortMembershipQueryService.findActiveMembership(OCCUPIER_MEMBERSHIP_ID))
                 .willReturn(Optional.empty());
 
@@ -211,7 +212,7 @@ class OccupancyParticipantServiceTest {
     @DisplayName("재실이 아닌 사용자는 참여자로 추가할 수 없다.")
     void cannotAddAbsentUserAsParticipant() {
         givenActiveOccupancy();
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room()));
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
         given(attendancePresenceQueryService.findOpenPresence(TARGET_USER_ID)).willReturn(Optional.empty());
 
@@ -240,7 +241,7 @@ class OccupancyParticipantServiceTest {
     @DisplayName("락을 잡은 뒤 종료된 점유를 찾아낸다.")
     void detectsOccupancyEndedAfterLock() {
         givenActiveOccupancy();
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room()));
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
         givenTargetPresent();
         givenCohort(TARGET_MEMBERSHIP_ID, COHORT_ID);
@@ -358,7 +359,7 @@ class OccupancyParticipantServiceTest {
     @DisplayName("공간을 찾을 수 없으면 참여자를 추가하지 않는다.")
     void doesNotAddWhenSpaceNotFound() {
         givenActiveOccupancy();
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.empty());
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.empty());
 
         assertBusinessError(
                 OccupancyErrorCode.SPACE_NOT_FOUND,
@@ -514,7 +515,7 @@ class OccupancyParticipantServiceTest {
     /** 추가가 정원 검사까지 도달하는 최소 구성. 정원 카운트는 기본값(0)에 맡긴다. */
     private void givenAddableTarget() {
         givenActiveOccupancy();
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room()));
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
         givenTargetPresent();
         givenCohort(TARGET_MEMBERSHIP_ID, COHORT_ID);
@@ -531,8 +532,8 @@ class OccupancyParticipantServiceTest {
                 Optional.of(new CohortMembershipView(membershipId, cohortId, TARGET_USER_ID)));
     }
 
-    private SpaceReader.MeetingRoom room() {
-        return new SpaceReader.MeetingRoom(SPACE_ID, true, true, CAPACITY);
+    private SpaceAccessView room() {
+        return new SpaceAccessView(SPACE_ID, true, true, CAPACITY);
     }
 
     private RoomOccupancy occupancy() {

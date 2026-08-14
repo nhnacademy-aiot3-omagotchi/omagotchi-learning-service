@@ -23,7 +23,7 @@ import java.util.UUID;
  * 시작된 점유의 연장·반납 (MR-06, MR-14, MR-32).
  *
  * <p>점유 시작({@code RoomOccupancyService})과 나눈 이유는 필요한 것이 다르기 때문이다.
- * 시작은 공간 유형·활성 여부와 재실을 확인해야 해서 {@code SpaceReader}·{@code PresenceReader}가
+ * 시작은 공간 유형·활성 여부와 재실을 확인해야 해서 {@code SpaceAccessService}·{@code AttendancePresenceQueryService}가
  * 필요하지만, 연장·반납은 이미 존재하는 점유 행의 상태만 바꾼다 — 요청자가 점유자인지만
  * 보면 되고 공간이나 재실은 다시 묻지 않는다.</p>
  *

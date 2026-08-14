@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -457,8 +458,8 @@ class SpaceCommandServiceTest {
                         null
                 )));
         when(occupancyQueryService.existsActive(
-                any(Long.class),
-                any(OffsetDateTime.class)
+                eq(1L),
+                eq(ZonedDateTime.ofInstant(NOW, SEOUL).toOffsetDateTime())
         )).thenReturn(true);
 
         assertBusinessError(
@@ -514,8 +515,8 @@ class SpaceCommandServiceTest {
         when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(existingSpace()));
         when(occupancyQueryService.existsActive(
-                any(Long.class),
-                any(OffsetDateTime.class)
+                eq(1L),
+                eq(ZonedDateTime.ofInstant(NOW, SEOUL).toOffsetDateTime())
         )).thenReturn(true);
 
         assertBusinessError(
@@ -597,8 +598,8 @@ class SpaceCommandServiceTest {
         spaceCommandService.delete(1L);
 
         verify(occupancyQueryService).existsActive(
-                any(Long.class),
-                any(OffsetDateTime.class)
+                eq(1L),
+                eq(ZonedDateTime.ofInstant(NOW, SEOUL).toOffsetDateTime())
         );
     }
 
@@ -607,8 +608,8 @@ class SpaceCommandServiceTest {
         when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(existingSpace()));
         when(occupancyQueryService.existsActive(
-                any(Long.class),
-                any(OffsetDateTime.class)
+                eq(1L),
+                eq(ZonedDateTime.ofInstant(NOW, SEOUL).toOffsetDateTime())
         )).thenReturn(true);
 
         assertBusinessError(

@@ -57,14 +57,6 @@ public enum SpaceErrorCode implements ErrorCode {
             "SPACE_ACCESS_DENIED",
             "해당 공간을 관리할 권한이 없습니다."
     ),
-    // 소프트 삭제된 공간은 없는 것으로 취급한다 — 명세 01 §5 "삭제된 공간 조회/수정 → 404".
-    // 전용 코드를 남기는 것은 진단을 위해서다. 상태는 NOT_FOUND지만 "지워진 공간"과
-    // "애초에 없는 id"를 로그에서 구분할 수 있다.
-    DELETED_SPACE(
-            ErrorType.NOT_FOUND,
-            "SPACE_ALREADY_DELETED",
-            "삭제된 공간은 변경할 수 없습니다."
-    ),
     ALREADY_ACTIVE(
             ErrorType.CONFLICT,
             "SPACE_ALREADY_ACTIVE",

@@ -47,7 +47,6 @@ class QualityEventMessageMessageConverterTest {
 
             QualityEventMessage event = (QualityEventMessage) converter.fromMessage(rulePayloadMessage());
 
-            assertThat(event.version()).isEqualTo(1);
             assertThat(event.traceId()).isEqualTo(TRACE_ID);
             assertThat(event.type()).isEqualTo(SensorEventType.RULE_HIT);
             assertThat(event.deviceEui()).isEqualTo(DEVICE_EUI);

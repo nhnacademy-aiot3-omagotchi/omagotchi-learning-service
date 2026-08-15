@@ -1,9 +1,8 @@
 package site.omagotchi.learningservice.ranking.application.result;
 
-import java.util.UUID;
-
-public record StudyTimeRankingResult(
-        UUID userId,
+public record StudyRankingEntryResult(
+        long rank,
+        String displayName,
         long studySeconds
 ) {
 }

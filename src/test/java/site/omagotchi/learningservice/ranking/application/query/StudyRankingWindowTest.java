@@ -37,4 +37,22 @@ class StudyRankingWindowTest {
                 () -> assertEquals(expectedEndDate, window.endDate())
         );
     }
+
+    @ParameterizedTest
+    @CsvSource({
+            "2000-01-12T18:59:59Z, 2000-01-12",
+            "2000-01-12T19:00:00Z, 2000-01-13"
+    })
+    @DisplayName("KST 04:00 기준 집계일 경계 테스트")
+    void resolvesAggregationDateAtBoundary(Instant calculatedAt, LocalDate expectedDate) {
+        StudyRankingWindow window = StudyRankingWindow.resolve(
+                StudyRankingPeriod.DAILY,
+                calculatedAt
+        );
+
+        assertAll(
+                () -> assertEquals(expectedDate, window.startDate()),
+                () -> assertEquals(expectedDate, window.endDate())
+        );
+    }
 }

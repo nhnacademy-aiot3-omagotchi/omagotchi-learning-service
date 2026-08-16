@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 import site.omagotchi.learningservice.statistics.application.port.CohortStatisticsRepository;
 import site.omagotchi.learningservice.statistics.application.port.CohortStatisticsRepository.TodaySummary;
 import site.omagotchi.learningservice.statistics.application.query.WindowQuery;
@@ -11,7 +12,6 @@ import site.omagotchi.learningservice.statistics.application.query.WindowQuery.D
 import site.omagotchi.learningservice.statistics.application.result.DailyTotalResult;
 import site.omagotchi.learningservice.statistics.application.result.TodayResult;
 import site.omagotchi.learningservice.statistics.application.result.TrendResult;
-import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -40,7 +40,7 @@ public class CohortStatisticsService {
 
         // 요청 기준 시각과 현재 집계일 계산
         Instant calculatedAt = clock.instant();
-        LocalDate aggregationDate = StudyTimePolicy.aggregationDate(calculatedAt);
+        LocalDate aggregationDate = AggregationDateTime.aggregationDate(calculatedAt);
 
         // 오늘 확정 학습 통계 DB 조회
         TodaySummary summary = cohortStatisticsRepository.summarizeToday(

@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -112,7 +113,7 @@ public class StudyRecord {
             throw new IllegalArgumentException("공부 시간은 0초보다 크고 점유 구간 이하여야 합니다.");
         }
 
-        this.aggregationDate = StudyTimePolicy.aggregationDate(startTime);
+        this.aggregationDate = AggregationDateTime.aggregationDate(startTime);
         this.startTime = startTime;
         this.endTime = endTime;
         this.studySeconds = studySeconds;

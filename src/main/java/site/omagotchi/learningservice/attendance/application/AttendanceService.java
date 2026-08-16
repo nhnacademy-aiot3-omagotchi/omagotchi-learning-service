@@ -24,7 +24,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -55,7 +55,7 @@ public class AttendanceService {
         lockActiveMembership(membership.getId());
         CohortAttendancePolicy policy = requirePolicy(cohortId);
         Instant now = clock.instant();
-        LocalDate attendanceDate = StudyTimePolicy.aggregationDate(now);
+        LocalDate attendanceDate = AggregationDateTime.aggregationDate(now);
 
         AttendanceRecord record = attendanceRecordRepository
                 .findWithLockByCohortMembershipIdAndAttendanceDate(membership.getId(), attendanceDate)
@@ -83,7 +83,7 @@ public class AttendanceService {
         CohortMembership membership = cohortAccessService.requireActiveMembership(cohortId, userId);
         lockActiveMembership(membership.getId());
         Instant now = clock.instant();
-        LocalDate attendanceDate = StudyTimePolicy.aggregationDate(now);
+        LocalDate attendanceDate = AggregationDateTime.aggregationDate(now);
 
         AttendanceRecord record = attendanceRecordRepository
                 .findWithLockByCohortMembershipIdAndAttendanceDate(membership.getId(), attendanceDate)

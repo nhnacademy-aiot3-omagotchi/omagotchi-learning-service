@@ -6,13 +6,13 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.result.DailyStudyRecordsResult;
 import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.MonthlyStudySecondsResult;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.StudyRecord;
-import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -143,6 +143,6 @@ public class StudyRecordQueryService {
     }
 
     private LocalDate currentAggregationDate() {
-        return StudyTimePolicy.aggregationDate(clock.instant());
+        return AggregationDateTime.aggregationDate(clock.instant());
     }
 }

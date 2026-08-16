@@ -105,6 +105,49 @@ class CohortAccessServiceTest {
     }
 
     @Nested
+    @DisplayName("활성 학생 소속 식별자 확인")
+    class RequireActiveStudentMembershipId {
+
+        @Test
+        @DisplayName("종료되지 않은 활성 학생의 소속 식별자 반환")
+        void returnsMembershipIdForActiveStudent() {
+            CohortMembership membership = mock(CohortMembership.class);
+            when(membership.getId()).thenReturn(MEMBERSHIP_ID);
+            when(membership.getRole()).thenReturn(CohortMembershipRole.STUDENT);
+            when(membershipRepository
+                    .findFirstByCohortIdAndUserIdAndStatusOrderByRequestedAtDesc(
+                            COHORT_ID,
+                            USER_ID,
+                            CohortMembershipStatus.ACTIVE
+                    )).thenReturn(Optional.of(membership));
+
+            Long result = accessService.requireActiveStudentMembershipId(COHORT_ID, USER_ID);
+
+            assertEquals(MEMBERSHIP_ID, result);
+        }
+
+        @Test
+        @DisplayName("활성 소속이 학생이 아니면 접근 거부")
+        void rejectsNonStudentMembership() {
+            CohortMembership membership = mock(CohortMembership.class);
+            when(membership.getRole()).thenReturn(CohortMembershipRole.MANAGER);
+            when(membershipRepository
+                    .findFirstByCohortIdAndUserIdAndStatusOrderByRequestedAtDesc(
+                            COHORT_ID,
+                            USER_ID,
+                            CohortMembershipStatus.ACTIVE
+                    )).thenReturn(Optional.of(membership));
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> accessService.requireActiveStudentMembershipId(COHORT_ID, USER_ID)
+            );
+
+            assertSame(CohortErrorCode.COHORT_ACCESS_DENIED, exception.getErrorCode());
+        }
+    }
+
+    @Nested
     @DisplayName("활성 기수 조회")
     class FindActiveCohorts {
 

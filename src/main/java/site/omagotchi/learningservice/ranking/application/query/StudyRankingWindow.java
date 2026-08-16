@@ -2,7 +2,7 @@ package site.omagotchi.learningservice.ranking.application.query;
 
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
-import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 
 import java.time.DayOfWeek;
 import java.time.Instant;
@@ -22,7 +22,7 @@ public record StudyRankingWindow(
             throw invalidRequest();
         }
 
-        LocalDate currentAggregationDate = StudyTimePolicy.aggregationDate(calculatedAt);
+        LocalDate currentAggregationDate = AggregationDateTime.aggregationDate(calculatedAt);
         return switch (period) {
             case DAILY -> new StudyRankingWindow(
                     currentAggregationDate,

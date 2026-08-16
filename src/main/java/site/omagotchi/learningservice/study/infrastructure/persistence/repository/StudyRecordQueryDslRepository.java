@@ -8,12 +8,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
+import site.omagotchi.learningservice.study.application.result.MemberStudyDurationResult;
 import site.omagotchi.learningservice.study.application.result.StudyProfileSummaryResult;
 import site.omagotchi.learningservice.study.domain.QStudyRecord;
 import site.omagotchi.learningservice.study.domain.StudyRecord;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -145,6 +147,45 @@ public class StudyRecordQueryDslRepository implements StudyRecordQueryRepository
                 )
                 .groupBy(studyRecord.aggregationDate)
                 .orderBy(studyRecord.aggregationDate.asc())
+                .fetch();
+    }
+
+    /*
+     * SELECT sr.cohort_membership_id,
+     *        COALESCE(SUM(sr.study_seconds), 0) AS total_study_seconds
+     * FROM learning_service.study_records sr
+     * WHERE sr.cohort_membership_id IN (:cohortMembershipIds)
+     *   AND sr.deleted_at IS NULL
+     *   AND sr.aggregation_date BETWEEN :startDate AND :endDateInclusive
+     * GROUP BY sr.cohort_membership_id
+     * HAVING COALESCE(SUM(sr.study_seconds), 0) > 0
+     * ORDER BY sr.cohort_membership_id ASC;
+     */
+    @Override
+    public List<MemberStudyDurationResult> findConfirmedDurations(
+            Collection<Long> cohortMembershipIds,
+            LocalDate startDate,
+            LocalDate endDateInclusive
+    ) {
+        NumberExpression<Long> totalStudySeconds = studyRecord.studySeconds
+                .sumLong()
+                .coalesce(0L);
+
+        return queryFactory
+                .select(Projections.constructor(
+                        MemberStudyDurationResult.class,
+                        studyRecord.cohortMembershipId,
+                        totalStudySeconds
+                ))
+                .from(studyRecord)
+                .where(
+                        studyRecord.cohortMembershipId.in(cohortMembershipIds),
+                        studyRecord.deletedAt.isNull(),
+                        studyRecord.aggregationDate.between(startDate, endDateInclusive)
+                )
+                .groupBy(studyRecord.cohortMembershipId)
+                .having(totalStudySeconds.gt(0L))
+                .orderBy(studyRecord.cohortMembershipId.asc())
                 .fetch();
     }
 

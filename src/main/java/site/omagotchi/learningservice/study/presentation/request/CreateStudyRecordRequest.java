@@ -2,8 +2,8 @@ package site.omagotchi.learningservice.study.presentation.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.NotNull;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
-import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -24,8 +24,8 @@ public record CreateStudyRecordRequest(
 
     public CreateStudyRecordCommand toCommand() {
         return new CreateStudyRecordCommand(
-                StudyTimePolicy.toInstant(date, startTime),
-                StudyTimePolicy.toInstant(date, endTime)
+                AggregationDateTime.toInstant(date, startTime),
+                AggregationDateTime.toInstant(date, endTime)
         );
     }
 }

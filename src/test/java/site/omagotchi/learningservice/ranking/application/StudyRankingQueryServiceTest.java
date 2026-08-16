@@ -9,26 +9,25 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
-import site.omagotchi.learningservice.cohort.domain.CohortMembership;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
 import site.omagotchi.learningservice.gamification.application.result.RepresentativeCharacterResult;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.ranking.application.port.StudyRankingRepository;
-import site.omagotchi.learningservice.ranking.application.port.StudyRankingRepository.RankedStudyMember;
-import site.omagotchi.learningservice.ranking.application.port.StudyRankingRepository.StudyRankingRows;
 import site.omagotchi.learningservice.ranking.application.query.StudyRankingPeriod;
 import site.omagotchi.learningservice.ranking.application.query.StudyRankingQuery;
 import site.omagotchi.learningservice.ranking.application.query.StudyRankingWindow;
 import site.omagotchi.learningservice.ranking.application.result.MemberStudyRankingViewResult;
 import site.omagotchi.learningservice.ranking.application.result.MyStudyRankingResult;
 import site.omagotchi.learningservice.ranking.application.result.StudyRankingBoardResult;
+import site.omagotchi.learningservice.ranking.application.result.StudyRankingEntryResult;
+import site.omagotchi.learningservice.study.application.StudyRecordAggregationQueryService;
+import site.omagotchi.learningservice.study.application.result.MemberStudyDurationResult;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -41,8 +40,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 @DisplayName("학습 랭킹 조회")
@@ -51,24 +48,26 @@ class StudyRankingQueryServiceTest {
 
     private static final UUID USER_ID = new UUID(0L, 1L);
     private static final UUID LEADER_USER_ID = new UUID(0L, 2L);
-    private static final UUID SECOND_USER_ID = new UUID(0L, 3L);
+    private static final UUID FIRST_TIE_USER_ID = new UUID(0L, 3L);
+    private static final UUID SECOND_TIE_USER_ID = new UUID(0L, 4L);
     private static final Long COHORT_ID = 10L;
     private static final Long MEMBERSHIP_ID = 11L;
     private static final Instant CALCULATED_AT = Instant.parse("2000-01-12T20:00:00Z");
+
     @Mock
     private CohortAccessService cohortAccessService;
 
     @Mock
-    private StudyRankingRepository studyRankingRepository;
+    private CohortMembershipQueryService cohortMembershipQueryService;
+
+    @Mock
+    private StudyRecordAggregationQueryService studyRecordAggregationQueryService;
 
     @Mock
     private CharacterGrowthService characterGrowthService;
 
     @Mock
     private Clock clock;
-
-    @Mock
-    private CohortMembership membership;
 
     @InjectMocks
     private StudyRankingQueryService studyRankingQueryService;
@@ -78,34 +77,23 @@ class StudyRankingQueryServiceTest {
     class GetMemberView {
 
         @Test
-        @DisplayName("하나의 랭킹 조회 결과로 보드와 내 순위 정상 처리")
-        void returnsBoardAndMineFromSameRankingRead() {
-            StudyRankingQuery query = new StudyRankingQuery(
-                    StudyRankingPeriod.DAILY,
-                    2
-            );
-            StudyRankingWindow window = dailyWindow();
-            RankedStudyMember leader = rankedMember(20L, LEADER_USER_ID, 1L, 7_200L);
-            RankedStudyMember second = rankedMember(21L, SECOND_USER_ID, 2L, 3_600L);
-            RankedStudyMember mine = rankedMember(MEMBERSHIP_ID, USER_ID, 3L, 1_800L);
-            StudyRankingRows rows = new StudyRankingRows(
-                    3L,
-                    List.of(leader, second),
-                    Optional.of(mine)
-            );
-            given(cohortAccessService.requireActiveMembership(COHORT_ID, USER_ID))
-                    .willReturn(membership);
-            given(membership.getRole()).willReturn(CohortMembershipRole.STUDENT);
-            given(membership.getId()).willReturn(MEMBERSHIP_ID);
+        @DisplayName("feature 조회 결과를 조립해 동점 경계와 내 순위를 함께 반환")
+        void returnsBoardAndMineFromSameRankingSet() {
+            StudyRankingQuery query = new StudyRankingQuery(StudyRankingPeriod.DAILY, 2);
+            List<CohortMembershipView> memberships = memberships();
+            given(cohortAccessService.requireActiveStudentMembershipId(COHORT_ID, USER_ID))
+                    .willReturn(MEMBERSHIP_ID);
             given(clock.instant()).willReturn(CALCULATED_AT);
-            given(studyRankingRepository.findBoardAndMember(
-                    window,
-                    2,
-                    COHORT_ID,
-                    MEMBERSHIP_ID
-            )).willReturn(rows);
+            given(cohortMembershipQueryService.findActiveStudentMemberships(COHORT_ID))
+                    .willReturn(memberships);
+            givenConfirmedDurations(memberships, durations());
             given(characterGrowthService.findRepresentativeCharacters(
-                    Set.of(LEADER_USER_ID, SECOND_USER_ID, USER_ID)
+                    Set.of(
+                            LEADER_USER_ID,
+                            FIRST_TIE_USER_ID,
+                            SECOND_TIE_USER_ID,
+                            USER_ID
+                    )
             )).willReturn(List.of(
                     character(LEADER_USER_ID, 101L, "첫째"),
                     character(USER_ID, 102L, "나")
@@ -118,44 +106,50 @@ class StudyRankingQueryServiceTest {
             );
 
             assertAll(
-                    () -> assertEquals(3L, result.board().rankedMemberCount()),
-                    () -> assertEquals(2, result.board().entries().size()),
+                    () -> assertEquals(4L, result.board().rankedMemberCount()),
+                    () -> assertEquals(3, result.board().entries().size()),
+                    () -> assertEquals(List.of(1L, 2L, 2L), result.board().entries().stream()
+                            .map(StudyRankingEntryResult::rank)
+                            .toList()),
                     () -> assertEquals("첫째", result.board().entries().getFirst().displayName()),
                     () -> assertNull(result.board().entries().getLast().displayName()),
                     () -> assertTrue(result.mine().ranked()),
-                    () -> assertEquals(3L, result.mine().ranking().orElseThrow().rank()),
+                    () -> assertEquals(4L, result.mine().ranking().orElseThrow().rank()),
                     () -> assertEquals("나", result.mine().ranking().orElseThrow().displayName())
             );
             InOrder inOrder = inOrder(
                     cohortAccessService,
                     clock,
-                    studyRankingRepository,
+                    cohortMembershipQueryService,
+                    studyRecordAggregationQueryService,
                     characterGrowthService
             );
-            inOrder.verify(cohortAccessService).requireActiveMembership(COHORT_ID, USER_ID);
+            inOrder.verify(cohortAccessService)
+                    .requireActiveStudentMembershipId(COHORT_ID, USER_ID);
             inOrder.verify(clock).instant();
-            inOrder.verify(studyRankingRepository).findBoardAndMember(
-                    window,
-                    2,
-                    COHORT_ID,
-                    MEMBERSHIP_ID
+            inOrder.verify(cohortMembershipQueryService)
+                    .findActiveStudentMemberships(COHORT_ID);
+            inOrder.verify(studyRecordAggregationQueryService).getConfirmedDurations(
+                    membershipIds(memberships),
+                    dailyWindow().startDate(),
+                    dailyWindow().endDate()
             );
             inOrder.verify(characterGrowthService).findRepresentativeCharacters(
-                    Set.of(LEADER_USER_ID, SECOND_USER_ID, USER_ID)
-            );
-            verify(studyRankingRepository, never()).findMember(
-                    window,
-                    COHORT_ID,
-                    MEMBERSHIP_ID
+                    Set.of(
+                            LEADER_USER_ID,
+                            FIRST_TIE_USER_ID,
+                            SECOND_TIE_USER_ID,
+                            USER_ID
+                    )
             );
         }
 
         @Test
-        @DisplayName("수강생 역할 없음은 조회 전 예외")
+        @DisplayName("활성 학생 권한이 없으면 feature 조회 전에 예외")
         void rejectsNonStudentBeforeReadingRanking() {
-            given(cohortAccessService.requireActiveMembership(COHORT_ID, USER_ID))
-                    .willReturn(membership);
-            given(membership.getRole()).willReturn(CohortMembershipRole.MANAGER);
+            willThrow(new BusinessException(CohortErrorCode.COHORT_ACCESS_DENIED))
+                    .given(cohortAccessService)
+                    .requireActiveStudentMembershipId(COHORT_ID, USER_ID);
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
@@ -167,7 +161,12 @@ class StudyRankingQueryServiceTest {
             );
 
             assertEquals(CohortErrorCode.COHORT_ACCESS_DENIED, exception.getErrorCode());
-            verifyNoInteractions(clock, studyRankingRepository, characterGrowthService);
+            verifyNoInteractions(
+                    clock,
+                    cohortMembershipQueryService,
+                    studyRecordAggregationQueryService,
+                    characterGrowthService
+            );
         }
     }
 
@@ -176,22 +175,15 @@ class StudyRankingQueryServiceTest {
     class GetMine {
 
         @Test
-        @DisplayName("보드 조회 없이 내 순위만 정상 처리")
+        @DisplayName("보드 표시명 없이 내 순위만 반환")
         void returnsOnlyMine() {
-            StudyRankingWindow window = dailyWindow();
-            RankedStudyMember mine = rankedMember(MEMBERSHIP_ID, USER_ID, 7L, 600L);
-            StudyRankingRows rows = new StudyRankingRows(
-                    20L,
-                    List.of(),
-                    Optional.of(mine)
-            );
-            given(cohortAccessService.requireActiveMembership(COHORT_ID, USER_ID))
-                    .willReturn(membership);
-            given(membership.getRole()).willReturn(CohortMembershipRole.STUDENT);
-            given(membership.getId()).willReturn(MEMBERSHIP_ID);
+            List<CohortMembershipView> memberships = memberships();
+            given(cohortAccessService.requireActiveStudentMembershipId(COHORT_ID, USER_ID))
+                    .willReturn(MEMBERSHIP_ID);
             given(clock.instant()).willReturn(CALCULATED_AT);
-            given(studyRankingRepository.findMember(window, COHORT_ID, MEMBERSHIP_ID))
-                    .willReturn(rows);
+            given(cohortMembershipQueryService.findActiveStudentMemberships(COHORT_ID))
+                    .willReturn(memberships);
+            givenConfirmedDurations(memberships, durations());
             given(characterGrowthService.findRepresentativeCharacters(Set.of(USER_ID)))
                     .willReturn(List.of(character(USER_ID, 101L, "나")));
 
@@ -202,30 +194,28 @@ class StudyRankingQueryServiceTest {
             );
 
             assertAll(
-                    () -> assertEquals(20L, result.rankedMemberCount()),
+                    () -> assertEquals(4L, result.rankedMemberCount()),
                     () -> assertTrue(result.ranked()),
-                    () -> assertEquals(7L, result.ranking().orElseThrow().rank()),
+                    () -> assertEquals(4L, result.ranking().orElseThrow().rank()),
                     () -> assertEquals("나", result.ranking().orElseThrow().displayName())
-            );
-            verify(studyRankingRepository, never()).findBoardAndMember(
-                    window,
-                    StudyRankingQuery.DEFAULT_MAX_RANK,
-                    COHORT_ID,
-                    MEMBERSHIP_ID
             );
         }
 
         @Test
-        @DisplayName("공부 기록 없음은 미랭크 정상 처리")
+        @DisplayName("공부 기록 없음은 미랭크")
         void returnsUnrankedWhenNoRecordExists() {
-            StudyRankingWindow window = dailyWindow();
-            given(cohortAccessService.requireActiveMembership(COHORT_ID, USER_ID))
-                    .willReturn(membership);
-            given(membership.getRole()).willReturn(CohortMembershipRole.STUDENT);
-            given(membership.getId()).willReturn(MEMBERSHIP_ID);
+            List<CohortMembershipView> memberships = memberships();
+            given(cohortAccessService.requireActiveStudentMembershipId(COHORT_ID, USER_ID))
+                    .willReturn(MEMBERSHIP_ID);
             given(clock.instant()).willReturn(CALCULATED_AT);
-            given(studyRankingRepository.findMember(window, COHORT_ID, MEMBERSHIP_ID))
-                    .willReturn(new StudyRankingRows(2L, List.of(), Optional.empty()));
+            given(cohortMembershipQueryService.findActiveStudentMemberships(COHORT_ID))
+                    .willReturn(memberships);
+            givenConfirmedDurations(
+                    memberships,
+                    durations().stream()
+                            .filter(duration -> !duration.cohortMembershipId().equals(MEMBERSHIP_ID))
+                            .toList()
+            );
 
             MyStudyRankingResult result = studyRankingQueryService.getMine(
                     USER_ID,
@@ -234,7 +224,7 @@ class StudyRankingQueryServiceTest {
             );
 
             assertAll(
-                    () -> assertEquals(2L, result.rankedMemberCount()),
+                    () -> assertEquals(3L, result.rankedMemberCount()),
                     () -> assertFalse(result.ranked()),
                     () -> assertTrue(result.ranking().isEmpty())
             );
@@ -247,15 +237,13 @@ class StudyRankingQueryServiceTest {
     class GetManagerBoard {
 
         @Test
-        @DisplayName("최대 순위 기본값 정상 처리")
+        @DisplayName("최대 순위 기본값이 인원보다 크면 전체 보드 반환")
         void usesDefaultMaxRank() {
-            StudyRankingWindow window = dailyWindow();
+            List<CohortMembershipView> memberships = memberships();
             given(clock.instant()).willReturn(CALCULATED_AT);
-            given(studyRankingRepository.findBoard(
-                    window,
-                    StudyRankingQuery.DEFAULT_MAX_RANK,
-                    COHORT_ID
-            )).willReturn(new StudyRankingRows(0L, List.of(), Optional.empty()));
+            given(cohortMembershipQueryService.findActiveStudentMemberships(COHORT_ID))
+                    .willReturn(memberships);
+            givenConfirmedDurations(memberships, durations());
 
             StudyRankingBoardResult result = studyRankingQueryService.getManagerBoard(
                     USER_ID,
@@ -263,18 +251,21 @@ class StudyRankingQueryServiceTest {
                     new StudyRankingQuery(StudyRankingPeriod.DAILY, null)
             );
 
-            assertTrue(result.entries().isEmpty());
+            assertEquals(4, result.entries().size());
             InOrder inOrder = inOrder(
                     cohortAccessService,
                     clock,
-                    studyRankingRepository
+                    cohortMembershipQueryService,
+                    studyRecordAggregationQueryService
             );
             inOrder.verify(cohortAccessService).requireManager(COHORT_ID, USER_ID);
             inOrder.verify(clock).instant();
-            inOrder.verify(studyRankingRepository).findBoard(
-                    window,
-                    StudyRankingQuery.DEFAULT_MAX_RANK,
-                    COHORT_ID
+            inOrder.verify(cohortMembershipQueryService)
+                    .findActiveStudentMemberships(COHORT_ID);
+            inOrder.verify(studyRecordAggregationQueryService).getConfirmedDurations(
+                    membershipIds(memberships),
+                    dailyWindow().startDate(),
+                    dailyWindow().endDate()
             );
         }
 
@@ -295,24 +286,58 @@ class StudyRankingQueryServiceTest {
             );
 
             assertEquals(CohortErrorCode.COHORT_MANAGER_REQUIRED, exception.getErrorCode());
-            verifyNoInteractions(clock, studyRankingRepository, characterGrowthService);
+            verifyNoInteractions(
+                    clock,
+                    cohortMembershipQueryService,
+                    studyRecordAggregationQueryService,
+                    characterGrowthService
+            );
         }
     }
 
-    private StudyRankingWindow dailyWindow() {
-        return StudyRankingWindow.resolve(
-                StudyRankingPeriod.DAILY,
-                CALCULATED_AT
+    private void givenConfirmedDurations(
+            List<CohortMembershipView> memberships,
+            List<MemberStudyDurationResult> durations
+    ) {
+        given(studyRecordAggregationQueryService.getConfirmedDurations(
+                membershipIds(memberships),
+                dailyWindow().startDate(),
+                dailyWindow().endDate()
+        )).willReturn(durations);
+    }
+
+    private List<CohortMembershipView> memberships() {
+        return List.of(
+                membership(20L, LEADER_USER_ID),
+                membership(21L, FIRST_TIE_USER_ID),
+                membership(22L, SECOND_TIE_USER_ID),
+                membership(MEMBERSHIP_ID, USER_ID)
         );
     }
 
-    private RankedStudyMember rankedMember(
-            Long membershipId,
-            UUID userId,
-            long rank,
-            long studySeconds
-    ) {
-        return new RankedStudyMember(membershipId, userId, rank, studySeconds);
+    private List<Long> membershipIds(List<CohortMembershipView> memberships) {
+        return memberships.stream().map(CohortMembershipView::membershipId).toList();
+    }
+
+    private List<MemberStudyDurationResult> durations() {
+        return List.of(
+                duration(20L, 7_200L),
+                duration(21L, 3_600L),
+                duration(22L, 3_600L),
+                duration(MEMBERSHIP_ID, 1_800L)
+        );
+    }
+
+    private CohortMembershipView membership(Long membershipId, UUID userId) {
+        return new CohortMembershipView(membershipId, COHORT_ID, userId);
+    }
+
+    private MemberStudyDurationResult duration(Long membershipId, long studySeconds) {
+        return new MemberStudyDurationResult(membershipId, studySeconds);
+    }
+
+    private StudyRankingWindow dailyWindow() {
+        return StudyRankingWindow.resolve(StudyRankingPeriod.DAILY, CALCULATED_AT);
     }
 
     private RepresentativeCharacterResult character(

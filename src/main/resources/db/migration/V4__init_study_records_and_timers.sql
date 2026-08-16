@@ -21,7 +21,12 @@ CREATE TABLE learning_service.study_records
     CONSTRAINT ck_study_records_time
         CHECK (start_time < end_time),
 
-    -- 분 단위로 저장되었는지 검증 (삭제됨)
+    -- 분 단위 정밀도
+    CONSTRAINT ck_study_records_minute_precision
+        CHECK (
+            start_time = date_trunc('minute', start_time)
+            AND end_time = date_trunc('minute', end_time)
+        ),
 
     -- study_seconds 범위 검증
     CONSTRAINT ck_study_records_seconds
@@ -52,3 +57,47 @@ CREATE INDEX idx_study_records_membership_date_time
         start_time
     )
     WHERE deleted_at IS NULL;
+
+CREATE TABLE learning_service.timer_runs (
+    id UUID NOT NULL,
+    cohort_membership_id BIGINT NOT NULL,
+    started_at TIMESTAMPTZ NOT NULL,
+    ended_at TIMESTAMPTZ,
+    measured_seconds BIGINT,
+    end_reason VARCHAR(20),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT pk_timer_runs PRIMARY KEY (id),
+    CONSTRAINT ck_timer_runs_end_reason
+        CHECK (end_reason IN ('STOP', 'DISCARD', 'EXPIRED')),
+    CONSTRAINT ck_timer_runs_second_precision
+        CHECK (
+            started_at = date_trunc('second', started_at)
+            AND (
+                ended_at IS NULL
+                OR ended_at = date_trunc('second', ended_at)
+            )
+        ),
+    CONSTRAINT ck_timer_runs_time_range
+        CHECK (
+            ended_at IS NULL
+                OR ended_at >= started_at
+            ),
+
+    CONSTRAINT ck_timer_runs_measured_seconds
+        CHECK (
+            measured_seconds IS NULL
+                OR measured_seconds >= 0
+            )
+);
+
+CREATE UNIQUE INDEX uq_timer_runs_active_membership
+    ON learning_service.timer_runs (cohort_membership_id)
+    WHERE ended_at IS NULL;
+
+CREATE INDEX idx_timer_runs_membership_created_at
+    ON learning_service.timer_runs (cohort_membership_id, created_at DESC);
+
+CREATE INDEX idx_timer_runs_active_started_at
+    ON learning_service.timer_runs (started_at)
+    WHERE ended_at IS NULL;

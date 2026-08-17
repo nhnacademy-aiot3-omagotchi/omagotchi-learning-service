@@ -102,6 +102,8 @@ cp .env.local.example .env.local
 - JDBC 시간대: `UTC`
 - Identity 사용자 참조: JWT `sub`와 동일한 UUID `userId`
 - 서비스 간 참조: Foreign Key 대신 논리 식별자 사용
+- V1–V8 통합 기준선 적용 대상: 기존 Learning Flyway 이력이 없는 빈 Schema
+- 기존 V1–V23 적용 개발 DB: 초기화 후 통합 기준선 재적용
 - 적용 완료 Migration의 변경 금지
 - Schema 변경의 신규 Version Migration 추가
 

@@ -76,15 +76,25 @@ public class CohortAccessService {
     public void requireManager(Long cohortId, UUID userId) {
         requireActiveMembershipId(cohortId, userId);
 
-        boolean isManager = membershipRepository.existsByCohortIdAndUserIdAndRoleAndStatus(
+        if (!isManager(cohortId, userId)) {
+            throw new BusinessException(CohortErrorCode.COHORT_MANAGER_REQUIRED);
+        }
+    }
+
+    /**
+     * 사용자가 해당 기수에서 MANAGER 역할의 ACTIVE 소속인지 boolean으로 확인
+     * 예외를 던지지 않는 단순 조건 분기용
+     *
+     * <p>소속이 아예 없는 경우와 소속은 있으나 매니저가 아닌 경우를 구분하지 않는다.
+     * 둘을 나눠 404와 403으로 응답해야 하면 {@link #requireManager}를 쓴다.</p>
+     */
+    public boolean isManager(Long cohortId, UUID userId) {
+        return membershipRepository.existsByCohortIdAndUserIdAndRoleAndStatus(
                 cohortId,
                 userId,
                 CohortMembershipRole.MANAGER,
                 CohortMembershipStatus.ACTIVE
         );
-        if (!isManager) {
-            throw new BusinessException(CohortErrorCode.COHORT_MANAGER_REQUIRED);
-        }
     }
 
     /**

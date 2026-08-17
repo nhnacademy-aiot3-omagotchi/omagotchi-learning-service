@@ -4,16 +4,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
-import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPort;
-import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceAttributes;
-import site.omagotchi.learningservice.space.domain.SpaceType;
 import site.omagotchi.learningservice.space.domain.SpaceStateTransitionException;
+import site.omagotchi.learningservice.space.domain.SpaceType;
 import site.omagotchi.learningservice.space.domain.SpaceValidationException;
 
 import java.time.Clock;
@@ -29,7 +29,7 @@ public class SpaceCommandService {
 
     private final SpaceRepository spaceRepository;
     private final OccupancyQueryService occupancyQueryService;
-    private final SpaceCohortAccessPort cohortAccessPort;
+    private final CohortAccessService cohortAccessService;
     private final Clock clock;
 
     public Space create(
@@ -275,7 +275,7 @@ public class SpaceCommandService {
             UUID actorUserId
     ) {
         if (requestedCohortId == null) {
-            List<Long> managedCohortIds = cohortAccessPort
+            List<Long> managedCohortIds = cohortAccessService
                     .findActiveManagedCohortIds(actorUserId);
 
             if (managedCohortIds.isEmpty()) {
@@ -305,7 +305,7 @@ public class SpaceCommandService {
             Long cohortId,
             UUID actorUserId
     ) {
-        if (!cohortAccessPort.isActiveManager(cohortId, actorUserId)) {
+        if (!cohortAccessService.isManager(cohortId, actorUserId)) {
             throw new BusinessException(SpaceErrorCode.ACCESS_DENIED);
         }
     }
@@ -321,7 +321,7 @@ public class SpaceCommandService {
      * <b>"시스템 관리자는 기수 내의 일에 관여할 수 없음"</b>으로 확정됐다 (명세 01 §4).</p>
      */
     private void requireAnyCohortManager(UUID actorUserId) {
-        if (cohortAccessPort.findActiveManagedCohortIds(actorUserId).isEmpty()) {
+        if (cohortAccessService.findActiveManagedCohortIds(actorUserId).isEmpty()) {
             throw new BusinessException(SpaceErrorCode.ACCESS_DENIED);
         }
     }
@@ -331,7 +331,7 @@ public class SpaceCommandService {
             throw new BusinessException(SpaceErrorCode.INVALID_COHORT_ID);
         }
 
-        if (!cohortAccessPort.exists(cohortId)) {
+        if (!cohortAccessService.exists(cohortId)) {
             throw new BusinessException(SpaceErrorCode.COHORT_NOT_FOUND);
         }
     }

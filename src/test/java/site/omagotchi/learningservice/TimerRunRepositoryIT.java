@@ -1,8 +1,11 @@
 package site.omagotchi.learningservice;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
@@ -55,6 +58,15 @@ class TimerRunRepositoryIT {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void setUpMemberships() {
+        CohortMembershipTestFixture.ensureActiveMemberships(
+                jdbcTemplate,
+                COHORT_MEMBERSHIP_ID,
+                102L
+        );
+    }
 
     @Nested
     @DisplayName("실행 생명주기")
@@ -120,6 +132,188 @@ class TimerRunRepositoryIT {
                             UUID.fromString("00000000-0000-0000-0000-000000000102"),
                             102L,
                             OffsetDateTime.parse("2000-01-01T00:00:00.001Z")
+                    )
+            );
+        }
+    }
+
+    @Nested
+    @DisplayName("소속 FK 제약")
+    class MembershipConstraint {
+
+        @Test
+        @DisplayName("존재하지 않는 소속의 실행 저장 거절")
+        void rejectsUnknownMembership() {
+            assertThrows(
+                    DataIntegrityViolationException.class,
+                    () -> jdbcTemplate.update("""
+                                    INSERT INTO learning_service.timer_runs (
+                                        id,
+                                        cohort_membership_id,
+                                        started_at
+                                    ) VALUES (?, ?, ?)
+                                    """,
+                            UUID.fromString("00000000-0000-0000-0000-000000000103"),
+                            103L,
+                            OffsetDateTime.parse("2000-01-01T00:00:00Z")
+                    )
+            );
+        }
+    }
+
+    @Nested
+    @DisplayName("실행 상태 제약")
+    class StateConstraint {
+
+        @Test
+        @DisplayName("폐기 상태 저장")
+        void persistsDiscardedState() {
+            TimerRun timerRun = timerRunRepository.create(
+                    TimerRun.start(COHORT_MEMBERSHIP_ID, STARTED_AT)
+            );
+
+            timerRun.discardOrExpire(ENDED_AT, TIME_POLICY);
+            timerRunRepository.end(timerRun);
+
+            TimerRun discarded = timerRunQueryRepository
+                    .findOwnedById(timerRun.getId(), COHORT_MEMBERSHIP_ID)
+                    .orElseThrow();
+            assertAll(
+                    () -> assertEquals(ENDED_AT, discarded.getEndedAt()),
+                    () -> assertEquals(TimerEndReason.DISCARD, discarded.getEndReason()),
+                    () -> assertNull(discarded.getMeasuredSeconds())
+            );
+        }
+
+        @Test
+        @DisplayName("만료 상태 저장")
+        void persistsExpiredState() {
+            TimerRun timerRun = timerRunRepository.create(
+                    TimerRun.start(COHORT_MEMBERSHIP_ID, STARTED_AT)
+            );
+            Instant expiredAt = STARTED_AT.plus(Duration.ofHours(12));
+
+            assertTrue(timerRun.expireIfDue(expiredAt, TIME_POLICY));
+            timerRunRepository.end(timerRun);
+
+            TimerRun expired = timerRunQueryRepository
+                    .findOwnedById(timerRun.getId(), COHORT_MEMBERSHIP_ID)
+                    .orElseThrow();
+            assertAll(
+                    () -> assertEquals(expiredAt, expired.getEndedAt()),
+                    () -> assertEquals(TimerEndReason.EXPIRED, expired.getEndReason()),
+                    () -> assertNull(expired.getMeasuredSeconds())
+            );
+        }
+
+        @ParameterizedTest(name = "{0} 사유")
+        @ValueSource(strings = {"STOP", "DISCARD", "EXPIRED"})
+        @DisplayName("종료 시각 없는 종료 사유 저장 거절")
+        void rejectsEndReasonWithoutEndTime(String endReason) {
+            assertThrows(
+                    DataIntegrityViolationException.class,
+                    () -> jdbcTemplate.update("""
+                                    INSERT INTO learning_service.timer_runs (
+                                        id,
+                                        cohort_membership_id,
+                                        started_at,
+                                        end_reason
+                                    ) VALUES (?, ?, ?, ?)
+                                    """,
+                            UUID.randomUUID(),
+                            COHORT_MEMBERSHIP_ID,
+                            OffsetDateTime.parse("2000-01-01T00:00:00Z"),
+                            endReason
+                    )
+            );
+        }
+
+        @Test
+        @DisplayName("계약에 없는 종료 사유 저장 거절")
+        void rejectsUnknownEndReason() {
+            assertThrows(
+                    DataIntegrityViolationException.class,
+                    () -> jdbcTemplate.update("""
+                                    INSERT INTO learning_service.timer_runs (
+                                        id,
+                                        cohort_membership_id,
+                                        started_at,
+                                        ended_at,
+                                        end_reason
+                                    ) VALUES (?, ?, ?, ?, 'UNKNOWN')
+                                    """,
+                            UUID.fromString("00000000-0000-0000-0000-000000000104"),
+                            COHORT_MEMBERSHIP_ID,
+                            OffsetDateTime.parse("2000-01-01T00:00:00Z"),
+                            OffsetDateTime.parse("2000-01-01T01:00:00Z")
+                    )
+            );
+        }
+
+        @Test
+        @DisplayName("종료 사유 없는 종료 실행 저장 거절")
+        void rejectsEndTimeWithoutEndReason() {
+            assertThrows(
+                    DataIntegrityViolationException.class,
+                    () -> jdbcTemplate.update("""
+                                    INSERT INTO learning_service.timer_runs (
+                                        id,
+                                        cohort_membership_id,
+                                        started_at,
+                                        ended_at
+                                    ) VALUES (?, ?, ?, ?)
+                                    """,
+                            UUID.fromString("00000000-0000-0000-0000-000000000105"),
+                            COHORT_MEMBERSHIP_ID,
+                            OffsetDateTime.parse("2000-01-01T00:00:00Z"),
+                            OffsetDateTime.parse("2000-01-01T01:00:00Z")
+                    )
+            );
+        }
+
+        @Test
+        @DisplayName("측정 시간 없는 정지 상태 저장 거절")
+        void rejectsStoppedStateWithoutMeasuredSeconds() {
+            assertThrows(
+                    DataIntegrityViolationException.class,
+                    () -> jdbcTemplate.update("""
+                                    INSERT INTO learning_service.timer_runs (
+                                        id,
+                                        cohort_membership_id,
+                                        started_at,
+                                        ended_at,
+                                        end_reason
+                                    ) VALUES (?, ?, ?, ?, 'STOP')
+                                    """,
+                            UUID.fromString("00000000-0000-0000-0000-000000000106"),
+                            COHORT_MEMBERSHIP_ID,
+                            OffsetDateTime.parse("2000-01-01T00:00:00Z"),
+                            OffsetDateTime.parse("2000-01-01T01:00:00Z")
+                    )
+            );
+        }
+
+        @ParameterizedTest(name = "{0} 상태")
+        @ValueSource(strings = {"DISCARD", "EXPIRED"})
+        @DisplayName("측정 시간 있는 미기록 종료 상태 저장 거절")
+        void rejectsUnrecordedEndStateWithMeasuredSeconds(String endReason) {
+            assertThrows(
+                    DataIntegrityViolationException.class,
+                    () -> jdbcTemplate.update("""
+                                    INSERT INTO learning_service.timer_runs (
+                                        id,
+                                        cohort_membership_id,
+                                        started_at,
+                                        ended_at,
+                                        measured_seconds,
+                                        end_reason
+                                    ) VALUES (?, ?, ?, ?, 3600, ?)
+                                    """,
+                            UUID.randomUUID(),
+                            COHORT_MEMBERSHIP_ID,
+                            OffsetDateTime.parse("2000-01-01T00:00:00Z"),
+                            OffsetDateTime.parse("2000-01-01T01:00:00Z"),
+                            endReason
                     )
             );
         }

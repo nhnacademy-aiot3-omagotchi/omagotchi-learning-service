@@ -1,7 +1,7 @@
 -- 공간·회의실·팀 도메인 테이블 생성 (ERD v3)
 --
 -- 선행 조건: learning_service.cohort_memberships 에 UNIQUE (id, user_id) 가 필요하다.
---            점유·참여의 복합 FK 참조점이며 기수 파트에 추가를 요청한 상태다.
+--            점유·참여의 복합 FK 참조점으로 V1에서 생성된다.
 --            id 가 PK이므로 이 UNIQUE 는 어떤 행도 새로 막지 않는다(순수 참조점).
 DO $$
 BEGIN
@@ -20,7 +20,7 @@ BEGIN
               JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k
           ) = ARRAY['id', 'user_id']
     ) THEN
-        RAISE EXCEPTION '선행 조건 미충족: cohort_memberships (id, user_id) UNIQUE 가 없습니다. 기수 파트에 uq_cohort_memberships_id_user 추가를 요청하세요.';
+        RAISE EXCEPTION '선행 조건 미충족: V1의 cohort_memberships (id, user_id) UNIQUE 가 없습니다.';
     END IF;
 END
 $$;
@@ -227,3 +227,26 @@ CREATE UNIQUE INDEX uq_occupancy_participants_one_active
 CREATE UNIQUE INDEX uq_vacancy_alerts_waiting
     ON learning_service.vacancy_alerts (space_id, cohort_membership_id)
     WHERE notified_at IS NULL;
+
+-- 부분 인덱스는 활성 업무 조회에는 유효하지만 FK 확인에는 충분하지 않다.
+-- 부모 행 변경·삭제 시 모든 자식 행을 확인할 수 있도록 FK 선행 컬럼의 일반 인덱스를 둔다.
+CREATE INDEX ix_spaces_cohort_fk
+    ON learning_service.spaces (cohort_id);
+
+CREATE INDEX ix_teams_cohort_fk
+    ON learning_service.teams (cohort_id);
+
+CREATE INDEX ix_room_occupancies_space_fk
+    ON learning_service.room_occupancies (space_id);
+
+CREATE INDEX ix_room_occupancies_occupier_fk
+    ON learning_service.room_occupancies (occupier_membership_id, occupier_user_id);
+
+CREATE INDEX ix_occupancy_participants_member_fk
+    ON learning_service.occupancy_participants (cohort_membership_id, user_id);
+
+CREATE INDEX ix_vacancy_alerts_space_fk
+    ON learning_service.vacancy_alerts (space_id);
+
+CREATE INDEX ix_vacancy_alerts_membership_fk
+    ON learning_service.vacancy_alerts (cohort_membership_id);

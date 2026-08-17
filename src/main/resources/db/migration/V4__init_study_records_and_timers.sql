@@ -17,6 +17,11 @@ CREATE TABLE learning_service.study_records
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     /* 서버가 먼저 업무 오류로 검증하고, DB는 잘못된 쓰기를 막는 최종 방어선으로 사용한다. */
+    CONSTRAINT fk_study_records_membership
+        FOREIGN KEY (cohort_membership_id)
+            REFERENCES learning_service.cohort_memberships (id)
+            ON DELETE RESTRICT,
+
     -- 시작 및 종료 시간 검증
     CONSTRAINT ck_study_records_time
         CHECK (start_time < end_time),
@@ -58,6 +63,10 @@ CREATE INDEX idx_study_records_membership_date_time
     )
     WHERE deleted_at IS NULL;
 
+-- 삭제된 기록까지 포함하는 FK 확인용 일반 인덱스.
+CREATE INDEX idx_study_records_membership_fk
+    ON learning_service.study_records (cohort_membership_id);
+
 CREATE TABLE learning_service.timer_runs (
     id UUID NOT NULL,
     cohort_membership_id BIGINT NOT NULL,
@@ -68,8 +77,30 @@ CREATE TABLE learning_service.timer_runs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT pk_timer_runs PRIMARY KEY (id),
-    CONSTRAINT ck_timer_runs_end_reason
-        CHECK (end_reason IN ('STOP', 'DISCARD', 'EXPIRED')),
+    CONSTRAINT fk_timer_runs_membership
+        FOREIGN KEY (cohort_membership_id)
+            REFERENCES learning_service.cohort_memberships (id)
+            ON DELETE RESTRICT,
+    CONSTRAINT ck_timer_runs_state
+        CHECK (
+            (
+                ended_at IS NULL
+                AND measured_seconds IS NULL
+                AND end_reason IS NULL
+            )
+            OR (
+                ended_at IS NOT NULL
+                AND end_reason IS NOT NULL
+                AND end_reason = 'STOP'
+                AND measured_seconds IS NOT NULL
+            )
+            OR (
+                ended_at IS NOT NULL
+                AND end_reason IS NOT NULL
+                AND end_reason IN ('DISCARD', 'EXPIRED')
+                AND measured_seconds IS NULL
+            )
+        ),
     CONSTRAINT ck_timer_runs_second_precision
         CHECK (
             started_at = date_trunc('second', started_at)

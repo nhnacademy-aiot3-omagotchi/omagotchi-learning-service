@@ -3,6 +3,7 @@ package site.omagotchi.learningservice;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
@@ -47,6 +48,16 @@ class StudyRecordRepositoryIT {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void setUpMemberships() {
+        CohortMembershipTestFixture.ensureActiveMemberships(
+                jdbcTemplate,
+                COHORT_MEMBERSHIP_ID,
+                2L,
+                101L
+        );
+    }
 
     @Nested
     @DisplayName("활성 기록 겹침 조회")
@@ -245,6 +256,36 @@ class StudyRecordRepositoryIT {
                             101L,
                             BASE_DATE,
                             OffsetDateTime.parse("2000-01-01T01:00:00.001Z"),
+                            OffsetDateTime.parse("2000-01-01T02:00:00Z"),
+                            3_600L
+                    )
+            );
+        }
+    }
+
+    @Nested
+    @DisplayName("소속 FK 제약")
+    class MembershipConstraint {
+
+        @Test
+        @DisplayName("존재하지 않는 소속의 기록 저장 거절")
+        void rejectsUnknownMembership() {
+            assertThrows(
+                    DataIntegrityViolationException.class,
+                    () -> jdbcTemplate.update("""
+                                    INSERT INTO learning_service.study_records (
+                                        id,
+                                        cohort_membership_id,
+                                        aggregation_date,
+                                        start_time,
+                                        end_time,
+                                        study_seconds
+                                    ) VALUES (?, ?, ?, ?, ?, ?)
+                                    """,
+                            UUID.fromString("00000000-0000-0000-0000-000000000102"),
+                            102L,
+                            BASE_DATE,
+                            OffsetDateTime.parse("2000-01-01T01:00:00Z"),
                             OffsetDateTime.parse("2000-01-01T02:00:00Z"),
                             3_600L
                     )

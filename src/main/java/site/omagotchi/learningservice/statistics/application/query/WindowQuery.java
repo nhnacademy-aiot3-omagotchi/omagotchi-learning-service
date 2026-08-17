@@ -2,7 +2,7 @@ package site.omagotchi.learningservice.statistics.application.query;
 
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
-import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -14,7 +14,7 @@ public record WindowQuery(int days) {
 
     private static final int MIN_DAYS = 7;
     private static final int MAX_DAYS = 60;
-    private static final Pattern WINDOW_PATTERN = Pattern.compile("^([1-9][0-9]?)d$");
+    private static final Pattern WINDOW_PATTERN = Pattern.compile("^([1-9]\\d?)d$");
 
     public WindowQuery {
         if (days < MIN_DAYS || days > MAX_DAYS) {
@@ -40,7 +40,7 @@ public record WindowQuery(int days) {
             throw new IllegalArgumentException("currentInstant가 null입니다.");
         }
 
-        LocalDate currentAggregationDate = StudyTimePolicy.aggregationDate(currentInstant);
+        LocalDate currentAggregationDate = AggregationDateTime.aggregationDate(currentInstant);
         return new DateRange(
                 this,
                 currentAggregationDate.minusDays(days - 1L),

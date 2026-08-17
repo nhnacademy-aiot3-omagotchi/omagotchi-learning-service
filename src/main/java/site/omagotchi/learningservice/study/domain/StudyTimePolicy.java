@@ -1,22 +1,16 @@
 package site.omagotchi.learningservice.study.domain;
 
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 public final class StudyTimePolicy {
 
-    private static final ZoneId ZONE_ID = ZoneId.of("Asia/Seoul");
-    private static final LocalTime DAILY_RESET_TIME = LocalTime.of(4, 0);
-
     private StudyTimePolicy() {
-    }
-
-    public static Instant toInstant(LocalDate date, LocalTime time) {
-        return date.atTime(time).atZone(ZONE_ID).toInstant();
     }
 
     public static boolean isMinuteAligned(Instant instant) {
@@ -36,16 +30,9 @@ public final class StudyTimePolicy {
         return instant.equals(floor) ? floor : floor.plus(1, ChronoUnit.MINUTES);
     }
 
-    public static LocalDate aggregationDate(Instant instant) {
-        LocalDate localDate = instant.atZone(ZONE_ID).toLocalDate();
-
-        return instant.isBefore(startOfAggregationDate(localDate))
-                ? localDate.minusDays(1)
-                : localDate;
-    }
-
     public static boolean crossesAggregationBoundary(Instant startTime, Instant endTime) {
-        return !aggregationDate(startTime).equals(aggregationDate(endTime.minusNanos(1)));
+        return !AggregationDateTime.aggregationDate(startTime)
+                .equals(AggregationDateTime.aggregationDate(endTime.minusNanos(1)));
     }
 
     public static Optional<Instant> findCrossedAggregationBoundary(
@@ -56,11 +43,9 @@ public final class StudyTimePolicy {
             return Optional.empty();
         }
 
-        LocalDate nextAggregationDate = aggregationDate(startTime).plusDays(1);
-        return Optional.of(startOfAggregationDate(nextAggregationDate));
-    }
-
-    private static Instant startOfAggregationDate(LocalDate aggregationDate) {
-        return aggregationDate.atTime(DAILY_RESET_TIME).atZone(ZONE_ID).toInstant();
+        LocalDate nextAggregationDate = AggregationDateTime
+                .aggregationDate(startTime)
+                .plusDays(1);
+        return Optional.of(AggregationDateTime.startOfAggregationDate(nextAggregationDate));
     }
 }

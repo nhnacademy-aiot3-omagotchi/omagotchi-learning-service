@@ -39,6 +39,20 @@ public class CohortMembershipQueryService {
     private final CohortMembershipRepository membershipRepository;
 
     /**
+     * 특정 기수에서 종료되지 않은 ACTIVE STUDENT 소속을 일괄 조회한다.
+     *
+     * <p>역할·상태·종료 여부 판정은 cohort가 소유하며 호출자는 결과를 다시 검사하지 않는다.</p>
+     */
+    public List<CohortMembershipView> findActiveStudentMemberships(Long cohortId) {
+        if (cohortId == null) {
+            return List.of();
+        }
+        return membershipRepository.findActiveStudents(cohortId).stream()
+                .map(CohortMembershipView::from)
+                .toList();
+    }
+
+    /**
      * 멤버십 식별자로 ACTIVE 소속을 조회한다.
      *
      * <p>점유의 참여자 기수 정합 검증(MR-33)이 첫 소비처다. 점유 행은 기수를 컬럼으로
@@ -174,4 +188,5 @@ public class CohortMembershipQueryService {
                 .map(CohortMembership::getId)
                 .collect(Collectors.toUnmodifiableSet());
     }
+
 }

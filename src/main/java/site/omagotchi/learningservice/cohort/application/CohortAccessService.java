@@ -3,11 +3,7 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
-import site.omagotchi.learningservice.cohort.domain.CohortMembership;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
-import site.omagotchi.learningservice.cohort.domain.CohortStatus;
+import site.omagotchi.learningservice.cohort.domain.*;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
@@ -60,6 +56,18 @@ public class CohortAccessService {
     public Long requireActiveMembershipId(Long cohortId, UUID userId) {
         return membershipRepository.findActiveMembershipId(userId, cohortId)
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
+    }
+
+    /**
+     * 사용자가 해당 기수의 종료되지 않은 ACTIVE STUDENT인지 확인하고 소속 식별자를 반환한다.
+     */
+    public Long requireActiveStudentMembershipId(Long cohortId, UUID userId) {
+        CohortMembership membership = requireActiveMembership(cohortId, userId);
+        if (membership.getRole() != CohortMembershipRole.STUDENT
+                || membership.getEndedAt() != null) {
+            throw new BusinessException(CohortErrorCode.COHORT_ACCESS_DENIED);
+        }
+        return membership.getId();
     }
 
     public CohortMembership requireCurrentActiveMembership(UUID userId) {
@@ -126,7 +134,7 @@ public class CohortAccessService {
         Set<Long> activeCohortIds = cohortRepository
                 .findByStatus(CohortStatus.ACTIVE)
                 .stream()
-                .map(cohort -> cohort.getId())
+                .map(Cohort::getId)
                 .collect(Collectors.toSet());
 
         return membershipRepository

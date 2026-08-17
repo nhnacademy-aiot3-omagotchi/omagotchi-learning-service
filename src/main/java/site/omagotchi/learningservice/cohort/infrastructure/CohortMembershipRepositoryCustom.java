@@ -1,5 +1,7 @@
 package site.omagotchi.learningservice.cohort.infrastructure;
 
+import site.omagotchi.learningservice.cohort.domain.CohortMembership;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +24,8 @@ public interface CohortMembershipRepositoryCustom {
      * @return 활성 소속 식별자, 없으면 {@link Optional#empty()}
      */
     Optional<Long> findActiveMembershipId(UUID userId, Long cohortId);
+
+    List<CohortMembership> findActiveStudents(Long cohortId);
 
     record MembershipView(Long id, Long cohortId, UUID userId) {
     }

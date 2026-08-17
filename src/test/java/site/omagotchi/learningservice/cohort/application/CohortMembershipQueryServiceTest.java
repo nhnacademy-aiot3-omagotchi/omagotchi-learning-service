@@ -45,6 +45,30 @@ class CohortMembershipQueryServiceTest {
     private CohortMembershipQueryService cohortMembershipQueryService;
 
     @Test
+    @DisplayName("기수의 활성 학생 소속을 공개 조회 결과로 일괄 변환한다.")
+    void findsActiveStudentMemberships() {
+        given(membershipRepository.findActiveStudents(COHORT_ID))
+                .willReturn(List.of(
+                        studentMembership(MEMBERSHIP_ID, USER_ID),
+                        studentMembership(20L, new UUID(0L, 2L))
+                ));
+
+        assertThat(cohortMembershipQueryService.findActiveStudentMemberships(COHORT_ID))
+                .containsExactly(
+                        new CohortMembershipView(MEMBERSHIP_ID, COHORT_ID, USER_ID),
+                        new CohortMembershipView(20L, COHORT_ID, new UUID(0L, 2L))
+                );
+    }
+
+    @Test
+    @DisplayName("기수 식별자가 없으면 활성 학생을 조회하지 않는다.")
+    void skipsActiveStudentQueryWithoutCohortId() {
+        assertThat(cohortMembershipQueryService.findActiveStudentMemberships(null)).isEmpty();
+
+        verify(membershipRepository, never()).findActiveStudents(any());
+    }
+
+    @Test
     @DisplayName("활성 소속을 찾으면 식별자만 담아 돌려준다.")
     void test1() {
         given(membershipRepository.findByIdAndStatus(MEMBERSHIP_ID, CohortMembershipStatus.ACTIVE))
@@ -209,6 +233,17 @@ class CohortMembershipQueryServiceTest {
         CohortMembership membership =
                 CohortMembership.activeManager(4L, USER_ID, UUID.randomUUID());
         ReflectionTestUtils.setField(membership, "id", 20L);
+        return membership;
+    }
+
+    private CohortMembership studentMembership(Long membershipId, UUID userId) {
+        CohortMembership membership = CohortMembership.pending(
+                COHORT_ID,
+                userId,
+                CohortMembershipRole.STUDENT
+        );
+        ReflectionTestUtils.setField(membership, "id", membershipId);
+        ReflectionTestUtils.setField(membership, "status", CohortMembershipStatus.ACTIVE);
         return membership;
     }
 

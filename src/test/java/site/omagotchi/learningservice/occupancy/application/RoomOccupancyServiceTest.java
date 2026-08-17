@@ -18,7 +18,8 @@ import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEve
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
-import site.omagotchi.learningservice.occupancy.application.port.SpaceReader;
+import site.omagotchi.learningservice.space.application.SpaceAccessService;
+import site.omagotchi.learningservice.space.application.result.SpaceAccessView;
 import site.omagotchi.learningservice.occupancy.application.result.RoomOccupancyResult;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
@@ -60,7 +61,7 @@ class RoomOccupancyServiceTest {
     private static final UUID USER_ID = UUID.randomUUID();
 
     @Mock
-    private SpaceReader spaceReader;
+    private SpaceAccessService spaceAccessService;
 
     @Mock
     private AttendancePresenceQueryService attendancePresenceQueryService;
@@ -81,7 +82,7 @@ class RoomOccupancyServiceTest {
     void setUp() {
         clock = Clock.fixed(NOW, SEOUL);
         roomOccupancyService = new RoomOccupancyService(
-                spaceReader,
+                spaceAccessService,
                 attendancePresenceQueryService,
                 occupancyRepository,
                 participantRepository,
@@ -148,7 +149,7 @@ class RoomOccupancyServiceTest {
     @Test
     @DisplayName("없는 공간은 점유할 수 없다.")
     void cannotOccupyNonExistentSpace() {
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.empty());
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.empty());
 
         assertBusinessError(
                 OccupancyErrorCode.SPACE_NOT_FOUND,
@@ -159,7 +160,7 @@ class RoomOccupancyServiceTest {
     @Test
     @DisplayName("회의실이 아닌 공간은 점유할 수 없다.")
     void cannotOccupyNonMeetingRoomSpace() {
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(false, true)));
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room(false, true)));
 
         assertBusinessError(
                 OccupancyErrorCode.NOT_MEETING_ROOM,
@@ -170,7 +171,7 @@ class RoomOccupancyServiceTest {
     @Test
     @DisplayName("비활성 공간은 점유할 수 없다.")
     void cannotOccupyInactiveSpace() {
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, false)));
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room(true, false)));
 
         assertBusinessError(
                 OccupancyErrorCode.SPACE_INACTIVE,
@@ -181,7 +182,7 @@ class RoomOccupancyServiceTest {
     @Test
     @DisplayName("재실이 아니면 점유할 수 없다.")
     void cannotOccupyWhenNotPresent() {
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
         given(attendancePresenceQueryService.findOpenPresence(USER_ID)).willReturn(Optional.empty());
 
         assertBusinessError(
@@ -197,9 +198,9 @@ class RoomOccupancyServiceTest {
     @Test
     @DisplayName("락을 잡은 뒤 비활성화된 공간을 찾아낸다.")
     void detectsSpaceDeactivatedAfterLock() {
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
         givenPresent();
-        given(spaceReader.lock(SPACE_ID)).willReturn(Optional.of(room(true, false)));
+        given(spaceAccessService.lock(SPACE_ID)).willReturn(Optional.of(room(true, false)));
 
         assertBusinessError(
                 OccupancyErrorCode.SPACE_INACTIVE,
@@ -210,9 +211,9 @@ class RoomOccupancyServiceTest {
     @Test
     @DisplayName("락 시점에 공간이 사라지면 없는 공간으로 처리한다.")
     void treatsSpaceAsNotFoundWhenMissingAtLockTime() {
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
         givenPresent();
-        given(spaceReader.lock(SPACE_ID)).willReturn(Optional.empty());
+        given(spaceAccessService.lock(SPACE_ID)).willReturn(Optional.empty());
 
         assertBusinessError(
                 OccupancyErrorCode.SPACE_NOT_FOUND,
@@ -252,7 +253,7 @@ class RoomOccupancyServiceTest {
     @Test
     @DisplayName("재실 조회 자체가 실패하면 감싸지 않고 그대로 전파한다.")
     void propagatesPresenceQueryFailureUnwrapped() {
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
         given(attendancePresenceQueryService.findOpenPresence(USER_ID))
                 .willThrow(new IllegalStateException("출결 모듈 조회 실패"));
 
@@ -265,7 +266,7 @@ class RoomOccupancyServiceTest {
     @Test
     @DisplayName("검증에 걸리면 점유도 참여자도 저장하지 않는다.")
     void doesNotSaveOccupancyOrParticipantWhenValidationFails() {
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, false)));
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room(true, false)));
 
         assertBusinessError(
                 OccupancyErrorCode.SPACE_INACTIVE,
@@ -288,10 +289,10 @@ class RoomOccupancyServiceTest {
 
         roomOccupancyService.start(SPACE_ID, USER_ID);
 
-        InOrder order = inOrder(spaceReader, attendancePresenceQueryService);
-        order.verify(spaceReader).find(SPACE_ID);
+        InOrder order = inOrder(spaceAccessService, attendancePresenceQueryService);
+        order.verify(spaceAccessService).find(SPACE_ID);
         order.verify(attendancePresenceQueryService).findOpenPresence(USER_ID);
-        order.verify(spaceReader).lock(SPACE_ID);
+        order.verify(spaceAccessService).lock(SPACE_ID);
     }
 
     /**
@@ -397,8 +398,8 @@ class RoomOccupancyServiceTest {
                 new RoomVacatedEvent(OTHER_SPACE_ID, 8L, endedAt));
     }
 
-    private SpaceReader.MeetingRoom room(boolean meetingRoom, boolean active) {
-        return new SpaceReader.MeetingRoom(SPACE_ID, meetingRoom, active, 8);
+    private SpaceAccessView room(boolean meetingRoom, boolean active) {
+        return new SpaceAccessView(SPACE_ID, meetingRoom, active, 8);
     }
 
     private void givenPresent() {
@@ -408,9 +409,9 @@ class RoomOccupancyServiceTest {
 
     /** 락까지 통과하는 회의실. 활성 점유 선검사는 기본값(false)에 맡긴다. */
     private void givenLockedRoom() {
-        given(spaceReader.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
         givenPresent();
-        given(spaceReader.lock(SPACE_ID)).willReturn(Optional.of(room(true, true)));
+        given(spaceAccessService.lock(SPACE_ID)).willReturn(Optional.of(room(true, true)));
     }
 
     /**

@@ -4,10 +4,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
-import site.omagotchi.learningservice.cohort.application.CohortAuditLogService;
 import site.omagotchi.learningservice.cohort.application.CohortAttendancePolicyService;
 import site.omagotchi.learningservice.cohort.application.CohortManagerService;
-import site.omagotchi.learningservice.cohort.application.result.CohortAuditLogResponse;
 import site.omagotchi.learningservice.cohort.application.result.CohortAttendancePolicyResponse;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipResponse;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
@@ -42,7 +40,6 @@ public class CohortController {
     private final CohortMembershipService membershipService;
     private final CohortManagerService managerService;
     private final CohortAttendancePolicyService attendancePolicyService;
-    private final CohortAuditLogService auditLogService;
 
     @PostMapping
     public CohortResponse create(
@@ -206,12 +203,4 @@ public class CohortController {
         return attendancePolicyService.savePolicy(cohortId, request.toCommand(), user.userId());
     }
 
-    @GetMapping("/{cohortId}/audit-logs")
-    public List<CohortAuditLogResponse> getAuditLogs(
-            @PathVariable Long cohortId,
-            JwtAuthenticationToken authentication
-    ) {
-        AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return auditLogService.getAuditLogs(cohortId, user.userId());
-    }
 }

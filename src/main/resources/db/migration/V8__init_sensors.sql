@@ -105,9 +105,8 @@ CREATE INDEX idx_threshold_rule_history_time
 -- '24e124' 를 복원한 16자리 전체 값이다.
 --
 -- space_id 는 전부 NULL 이다 (의도).
--- 공간 시드(V8)의 명칭이 아직 예시 단계라 이름으로 묶으면 임시 데이터에 종속되고,
--- 불일치 시 에러가 아니라 조용히 NULL 이 들어가 실패를 놓친다.
--- 센서-공간 배치는 공간 명칭 확정 후 UPDATE 로 처리한다.
+-- 운영 공간 식별자가 확정·시드되기 전이므로 임시 명칭에 센서를 묶지 않는다.
+-- 센서-공간 배치는 공간 정본 확정 후 별도 마이그레이션으로 처리한다.
 --
 -- expected_interval_seconds 는 관측 중앙값이 아니라 그 값이 수렴하는 공칭 주기를 쓴다.
 -- (121.8 -> 120, 599.9 -> 600). 관측값의 소수점 편차는 장비 드리프트다.
@@ -141,11 +140,25 @@ DECLARE
     seeded INTEGER;
 BEGIN
     SELECT count(*) INTO seeded
-    FROM learning_service.sensor_devices
-    WHERE device_eui LIKE '24e124%';
+    FROM (
+        VALUES
+            ('24e124126d152862', 'EM500-CO2', 120,  TRUE),
+            ('24e124128c140101', 'AM107',     600,  TRUE),
+            ('24e124136d151836', 'EM300-TH',   60,  TRUE),
+            ('24e124725d081175', 'AM103',       60,  TRUE),
+            ('24e124725d089152', 'AM103',      600,  TRUE),
+            ('24e124785c389010', 'EM320-TH',    60,  TRUE),
+            ('24e124141d180806', 'WS301',     3600,  TRUE),
+            ('24e124141d189196', 'WS301',     3600,  TRUE)
+    ) AS expected(device_eui, model, expected_interval_seconds, active)
+    JOIN learning_service.sensor_devices actual
+      ON actual.device_eui = expected.device_eui
+     AND actual.model = expected.model
+     AND actual.expected_interval_seconds = expected.expected_interval_seconds
+     AND actual.active = expected.active;
 
-    IF seeded < 8 THEN
-        RAISE EXCEPTION '센서 시드 적재 실패: 기대 8건, 실제 %건', seeded;
+    IF seeded <> 8 THEN
+        RAISE EXCEPTION '센서 시드 검증 실패: 식별자와 관리 메타데이터가 일치하는 행 기대 8건, 실제 %건', seeded;
     END IF;
 END
 $$;

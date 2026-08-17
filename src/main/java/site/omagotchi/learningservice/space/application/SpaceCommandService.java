@@ -182,21 +182,15 @@ public class SpaceCommandService {
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
+        // 검증 순서는 명세 07 §2를 그대로 따른다:
+        // 대상 기수 권한(2·3) → 실습실 여부(4) → 배정 여부(6).
+        //
+        // 기존 배정 기수의 매니저인지는 묻지 않는다. 미배정 실습실은 기수 매니저 누구나
+        // 배정할 수 있고(RM-16), 이미 배정된 실습실이면 요청자가 누구든 결과가 같다 —
+        // "이미 다른 기수에 배정됨"(409)이다. 소유 기수 권한을 먼저 보면 같은 상황이
+        // 요청자에 따라 403과 409로 갈려, 클라이언트가 배정 가능 여부를 오해한다.
         requireExistingCohort(cohortId);
-
-        if (existingSpace.getCohortId() == null) {
-            requireCohortManager(cohortId, actorUserId);
-        } else {
-            requireCohortManager(
-                    existingSpace.getCohortId(),
-                    actorUserId
-            );
-
-            if (!existingSpace.getCohortId().equals(cohortId)) {
-                requireCohortManager(cohortId, actorUserId);
-            }
-        }
-
+        requireCohortManager(cohortId, actorUserId);
         ensureLab(existingSpace);
 
         if (existingSpace.getCohortId() != null) {

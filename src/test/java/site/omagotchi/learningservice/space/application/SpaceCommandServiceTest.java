@@ -790,17 +790,28 @@ class SpaceCommandServiceTest {
         );
     }
 
+    /**
+     * 이미 배정된 실습실은 요청자가 누구든 409다 (명세 07 §5).
+     *
+     * <p>소유 기수의 매니저인지는 묻지 않는다. 그 권한을 먼저 보면 같은 상황이 요청자에 따라
+     * 403과 409로 갈려, 클라이언트가 "권한만 있으면 배정된다"고 오해한다.</p>
+     */
     @Test
-    void rejectsAssignmentWhenActorDoesNotManageOwningCohort() {
+    @DisplayName("이미 배정된 실습실은 소유 기수 매니저가 아니어도 409다")
+    void rejectsAssignmentToAlreadyAssignedLabRegardlessOfOwningCohort() {
         when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(lab(42L, null)));
-        when(cohortAccessPort.isActiveManager(42L, ACTOR_USER_ID))
-                .thenReturn(false);
+        when(cohortAccessPort.exists(84L)).thenReturn(true);
+        when(cohortAccessPort.isActiveManager(84L, ACTOR_USER_ID))
+                .thenReturn(true);
 
         assertBusinessError(
-                SpaceErrorCode.ACCESS_DENIED,
+                SpaceErrorCode.LAB_ALREADY_ASSIGNED,
                 () -> spaceCommandService.assignCohort(1L, 84L)
         );
+
+        // 소유 기수(42) 권한은 조회하지 않는다.
+        verify(cohortAccessPort, never()).isActiveManager(42L, ACTOR_USER_ID);
     }
 
     @Test

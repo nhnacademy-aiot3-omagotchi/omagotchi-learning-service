@@ -135,12 +135,22 @@ class SpaceTest {
         Space active = activeSpace();
         Space managed = managedSpace();
 
-        // 활성 공간의 정원 축소·유형 변경(RM-14)은 도메인이 막지 않는다. 정상 사용자 흐름의
-        // 거절 사유라 오류 코드로 옮기는 것이 Application의 책임이고, 양쪽이 함께 검사하면
-        // 같은 규칙이 두 곳에 생긴다 — 그 거절은 SpaceCommandServiceTest가 고정한다.
-        assertThat(active.changeCapacity(7, UPDATED_AT).getCapacity()).isEqualTo(7);
-        assertThat(active.changeType(SpaceType.STUDY, UPDATED_AT).getSpaceType())
-                .isEqualTo(SpaceType.STUDY);
+        // 활성 공간의 정원 축소·유형 변경(RM-14)은 도메인이 스스로 막는다. 호출자의 사전
+        // 확인에만 의존하면 다른 경로가 생길 때 조용히 우회되고, 이 조건을 지켜 주는 DB 제약도
+        // 없다. 사유는 Rule로 구분해 전달하며, 외부 오류 코드로 옮기는 것은 Application의 몫이다.
+        assertThatThrownBy(() -> active.changeCapacity(7, UPDATED_AT))
+                .isInstanceOf(SpaceStateTransitionException.class)
+                .extracting(exception ->
+                        ((SpaceStateTransitionException) exception).violated())
+                .isEqualTo(SpaceStateTransitionException.Rule.ACTIVE_CAPACITY_REDUCTION);
+        assertThatThrownBy(() -> active.changeType(SpaceType.STUDY, UPDATED_AT))
+                .isInstanceOf(SpaceStateTransitionException.class)
+                .extracting(exception ->
+                        ((SpaceStateTransitionException) exception).violated())
+                .isEqualTo(SpaceStateTransitionException.Rule.ACTIVE_TYPE_CHANGE);
+
+        // 늘리거나 유지하는 것은 상태와 무관하게 허용된다 — 줄이는 쪽만 경합을 만든다.
+        assertThat(active.changeCapacity(99, UPDATED_AT).getCapacity()).isEqualTo(99);
 
         assertThatThrownBy(() -> active.delete(UPDATED_AT))
                 .isInstanceOf(IllegalStateException.class);

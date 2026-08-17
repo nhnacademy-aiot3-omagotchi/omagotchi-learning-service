@@ -178,21 +178,30 @@ public class Space {
     /**
      * 공간 유형을 변경한 새로운 객체를 반환한다.
      *
-     * <p><b>"비활성 상태에서만"(RM-14)은 여기서 막지 않는다.</b> 정상 사용자 흐름에서도 나오는
-     * 거절 사유라 외부 오류 코드로 옮기는 것이 Application의 책임이고, 양쪽이 함께 검사하면
-     * 같은 규칙이 두 곳에 생겨 한쪽만 바뀐다. 상태는 {@link #isActive()}로 물어보면 된다
-     * ({@code RoomOccupancy.extend()}와 같은 분담).</p>
+     * <p><b>활성 공간의 유형은 바꿀 수 없다</b> (RM-14). 이용 중일 수 있는 공간의 유형이 바뀌면
+     * 이미 진행 중인 점유·재실과 어긋나므로, 비활성 상태로 한정해 그 경합을 원천 소멸시킨다.
+     * 배정 여부는 조건이 아니다 — RM-22는 미수용이다.</p>
      *
-     * <p><b>이 Method가 통과시킨다고 유형 변경이 허용된다는 뜻이 아니다.</b> 실제 거절은
-     * {@code SpaceCommandService.update()}가 {@code SPACE_ACTIVE_TYPE_CHANGE_NOT_ALLOWED}로
-     * 수행하며, 그 가드를 지우면 RM-14가 사라진다 — 여기에는 그것을 대신 막아 줄 검사가 없다.
-     * 회귀는 {@code SpaceCommandServiceTest}와 {@code SpaceIT}가 잡는다.</p>
+     * <p>이 규칙을 <b>스스로</b> 지킨다. 호출자의 사전 확인에만 의존하면 다른 경로가 생길 때
+     * 조용히 우회되고, 이 조건을 지켜 주는 DB 제약도 없다. 상태를 미리 보고 분기하려면
+     * {@link #isActive()}를 쓴다.</p>
+     *
+     * @throws SpaceStateTransitionException 활성 상태에서 유형을 바꾸려 한 경우.
+     *                                       사유는 {@link SpaceStateTransitionException.Rule}로
+     *                                       구분해 전달하며, 외부 오류로 옮기는 것은 호출자의 몫이다
      */
     public Space changeType(
             SpaceType newType,
             ZonedDateTime updatedAt
     ) {
         ensureNotDeleted();
+
+        if (spaceType != newType && isActive()) {
+            throw new SpaceStateTransitionException(
+                    SpaceStateTransitionException.Rule.ACTIVE_TYPE_CHANGE,
+                    "활성 공간의 유형은 변경할 수 없습니다."
+            );
+        }
 
         return new Space(
                 id,
@@ -211,18 +220,27 @@ public class Space {
     /**
      * 공간 최대 인원을 변경한 새로운 객체를 반환한다.
      *
-     * <p>"활성 공간의 정원 축소 금지"(RM-14)는 {@link #changeType}과 같은 이유로 여기서
-     * 검사하지 않는다. 거절은 {@code SpaceCommandService.update()}가
-     * {@code SPACE_ACTIVE_CAPACITY_REDUCTION_NOT_ALLOWED}로 수행한다.</p>
+     * <p><b>활성 공간의 정원은 줄일 수 없다</b> (RM-14). 늘리거나 유지하는 것은 상태와 무관하게
+     * 허용된다 — 줄이는 쪽만 "이미 그 인원이 차 있는" 상태와 어긋날 수 있기 때문이다.
+     * {@link #changeType}과 같은 이유로 이 규칙도 스스로 지킨다.</p>
      *
      * <p>값 자체의 규칙(양수)은 {@link SpaceAttributes}가 생성자에서 지킨다 — 그쪽은 상태와
-     * 무관한 불변식이라 도메인이 소유한다.</p>
+     * 무관한 불변식이라 언제나 성립한다.</p>
+     *
+     * @throws SpaceStateTransitionException 활성 상태에서 정원을 줄이려 한 경우
      */
     public Space changeCapacity(
             Integer newCapacity,
             ZonedDateTime updatedAt
     ) {
         ensureNotDeleted();
+
+        if (newCapacity != null && newCapacity < capacity && isActive()) {
+            throw new SpaceStateTransitionException(
+                    SpaceStateTransitionException.Rule.ACTIVE_CAPACITY_REDUCTION,
+                    "활성 공간의 최대 인원은 줄일 수 없습니다."
+            );
+        }
 
         return new Space(
                 id,

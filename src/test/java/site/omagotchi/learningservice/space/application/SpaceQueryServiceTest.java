@@ -8,7 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
-import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPort;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.application.result.SpaceListResult;
 import site.omagotchi.learningservice.space.domain.Space;
@@ -62,7 +62,7 @@ class SpaceQueryServiceTest {
     private OccupancyQueryService occupancyQueryService;
 
     @Mock
-    private SpaceCohortAccessPort cohortAccessPort;
+    private CohortAccessService cohortAccessService;
 
     private SpaceQueryService spaceQueryService;
 
@@ -71,7 +71,7 @@ class SpaceQueryServiceTest {
         spaceQueryService = new SpaceQueryService(
                 spaceRepository,
                 occupancyQueryService,
-                cohortAccessPort,
+                cohortAccessService,
                 Clock.fixed(NOW, SEOUL)
         );
     }
@@ -83,7 +83,7 @@ class SpaceQueryServiceTest {
 
         assertThat(spaceQueryService.getSpaceList(REQUESTER_ID)).isEmpty();
 
-        verifyNoInteractions(occupancyQueryService, cohortAccessPort);
+        verifyNoInteractions(occupancyQueryService, cohortAccessService);
     }
 
     @Test
@@ -105,7 +105,7 @@ class SpaceQueryServiceTest {
     @DisplayName("활성 점유가 있으면 사용 중이고 남은 시간을 함께 낸다")
     void marksOccupiedMeetingWithRemainingTime() {
         stubMeetingWithOccupancy(MY_COHORT);
-        when(cohortAccessPort.findActiveCohortIds(REQUESTER_ID))
+        when(cohortAccessService.findActiveCohortIds(REQUESTER_ID))
                 .thenReturn(List.of(MY_COHORT));
 
         SpaceListResult result = spaceQueryService.getSpaceList(REQUESTER_ID).getFirst();
@@ -123,7 +123,7 @@ class SpaceQueryServiceTest {
     @DisplayName("같은 기수 점유면 점유자와 참여자를 노출한다")
     void exposesOccupantsToSameCohortRequester() {
         stubMeetingWithOccupancy(MY_COHORT);
-        when(cohortAccessPort.findActiveCohortIds(REQUESTER_ID))
+        when(cohortAccessService.findActiveCohortIds(REQUESTER_ID))
                 .thenReturn(List.of(MY_COHORT));
 
         SpaceListResult result = spaceQueryService.getSpaceList(REQUESTER_ID).getFirst();
@@ -139,7 +139,7 @@ class SpaceQueryServiceTest {
     @DisplayName("타 기수 점유면 개인정보를 가린다")
     void hidesOccupantsFromOtherCohortRequester() {
         stubMeetingWithOccupancy(OTHER_COHORT);
-        when(cohortAccessPort.findActiveCohortIds(REQUESTER_ID))
+        when(cohortAccessService.findActiveCohortIds(REQUESTER_ID))
                 .thenReturn(List.of(MY_COHORT));
 
         SpaceListResult result = spaceQueryService.getSpaceList(REQUESTER_ID).getFirst();
@@ -160,7 +160,7 @@ class SpaceQueryServiceTest {
         SpaceListResult result = spaceQueryService.getSpaceList(null).getFirst();
 
         assertOccupantsHidden(result);
-        verifyNoInteractions(cohortAccessPort);
+        verifyNoInteractions(cohortAccessService);
     }
 
     /**
@@ -174,7 +174,7 @@ class SpaceQueryServiceTest {
     @DisplayName("점유자의 기수를 알 수 없으면 500이 아니라 개인정보를 가린다")
     void hidesOccupantsWhenOccupierCohortIsUnknown() {
         stubMeetingWithOccupancy(null);
-        when(cohortAccessPort.findActiveCohortIds(REQUESTER_ID))
+        when(cohortAccessService.findActiveCohortIds(REQUESTER_ID))
                 .thenReturn(List.of(MY_COHORT));
 
         SpaceListResult result = spaceQueryService.getSpaceList(REQUESTER_ID).getFirst();
@@ -198,7 +198,7 @@ class SpaceQueryServiceTest {
 
         assertThat(result.status()).isEqualTo(SpaceUsageStatus.OCCUPIED);
         assertOccupantsHidden(result);
-        verifyNoInteractions(cohortAccessPort);
+        verifyNoInteractions(cohortAccessService);
     }
 
     /**
@@ -212,7 +212,7 @@ class SpaceQueryServiceTest {
                 .thenReturn(List.of(meeting(1L, SpaceOperationalStatus.INACTIVE)));
         when(occupancyQueryService.findActiveBySpaceIds(anyCollection(), any()))
                 .thenReturn(Map.of(1L, occupancy(MY_COHORT)));
-        when(cohortAccessPort.findActiveCohortIds(REQUESTER_ID))
+        when(cohortAccessService.findActiveCohortIds(REQUESTER_ID))
                 .thenReturn(List.of(MY_COHORT));
 
         SpaceListResult result = spaceQueryService.getSpaceList(REQUESTER_ID).getFirst();

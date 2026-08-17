@@ -96,7 +96,7 @@ public interface RoomOccupancyRepository {
      * 뒤이은 {@link #lockById}가 {@code FOR UPDATE}를 실제로 실행해도 Hibernate는
      * 캐시 인스턴스를 그대로 돌려준다. 그러면 락 획득 후 상태 재확인이 락 이전
      * 스냅샷을 보게 되어 "종료 커밋 직후 도착한 요청" 방어가 무력화된다
-     * ({@code SpaceReader} 주석과 같은 함정).</p>
+     * ({@code SpaceAccessQueryPort#lock} 주석과 같은 함정).</p>
      */
     Optional<ActiveOccupancy> findActiveSummaryBySpaceId(Long spaceId);
 

@@ -8,11 +8,12 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
 import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPort;
-import site.omagotchi.learningservice.space.application.port.SpaceOccupancyQueryPort;
+import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceAttributes;
 import site.omagotchi.learningservice.space.domain.SpaceType;
+import site.omagotchi.learningservice.space.domain.SpaceStateTransitionException;
 import site.omagotchi.learningservice.space.domain.SpaceValidationException;
 
 import java.time.Clock;
@@ -27,7 +28,7 @@ import java.util.UUID;
 public class SpaceCommandService {
 
     private final SpaceRepository spaceRepository;
-    private final SpaceOccupancyQueryPort spaceOccupancyQueryPort;
+    private final OccupancyQueryService occupancyQueryService;
     private final SpaceCohortAccessPort cohortAccessPort;
     private final Clock clock;
 
@@ -93,32 +94,9 @@ public class SpaceCommandService {
         boolean changesType = existingSpace.getSpaceType()
                 != attributes.spaceType();
 
-        if (changesType && existingSpace.isActive()) {
-            throw new BusinessException(
-                    SpaceErrorCode.ACTIVE_TYPE_CHANGE_NOT_ALLOWED
-            );
-        }
-
-        if (attributes.capacity() < existingSpace.getCapacity()
-                && existingSpace.isActive()) {
-            throw new BusinessException(
-                    SpaceErrorCode.ACTIVE_CAPACITY_REDUCTION_NOT_ALLOWED
-            );
-        }
-
-        Space updatedSpace = existingSpace
-                .changeName(
-                        attributes.name(),
-                        now
-                )
-                .changeType(
-                        attributes.spaceType(),
-                        now
-                )
-                .changeCapacity(
-                        attributes.capacity(),
-                        now
-                );
+        // 상태가 막는 변경(RM-14)은 Domain이 스스로 검사한다. 여기서 같은 조건을 미리 보면
+        // 불변식이 두 곳에 생겨 한쪽만 바뀌므로, 사유만 받아 외부 오류로 옮긴다.
+        Space updatedSpace = applyAttributes(existingSpace, attributes, now);
 
         if (changesType) {
             ensureNoActiveOccupancy(spaceId, now);
@@ -270,7 +248,7 @@ public class SpaceCommandService {
             Long spaceId,
             ZonedDateTime now
     ) {
-        if (spaceOccupancyQueryPort.existsActiveOccupancy(spaceId, now)) {
+        if (occupancyQueryService.existsActive(spaceId, now.toOffsetDateTime())) {
             throw new BusinessException(
                     SpaceErrorCode.ACTIVE_OCCUPANCY_EXISTS
             );
@@ -370,6 +348,41 @@ public class SpaceCommandService {
                     SpaceErrorCode.LAB_ONLY_COHORT_ASSIGNMENT
             );
         }
+    }
+
+    /**
+     * 이름·유형·정원을 한 번에 반영하고, 상태가 막은 변경을 외부 오류로 옮긴다.
+     *
+     * <p>거절 사유는 {@link SpaceStateTransitionException.Rule}로 구분한다 — Domain은 어떤
+     * {@code ErrorCode}로 응답할지 모르고, 그 매핑이 이 Application의 책임이다.</p>
+     *
+     * <p>{@code cause}를 넘겨 원본을 보존한다. 예상 가능한 {@code 4xx}라 stack trace를 남기지는
+     * 않지만, 조사 시 어느 규칙이 어디서 걸렸는지 추적할 수 있어야 한다.</p>
+     */
+    private Space applyAttributes(
+            Space space,
+            SpaceAttributes attributes,
+            ZonedDateTime now
+    ) {
+        try {
+            return space
+                    .changeName(attributes.name(), now)
+                    .changeType(attributes.spaceType(), now)
+                    .changeCapacity(attributes.capacity(), now);
+        } catch (SpaceStateTransitionException exception) {
+            throw new BusinessException(toErrorCode(exception.violated()), exception);
+        }
+    }
+
+    private static SpaceErrorCode toErrorCode(
+            SpaceStateTransitionException.Rule violated
+    ) {
+        return switch (violated) {
+            case ACTIVE_TYPE_CHANGE ->
+                    SpaceErrorCode.ACTIVE_TYPE_CHANGE_NOT_ALLOWED;
+            case ACTIVE_CAPACITY_REDUCTION ->
+                    SpaceErrorCode.ACTIVE_CAPACITY_REDUCTION_NOT_ALLOWED;
+        };
     }
 
     private SpaceAttributes validateSpaceAttributes(

@@ -155,6 +155,67 @@ class CohortAccessServiceTest {
     }
 
     @Nested
+    @DisplayName("기수 매니저 확인 (예외)")
+    class RequireManager {
+
+        @Test
+        @DisplayName("활성 소속이 없으면 404")
+        void throwsNotFoundWhenNoActiveMembership() {
+            when(membershipRepository.findActiveMembershipId(USER_ID, COHORT_ID))
+                    .thenReturn(Optional.empty());
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> accessService.requireManager(COHORT_ID, USER_ID)
+            );
+
+            assertSame(CohortErrorCode.COHORT_NOT_FOUND, exception.getErrorCode());
+            verify(membershipRepository, never())
+                    .existsByCohortIdAndUserIdAndRoleAndStatus(
+                            COHORT_ID,
+                            USER_ID,
+                            CohortMembershipRole.MANAGER,
+                            CohortMembershipStatus.ACTIVE
+                    );
+        }
+
+        @Test
+        @DisplayName("활성 소속은 있으나 매니저가 아니면 403")
+        void throwsManagerRequiredWhenActiveMembershipIsNotManager() {
+            when(membershipRepository.findActiveMembershipId(USER_ID, COHORT_ID))
+                    .thenReturn(Optional.of(MEMBERSHIP_ID));
+            when(membershipRepository.existsByCohortIdAndUserIdAndRoleAndStatus(
+                    COHORT_ID,
+                    USER_ID,
+                    CohortMembershipRole.MANAGER,
+                    CohortMembershipStatus.ACTIVE
+            )).thenReturn(false);
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> accessService.requireManager(COHORT_ID, USER_ID)
+            );
+
+            assertSame(CohortErrorCode.COHORT_MANAGER_REQUIRED, exception.getErrorCode());
+        }
+
+        @Test
+        @DisplayName("활성 매니저 소속이면 예외 없음")
+        void doesNotThrowForActiveManager() {
+            when(membershipRepository.findActiveMembershipId(USER_ID, COHORT_ID))
+                    .thenReturn(Optional.of(MEMBERSHIP_ID));
+            when(membershipRepository.existsByCohortIdAndUserIdAndRoleAndStatus(
+                    COHORT_ID,
+                    USER_ID,
+                    CohortMembershipRole.MANAGER,
+                    CohortMembershipStatus.ACTIVE
+            )).thenReturn(true);
+
+            assertDoesNotThrow(() -> accessService.requireManager(COHORT_ID, USER_ID));
+        }
+    }
+
+    @Nested
     @DisplayName("활성 학생 소속 식별자 확인")
     class RequireActiveStudentMembershipId {
 

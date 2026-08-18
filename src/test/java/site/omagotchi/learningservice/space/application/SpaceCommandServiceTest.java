@@ -11,7 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
-import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPort;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.space.domain.Space;
@@ -53,7 +53,7 @@ class SpaceCommandServiceTest {
     private OccupancyQueryService occupancyQueryService;
 
     @Mock
-    private SpaceCohortAccessPort cohortAccessPort;
+    private CohortAccessService cohortAccessService;
 
     private TestSpaceCommandService spaceCommandService;
 
@@ -63,13 +63,13 @@ class SpaceCommandServiceTest {
         SpaceCommandService delegate = new SpaceCommandService(
                 spaceRepository,
                 occupancyQueryService,
-                cohortAccessPort,
+                cohortAccessService,
                 clock
         );
         spaceCommandService = new TestSpaceCommandService(delegate);
-        lenient().when(cohortAccessPort.exists(anyLong()))
+        lenient().when(cohortAccessService.exists(anyLong()))
                 .thenReturn(true);
-        lenient().when(cohortAccessPort.isActiveManager(
+        lenient().when(cohortAccessService.isManager(
                         anyLong(),
                         any(UUID.class)
                 ))
@@ -204,12 +204,12 @@ class SpaceCommandServiceTest {
         assertThat(created.getCohortId()).isEqualTo(42L);
         assertThat(created.getOperationalStatus())
                 .isEqualTo(SpaceOperationalStatus.INACTIVE);
-        verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
+        verify(cohortAccessService).isManager(42L, ACTOR_USER_ID);
     }
 
     @Test
     void usesActorsActiveManagedCohortWhenCreateCohortIdIsOmitted() {
-        when(cohortAccessPort.findActiveManagedCohortIds(ACTOR_USER_ID))
+        when(cohortAccessService.findActiveManagedCohortIds(ACTOR_USER_ID))
                 .thenReturn(List.of(42L));
         when(spaceRepository.save(any(Space.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -228,7 +228,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsCreateWithoutActiveManagedCohort() {
-        when(cohortAccessPort.findActiveManagedCohortIds(ACTOR_USER_ID))
+        when(cohortAccessService.findActiveManagedCohortIds(ACTOR_USER_ID))
                 .thenReturn(List.of());
 
         assertBusinessError(
@@ -244,7 +244,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void requiresCohortIdWhenActorManagesMultipleActiveCohorts() {
-        when(cohortAccessPort.findActiveManagedCohortIds(ACTOR_USER_ID))
+        when(cohortAccessService.findActiveManagedCohortIds(ACTOR_USER_ID))
                 .thenReturn(List.of(42L, 84L));
 
         assertBusinessError(
@@ -261,7 +261,7 @@ class SpaceCommandServiceTest {
 
     @Test
     void rejectsCreateForAnotherCohort() {
-        when(cohortAccessPort.isActiveManager(84L, ACTOR_USER_ID))
+        when(cohortAccessService.isManager(84L, ACTOR_USER_ID))
                 .thenReturn(false);
 
         assertBusinessError(
@@ -297,7 +297,7 @@ class SpaceCommandServiceTest {
         assertThat(updated.getSpaceType()).isEqualTo(SpaceType.STUDY);
         assertThat(updated.getCapacity()).isEqualTo(12);
         assertThat(updated.getCohortId()).isEqualTo(42L);
-        verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
+        verify(cohortAccessService).isManager(42L, ACTOR_USER_ID);
         verify(spaceRepository).findByIdForUpdate(1L);
     }
 
@@ -314,7 +314,7 @@ class SpaceCommandServiceTest {
         verify(spaceRepository).save(captor.capture());
         assertThat(captor.getValue().isDeleted()).isTrue();
         assertThat(captor.getValue().getCohortId()).isEqualTo(42L);
-        verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
+        verify(cohortAccessService).isManager(42L, ACTOR_USER_ID);
         verify(spaceRepository).findByIdForUpdate(1L);
     }
 
@@ -336,7 +336,7 @@ class SpaceCommandServiceTest {
         assertThat(activated.getInactiveReason()).isNull();
         assertThat(activated.getUpdatedAt())
                 .isEqualTo(ZonedDateTime.ofInstant(NOW, SEOUL));
-        verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
+        verify(cohortAccessService).isManager(42L, ACTOR_USER_ID);
         verify(spaceRepository).findByIdForUpdate(1L);
     }
 
@@ -419,7 +419,7 @@ class SpaceCommandServiceTest {
         assertThat(deactivated.getOperationalStatus())
                 .isEqualTo(SpaceOperationalStatus.INACTIVE);
         assertThat(deactivated.getInactiveReason()).isEqualTo("냉방 점검");
-        verify(cohortAccessPort).isActiveManager(42L, ACTOR_USER_ID);
+        verify(cohortAccessService).isManager(42L, ACTOR_USER_ID);
         verify(spaceRepository).findByIdForUpdate(1L);
     }
 
@@ -790,24 +790,35 @@ class SpaceCommandServiceTest {
         );
     }
 
+    /**
+     * 이미 배정된 실습실은 대상 기수 매니저인 요청자라면 누구든 409다 (명세 07 §5).
+     *
+     * <p>소유 기수의 매니저인지는 묻지 않는다. 그 권한을 먼저 보면 같은 상황이 요청자에 따라
+     * 403과 409로 갈려, 클라이언트가 "권한만 있으면 배정된다"고 오해한다.</p>
+     */
     @Test
-    void rejectsAssignmentWhenActorDoesNotManageOwningCohort() {
+    @DisplayName("이미 배정된 실습실은 소유 기수 매니저가 아니어도 409다")
+    void rejectsAssignmentToAlreadyAssignedLabRegardlessOfOwningCohort() {
         when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(lab(42L, null)));
-        when(cohortAccessPort.isActiveManager(42L, ACTOR_USER_ID))
-                .thenReturn(false);
+        when(cohortAccessService.exists(84L)).thenReturn(true);
+        when(cohortAccessService.isManager(84L, ACTOR_USER_ID))
+                .thenReturn(true);
 
         assertBusinessError(
-                SpaceErrorCode.ACCESS_DENIED,
+                SpaceErrorCode.LAB_ALREADY_ASSIGNED,
                 () -> spaceCommandService.assignCohort(1L, 84L)
         );
+
+        // 소유 기수(42) 권한은 조회하지 않는다.
+        verify(cohortAccessService, never()).isManager(42L, ACTOR_USER_ID);
     }
 
     @Test
     void rejectsAssignmentWhenActorDoesNotManageRequestedCohort() {
         when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(lab(42L, null)));
-        when(cohortAccessPort.isActiveManager(84L, ACTOR_USER_ID))
+        when(cohortAccessService.isManager(84L, ACTOR_USER_ID))
                 .thenReturn(false);
 
         assertBusinessError(

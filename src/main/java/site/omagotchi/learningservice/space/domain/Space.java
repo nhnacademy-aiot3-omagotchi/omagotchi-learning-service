@@ -7,6 +7,13 @@ import java.util.Objects;
 
 /**
  * DB 기술에 의존하지 않는 공간 순수 도메인 객체.
+ *
+ * <p>모든 변경 Method는 불변식을 <b>스스로</b> 지킨다. 이 Class는 외부 오류 계약과 HTTP를
+ * 알지 못하며, 상태 코드 결정은 Application의 책임이다.</p>
+ *
+ * <p>거절을 알리는 방법이 두 가지다 — 복합 조건은 {@link SpaceStateTransitionException}에 사유를
+ * 실어 던지고, 단일 상태는 {@link IllegalStateException}으로 막는다.
+ * <b>기준과 통일하지 말아야 하는 이유는 ADR space-team/0014에 있다.</b></p>
  */
 @Getter
 public class Space {

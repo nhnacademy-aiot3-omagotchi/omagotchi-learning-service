@@ -60,11 +60,22 @@ public interface OccupancyParticipantJpaRepository extends JpaRepository<Occupan
      *
      * <p>{@code WHERE left_at IS NULL} 조건부 UPDATE라 멱등하다. 같은 반납이 두 번
      * 처리돼도 이미 닫힌 행의 시각을 덮어쓰지 않는다.</p>
+     *
+     * <p><b>{@code joined_at}보다 이른 시각으로는 마감하지 않는다.</b> 참여 시각이 종료
+     * 시각보다 뒤인 행이 하나라도 있으면 {@code ck_occupancy_participants_period}가 걸려
+     * 이 UPDATE가 실패하고, 만료 처리 트랜잭션 전체가 롤백된다 — 점유는 ACTIVE로 남아
+     * 주기마다 같은 실패를 반복하고 그 참여자들은 열린 행에 영구히 묶인다. 그런 행은
+     * 애초에 생기지 않아야 하지만(그 방어는 참여자 추가 경로에 있다), 여기서 한 건이
+     * 만료 절차 전체를 막게 두지 않는다. 참여 구간을 길이 0으로 마감하는 것이
+     * 이미 끝난 회의에 대해 사실에도 맞다.</p>
      */
     @Modifying
     @Query("""
                 UPDATE OccupancyParticipant p
-                SET p.leftAt = :endedAt
+                SET p.leftAt = CASE
+                        WHEN p.joinedAt > :endedAt THEN p.joinedAt
+                        ELSE :endedAt
+                    END
                 WHERE p.occupancyId = :occupancyId
                   AND p.leftAt IS NULL""")
     int closeAllActiveByOccupancyId(

@@ -3,9 +3,9 @@ package site.omagotchi.learningservice.space.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
-import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPort;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.application.result.SpaceListResult;
 import site.omagotchi.learningservice.space.domain.Space;
@@ -41,7 +41,7 @@ public class SpaceQueryService {
 
     private final SpaceRepository spaceRepository;
     private final OccupancyQueryService occupancyQueryService;
-    private final SpaceCohortAccessPort cohortAccessPort;
+    private final CohortAccessService cohortAccessService;
     private final Clock clock;
 
     /**
@@ -67,7 +67,7 @@ public class SpaceQueryService {
 
         Set<Long> requesterCohortIds = requesterUserId == null
                 ? Set.of()
-                : Set.copyOf(cohortAccessPort.findActiveCohortIds(requesterUserId));
+                : Set.copyOf(cohortAccessService.findActiveCohortIds(requesterUserId));
 
         return spaces.stream()
                 .map(space -> toListResult(

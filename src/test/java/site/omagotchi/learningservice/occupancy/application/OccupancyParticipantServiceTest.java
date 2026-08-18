@@ -258,6 +258,51 @@ class OccupancyParticipantServiceTest {
         verify(participantRepository, never()).save(any(OccupancyParticipant.class));
     }
 
+    /**
+     * ACTIVE와 만료는 별개다 — 스케줄러(#9)가 쓸어가기 전 구간에서는 둘이 동시에 성립한다.
+     *
+     * <p>여기서 막지 않으면 {@code joined_at > expires_at}인 행이 생기고, 이후 만료 처리가
+     * {@code left_at}을 {@code expires_at}으로 찍는 순간 {@code ck_occupancy_participants_period}에
+     * 걸려 그 점유가 영영 종료되지 못한다.</p>
+     */
+    @Test
+    @DisplayName("만료 시각이 지났으면 아직 ACTIVE여도 참여자를 추가할 수 없다.")
+    void cannotAddToExpiredButStillActiveOccupancy() {
+        givenActiveOccupancy();
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room()));
+        givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
+        givenTargetPresent();
+        givenCohort(TARGET_MEMBERSHIP_ID, COHORT_ID);
+        given(occupancyRepository.lockById(OCCUPANCY_ID))
+                .willReturn(Optional.of(expiredButActiveOccupancy()));
+
+        assertBusinessError(
+                OccupancyErrorCode.OCCUPANCY_ENDED,
+                () -> occupancyParticipantService.add(SPACE_ID, TARGET_USER_ID, OCCUPIER_USER_ID)
+        );
+
+        verify(participantRepository, never()).save(any(OccupancyParticipant.class));
+    }
+
+    /**
+     * 나가는 길까지 막으면 안 된다. 이탈은 {@code left_at}에 현재 시각을 찍으므로
+     * 항상 {@code joined_at} 이후이고, 오히려 묶인 참여자를 풀어 주는 경로다.
+     */
+    @Test
+    @DisplayName("만료 시각이 지난 점유에서도 참여자는 이탈할 수 있다.")
+    void canStillLeaveExpiredButStillActiveOccupancy() {
+        givenActiveOccupancy();
+        given(occupancyRepository.lockById(OCCUPANCY_ID))
+                .willReturn(Optional.of(expiredButActiveOccupancy()));
+        OccupancyParticipant participant = participant();
+        given(participantRepository.findByOccupancyIdAndUserId(OCCUPANCY_ID, TARGET_USER_ID))
+                .willReturn(Optional.of(participant));
+
+        occupancyParticipantService.remove(SPACE_ID, TARGET_USER_ID, TARGET_USER_ID);
+
+        assertThat(participant.getLeftAt()).isEqualTo(now());
+    }
+
     /** 정원은 "최대 N행"이라 유니크로 표현할 수 없어 락 안 카운트가 유일한 방어선이다. */
     @Test
     @DisplayName("정원이 찬 회의실에는 참여자를 추가할 수 없다.")
@@ -539,6 +584,15 @@ class OccupancyParticipantServiceTest {
     private RoomOccupancy occupancy() {
         RoomOccupancy occupancy = RoomOccupancy.start(
                 SPACE_ID, OCCUPIER_MEMBERSHIP_ID, OCCUPIER_USER_ID, now(), now().plusHours(2));
+        ReflectionTestUtils.setField(occupancy, "id", OCCUPANCY_ID);
+        return occupancy;
+    }
+
+    /** 만료 시각은 지났지만 스케줄러가 아직 EXPIRED로 바꾸지 않은 상태. */
+    private RoomOccupancy expiredButActiveOccupancy() {
+        RoomOccupancy occupancy = RoomOccupancy.start(
+                SPACE_ID, OCCUPIER_MEMBERSHIP_ID, OCCUPIER_USER_ID,
+                now().minusHours(2), now().minusMinutes(1));
         ReflectionTestUtils.setField(occupancy, "id", OCCUPANCY_ID);
         return occupancy;
     }

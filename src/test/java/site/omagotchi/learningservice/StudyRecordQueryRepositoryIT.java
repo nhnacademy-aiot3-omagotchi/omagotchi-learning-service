@@ -3,10 +3,12 @@ package site.omagotchi.learningservice;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.global.config.JpaAuditingConfig;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
@@ -43,6 +45,18 @@ class StudyRecordQueryRepositoryIT {
 
     @Autowired
     private StudyRecordQueryDslRepository studyRecordQueryRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @BeforeEach
+    void setUpMemberships() {
+        CohortMembershipTestFixture.ensureActiveMemberships(
+                jdbcTemplate,
+                COHORT_MEMBERSHIP_ID,
+                2L
+        );
+    }
 
     @Nested
     @DisplayName("활성 기록 단건 조회")

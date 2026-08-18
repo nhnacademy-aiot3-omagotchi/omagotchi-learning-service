@@ -1,5 +1,7 @@
 package site.omagotchi.learningservice.environment.domain;
 
+import site.omagotchi.learningservice.rule.domain.Operator;
+
 import java.time.Instant;
 import java.util.Objects;
 
@@ -12,6 +14,8 @@ public record SensorDetection (
         String measurement,
         Double value,
         String detail,
+        Operator operator,
+        Double threshold,
         Instant measuredAt,
         Instant receivedAt
 ){

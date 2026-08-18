@@ -118,8 +118,12 @@ CREATE TABLE learning_service.timer_runs (
     CONSTRAINT ck_timer_runs_measured_seconds
         CHECK (
             measured_seconds IS NULL
-                OR measured_seconds >= 0
-            )
+                OR (
+                    measured_seconds >= 0
+                    AND ended_at IS NOT NULL
+                    AND measured_seconds <= EXTRACT(EPOCH FROM (ended_at - started_at))
+                )
+        )
 );
 
 CREATE UNIQUE INDEX uq_timer_runs_active_membership

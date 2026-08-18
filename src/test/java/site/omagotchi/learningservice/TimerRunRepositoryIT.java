@@ -293,6 +293,29 @@ class TimerRunRepositoryIT {
             );
         }
 
+        @Test
+        @DisplayName("경과 시간을 초과한 정지 측정 시간 저장 거절")
+        void rejectsStoppedStateWhenMeasuredSecondsExceedsElapsedTime() {
+            assertThrows(
+                    DataIntegrityViolationException.class,
+                    () -> jdbcTemplate.update("""
+                                    INSERT INTO learning_service.timer_runs (
+                                        id,
+                                        cohort_membership_id,
+                                        started_at,
+                                        ended_at,
+                                        measured_seconds,
+                                        end_reason
+                                    ) VALUES (?, ?, ?, ?, 3600, 'STOP')
+                                    """,
+                            UUID.fromString("00000000-0000-0000-0000-000000000107"),
+                            COHORT_MEMBERSHIP_ID,
+                            OffsetDateTime.parse("2000-01-01T00:00:00Z"),
+                            OffsetDateTime.parse("2000-01-01T00:01:00Z")
+                    )
+            );
+        }
+
         @ParameterizedTest(name = "{0} 상태")
         @ValueSource(strings = {"DISCARD", "EXPIRED"})
         @DisplayName("측정 시간 있는 미기록 종료 상태 저장 거절")

@@ -23,11 +23,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -101,6 +105,113 @@ class CohortAccessServiceTest {
             );
 
             assertSame(CohortErrorCode.COHORT_NOT_FOUND, exception.getErrorCode());
+        }
+    }
+
+    @Nested
+    @DisplayName("기수 매니저 확인")
+    class IsManager {
+
+        @Test
+        @DisplayName("MANAGER 역할의 활성 소속이면 true")
+        void returnsTrueForActiveManager() {
+            when(membershipRepository.existsByCohortIdAndUserIdAndRoleAndStatus(
+                    COHORT_ID,
+                    USER_ID,
+                    CohortMembershipRole.MANAGER,
+                    CohortMembershipStatus.ACTIVE
+            )).thenReturn(true);
+
+            assertTrue(accessService.isManager(COHORT_ID, USER_ID));
+        }
+
+        @Test
+        @DisplayName("매니저가 아니면 예외 대신 false — 호출자가 자기 오류 Code를 고른다")
+        void returnsFalseInsteadOfThrowing() {
+            when(membershipRepository.existsByCohortIdAndUserIdAndRoleAndStatus(
+                    COHORT_ID,
+                    USER_ID,
+                    CohortMembershipRole.MANAGER,
+                    CohortMembershipStatus.ACTIVE
+            )).thenReturn(false);
+
+            assertFalse(accessService.isManager(COHORT_ID, USER_ID));
+        }
+
+        @Test
+        @DisplayName("소속 자체가 없어도 예외 없이 false — 404와 403을 구분하지 않는다")
+        void doesNotDistinguishMissingMembership() {
+            when(membershipRepository.existsByCohortIdAndUserIdAndRoleAndStatus(
+                    COHORT_ID,
+                    USER_ID,
+                    CohortMembershipRole.MANAGER,
+                    CohortMembershipStatus.ACTIVE
+            )).thenReturn(false);
+
+            assertFalse(accessService.isManager(COHORT_ID, USER_ID));
+            verify(membershipRepository, never())
+                    .findActiveMembershipId(USER_ID, COHORT_ID);
+        }
+    }
+
+    @Nested
+    @DisplayName("기수 매니저 확인 (예외)")
+    class RequireManager {
+
+        @Test
+        @DisplayName("활성 소속이 없으면 404")
+        void throwsNotFoundWhenNoActiveMembership() {
+            when(membershipRepository.findActiveMembershipId(USER_ID, COHORT_ID))
+                    .thenReturn(Optional.empty());
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> accessService.requireManager(COHORT_ID, USER_ID)
+            );
+
+            assertSame(CohortErrorCode.COHORT_NOT_FOUND, exception.getErrorCode());
+            verify(membershipRepository, never())
+                    .existsByCohortIdAndUserIdAndRoleAndStatus(
+                            COHORT_ID,
+                            USER_ID,
+                            CohortMembershipRole.MANAGER,
+                            CohortMembershipStatus.ACTIVE
+                    );
+        }
+
+        @Test
+        @DisplayName("활성 소속은 있으나 매니저가 아니면 403")
+        void throwsManagerRequiredWhenActiveMembershipIsNotManager() {
+            when(membershipRepository.findActiveMembershipId(USER_ID, COHORT_ID))
+                    .thenReturn(Optional.of(MEMBERSHIP_ID));
+            when(membershipRepository.existsByCohortIdAndUserIdAndRoleAndStatus(
+                    COHORT_ID,
+                    USER_ID,
+                    CohortMembershipRole.MANAGER,
+                    CohortMembershipStatus.ACTIVE
+            )).thenReturn(false);
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> accessService.requireManager(COHORT_ID, USER_ID)
+            );
+
+            assertSame(CohortErrorCode.COHORT_MANAGER_REQUIRED, exception.getErrorCode());
+        }
+
+        @Test
+        @DisplayName("활성 매니저 소속이면 예외 없음")
+        void doesNotThrowForActiveManager() {
+            when(membershipRepository.findActiveMembershipId(USER_ID, COHORT_ID))
+                    .thenReturn(Optional.of(MEMBERSHIP_ID));
+            when(membershipRepository.existsByCohortIdAndUserIdAndRoleAndStatus(
+                    COHORT_ID,
+                    USER_ID,
+                    CohortMembershipRole.MANAGER,
+                    CohortMembershipStatus.ACTIVE
+            )).thenReturn(true);
+
+            assertDoesNotThrow(() -> accessService.requireManager(COHORT_ID, USER_ID));
         }
     }
 

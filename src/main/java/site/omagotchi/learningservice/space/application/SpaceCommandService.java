@@ -4,16 +4,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
-import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPort;
-import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceAttributes;
-import site.omagotchi.learningservice.space.domain.SpaceType;
 import site.omagotchi.learningservice.space.domain.SpaceStateTransitionException;
+import site.omagotchi.learningservice.space.domain.SpaceType;
 import site.omagotchi.learningservice.space.domain.SpaceValidationException;
 
 import java.time.Clock;
@@ -29,7 +29,7 @@ public class SpaceCommandService {
 
     private final SpaceRepository spaceRepository;
     private final OccupancyQueryService occupancyQueryService;
-    private final SpaceCohortAccessPort cohortAccessPort;
+    private final CohortAccessService cohortAccessService;
     private final Clock clock;
 
     public Space create(
@@ -182,21 +182,15 @@ public class SpaceCommandService {
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
+        // 검증 순서는 명세 07 §2를 그대로 따른다:
+        // 대상 기수 권한(2·3) → 실습실 여부(4) → 배정 여부(6).
+        //
+        // 기존 배정 기수의 매니저인지는 묻지 않는다. 미배정 실습실은 기수 매니저 누구나
+        // 배정할 수 있고(RM-16), 이미 배정된 실습실이면 대상 기수 매니저인 요청자는 결과가
+        // 같다 — "이미 다른 기수에 배정됨"(409)이다. 소유 기수 권한을 먼저 보면 같은 상황이
+        // 요청자에 따라 403과 409로 갈려, 클라이언트가 배정 가능 여부를 오해한다.
         requireExistingCohort(cohortId);
-
-        if (existingSpace.getCohortId() == null) {
-            requireCohortManager(cohortId, actorUserId);
-        } else {
-            requireCohortManager(
-                    existingSpace.getCohortId(),
-                    actorUserId
-            );
-
-            if (!existingSpace.getCohortId().equals(cohortId)) {
-                requireCohortManager(cohortId, actorUserId);
-            }
-        }
-
+        requireCohortManager(cohortId, actorUserId);
         ensureLab(existingSpace);
 
         if (existingSpace.getCohortId() != null) {
@@ -281,7 +275,7 @@ public class SpaceCommandService {
             UUID actorUserId
     ) {
         if (requestedCohortId == null) {
-            List<Long> managedCohortIds = cohortAccessPort
+            List<Long> managedCohortIds = cohortAccessService
                     .findActiveManagedCohortIds(actorUserId);
 
             if (managedCohortIds.isEmpty()) {
@@ -311,7 +305,7 @@ public class SpaceCommandService {
             Long cohortId,
             UUID actorUserId
     ) {
-        if (!cohortAccessPort.isActiveManager(cohortId, actorUserId)) {
+        if (!cohortAccessService.isManager(cohortId, actorUserId)) {
             throw new BusinessException(SpaceErrorCode.ACCESS_DENIED);
         }
     }
@@ -327,7 +321,7 @@ public class SpaceCommandService {
      * <b>"시스템 관리자는 기수 내의 일에 관여할 수 없음"</b>으로 확정됐다 (명세 01 §4).</p>
      */
     private void requireAnyCohortManager(UUID actorUserId) {
-        if (cohortAccessPort.findActiveManagedCohortIds(actorUserId).isEmpty()) {
+        if (cohortAccessService.findActiveManagedCohortIds(actorUserId).isEmpty()) {
             throw new BusinessException(SpaceErrorCode.ACCESS_DENIED);
         }
     }
@@ -337,7 +331,7 @@ public class SpaceCommandService {
             throw new BusinessException(SpaceErrorCode.INVALID_COHORT_ID);
         }
 
-        if (!cohortAccessPort.exists(cohortId)) {
+        if (!cohortAccessService.exists(cohortId)) {
             throw new BusinessException(SpaceErrorCode.COHORT_NOT_FOUND);
         }
     }

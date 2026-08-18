@@ -1206,6 +1206,11 @@ class SpaceIT {
                 null
         );
 
+        // 배정과 해제의 결과가 다르다.
+        // 배정: 이미 배정된 실습실이면 대상 기수 매니저인 요청자는 누구든 409다 (명세 07
+        //       §5). 소유 기수 권한을 먼저 보면 같은 상황이 요청자에 따라 403과 409로
+        //       갈린다.
+        // 해제: 소유 기수의 매니저만 할 수 있으므로 403이다 (명세 07 §5 "타 기수 실습실 해제").
         mockMvc.perform(put(
                         "/api/v1/admin/spaces/{space-id}/cohort",
                         labId
@@ -1213,9 +1218,9 @@ class SpaceIT {
                         .content("""
                                 {"cohortId":%d}
                                 """.formatted(ownCohortId)))
-                .andExpect(status().isForbidden())
+                .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
-                        .value("SPACE_ACCESS_DENIED"));
+                        .value("SPACE_LAB_ALREADY_ASSIGNED"));
 
         mockMvc.perform(delete(
                         "/api/v1/admin/spaces/{space-id}/cohort",

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
@@ -69,6 +70,9 @@ class TimerCommandServiceIT {
     @Autowired
     private StudyRecordJpaRepository studyRecordJpaRepository;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @MockitoBean
     private CohortAccessService cohortAccessService;
 
@@ -82,6 +86,10 @@ class TimerCommandServiceIT {
     void setUp() {
         studyRecordJpaRepository.deleteAllInBatch();
         timerRunJpaRepository.deleteAllInBatch();
+        CohortMembershipTestFixture.ensureActiveMemberships(
+                jdbcTemplate,
+                COHORT_MEMBERSHIP_ID
+        );
         given(cohortAccessService.requireActiveMembershipId(COHORT_ID, USER_ID))
                 .willReturn(COHORT_MEMBERSHIP_ID);
     }

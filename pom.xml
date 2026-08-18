@@ -31,6 +31,7 @@
 		<spring-cloud.version>2025.1.2</spring-cloud.version>
 		<telegrambots.version>6.9.7.1</telegrambots.version>
 		<openfeign-querydsl.version>7.4.0</openfeign-querydsl.version>
+		<influxdb-client.version>8.0.0</influxdb-client.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -162,6 +163,16 @@
 			<groupId>io.github.openfeign.querydsl</groupId>
 			<artifactId>querydsl-jpa</artifactId>
 			<version>${openfeign-querydsl.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.influxdb</groupId>
+			<artifactId>influxdb-client-java</artifactId>
+			<version>${influxdb-client.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-influxdb</artifactId>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 	<dependencyManagement>

@@ -22,6 +22,21 @@ public record ActionOutcome (
 ){
     /** 룰 히트 제외 type일때만 */
     public static ActionOutcome none(){
-        return new ActionOutcome(null, ActionStatus.NONE, null, false, null, Instant.now());
+        return new ActionOutcome(null, ActionStatus.NONE, null, false, null, null);
+    }
+
+    /** 쿨다운에 걸려 명령을 보내지않을 때 */
+    public static ActionOutcome skipped(IotAction action){
+        return new ActionOutcome(action, ActionStatus.SKIPPED, null, false, null, null);
+    }
+
+    /** 제어기가 동작을 확인했을 때, notifiedAt은 발송 실패 시 null */
+    public static ActionOutcome confirm(IotAction action, Instant confirmedAt, boolean simulated, Instant notifiedAt){
+        return new ActionOutcome(action, ActionStatus.CONFIRMED, confirmedAt, simulated, null, notifiedAt);
+    }
+
+    /** 명려이 실패했거나 확인을 못 받았을 때 */
+    public static ActionOutcome failed(IotAction action, String error, boolean simulated){
+        return new ActionOutcome(action, ActionStatus.FAILED, null, simulated, error, null);
     }
 }

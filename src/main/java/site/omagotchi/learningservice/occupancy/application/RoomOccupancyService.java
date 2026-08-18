@@ -11,7 +11,8 @@ import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEve
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
-import site.omagotchi.learningservice.occupancy.application.port.SpaceReader;
+import site.omagotchi.learningservice.space.application.SpaceAccessService;
+import site.omagotchi.learningservice.space.application.result.SpaceAccessView;
 import site.omagotchi.learningservice.occupancy.application.result.RoomOccupancyResult;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
@@ -35,6 +36,17 @@ import java.util.UUID;
  * 열린 재실 구간의 {@code cohort_membership_id}를 그대로 점유자 멤버십으로 쓴다.
  * 요청 본문에 기수 식별자를 추가하면 안 된다 — 출근한 기수와 다른 기수로 점유하는
  * 경로가 열린다.</p>
+ *
+ * <p><b>다른 Feature는 소유 Feature의 공개 Application Service로만 부른다.</b>
+ * 공간은 {@link SpaceAccessService}, 재실은 {@code AttendancePresenceQueryService}이며
+ * 그 결과 Type({@link SpaceAccessView}, {@code OpenPresenceView})을 그대로 받는다.
+ * 중간에 Port와 전달 객체를 두지 않는다 — Port는 실제 외부 기술 경계(DB·JWT·API·Message)에만
+ * 두고, Feature 경계에서는 필드를 복사하는 계층만 늘어난다
+ * (10-backend-code-structure §3 "Feature 사이 의존", §5).</p>
+ *
+ * <p>{@code spaces} 행 락은 {@link SpaceAccessService#lock}이 이 Method의 트랜잭션에
+ * 참여해 잡는다. 락 이후 상태를 <b>다시 확인해야</b> 하며, 값(엔티티 아님)을 받는 것이
+ * 그 재확인이 1차 캐시에 가려지지 않게 하는 조건이다.</p>
  */
 @Slf4j
 @Service
@@ -42,7 +54,7 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class RoomOccupancyService {
 
-    private final SpaceReader spaceReader;
+    private final SpaceAccessService spaceAccessService;
     private final AttendancePresenceQueryService attendancePresenceQueryService;
     private final RoomOccupancyRepository occupancyRepository;
     private final OccupancyParticipantRepository participantRepository;
@@ -65,7 +77,7 @@ public class RoomOccupancyService {
         // ── 락 밖: 검증과 외부 조회 ────────────────────────────────
         // 엔티티가 아니라 값으로 읽는다. SpaceJpaEntity를 여기서 읽으면 1차 캐시에 올라가
         // 아래 lock()의 상태 재확인이 락 이전 스냅샷을 보게 된다.
-        SpaceReader.MeetingRoom room = spaceReader.find(spaceId)
+        SpaceAccessView room = spaceAccessService.find(spaceId)
                 .orElseThrow(() -> new BusinessException(OccupancyErrorCode.SPACE_NOT_FOUND));
 
         if (!room.meetingRoom()) {
@@ -80,7 +92,7 @@ public class RoomOccupancyService {
         // ── 락 구간 ──────────────────────────────────────────────
         // 활성 조건을 쿼리에 넣지 않고 락 획득 후 확인한다. 그래야 "비활성화 커밋 직후
         // 도착한 요청"을 404가 아니라 400으로 정확히 잡는다.
-        SpaceReader.MeetingRoom locked = spaceReader.lock(spaceId)
+        SpaceAccessView locked = spaceAccessService.lock(spaceId)
                 .orElseThrow(() -> new BusinessException(OccupancyErrorCode.SPACE_NOT_FOUND));
         if (!locked.active()) {
             throw new BusinessException(OccupancyErrorCode.SPACE_INACTIVE);

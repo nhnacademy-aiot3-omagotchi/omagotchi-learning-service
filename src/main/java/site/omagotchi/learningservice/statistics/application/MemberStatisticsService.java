@@ -7,6 +7,7 @@ import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 import site.omagotchi.learningservice.statistics.application.port.MemberStatisticsRepository;
 import site.omagotchi.learningservice.statistics.application.port.MemberStatisticsRepository.MemberReference;
 import site.omagotchi.learningservice.statistics.application.port.MemberStatisticsRepository.PeriodSummary;
@@ -19,7 +20,6 @@ import site.omagotchi.learningservice.statistics.application.result.MemberDailyR
 import site.omagotchi.learningservice.statistics.application.result.MemberDailyRecordsResult;
 import site.omagotchi.learningservice.statistics.application.result.MemberOverviewResult;
 import site.omagotchi.learningservice.statistics.application.result.MemberPageResult;
-import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -160,7 +160,7 @@ public class MemberStatisticsService {
             throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
         }
         Instant calculatedAt = clock.instant();
-        if (date.isAfter(StudyTimePolicy.aggregationDate(calculatedAt))) {
+        if (date.isAfter(AggregationDateTime.aggregationDate(calculatedAt))) {
             throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
         }
 

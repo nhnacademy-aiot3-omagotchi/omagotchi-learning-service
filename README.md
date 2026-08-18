@@ -107,6 +107,27 @@ cp .env.local.example .env.local
 - 적용 완료 Migration의 변경 금지
 - Schema 변경의 신규 Version Migration 추가
 
+### V1–V8 통합 기준선 전환
+
+- 운영 최초 적용: Learning Flyway 이력이 없는 빈 Schema에 V1–V8 적용
+- 기존 개발 DB 적용: 저장 데이터 백업과 공유 DB 사용자 승인 후 진행
+- 초기화 범위: `learning_service` Schema 전용
+- 사용 금지: 현재 Schema 상태를 보존하는 절차가 아닌 `baseline`·`repair`
+- 적용 순서:
+
+  1. Learning Service 중지
+  2. DB 백업 및 초기화 승인 확인
+  3. 기존 Schema 삭제 및 빈 Schema 재생성
+
+     ```sql
+     DROP SCHEMA learning_service CASCADE;
+     CREATE SCHEMA learning_service;
+     ```
+
+  4. `FLYWAY_ENABLED=true` 설정으로 Learning Service 1회 기동
+  5. `learning_service.flyway_schema_history`의 V1–V8 성공 상태 확인
+  6. 공유 개발 환경의 `FLYWAY_ENABLED=false` 기본값 복원
+
 ## 코드 구조
 
 - 교육: `cohort`, `attendance`, `study`, `statistics`

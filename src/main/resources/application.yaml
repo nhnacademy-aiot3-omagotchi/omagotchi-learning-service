@@ -122,6 +122,16 @@ auth:
     audience: ${JWT_AUDIENCE}
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
 
+sensor:
+  influx:
+    url: ${INFLUXDB_URL}
+    token: ${INFLUXDB_TOKEN}
+    org: ${INFLUXDB_ORG_ID}
+    buckets:
+      raw: omagotchi-raw
+      avg-1h: omagotchi-avg-1h
+      avg-1d: omagotchi-avg-1d
+
 omagotchi:
   scheduling:
     # 끄면 만료된 점유가 정리되지 않는다. Test에서만 끈다

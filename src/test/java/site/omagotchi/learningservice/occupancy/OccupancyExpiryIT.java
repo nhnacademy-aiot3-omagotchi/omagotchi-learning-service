@@ -154,6 +154,40 @@ class OccupancyExpiryIT {
         assertThat(participantRows(roomId)).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("참여 시각이 종료 시각보다 뒤여도 만료 정리가 막히지 않는다.")
+    void expirySurvivesParticipantJoinedAfterOccupancyEnd() {
+        Long cohortId = fixture.createCohort("만료-역전구간");
+        OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "만료-역전구간-1", 8);
+        Long otherRoomId = fixture.createMeetingRoom(cohortId, "만료-역전구간-2", 8);
+
+        roomOccupancyService.start(roomId, member.userId());
+        expire(roomId);
+
+        // 방어가 없던 시절에 들어온 행을 재현한다 — 만료 시각(1분 전)보다 뒤에 참여했다.
+        Long occupancyId = activeOccupancyId(roomId);
+        jdbcTemplate.update("""
+                UPDATE learning_service.occupancy_participants
+                   SET joined_at = now()
+                 WHERE occupancy_id = ?
+                """, occupancyId);
+
+        assertThatCode(() -> roomOccupancyLifecycleService.expireAll())
+                .doesNotThrowAnyException();
+
+        assertThat(occupancyStatus(occupancyId)).isEqualTo("EXPIRED");
+        assertThat(openParticipantRows(roomId)).isZero();
+
+        // 종료 시각으로 당기지 않고 참여 시각으로 닫는다. 그래야 CHECK를 지키면서도
+        // 실제보다 길게 집계되지 않는다.
+        assertThat(participantLeftAt(roomId)).isEqualTo(participantJoinedAt(occupancyId));
+
+        // 안전망의 목적은 사람을 풀어 주는 것이다. 열린 행이 남으면 여기서 걸린다.
+        assertThatCode(() -> roomOccupancyService.start(otherRoomId, member.userId()))
+                .doesNotThrowAnyException();
+    }
+
     /**
      * 정리는 재실행이 안전해야 한다 — 실패한 주기를 다음 주기가 그대로 다시 처리한다.
      *
@@ -505,6 +539,13 @@ class OccupancyExpiryIT {
                   JOIN learning_service.room_occupancies o ON o.id = p.occupancy_id
                  WHERE o.space_id = ? AND o.status = 'EXPIRED'
                 """, OffsetDateTime.class, spaceId);
+    }
+
+    private OffsetDateTime participantJoinedAt(Long occupancyId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT joined_at FROM learning_service.occupancy_participants
+                 WHERE occupancy_id = ?
+                """, OffsetDateTime.class, occupancyId);
     }
 
     private Long activeOccupancyId(Long spaceId) {

@@ -61,7 +61,8 @@ public class OccupancyParticipantService {
      * @param targetUserId    추가할 사용자
      * @param requesterUserId 요청자. 점유자 본인이어야 한다
      * @throws BusinessException 타 기수 대상(400), 요청자가 점유자 아님·대상 비재실(403),
-     *                           공간 없음(404), 종료된 점유·정원 초과(409),
+     *                           공간 없음(404), 종료된 점유·정원 초과(409) —
+     *                           <b>만료 시각이 지났으나 아직 ACTIVE인 점유도 종료로 본다</b>,
      *                           대상이 <b>다른</b> 회의에 참여 중(409, MR-30 —
      *                           {@code uq_occupancy_participants_one_active} 위반이
      *                           {@code ALREADY_PARTICIPATING}으로 변환된다)
@@ -99,6 +100,16 @@ public class OccupancyParticipantService {
 
         // ── 락 구간 ──────────────────────────────────────────────
         RoomOccupancy locked = lockActive(occupancy.id());
+        OffsetDateTime now = OffsetDateTime.now(clock);
+
+        // 만료 시각이 지난 점유는 스케줄러(#9)가 아직 쓸어가지 않았을 뿐 이미 끝난 회의다.
+        // isActive()만 보고 넣으면 joined_at이 expires_at보다 뒤인 행이 생기고, 그 뒤
+        // 만료 처리가 left_at을 expires_at으로 찍는 순간 ck_occupancy_participants_period를
+        // 위반한다 — 그 트랜잭션이 통째로 롤백되므로 점유는 영영 EXPIRED가 되지 못하고
+        // 주기마다 같은 실패를 반복하며, 참여자들은 열린 행에 묶여 다른 회의에 못 들어간다.
+        if (locked.isExpiredAt(now)) {
+            throw new BusinessException(OccupancyErrorCode.OCCUPANCY_ENDED);
+        }
 
         // 조회가 정원 검사보다 먼저인 것이 중요하다. countActiveByOccupancyId는 대상이
         // 이미 활성 참여자면 그 사람까지 세므로, 좌석을 하나도 더 쓰지 않는 요청이
@@ -131,7 +142,7 @@ public class OccupancyParticipantService {
                         locked.getId(),
                         presence.cohortMembershipId(),
                         targetUserId,
-                        OffsetDateTime.now(clock)
+                        now
                 ))
         );
     }

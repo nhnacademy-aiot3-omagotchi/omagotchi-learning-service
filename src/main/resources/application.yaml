@@ -121,15 +121,16 @@ auth:
     issuer: ${JWT_ISSUER}
     audience: ${JWT_AUDIENCE}
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
-  sensor:
-    influx:
-      url: ${INFLUXDB_URL}
-      token: ${INFLUXDB_TOKEN}
-      org: ${INFLUXDB_ORG_ID}
-      buckets:
-        raw: omagotchi-raw
-        avg-1h: omagotchi-avg-1h
-        avg-1d: omagotchi-avg-1d
+
+sensor:
+  influx:
+    url: ${INFLUXDB_URL}
+    token: ${INFLUXDB_TOKEN}
+    org: ${INFLUXDB_ORG_ID}
+    buckets:
+      raw: omagotchi-raw
+      avg-1h: omagotchi-avg-1h
+      avg-1d: omagotchi-avg-1d
 
 omagotchi:
   scheduling:

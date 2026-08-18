@@ -1,6 +1,5 @@
 package site.omagotchi.learningservice.sensor.infrastructure;
 
-import com.influxdb.client.domain.Buckets;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "sensor.influx")

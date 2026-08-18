@@ -100,10 +100,13 @@ class CommunityPostControllerTest {
                 .andExpect(jsonPath("$.items[0].postId").value(1))
                 .andExpect(jsonPath("$.items[0].type").value("NOTICE"))
                 .andExpect(jsonPath("$.items[0].pinned").value(true))
-                .andExpect(jsonPath("$.page").value(1))
-                .andExpect(jsonPath("$.size").value(10))
-                .andExpect(jsonPath("$.totalElements").value(11))
-                .andExpect(jsonPath("$.totalPages").value(2));
+                .andExpect(jsonPath("$.page.number").value(1))
+                .andExpect(jsonPath("$.page.size").value(10))
+                .andExpect(jsonPath("$.page.totalElements").value(11))
+                .andExpect(jsonPath("$.page.totalPages").value(2))
+                .andExpect(jsonPath("$.size").doesNotExist())
+                .andExpect(jsonPath("$.totalElements").doesNotExist())
+                .andExpect(jsonPath("$.totalPages").doesNotExist());
 
         verify(communityPostQueryService).getPosts(
                 USER_ID,

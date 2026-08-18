@@ -1,7 +1,8 @@
 package site.omagotchi.learningservice.statistics.presentation.response;
 
-import site.omagotchi.learningservice.statistics.application.result.MemberSummaryResult;
+import site.omagotchi.learningservice.global.presentation.response.PageInfo;
 import site.omagotchi.learningservice.statistics.application.result.MemberPageResult;
+import site.omagotchi.learningservice.statistics.application.result.MemberSummaryResult;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -13,11 +14,8 @@ public record MemberPageResponse(
         LocalDate from,
         LocalDate to,
         Instant calculatedAt,
-        int page,
-        int size,
-        long totalElements,
-        int totalPages,
-        List<Member> items
+        List<Member> items,
+        PageInfo page
 ) {
 
     public MemberPageResponse {
@@ -32,13 +30,15 @@ public record MemberPageResponse(
                 result.from(),
                 result.to(),
                 result.calculatedAt(),
-                result.page(),
-                result.size(),
-                result.totalElements(),
-                result.totalPages(),
                 result.items().stream()
                         .map(Member::from)
-                        .toList()
+                        .toList(),
+                new PageInfo(
+                        result.page(),
+                        result.size(),
+                        result.totalElements(),
+                        result.totalPages()
+                )
         );
     }
 

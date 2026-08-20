@@ -1,8 +1,9 @@
 package site.omagotchi.learningservice.study.application.command;
 
+import java.time.Instant;
+
 public record CreateStudyRecordCommand(
-        String date,
-        String startTime,
-        String endTime
+        Instant startTime,
+        Instant endTime
 ) {
 }

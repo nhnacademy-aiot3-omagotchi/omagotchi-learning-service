@@ -1,9 +1,10 @@
 package site.omagotchi.learningservice.study.application.command;
 
+import java.time.Instant;
+
 public record UpdateStudyRecordCommand(
-        String date,
-        String startTime,
-        String endTime,
+        Instant startTime,
+        Instant endTime,
         Long expectedVersion
 ) {
 }

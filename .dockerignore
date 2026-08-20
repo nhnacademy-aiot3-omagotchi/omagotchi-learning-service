@@ -1,6 +1,6 @@
 # Build outputs and local runtime files
 **/target/
-**/out/
+/out/
 **/tmp/
 **/logs/
 **/*.log

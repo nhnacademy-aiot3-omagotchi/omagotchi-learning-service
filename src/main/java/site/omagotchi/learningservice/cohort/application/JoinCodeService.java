@@ -3,10 +3,11 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.cohort.application.dto.command.IssueJoinCodeRequest;
-import site.omagotchi.learningservice.cohort.application.dto.result.IssuedJoinCodeResponse;
-import site.omagotchi.learningservice.cohort.application.dto.result.JoinCodeResponse;
+import site.omagotchi.learningservice.cohort.application.command.IssueJoinCodeCommand;
+import site.omagotchi.learningservice.cohort.application.result.IssuedJoinCodeResponse;
+import site.omagotchi.learningservice.cohort.application.result.JoinCodeResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
+import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortJoinCode;
 import site.omagotchi.learningservice.cohort.domain.CohortJoinCodeStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
@@ -51,11 +52,11 @@ public class JoinCodeService {
      * 기존 ACTIVE 코드는 폐기하고, 새 원문 코드는 이 응답에서만 1회 반환한다.
      */
     @Transactional
-    public IssuedJoinCodeResponse issue(Long cohortId, IssueJoinCodeRequest request, UUID issuedByUserId) {
+    public IssuedJoinCodeResponse issue(Long cohortId, IssueJoinCodeCommand command, UUID issuedByUserId) {
         accessService.requireManager(cohortId, issuedByUserId);
 
         Cohort cohort = getCohortOrThrow(cohortId);
-        validateIssuable(cohort, request.expiresAt());
+        validateIssuable(cohort, command.expiresAt());
 
         joinCodeRepository.findFirstByCohortIdAndStatusOrderByIssuedAtDesc(
                 cohortId,
@@ -66,7 +67,7 @@ public class JoinCodeService {
         CohortJoinCode joinCode = CohortJoinCode.issue(
                 cohortId,
                 JoinCodeHash.sha256(rawCode),
-                request.expiresAt(),
+                command.expiresAt(),
                 issuedByUserId
         );
 

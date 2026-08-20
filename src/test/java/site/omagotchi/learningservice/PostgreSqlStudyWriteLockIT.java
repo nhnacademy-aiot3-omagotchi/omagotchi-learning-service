@@ -10,20 +10,13 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.study.application.StudyRecordErrorCode;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
-import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
 
 import java.time.Duration;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 @Import(TestcontainersConfiguration.class)
 @ActiveProfiles("test")

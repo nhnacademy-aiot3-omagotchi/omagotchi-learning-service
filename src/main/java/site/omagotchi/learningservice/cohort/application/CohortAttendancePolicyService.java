@@ -3,9 +3,10 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.cohort.application.dto.command.SaveAttendancePolicyRequest;
-import site.omagotchi.learningservice.cohort.application.dto.result.CohortAttendancePolicyResponse;
+import site.omagotchi.learningservice.cohort.application.command.SaveAttendancePolicyCommand;
+import site.omagotchi.learningservice.cohort.application.result.CohortAttendancePolicyResponse;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
+import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
@@ -19,12 +20,15 @@ public class CohortAttendancePolicyService {
 
     private final CohortRepository cohortRepository;
     private final CohortAttendancePolicyRepository attendancePolicyRepository;
+    private final CohortAccessService accessService;
 
     /**
      * 특정 기수의 출결 정책을 조회
      * 출결/타이머 기능이 기수별 판정 기준을 가져갈 때 사용
      */
-    public CohortAttendancePolicyResponse getPolicy(Long cohortId) {
+    public CohortAttendancePolicyResponse getPolicy(Long cohortId, UUID actorUserId) {
+        accessService.requireManager(cohortId, actorUserId);
+
         return attendancePolicyRepository.findById(cohortId)
                 .map(CohortAttendancePolicyResponse::from)
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
@@ -37,31 +41,33 @@ public class CohortAttendancePolicyService {
     @Transactional
     public CohortAttendancePolicyResponse savePolicy(
             Long cohortId,
-            SaveAttendancePolicyRequest request,
+            SaveAttendancePolicyCommand command,
             UUID updatedByUserId
     ) {
+        accessService.requireManager(cohortId, updatedByUserId);
+
         if (!cohortRepository.existsById(cohortId)) {
             throw new BusinessException(CohortErrorCode.COHORT_NOT_FOUND);
         }
 
         CohortAttendancePolicy policy = attendancePolicyRepository.findById(cohortId)
-                .map(existingPolicy -> updateExistingPolicy(existingPolicy, request, updatedByUserId))
-                .orElseGet(() -> createPolicy(cohortId, request, updatedByUserId));
+                .map(existingPolicy -> updateExistingPolicy(existingPolicy, command, updatedByUserId))
+                .orElseGet(() -> createPolicy(cohortId, command, updatedByUserId));
 
         return CohortAttendancePolicyResponse.from(attendancePolicyRepository.save(policy));
     }
 
     private CohortAttendancePolicy updateExistingPolicy(
             CohortAttendancePolicy policy,
-            SaveAttendancePolicyRequest request,
+            SaveAttendancePolicyCommand command,
             UUID updatedByUserId
     ) {
         policy.update(
-                request.timezone(),
-                request.scheduledStartTime(),
-                request.scheduledEndTime(),
-                request.absenceCutoffTime(),
-                request.allowedAwayMinutes(),
+                command.timezone(),
+                command.scheduledStartTime(),
+                command.scheduledEndTime(),
+                command.absenceCutoffTime(),
+                command.allowedAwayMinutes(),
                 updatedByUserId
         );
         return policy;
@@ -69,16 +75,16 @@ public class CohortAttendancePolicyService {
 
     private CohortAttendancePolicy createPolicy(
             Long cohortId,
-            SaveAttendancePolicyRequest request,
+            SaveAttendancePolicyCommand command,
             UUID updatedByUserId
     ) {
         return CohortAttendancePolicy.create(
                 cohortId,
-                request.timezone(),
-                request.scheduledStartTime(),
-                request.scheduledEndTime(),
-                request.absenceCutoffTime(),
-                request.allowedAwayMinutes(),
+                command.timezone(),
+                command.scheduledStartTime(),
+                command.scheduledEndTime(),
+                command.absenceCutoffTime(),
+                command.allowedAwayMinutes(),
                 updatedByUserId
         );
     }

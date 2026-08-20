@@ -1,6 +1,6 @@
 package site.omagotchi.learningservice.study.application.result;
 
-import site.omagotchi.learningservice.study.infrastructure.persistence.entity.StudyRecordEntity;
+import site.omagotchi.learningservice.study.domain.StudyRecord;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -17,7 +17,7 @@ public record StudyRecordResult(
         Instant updatedAt
 ) {
 
-    public static StudyRecordResult from(StudyRecordEntity entity) {
+    public static StudyRecordResult from(StudyRecord entity) {
         return new StudyRecordResult(
                 entity.getId(),
                 entity.getAggregationDate(),

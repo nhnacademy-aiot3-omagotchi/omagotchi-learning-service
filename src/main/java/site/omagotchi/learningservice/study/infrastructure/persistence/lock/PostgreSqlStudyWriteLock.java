@@ -5,8 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.study.application.StudyRecordErrorCode;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
-import site.omagotchi.learningservice.study.domain.exception.StudyRecordErrorCode;
 
 import java.sql.SQLException;
 
@@ -22,7 +22,9 @@ public class PostgreSqlStudyWriteLock implements StudyWriteLock {
     @Override
     public void acquire(long cohortMembershipId) {
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-            throw new BusinessException(StudyRecordErrorCode.WRITE_LOCK_TRANSACTION_REQUIRED);
+            throw new IllegalStateException(
+                    "공부 쓰기 잠금을 획득하려면 활성 트랜잭션이 필요합니다."
+            );
         }
 
         try {

@@ -1,0 +1,176 @@
+package site.omagotchi.learningservice.occupancy.application;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
+import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertRepository;
+import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
+import site.omagotchi.learningservice.occupancy.application.result.VacancyAlertView;
+import site.omagotchi.learningservice.occupancy.domain.VacancyAlert;
+
+import java.time.Clock;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+/**
+ * 공실 알림 신청·취소·목록 (MR-02, MR-15, MR-17, MR-34).
+ *
+ * <p>발송(MR-03)은 여기 없다. 이벤트 리스너라 Transaction 성격이 완전히 달라
+ * ({@code AFTER_COMMIT} + {@code @Async} + {@code REQUIRES_NEW}) 같은 Class에 두면
+ * 자기호출이 Proxy를 우회한다 — {@code OccupancyExpiration}을 나눈 것과 같은 이유다.</p>
+ *
+ * <p><b>기수 스코프를 두지 않는 것이 의도다</b> (MR-34). 회의실은 여러 기수가 공유하는
+ * 자원이라, 타 기수가 점유 중인 방에도 신청할 수 있다. 점유자의 기수를 신청자와 비교하는
+ * 검사를 넣으면 공유 자원이 기수별 자원으로 바뀐다.</p>
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class VacancyAlertService {
+
+    private final OccupancyQueryService occupancyQueryService;
+    private final CohortMembershipQueryService cohortMembershipQueryService;
+    private final VacancyAlertRepository alertRepository;
+    private final Clock clock;
+
+    /**
+     * 공실 알림을 신청한다 (MR-02, MR-15, MR-34).
+     *
+     * @param cohortId 신청 주체로 쓸 기수. {@code null}이면 활성 소속이 하나일 때만
+     *                 그것으로 정한다 — 여럿이면 어느 쪽인지 서버가 고를 수 없다
+     * @throws BusinessException 빈 방·본인 방·기수 미지정(400), 활성 소속 없음(403),
+     *                           중복 신청(409)
+     */
+    @Transactional
+    public Long request(Long spaceId, Long cohortId, UUID requesterUserId) {
+
+        OffsetDateTime now = OffsetDateTime.now(clock);
+
+        // 사용 중 판정을 직접 하지 않고 점유 조회를 재사용한다. 여기서 room_occupancies를
+        // 다시 읽으면 "사용 중"의 정의가 복제되고, 만료 스케줄러(#9)나 강제 종료로 조건이
+        // 바뀔 때 목록에는 공실인데 신청은 400인 상태가 된다.
+        SpaceOccupancyView occupancy = findActiveOccupancy(spaceId, now)
+                .orElseThrow(() -> new BusinessException(OccupancyErrorCode.ALERT_ROOM_AVAILABLE));
+
+        // 본인이 쓰고 있는 방을 스스로에게 알릴 이유가 없다. 점유자가 타 기수인 것은
+        // 정상이므로(MR-34) 기수가 아니라 계정으로 비교한다.
+        if (requesterUserId.equals(occupancy.occupierUserId())) {
+            throw new BusinessException(OccupancyErrorCode.ALERT_OCCUPIER_CANNOT_REQUEST);
+        }
+
+        Long membershipId = resolveMembershipId(cohortId, requesterUserId);
+
+        // 선검사를 두지 않는다. 대기 중 중복은 uq_vacancy_alerts_waiting이 막고, 그 위반을
+        // Persistence가 409로 옮긴다 — select로 먼저 확인해도 동시 요청은 잡지 못하므로
+        // 같은 판정이 두 곳에 생길 뿐이다.
+        return alertRepository.save(VacancyAlert.request(spaceId, membershipId, now)).getId();
+    }
+
+    /**
+     * 신청을 취소한다 (MR-17). 행을 물리 삭제한다.
+     *
+     * <p>이미 발송된 신청과 남의 신청을 같은 404로 돌려준다. 후자를 403으로 구분하면
+     * 신청 식별자를 훑어 "이 번호는 존재한다"는 사실이 새어 나간다.</p>
+     *
+     * <p><b>먼저 읽고 지우지 않는다.</b> 그 사이 발송이 끝나면 삭제가 바뀐 상태를 보지 못해
+     * <b>이미 발송된 신청의 이력이 사라진다.</b> 조건을 삭제문에 실으면 삭제가 발송 커밋을
+     * 기다린 뒤 {@code notified_at}을 다시 평가해 0행이 되고, 그대로 404가 된다 —
+     * 잠금을 따로 잡지 않고도 같은 결과이며, 소속 조회 동안 잠금을 쥐고 있지도 않는다.</p>
+     *
+     * @throws BusinessException 대기 중 신청이 아니거나 신청자가 아님(404)
+     */
+    @Transactional
+    public void cancel(Long alertId, UUID requesterUserId) {
+
+        // 소유 판정을 멤버십으로 하는 이유는 vacancy_alerts가 user_id를 갖지 않기 때문이다 (v3).
+        // 신청 당시의 소속이 이미 끝났다면 여기 없어 지울 수 없는데, 그때는 기수 종료
+        // 정리(CE-02)가 대신 지울 대상이라 취소를 허용할 이유가 없다.
+        Set<Long> membershipIds = activeMemberships(requesterUserId).stream()
+                .map(CohortMembershipView::membershipId)
+                .collect(Collectors.toSet());
+
+        if (!alertRepository.deleteWaiting(alertId, membershipIds)) {
+            throw new BusinessException(OccupancyErrorCode.ALERT_NOT_FOUND);
+        }
+    }
+
+    /**
+     * 내가 신청한 대기 중 목록 (MR-17 1단계).
+     *
+     * <p>활성 소속 전체를 대상으로 한다. 다기수 담당자가 기수를 바꿔 가며 조회하지 않아도
+     * 자기 신청이 한 번에 보여야 취소할 수 있다.</p>
+     */
+    public List<VacancyAlertView> findMine(UUID requesterUserId) {
+
+        Map<Long, Long> cohortIdByMembershipId = activeMemberships(requesterUserId).stream()
+                .collect(Collectors.toMap(
+                        CohortMembershipView::membershipId, CohortMembershipView::cohortId));
+
+        if (cohortIdByMembershipId.isEmpty()) {
+            return List.of();
+        }
+
+        return alertRepository.findWaitingByMembershipIds(cohortIdByMembershipId.keySet()).stream()
+                .map(alert -> VacancyAlertView.of(
+                        alert, cohortIdByMembershipId.get(alert.getCohortMembershipId())))
+                .toList();
+    }
+
+    // ────────────────────────────── 내부 헬퍼 ──────────────────────────────
+
+    /**
+     * 이 공간의 현재 점유. 만료됐지만 아직 ACTIVE인 행은 제외된다.
+     *
+     * <p>단건인데 배치 조회를 쓰는 이유는 만료 필터가 그쪽에만 있기 때문이다.
+     * {@code findActiveSummaryBySpaceId}는 {@code expires_at}을 보지 않아, 스케줄러가
+     * 쓸어가기 전의 방을 "사용 중"으로 판정해 <b>빈 방에 신청이 들어간다.</b></p>
+     */
+    private Optional<SpaceOccupancyView> findActiveOccupancy(Long spaceId, OffsetDateTime now) {
+        return Optional.ofNullable(
+                occupancyQueryService.findActiveBySpaceIds(List.of(spaceId), now).get(spaceId));
+    }
+
+    /**
+     * 신청 주체가 될 멤버십을 정한다.
+     *
+     * <p>기수를 받는 이유는 신청이 계정이 아니라 멤버십 단위이기 때문이다(§4). 다기수
+     * 담당자는 같은 방에 기수마다 신청할 수 있어야 하고, 그러려면 어느 소속으로 신청하는지를
+     * 서버가 임의로 고르면 안 된다. 소속이 하나뿐인 대다수 사용자에게 매번 기수를 요구하지
+     * 않으려고 {@code null}을 허용한다 — {@code SpaceCommandService}의 생성 기수 결정과 같은 규약이다.</p>
+     */
+    private Long resolveMembershipId(Long cohortId, UUID requesterUserId) {
+
+        List<CohortMembershipView> memberships = activeMemberships(requesterUserId);
+
+        if (memberships.isEmpty()) {
+            throw new BusinessException(OccupancyErrorCode.ALERT_COHORT_ACCESS_DENIED);
+        }
+
+        if (cohortId == null) {
+            if (memberships.size() > 1) {
+                throw new BusinessException(OccupancyErrorCode.ALERT_COHORT_ID_REQUIRED);
+            }
+            return memberships.getFirst().membershipId();
+        }
+
+        return memberships.stream()
+                .filter(membership -> cohortId.equals(membership.cohortId()))
+                .findFirst()
+                .map(CohortMembershipView::membershipId)
+                .orElseThrow(() -> new BusinessException(OccupancyErrorCode.ALERT_COHORT_ACCESS_DENIED));
+    }
+
+    private List<CohortMembershipView> activeMemberships(UUID requesterUserId) {
+        return cohortMembershipQueryService.findActiveMemberships(requesterUserId);
+    }
+}

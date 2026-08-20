@@ -17,6 +17,7 @@ import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -45,7 +46,13 @@ public class RoomOccupancyLifecycleService {
     private final OccupancyEventPublisher eventPublisher;
     private final OccupancyExpiration occupancyExpiration;
     private final OccupancyExpiryReminder occupancyExpiryReminder;
-    private final List<OccupancyReminderSender> reminderSenders;
+    /**
+     * 발송 수단. {@code Optional}로 받는 것이 설정 검증을 겸한다 — 둘 이상 등록되면
+     * Container가 <b>기동 시점에</b> 거부하므로, 어느 발송의 성공을 완료로 볼지 모호한
+     * 설정이 배포 시점에 걸러진다. 비어 있는 것은 정상 상태이며(아직 발송 수단이 없다)
+     * 그때는 후보를 소진시키지 않는다 ({@code VacancyAlertDispatcher}와 같은 규약).
+     */
+    private final Optional<OccupancyReminderSender> reminderSender;
     private final Clock clock;
 
     /**
@@ -172,7 +179,8 @@ public class RoomOccupancyLifecycleService {
      * 만료까지 10분 이하로 남은 ACTIVE 점유의 점유자에게 알림을 보낸다 (MR-12).
      *
      * <p>실제 발송 계약 구현이 없으면 후보를 조회하거나 {@code reminder_sent_at}을 소진하지
-     * 않는다. 구현이 둘 이상이면 어느 발송의 성공을 완료로 볼지 계약이 모호하므로 실패시킨다.</p>
+     * 않는다. 구현이 둘 이상이면 어느 발송의 성공을 완료로 볼지 계약이 모호한데, 그 설정은
+     * 여기까지 오지 못한다 — {@code Optional} 주입이라 Container가 기동 시점에 거부한다.</p>
      *
      * <p>후보는 한 번에 찾되 발송은 {@link OccupancyExpiryReminder}가 건별 트랜잭션에서
      * 처리한다. 한 건의 발송 실패는 다음 후보를 막지 않으며, 실패한 점유는 완료 기록이
@@ -182,19 +190,16 @@ public class RoomOccupancyLifecycleService {
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int sendExpiryReminders() {
-        if (reminderSenders.isEmpty()) {
+        if (reminderSender.isEmpty()) {
             log.debug("점유 만료 임박 알림 sender가 없어 이번 주기를 건너뜁니다.");
             return 0;
-        }
-        if (reminderSenders.size() > 1) {
-            throw new IllegalStateException("점유 만료 임박 알림 sender는 하나만 등록할 수 있습니다.");
         }
 
         OffsetDateTime now = OffsetDateTime.now(clock);
         OffsetDateTime reminderEndsAt = now.plus(RoomOccupancy.EXPIRY_REMINDER_WINDOW);
         List<RoomOccupancyRepository.ExpiringOccupancy> candidates =
                 occupancyRepository.findExpiringSoon(now, reminderEndsAt);
-        OccupancyReminderSender sender = reminderSenders.getFirst();
+        OccupancyReminderSender sender = reminderSender.get();
 
         int sent = 0;
         for (RoomOccupancyRepository.ExpiringOccupancy candidate : candidates) {

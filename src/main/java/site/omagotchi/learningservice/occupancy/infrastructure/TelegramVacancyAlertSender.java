@@ -1,0 +1,142 @@
+package site.omagotchi.learningservice.occupancy.infrastructure;
+
+import org.apache.http.client.config.RequestConfig;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
+import org.telegram.telegrambots.bots.DefaultAbsSender;
+import org.telegram.telegrambots.bots.DefaultBotOptions;
+import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.Message;
+import org.telegram.telegrambots.meta.bots.AbsSender;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import site.omagotchi.learningservice.global.util.DateTimePolicy;
+import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSender;
+
+import java.time.format.DateTimeFormatter;
+import java.util.Objects;
+
+/**
+ * 고정된 테스트용 Telegram 개인 채팅으로 공실 알림을 발송한다 (MR-03).
+ *
+ * <p>Telegram API의 동기 응답을 확인한 뒤에만 정상 반환한다. 오류를 예외로 전파해야
+ * 호출부가 {@code notified_at}을 기록하지 않고 대기 상태로 남긴다 —
+ * {@link TelegramOccupancyReminderSender}와 같은 계약이다.</p>
+ *
+ * <p><b>{@code recipientUserId}를 쓰지 않는다.</b> 계정별 채팅 매핑이 아직 없어 모든
+ * 신청자의 알림이 같은 테스트 채팅으로 간다. 발송 경로가 실제로 동작하는지 확인하기 위한
+ * 임시 구현이며, 계정별 발송은 {@code telegram_user_links}가 붙은 뒤에 온다.</p>
+ *
+ * <p><b>{@link TelegramOccupancyReminderSender}와 전송 코드가 겹치는 것은 의도된 임시
+ * 상태다.</b> 지금 공통 부분을 뽑으면 계정별 발송으로 바뀔 때 그 추상이 먼저 깨진다 —
+ * 두 알림의 수신자 결정 방식이 다르기 때문이다(점유자 1명 vs 신청자 N명). 실제 발송
+ * 수단이 확정되면 그때 함께 정리한다.</p>
+ *
+ * <p>활성화 설정이 {@code true}일 때만 Bean이 등록된다. 비활성 상태에서는 no-op Bean을
+ * 만들지 않아, 실제 sender가 없을 때 신청을 소진하지 않는 Application 정책을 유지한다.</p>
+ */
+@Component
+@ConditionalOnProperty(
+        prefix = "omagotchi.occupancy.telegram",
+        name = "enabled",
+        havingValue = "true"
+)
+public class TelegramVacancyAlertSender implements VacancyAlertSender {
+
+    private static final int CONNECTION_REQUEST_TIMEOUT_MILLIS = 5_000;
+    private static final int CONNECT_TIMEOUT_MILLIS = 5_000;
+    private static final int SOCKET_TIMEOUT_MILLIS = 10_000;
+
+    /**
+     * 저장은 UTC 그대로 두고, 사람이 읽는 문구에서만 KST로 바꾼다. {@code vacatedAt} 자체는
+     * 이미 올바른 순간(instant)이라 저장을 바꿀 이유가 없다 — 텔레그램 문자를 읽는 사람이
+     * 알아보기 쉽도록 표시만 바꾼다.
+     */
+    private static final DateTimeFormatter DISPLAY_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    private final AbsSender telegramSender;
+    private final String chatId;
+
+    @Autowired
+    public TelegramVacancyAlertSender(
+            @Value("${omagotchi.occupancy.telegram.bot-token}") String botToken,
+            @Value("${omagotchi.occupancy.telegram.chat-id}") String chatId
+    ) {
+        this(new TelegramBotApiSender(requireConfigured(botToken, "TELEGRAM_BOT_TOKEN")), chatId);
+    }
+
+    TelegramVacancyAlertSender(AbsSender telegramSender, String chatId) {
+        this.telegramSender = Objects.requireNonNull(telegramSender, "Telegram sender는 필수입니다.");
+        this.chatId = requireConfigured(chatId, "TELEGRAM_CHAT_ID");
+    }
+
+    @Override
+    public void sendVacancyAlert(VacancyNotice notice) {
+        Objects.requireNonNull(notice, "공실 알림은 필수입니다.");
+
+        SendMessage request = SendMessage.builder()
+                .chatId(chatId)
+                .text(messageOf(notice))
+                .build();
+
+        Message response;
+        try {
+            response = telegramSender.execute(request);
+        } catch (TelegramApiException exception) {
+            throw new IllegalStateException("Telegram 공실 알림 발송에 실패했습니다.", exception);
+        }
+
+        if (response == null || response.getMessageId() == null) {
+            throw new IllegalStateException("Telegram 발송 성공 응답을 확인할 수 없습니다.");
+        }
+    }
+
+    /**
+     * 알림 본문.
+     *
+     * <p>점유자·참여자를 담지 않는 것이 의도다 (MR-36). 회의실은 여러 기수가 공유하므로
+     * "누가 쓰던 방인지"가 들어가면 타 기수 사용자의 개인정보가 신청자에게 노출된다.</p>
+     *
+     * <p>선착순임을 함께 알린다 (MR-04). 알림은 사용 권한을 보장하지 않는데, 그 사실을
+     * 적지 않으면 알림을 받고 갔다가 이미 점유된 방을 보게 된다.</p>
+     */
+    private static String messageOf(VacancyNotice notice) {
+        return """
+                [회의실 공실 안내]
+
+                공간: %s
+                신청하신 회의실이 비었습니다.
+                비워진 시각: %s
+
+                먼저 점유하는 사람이 사용합니다.
+                """.formatted(notice.spaceName(),
+                notice.vacatedAt().atZoneSameInstant(DateTimePolicy.ZONE_ID).format(DISPLAY_FORMATTER))
+                .stripTrailing();
+    }
+
+    private static String requireConfigured(String value, String environmentVariable) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(environmentVariable + " 환경변수는 비어 있을 수 없습니다.");
+        }
+        return value;
+    }
+
+    private static final class TelegramBotApiSender extends DefaultAbsSender {
+
+        private TelegramBotApiSender(String botToken) {
+            super(botOptions(), botToken);
+        }
+
+        private static DefaultBotOptions botOptions() {
+            DefaultBotOptions options = new DefaultBotOptions();
+            options.setRequestConfig(RequestConfig.custom()
+                    .setConnectionRequestTimeout(CONNECTION_REQUEST_TIMEOUT_MILLIS)
+                    .setConnectTimeout(CONNECT_TIMEOUT_MILLIS)
+                    .setSocketTimeout(SOCKET_TIMEOUT_MILLIS)
+                    .build());
+            return options;
+        }
+    }
+}

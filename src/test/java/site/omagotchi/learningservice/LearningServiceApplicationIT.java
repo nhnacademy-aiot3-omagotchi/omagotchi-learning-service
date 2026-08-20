@@ -59,4 +59,16 @@ class LearningServiceApplicationIT {
 				.allMatch("uuid"::equals);
 	}
 
+	@Test
+	void installsBtreeGistInLearningServiceSchema() {
+		String extensionSchema = jdbcTemplate.queryForObject("""
+				SELECT namespace.nspname
+				FROM pg_extension extension
+				JOIN pg_namespace namespace ON namespace.oid = extension.extnamespace
+				WHERE extension.extname = 'btree_gist'
+				""", String.class);
+
+		assertThat(extensionSchema).isEqualTo("learning_service");
+	}
+
 }

@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.rule.infrastructure;
+package site.omagotchi.learningservice.environment.infrastructure;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.ImmediateRequeueAmqpException;
@@ -28,7 +28,7 @@ public class RabbitRecoverConfig {
 
         RepublishMessageRecovererWithConfirms delegate = new RepublishMessageRecovererWithConfirms(
                 rabbitTemplate,
-                RabbitTopologyConfig.EXCHANGE_QUALITY_DEAD_LETTER,
+                QualityTopologyConfig.EXCHANGE_QUALITY_DEAD_LETTER,
                 confirmType
         );
         delegate.setConfirmTimeout(CONFIRM_TIMEOUT_MS);

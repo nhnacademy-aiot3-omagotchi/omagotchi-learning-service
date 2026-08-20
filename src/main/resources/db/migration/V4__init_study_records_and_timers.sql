@@ -1,5 +1,6 @@
 -- BIGINT 동등 비교와 시간 범위 겹침 연산을 하나의 GiST 제약에서 사용한다.
-CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public;
+-- 서비스 전용 Schema만 제공되는 운영 DB에서도 동작하도록 같은 Schema에 설치한다.
+CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA learning_service;
 
 CREATE TABLE learning_service.study_records
 (

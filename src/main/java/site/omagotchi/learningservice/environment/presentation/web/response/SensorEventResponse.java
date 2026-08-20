@@ -8,8 +8,6 @@ import java.util.Objects;
 
 //SensorEvent
 public record SensorEventResponse (
-        String id,
-
         //SensorDetection
         SensorEventType type,
         String traceId,
@@ -40,7 +38,6 @@ public record SensorEventResponse (
         IotAction action = outcome.action();
 
         return new SensorEventResponse(
-                event.id().toString(),
                 detection.type(),
                 detection.traceId(),
                 detection.deviceEui(),

@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.rule.infrastructure;
+package site.omagotchi.learningservice.environment.infrastructure;
 
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -36,7 +37,7 @@ public class RecoveryMetrics {
     private double depth(){
         try{
             return rabbitTemplate.execute(channel ->
-                    (double) channel.queueDeclarePassive(RabbitTopologyConfig.QUEUE_QUALITY_DEAD_LETTER).getMessageCount());
+                    (double) channel.queueDeclarePassive(QualityTopologyConfig.QUEUE_QUALITY_DEAD_LETTER).getMessageCount());
         }catch (Exception e){
             log.warn("파킹 큐 깊이 조회 실패. queue={}", QUEUE_TAG ,e);
             return Double.NaN;

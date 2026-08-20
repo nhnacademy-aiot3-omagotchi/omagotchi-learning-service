@@ -66,7 +66,7 @@ class AttendanceControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(10))
-                .andExpect(jsonPath("$[0].cohortMembershipId").value(20))
+                .andExpect(jsonPath("$[0].cohortMembershipId").doesNotExist())
                 .andExpect(jsonPath("$[0].attendanceDate").value("2026-08-20"))
                 .andExpect(jsonPath("$[0].autoStatus").value("PRESENT"))
                 .andExpect(jsonPath("$[0].finalStatus").value("PRESENT"))

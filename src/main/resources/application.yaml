@@ -116,6 +116,18 @@ realtime:
   presence:
     session-ttl: ${REALTIME_PRESENCE_SESSION_TTL}
 
+environment:
+  cache:
+    capacity: 1000
+    retention: P7D
+  cooldown: PT5M
+  iot:
+    request-timeout: PT3S
+    secret: ${IOT_SECRET:}
+    base-url: ${IOT_BASE_URL:}
+    simulator:
+      enabled: ${IOT_SIMULATOR_ENABLED:false}
+
 auth:
   jwt:
     issuer: ${JWT_ISSUER}
@@ -123,6 +135,8 @@ auth:
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
 
 sensor:
+  series:
+    zone: ${SENSOR_SERIES_ZONE:Asia/Seoul}
   influx:
     url: ${INFLUXDB_URL}
     token: ${INFLUXDB_TOKEN}

@@ -10,8 +10,8 @@ import site.omagotchi.learningservice.gamification.application.GamificationEvent
 import site.omagotchi.learningservice.gamification.application.port.GamificationEventReceiptRepository;
 
 import java.time.Instant;
-import java.util.UUID;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -135,6 +135,18 @@ class LearningServiceApplicationIT {
 		assertThat(firstClaim).isTrue();
 		assertThat(duplicateClaim).isFalse();
 		assertThat(migrationCount).isEqualTo(1);
+	}
+
+	@Test
+	void installsBtreeGistInLearningServiceSchema() {
+		String extensionSchema = jdbcTemplate.queryForObject("""
+				SELECT namespace.nspname
+				FROM pg_extension extension
+				JOIN pg_namespace namespace ON namespace.oid = extension.extnamespace
+				WHERE extension.extname = 'btree_gist'
+				""", String.class);
+
+		assertThat(extensionSchema).isEqualTo("learning_service");
 	}
 
 }

@@ -93,27 +93,4 @@ public class GamificationController {
         return DailyQuestResponse.from(dailyQuestService.claim(user.userId(), userDailyQuestId));
     }
 
-    @PostMapping("/events/attendance")
-    public DailyQuestResponse handleAttendance(JwtAuthenticationToken authentication) {
-        AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return DailyQuestResponse.from(dailyQuestService.handleAttendance(user.userId()));
-    }
-
-    @PostMapping("/events/study-completed")
-    public DailyQuestResponse handleStudyCompleted(JwtAuthenticationToken authentication) {
-        AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return DailyQuestResponse.from(dailyQuestService.handleStudyCompleted(user.userId()));
-    }
-
-    @PostMapping("/events/character-checked")
-    public DailyQuestResponse handleCharacterChecked(JwtAuthenticationToken authentication) {
-        AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return DailyQuestResponse.from(dailyQuestService.handleCharacterChecked(user.userId()));
-    }
-
-    @PostMapping("/events/llm-quest-completed")
-    public DailyQuestResponse handleLlmQuestCompleted(JwtAuthenticationToken authentication) {
-        AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return DailyQuestResponse.from(dailyQuestService.handleLlmQuestCompleted(user.userId()));
-    }
 }

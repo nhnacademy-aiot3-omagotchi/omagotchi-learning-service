@@ -132,4 +132,12 @@ class GamificationControllerTest {
                 new CreateUserCharacterCommand(1L, "오마", "pistachio")
         );
     }
+
+    @Test
+    @DisplayName("클라이언트는 게이미피케이션 이벤트를 직접 발생시킬 수 없다")
+    void doesNotExposeGamificationEventEndpoints() throws Exception {
+        mockMvc.perform(post("/api/v1/gamification/events/attendance")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isNotFound());
+    }
 }

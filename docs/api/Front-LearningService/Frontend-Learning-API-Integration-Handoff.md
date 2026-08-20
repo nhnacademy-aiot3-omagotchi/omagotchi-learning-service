@@ -681,15 +681,13 @@ POST /api/v1/gamification/quests/{userDailyQuestId}/claim
 }
 ```
 
-다음 이벤트 API는 실제 Controller에 존재하지만 UI 버튼에서 직접 호출할 API로 확정하지 않는다.
-출결·학습 완료 Domain 동작에서 서버가 발생시키는 방식이 우선이다.
+`/api/v1/gamification/events/**`는 공개 API가 아니며 Controller에서도 제거되었다. Frontend가
+출석이나 학습 완료 후 이벤트 API를 추가로 호출하면 안 된다. 출석 체크인과 학습 기록 생성·타이머
+정상 종료가 커밋되면 Learning Service가 내부 이벤트로 일일 퀘스트를 진행한다. Frontend는 해당
+Domain API 성공 후 `/gamification/home` 또는 `/gamification/quests/daily`를 재조회한다.
 
-```http
-POST /api/v1/gamification/events/attendance
-POST /api/v1/gamification/events/study-completed
-POST /api/v1/gamification/events/character-checked
-POST /api/v1/gamification/events/llm-quest-completed
-```
+`character-checked`, `llm-quest-completed`는 신뢰할 수 있는 내부 발생 조건이 확정될 때까지
+외부에서 발생시킬 수 없다.
 
 ## 11. Ranking 계약
 

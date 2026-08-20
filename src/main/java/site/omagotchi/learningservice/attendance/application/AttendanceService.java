@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.command.ChangeAttendanceStatusCommand;
+import site.omagotchi.learningservice.attendance.application.event.AttendanceCheckedInEvent;
+import site.omagotchi.learningservice.attendance.application.port.AttendanceEventPublisher;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordResult;
 import site.omagotchi.learningservice.attendance.domain.AttendanceChangeLog;
 import site.omagotchi.learningservice.attendance.domain.AttendanceDecision;
@@ -46,6 +48,7 @@ public class AttendanceService {
     private final AttendanceRecordRepository attendanceRecordRepository;
     private final AttendanceChangeLogRepository attendanceChangeLogRepository;
     private final PresenceIntervalRepository presenceIntervalRepository;
+    private final AttendanceEventPublisher attendanceEventPublisher;
     private final Clock clock;
 
     // 출석 기록 결과 -> 출석(기수 Id, 유저 Id)
@@ -72,6 +75,12 @@ public class AttendanceService {
                 savedRecord.getId(),
                 PresenceState.PRESENT,
                 null,
+                now
+        ));
+        attendanceEventPublisher.publishCheckedIn(new AttendanceCheckedInEvent(
+                userId,
+                cohortId,
+                savedRecord.getId(),
                 now
         ));
 

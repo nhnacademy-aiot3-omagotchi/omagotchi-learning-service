@@ -8,6 +8,8 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
 import site.omagotchi.learningservice.study.application.command.UpdateStudyRecordCommand;
+import site.omagotchi.learningservice.study.application.event.StudyCompletedEvent;
+import site.omagotchi.learningservice.study.application.port.StudyEventPublisher;
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
@@ -33,6 +35,7 @@ public class StudyRecordCommandService {
     private final TimerRunQueryRepository timerRunQueryRepository;
     private final Clock clock;
     private final StudyWriteLock studyWriteLock;
+    private final StudyEventPublisher studyEventPublisher;
 
     public StudyRecordResult create(
             UUID userId,
@@ -73,6 +76,11 @@ public class StudyRecordCommandService {
         );
 
         StudyRecord saved = studyRecordRepository.save(entity);
+        studyEventPublisher.publishCompleted(new StudyCompletedEvent(
+                userId,
+                saved.getId(),
+                saved.getEndTime()
+        ));
 
         return StudyRecordResult.from(saved);
     }

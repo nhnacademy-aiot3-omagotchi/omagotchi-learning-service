@@ -6,6 +6,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import site.omagotchi.learningservice.gamification.application.GamificationEventType;
+import site.omagotchi.learningservice.gamification.application.port.GamificationEventReceiptRepository;
+
+import java.time.Instant;
+import java.util.UUID;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,6 +22,9 @@ class LearningServiceApplicationIT {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private GamificationEventReceiptRepository gamificationEventReceiptRepository;
 
 	@Test
 	void contextLoads() {
@@ -96,6 +104,36 @@ class LearningServiceApplicationIT {
 				"study"
 		);
 		assertThat(defaultColor).contains("original");
+		assertThat(migrationCount).isEqualTo(1);
+	}
+
+	@Test
+	void appliesGamificationEventReceiptMigrationAndClaimsOnce() {
+		UUID userId = UUID.randomUUID();
+		String sourceId = UUID.randomUUID().toString();
+		Instant occurredAt = Instant.parse("2026-08-20T00:00:00Z");
+
+		boolean firstClaim = gamificationEventReceiptRepository.claim(
+				GamificationEventType.STUDY_COMPLETED,
+				sourceId,
+				userId,
+				occurredAt
+		);
+		boolean duplicateClaim = gamificationEventReceiptRepository.claim(
+				GamificationEventType.STUDY_COMPLETED,
+				sourceId,
+				userId,
+				occurredAt
+		);
+		Integer migrationCount = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM learning_service.flyway_schema_history
+				WHERE version = '10'
+				  AND success
+				""", Integer.class);
+
+		assertThat(firstClaim).isTrue();
+		assertThat(duplicateClaim).isFalse();
 		assertThat(migrationCount).isEqualTo(1);
 	}
 

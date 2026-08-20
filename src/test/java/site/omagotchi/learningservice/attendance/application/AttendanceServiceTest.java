@@ -9,6 +9,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.attendance.domain.AttendanceErrorCode;
+import site.omagotchi.learningservice.attendance.application.event.AttendanceCheckedInEvent;
+import site.omagotchi.learningservice.attendance.application.port.AttendanceEventPublisher;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceChangeLogRepository;
@@ -68,6 +70,9 @@ class AttendanceServiceTest {
     private PresenceIntervalRepository presenceIntervalRepository;
 
     @Mock
+    private AttendanceEventPublisher attendanceEventPublisher;
+
+    @Mock
     private Clock clock;
 
     @InjectMocks
@@ -101,6 +106,12 @@ class AttendanceServiceTest {
                 ATTENDANCE_DATE
         );
         verify(presenceIntervalRepository).save(any());
+        verify(attendanceEventPublisher).publishCheckedIn(new AttendanceCheckedInEvent(
+                USER_ID,
+                COHORT_ID,
+                1L,
+                checkInAt
+        ));
     }
 
     @Test
@@ -140,6 +151,7 @@ class AttendanceServiceTest {
                 MEMBERSHIP_ID,
                 ATTENDANCE_DATE
         );
+        verifyNoInteractions(attendanceEventPublisher);
     }
 
     @Test

@@ -82,8 +82,8 @@ Frontend/BFF는 상세 응답의 `attachmentId`로 위 API를 호출해 byte str
 
 ## 5. Gamification 이벤트 연결
 
-현재 `/gamification/events/**`는 Browser가 직접 호출하면 출결/학습 완료를 임의로 발생시킬 수 있다.
-프런트 공개 API가 아니라 Learning 내부 도메인 이벤트로 바꾸는 것이 목표다.
+구현 완료. `/gamification/events/**` 공개 Controller는 제거했고 출결·학습 성공 트랜잭션에서
+Learning 내부 도메인 이벤트를 발행한다.
 
 권장 흐름:
 
@@ -94,19 +94,20 @@ AttendanceService.checkIn 성공
   -> DailyQuestService.handleAttendance(userId)
 
 Study 완료 처리 성공
-  -> StudyCompletedEvent(userId, studyRecordId, occurredAt)
+  -> StudyCompletedEvent(userId, sourceId, occurredAt)
   -> AFTER_COMMIT listener
   -> DailyQuestService.handleStudyCompleted(userId)
 ```
 
-- Application 계층에는 event와 publisher Port를 두고 Spring publisher는 Infrastructure에서 구현한다.
-- listener는 `@TransactionalEventListener(phase = AFTER_COMMIT)`로 실행한다.
-- 중복 event에 대비해 `(eventType, sourceId)` 또는 quest progress update를 idempotent하게 만든다.
+- Application 계층에는 event와 publisher Port를 두고 Spring publisher는 Infrastructure에서 구현했다.
+- listener는 `AFTER_COMMIT`과 전용 비동기 executor를 사용하고, Processor는 `REQUIRES_NEW`로 실행한다.
+- V10의 `gamification_event_receipts`가 `(event_type, source_id)`를 원자적으로 선점해 중복 진행을 막는다.
+- 수동 학습은 `studyRecordId`, 타이머 학습은 한 사용자 행동을 나타내는 `timerRunId`를 sourceId로 쓴다.
 - `character-checked`가 단순 화면 열기라면 보상 조건으로 사용하지 않는다. 실제 사용자 action API로
   정의하거나 퀘스트 종류에서 제외한다.
 - `llm-quest-completed`는 LLM/검증 서비스가 인증된 내부 호출이나 메시지로 발행하고 Browser가
   완료를 직접 선언하지 않게 한다.
-- 내부 전환 후 `/events/**` Controller는 제거하거나 Gateway에서 외부 접근을 차단한다.
+- `/events/**` Controller는 제거되어 직접 호출 시 `404 Not Found`를 반환한다.
 
 Frontend는 출석 또는 학습 완료 API 성공 후 `/events/**`를 추가 호출하지 않는다. 홈/퀘스트를
 재조회해 갱신된 상태만 표시한다.

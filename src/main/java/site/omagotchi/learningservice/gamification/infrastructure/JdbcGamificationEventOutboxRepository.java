@@ -22,13 +22,14 @@ public class JdbcGamificationEventOutboxRepository implements GamificationEventO
     public void enqueue(GamificationEventMessage event) {
         jdbcTemplate.update("""
                 INSERT INTO learning_service.gamification_event_outbox
-                    (event_type, source_id, user_id, occurred_at)
-                VALUES (?, ?, ?, ?)
+                    (event_type, source_id, user_id, occurred_at, next_attempt_at)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT (event_type, source_id) DO NOTHING
                 """,
                 event.eventType().name(),
                 event.sourceId(),
                 event.userId(),
+                Timestamp.from(event.occurredAt()),
                 Timestamp.from(event.occurredAt()));
     }
 

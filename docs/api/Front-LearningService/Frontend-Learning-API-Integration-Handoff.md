@@ -277,7 +277,10 @@ Content-Type: application/json
 }
 ```
 
-닉네임은 trim 후 2~12자이며, 대표 캐릭터가 없으면 `404 REPRESENTATIVE_CHARACTER_NOT_FOUND`다.
+닉네임은 Unicode 정규화와 trim 후 2~12자이며 한글, 영문, 숫자만 허용한다. 금칙어·운영 주체
+사칭·특수문자 우회 입력은 `400 USER_PROFILE_INVALID_NICKNAME`, 이미 사용 중인 닉네임은
+`409 USER_PROFILE_DUPLICATE_NICKNAME`이다. 대표 캐릭터가 없으면
+`404 REPRESENTATIVE_CHARACTER_NOT_FOUND`다.
 
 ## 7. Cohort 계약
 
@@ -635,6 +638,8 @@ POST /api/v1/gamification/quests/{userDailyQuestId}/claim
 
 - Frontend는 먼저 `/characters`에서 숫자 `gameCharacterId`를 받는다.
 - 선택 UI는 이 ID, 사용자가 입력한 `nickname`, `colorId`를 전송한다.
+- 캐릭터 생성 닉네임에도 같은 정책을 적용하며 중복은
+  `409 DUPLICATE_NICKNAME`으로 반환한다.
 - 허용 색상은 `original`, `pistachio`, `cyan`, `cream_can`, `light_coral`,
   `light_purple`, `white`, `dark_gray`다. 생략하면 `original`이다.
 

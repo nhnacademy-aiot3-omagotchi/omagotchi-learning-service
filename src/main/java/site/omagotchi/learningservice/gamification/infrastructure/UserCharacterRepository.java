@@ -20,6 +20,10 @@ public interface UserCharacterRepository extends JpaRepository<UserCharacter, Lo
 
     boolean existsByUserIdAndRepresentativeTrue(UUID userId);
 
+    boolean existsByNicknameIgnoreCaseAndRepresentativeTrue(String nickname);
+
+    boolean existsByNicknameIgnoreCaseAndRepresentativeTrueAndIdNot(String nickname, Long id);
+
     List<UserCharacter> findByUserIdInAndRepresentativeTrue(Collection<UUID> userIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

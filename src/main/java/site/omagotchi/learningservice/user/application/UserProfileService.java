@@ -11,6 +11,7 @@ import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
 import site.omagotchi.learningservice.gamification.domain.CharacterAppearance;
+import site.omagotchi.learningservice.gamification.domain.CharacterNicknameValidator;
 import site.omagotchi.learningservice.gamification.application.GamificationErrorCode;
 import site.omagotchi.learningservice.gamification.domain.LevelPolicy;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
@@ -41,9 +42,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class UserProfileService {
-
-    private static final int MIN_NICKNAME_LENGTH = 2;
-    private static final int MAX_NICKNAME_LENGTH = 12;
 
     private final CohortMembershipRepository cohortMembershipRepository;
     private final CohortRepository cohortRepository;
@@ -95,6 +93,12 @@ public class UserProfileService {
     public UserNicknameResult updateNickname(UUID userId, String nickname) {
         String normalizedNickname = normalizeNickname(nickname);
         UserCharacter character = characterGrowthService.requireRepresentativeCharacter(userId);
+        if (userCharacterRepository.existsByNicknameIgnoreCaseAndRepresentativeTrueAndIdNot(
+                normalizedNickname,
+                character.getId()
+        )) {
+            throw new BusinessException(UserProfileErrorCode.DUPLICATE_NICKNAME);
+        }
         character.updateNickname(normalizedNickname);
         return new UserNicknameResult(character.getNickname());
     }
@@ -154,14 +158,10 @@ public class UserProfileService {
     }
 
     private String normalizeNickname(String nickname) {
-        if (nickname == null) {
+        try {
+            return CharacterNicknameValidator.normalize(nickname);
+        } catch (IllegalArgumentException exception) {
             throw new BusinessException(UserProfileErrorCode.INVALID_NICKNAME);
         }
-        String normalizedNickname = nickname.trim();
-        if (normalizedNickname.length() < MIN_NICKNAME_LENGTH
-                || normalizedNickname.length() > MAX_NICKNAME_LENGTH) {
-            throw new BusinessException(UserProfileErrorCode.INVALID_NICKNAME);
-        }
-        return normalizedNickname;
     }
 }

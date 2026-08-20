@@ -8,7 +8,7 @@ import site.omagotchi.learningservice.gamification.application.command.CreateUse
 
 public record CreateUserCharacterRequest(
         @NotNull Long gameCharacterId,
-        @NotBlank @Size(max = 30) String nickname,
+        @NotBlank @Size(min = 2, max = 12) String nickname,
         @Pattern(regexp = "original|pistachio|cyan|cream_can|light_coral|light_purple|white|dark_gray")
         String colorId
 ) {

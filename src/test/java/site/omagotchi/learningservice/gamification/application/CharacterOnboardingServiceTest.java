@@ -18,6 +18,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -68,5 +70,29 @@ class CharacterOnboardingServiceTest {
                 () -> assertEquals(AdvancementStage.BASE, result.advancementStage()),
                 () -> assertEquals(true, result.representative())
         );
+    }
+
+    @Test
+    @DisplayName("이미 사용 중인 닉네임으로 대표 캐릭터를 만들 수 없다")
+    void rejectsDuplicateNickname() {
+        GameCharacter gameCharacter = GameCharacter.create("NIGHT_CLASS", "야간반", "기본 캐릭터", "night");
+        ReflectionTestUtils.setField(gameCharacter, "id", 1L);
+        when(gameCharacterRepository.findByIdAndActiveTrue(1L)).thenReturn(Optional.of(gameCharacter));
+        when(userCharacterRepository.existsByNicknameIgnoreCaseAndRepresentativeTrue("야간반장"))
+                .thenReturn(true);
+        CharacterOnboardingService service = new CharacterOnboardingService(
+                gameCharacterRepository,
+                userCharacterRepository
+        );
+
+        var exception = assertThrows(
+                site.omagotchi.learningservice.global.exception.BusinessException.class,
+                () -> service.createRepresentativeCharacter(
+                        USER_ID,
+                        new CreateUserCharacterCommand(1L, "야간반장", "pistachio")
+                )
+        );
+
+        assertSame(GamificationErrorCode.DUPLICATE_NICKNAME, exception.getErrorCode());
     }
 }

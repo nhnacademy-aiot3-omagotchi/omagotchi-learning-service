@@ -184,6 +184,36 @@ class UserProfileServiceTest {
         verifyNoInteractions(characterGrowthService);
     }
 
+    @Test
+    @DisplayName("이미 사용 중인 닉네임은 변경할 수 없다")
+    void rejectsDuplicateNickname() {
+        UserCharacter character = representativeCharacter("오마");
+        given(characterGrowthService.requireRepresentativeCharacter(USER_ID)).willReturn(character);
+        given(userCharacterRepository.existsByNicknameIgnoreCaseAndRepresentativeTrueAndIdNot(
+                "새이름",
+                30L
+        )).willReturn(true);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> userProfileService.updateNickname(USER_ID, "새이름")
+        );
+
+        assertSame(UserProfileErrorCode.DUPLICATE_NICKNAME, exception.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("금칙어가 포함된 닉네임은 변경할 수 없다")
+    void rejectsForbiddenNickname() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> userProfileService.updateNickname(USER_ID, "시1발")
+        );
+
+        assertSame(UserProfileErrorCode.INVALID_NICKNAME, exception.getErrorCode());
+        verifyNoInteractions(characterGrowthService);
+    }
+
     private CohortMembership activeMembership() {
         CohortMembership membership = CohortMembership.activeManager(COHORT_ID, USER_ID, USER_ID);
         ReflectionTestUtils.setField(membership, "id", MEMBERSHIP_ID);

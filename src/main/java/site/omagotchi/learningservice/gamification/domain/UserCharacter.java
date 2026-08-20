@@ -92,10 +92,7 @@ public class UserCharacter {
     }
 
     public void updateNickname(String nickname) {
-        if (nickname == null || nickname.isBlank()) {
-            throw new IllegalArgumentException("캐릭터 별명은 필수입니다.");
-        }
-        this.nickname = nickname;
+        this.nickname = CharacterNicknameValidator.normalize(nickname);
     }
 
     public LevelState addXp(long amount, List<LevelPolicy> policies) {

@@ -41,6 +41,9 @@ public class CharacterOnboardingService {
                 .orElseThrow(() -> new BusinessException(GamificationErrorCode.GAME_CHARACTER_NOT_FOUND));
 
         String nickname = normalizeNickname(command.nickname());
+        if (userCharacterRepository.existsByNicknameIgnoreCaseAndRepresentativeTrue(nickname)) {
+            throw new BusinessException(GamificationErrorCode.DUPLICATE_NICKNAME);
+        }
         String colorId = normalizeColorId(command.colorId());
         UserCharacter userCharacter = userCharacterRepository.save(UserCharacter.representative(
                 userId,

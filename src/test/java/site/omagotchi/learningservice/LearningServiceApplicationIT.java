@@ -174,6 +174,24 @@ class LearningServiceApplicationIT {
 	}
 
 	@Test
+	void appliesUserNicknamePolicyMigration() {
+		String uniqueNicknameIndex = jdbcTemplate.queryForObject(
+				"SELECT to_regclass('learning_service.ux_user_characters_representative_nickname')::text",
+				String.class
+		);
+		Integer migrationCount = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM learning_service.flyway_schema_history
+				WHERE version IN ('14', '15')
+				  AND success
+				""", Integer.class);
+
+		assertThat(uniqueNicknameIndex)
+				.isEqualTo("learning_service.ux_user_characters_representative_nickname");
+		assertThat(migrationCount).isEqualTo(2);
+	}
+
+	@Test
 	void installsBtreeGistInLearningServiceSchema() {
 		String extensionSchema = jdbcTemplate.queryForObject("""
 				SELECT namespace.nspname

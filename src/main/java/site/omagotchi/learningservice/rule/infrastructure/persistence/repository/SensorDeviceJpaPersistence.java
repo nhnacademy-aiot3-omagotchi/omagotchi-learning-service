@@ -3,6 +3,9 @@ package site.omagotchi.learningservice.rule.infrastructure.persistence.repositor
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.rule.application.port.SensorDeviceRepository;
+import site.omagotchi.learningservice.rule.domain.SensorDevice;
+
+import java.util.List;
 
 @Repository
 @RequiredArgsConstructor
@@ -14,4 +17,10 @@ public class SensorDeviceJpaPersistence implements SensorDeviceRepository {
     public boolean existsByDeviceEui(String deviceEui) {
         return sensorDeviceJpaRepository.existsById(deviceEui);
     }
+
+    @Override
+    public List<SensorDevice> findAll() {
+        return sensorDeviceJpaRepository.findAll();
+    }
+
 }

@@ -16,4 +16,6 @@ public interface ThresholdRuleRepository {
     Optional<ThresholdRule> findById(Long ruleId);
 
     List<ThresholdRule> findAll();
+
+    Optional<ThresholdRule> findByDeviceEuiAndMetric(String deviceEui, String metric);
 }

@@ -25,14 +25,14 @@ public class SensorEventQueryService {
 
     /** 페이지 단위로 센서이벤트 조회, 각 센서이벤트마다 센서 displayㅣㅣㅏㅣ*/
     public SensorEventPage getEvents(
-            Set<SensorEventType> types,
+            SensorEventType type,
             String deviceEui,
             Instant from,
             Instant to,
             Integer page,
             Integer size
     ) {
-        SensorEventQuery query = SensorEventQuery.of(types, deviceEui, from, to, page, size, clock.instant());
+        SensorEventQuery query = SensorEventQuery.of(type, deviceEui, from, to, page, size, clock.instant());
 
         List<SensorEvent> found = sensorEventStore.findByReceivedAt(query.from(), query.to());
 
@@ -51,7 +51,7 @@ public class SensorEventQueryService {
         int totalPages = (totalElements + query.size() - 1) / query.size();
 
         long offset = query.offset();
-        if(offset > totalElements){
+        if(offset >= totalElements){
             return new SensorEventPage(List.of(), query.page(), query.size(), totalElements, totalPages);
         }
 

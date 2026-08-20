@@ -11,7 +11,7 @@ public record SensorEvent(
         return new SensorEvent(UUID.randomUUID(), detection, ActionOutcome.none());
     }
 
-    public SensorEvent withOutCome(ActionOutcome outCome){
+    public SensorEvent withOutcome(ActionOutcome outCome){
         return new SensorEvent(id, detection, outCome);
     }
 }

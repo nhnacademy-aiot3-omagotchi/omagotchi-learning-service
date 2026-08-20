@@ -7,12 +7,12 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Set;
+import java.util.Objects;
 
 /**
  * 정규화가 끝난 센서 이벤트 조회 조건.
  *
- * @param types 이벤트 종류 필터. 비어 있으면 전체
+ * @param type 이벤트 종류 필터. 비어 있으면 전체
  * @param deviceEui 기기 필터. null이면 전체
  * @param from 수신 시각 하한. 기본값은 to로부터 24시간 전
  * @param to 수신 시각 상한. 기본값은 현재
@@ -20,7 +20,7 @@ import java.util.Set;
  * @param size 페이지 크기 (1~100)
  */
 public record SensorEventQuery(
-        Set<SensorEventType> types,
+        SensorEventType type,
         String deviceEui,
         Instant from,
         Instant to,
@@ -43,8 +43,6 @@ public record SensorEventQuery(
         if (from == null || to == null || from.isAfter(to)) {
             throw new BusinessException(EnvironmentErrorCode.INVALID_PERIOD_REQUEST);
         }
-
-        types = (types == null) ? Set.of() : Set.copyOf(types);
     }
 
     /**
@@ -53,7 +51,7 @@ public record SensorEventQuery(
      * @param currentInstant 기본 기간 계산 기준. 호출부가 Clock에서 꺼내 넘긴다
      */
     public static SensorEventQuery of(
-            Set<SensorEventType> types,
+            SensorEventType type,
             String deviceEui,
             Instant from,
             Instant to,
@@ -65,7 +63,7 @@ public record SensorEventQuery(
         Instant resolvedFrom = (from == null) ? resolvedTo.minus(DEFAULT_WINDOW) : from;
 
         return new SensorEventQuery(
-                types,
+                type,
                 normalizeDeviceEui(deviceEui),
                 resolvedFrom,
                 resolvedTo,
@@ -76,7 +74,7 @@ public record SensorEventQuery(
 
     /** 캐시에서 꺼낸 이벤트가 이 조건을 통과하는지 */
     public boolean matches(SensorEvent event) {
-        if (!types.isEmpty() && !types.contains(event.detection().type())) {
+        if(!Objects.isNull(type) && type != event.detection().type()){
             return false;
         }
 

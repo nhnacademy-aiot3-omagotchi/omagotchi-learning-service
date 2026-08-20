@@ -7,7 +7,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import site.omagotchi.learningservice.sensor.application.SensorSeriesService;
 import site.omagotchi.learningservice.sensor.domain.SensorSeries;
-import site.omagotchi.learningservice.sensor.domain.SeriesWindow;
 import site.omagotchi.learningservice.sensor.presentation.response.SensorSeriesResponse;
 
 @RestController
@@ -23,8 +22,7 @@ public class SensorSeriesController {
             @RequestParam String measurement,
             @RequestParam String window) {
 
-        SensorSeries series = sensorSeriesService.getSeries(
-                deviceEui, measurement, SeriesWindow.from(window));
+        SensorSeries series = sensorSeriesService.getSeries(deviceEui, measurement, window);
 
         return SensorSeriesResponse.from(series);
     }

@@ -37,6 +37,8 @@ spring:
     create-schemas: true
     clean-disabled: true
     validate-on-migrate: true
+    postgresql:
+      transactional-lock: false
 
   jpa:
     hibernate:

@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.gamification.domain;
+package site.omagotchi.learningservice.gamification.application;
 
 import lombok.RequiredArgsConstructor;
 import site.omagotchi.learningservice.global.exception.ErrorCode;

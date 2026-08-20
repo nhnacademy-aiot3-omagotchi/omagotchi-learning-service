@@ -11,12 +11,6 @@ UPDATE learning_service.game_characters
 SET description = '늦은 시간에도 집중력을 붙잡는 야간형 오마고치입니다.'
 WHERE code = 'NIGHT_CLASS';
 
-ALTER TABLE learning_service.game_characters
-    ALTER COLUMN asset_key SET NOT NULL,
-    ADD CONSTRAINT uq_game_characters_asset_key UNIQUE (asset_key),
-    ADD CONSTRAINT ck_game_characters_asset_key
-        CHECK (asset_key ~ '^[a-z0-9_]+$');
-
 INSERT INTO learning_service.game_characters (name, code, description, asset_key) VALUES
     ('공부쟁이', 'STUDY', '기본기가 탄탄한 학습형 오마고치입니다.', 'study'),
     ('디버깅이', 'DEBUG', '문제를 발견하면 끝까지 추적하는 오마고치입니다.', 'debug'),
@@ -27,16 +21,8 @@ INSERT INTO learning_service.game_characters (name, code, description, asset_key
     ('커밋이', 'COMMIT', '기록과 회고를 좋아하는 습관형 오마고치입니다.', 'commit');
 
 ALTER TABLE learning_service.user_characters
-    ADD COLUMN color_id VARCHAR(30) NOT NULL DEFAULT 'original',
-    ADD CONSTRAINT ck_user_characters_color_id CHECK (
-        color_id IN (
-            'original',
-            'pistachio',
-            'cyan',
-            'cream_can',
-            'light_coral',
-            'light_purple',
-            'white',
-            'dark_gray'
-        )
-    );
+    ADD COLUMN color_id VARCHAR(30) DEFAULT 'original';
+
+UPDATE learning_service.user_characters
+SET color_id = 'original'
+WHERE color_id IS NULL;

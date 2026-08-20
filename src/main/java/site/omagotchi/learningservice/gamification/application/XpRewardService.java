@@ -6,7 +6,6 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.gamification.application.result.XpRewardResult;
 import site.omagotchi.learningservice.gamification.domain.AdvancementHistory;
 import site.omagotchi.learningservice.gamification.domain.AdvancementStage;
-import site.omagotchi.learningservice.gamification.domain.GamificationErrorCode;
 import site.omagotchi.learningservice.gamification.domain.LevelPolicy;
 import site.omagotchi.learningservice.gamification.domain.LevelState;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;

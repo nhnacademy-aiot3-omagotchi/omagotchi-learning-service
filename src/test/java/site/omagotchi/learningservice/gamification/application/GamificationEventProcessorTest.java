@@ -6,9 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import site.omagotchi.learningservice.attendance.application.event.AttendanceCheckedInEvent;
 import site.omagotchi.learningservice.gamification.application.port.GamificationEventReceiptRepository;
-import site.omagotchi.learningservice.study.application.event.StudyCompletedEvent;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -37,7 +35,8 @@ class GamificationEventProcessorTest {
     @Test
     @DisplayName("최초 출석 이벤트만 출석 퀘스트를 진행한다")
     void progressesAttendanceQuestForFirstEvent() {
-        AttendanceCheckedInEvent event = new AttendanceCheckedInEvent(USER_ID, 1L, 10L, OCCURRED_AT);
+        GamificationEventMessage event = new GamificationEventMessage(
+                GamificationEventType.ATTENDANCE_CHECKED_IN, "10", USER_ID, OCCURRED_AT);
         given(eventReceiptRepository.claim(
                 GamificationEventType.ATTENDANCE_CHECKED_IN,
                 "10",
@@ -53,7 +52,8 @@ class GamificationEventProcessorTest {
     @Test
     @DisplayName("이미 처리한 출석 이벤트는 퀘스트를 다시 진행하지 않는다")
     void ignoresDuplicateAttendanceEvent() {
-        AttendanceCheckedInEvent event = new AttendanceCheckedInEvent(USER_ID, 1L, 10L, OCCURRED_AT);
+        GamificationEventMessage event = new GamificationEventMessage(
+                GamificationEventType.ATTENDANCE_CHECKED_IN, "10", USER_ID, OCCURRED_AT);
         given(eventReceiptRepository.claim(
                 GamificationEventType.ATTENDANCE_CHECKED_IN,
                 "10",
@@ -69,7 +69,11 @@ class GamificationEventProcessorTest {
     @Test
     @DisplayName("최초 학습 완료 이벤트만 학습 퀘스트를 진행한다")
     void progressesStudyQuestForFirstEvent() {
-        StudyCompletedEvent event = new StudyCompletedEvent(USER_ID, STUDY_SOURCE_ID, OCCURRED_AT);
+        GamificationEventMessage event = new GamificationEventMessage(
+                GamificationEventType.STUDY_COMPLETED,
+                STUDY_SOURCE_ID.toString(),
+                USER_ID,
+                OCCURRED_AT);
         given(eventReceiptRepository.claim(
                 GamificationEventType.STUDY_COMPLETED,
                 STUDY_SOURCE_ID.toString(),

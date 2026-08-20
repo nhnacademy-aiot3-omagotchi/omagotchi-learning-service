@@ -7,7 +7,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import site.omagotchi.learningservice.gamification.domain.GamificationErrorCode;
 import site.omagotchi.learningservice.gamification.domain.QuestStatus;
 import site.omagotchi.learningservice.gamification.domain.QuestType;
 import site.omagotchi.learningservice.gamification.domain.UserDailyQuest;

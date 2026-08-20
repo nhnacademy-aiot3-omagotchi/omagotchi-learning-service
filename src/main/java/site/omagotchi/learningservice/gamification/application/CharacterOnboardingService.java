@@ -9,7 +9,6 @@ import site.omagotchi.learningservice.gamification.application.result.UserCharac
 import site.omagotchi.learningservice.gamification.domain.CharacterNicknameValidator;
 import site.omagotchi.learningservice.gamification.domain.CharacterAppearance;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
-import site.omagotchi.learningservice.gamification.domain.GamificationErrorCode;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
 import site.omagotchi.learningservice.gamification.infrastructure.GameCharacterRepository;
 import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;

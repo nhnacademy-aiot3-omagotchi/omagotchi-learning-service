@@ -197,8 +197,8 @@ class OccupancyExpiryIT {
      * 실행의 후보에서 제외되는지를 고정한다.</p>
      */
     @Test
-    @DisplayName("정리를 두 번 돌려도 두 번째는 대상이 없다.")
-    void secondExpiryRunFindsNoCandidates() {
+    @DisplayName("정리를 두 번 돌려도 이 점유는 다시 후보가 되지 않는다.")
+    void secondExpiryRunDoesNotReprocessThisOccupancy() {
         Long cohortId = fixture.createCohort("만료-멱등");
         OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "만료-멱등-1", 8);

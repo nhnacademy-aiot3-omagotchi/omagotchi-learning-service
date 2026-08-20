@@ -686,6 +686,11 @@ POST /api/v1/gamification/quests/{userDailyQuestId}/claim
 정상 종료가 커밋되면 Learning Service가 내부 이벤트로 일일 퀘스트를 진행한다. Frontend는 해당
 Domain API 성공 후 `/gamification/home` 또는 `/gamification/quests/daily`를 재조회한다.
 
+내부 이벤트는 원 트랜잭션의 커밋 전에 Outbox에 함께 저장된다. 커밋 직후 처리가 실패하거나
+인스턴스가 종료되어도 재시도 워커가 미처리 이벤트를 다시 처리하며, receipt의
+`(event_type, source_id)` 유일 키가 중복 퀘스트 진행을 막는다. 이 재처리 과정은 내부 동작이므로
+Frontend가 별도의 재시도 API를 호출할 필요는 없다.
+
 `character-checked`, `llm-quest-completed`는 신뢰할 수 있는 내부 발생 조건이 확정될 때까지
 외부에서 발생시킬 수 없다.
 
@@ -848,18 +853,18 @@ PresenceStatus: ONLINE, AWAY, OFFLINE
 
 ## 14. 현재 Frontend 코드에서 반드시 바꿀 부분
 
-| 현재 Frontend | 실제 계약/조치 |
-|---|---|
-| `api.js`의 API Base `/bff/v1` | 유지하고 BFF Controller를 실제 구현한다. |
+| 현재 Frontend | 실제 계약/조치                                                             |
+|---|----------------------------------------------------------------------|
+| `api.js`의 API Base `/bff/v1` | 유지하고 BFF Controller를 실제 구현한다.                                        |
 | `attendance/history`, `attendance/today` | BFF가 Profile의 `approvedCohortId`로 `/attendance-records/me` 호출 후 변환한다. |
-| `checkInAt`, `checkOutAt` | `checkedInAt`, `checkedOutAt`으로 변경한다. |
-| `character.saveSelection({characterId, colorId})` | `{gameCharacterId, nickname}`으로 변경한다. |
-| Character ID가 `study` 같은 문자열 | `/gamification/characters`의 숫자 ID를 사용한다. |
-| Presence `/presence/lab/stream` SSE | BFF STOMP→SSE Bridge를 만들거나 REST Snapshot까지만 우선 연동한다. |
-| 출결·프로필·레벨 `localStorage` | 서버 응답을 Source of Truth로 바꾸고 Prototype 저장을 제거한다. |
-| `404`일 때 Prototype fallback | 실제 연동 완료 후 제거한다. |
-| BFF 쓰기 요청에 CSRF Header 없음 | `X-CSRF-TOKEN`을 모든 쓰기 요청에 추가한다. |
-| Community JSON 전용 request helper | 첨부파일용 `FormData` request helper를 추가한다. |
+| `checkInAt`, `checkOutAt` | `checkedInAt`, `checkedOutAt`으로 변경한다.                                |
+| `character.saveSelection({characterId, colorId})` | `{gameCharacterId, nickname, colorId}`로 변경한다.                        |
+| Character ID가 `study` 같은 문자열 | `/gamification/characters`의 숫자 ID를 사용한다.                             |
+| Presence `/presence/lab/stream` SSE | BFF STOMP→SSE Bridge를 만들거나 REST Snapshot까지만 우선 연동한다.                 |
+| 출결·프로필·레벨 `localStorage` | 서버 응답을 Source of Truth로 바꾸고 Prototype 저장을 제거한다.                      |
+| `404`일 때 Prototype fallback | 실제 연동 완료 후 제거한다.                                                     |
+| BFF 쓰기 요청에 CSRF Header 없음 | `X-CSRF-TOKEN`을 모든 쓰기 요청에 추가한다.                                      |
+| Community JSON 전용 request helper | 첨부파일용 `FormData` request helper를 추가한다.                               |
 
 ## 15. 현재 계약으로 화면을 완성할 수 없는 항목
 

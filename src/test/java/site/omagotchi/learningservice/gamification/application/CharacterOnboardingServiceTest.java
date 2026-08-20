@@ -36,7 +36,7 @@ class CharacterOnboardingServiceTest {
     @Test
     @DisplayName("별명을 trim해서 대표 캐릭터를 생성한다")
     void createsRepresentativeCharacterWithNormalizedNickname() {
-        GameCharacter gameCharacter = GameCharacter.create("NIGHT_CLASS", "야간반", "기본 캐릭터");
+        GameCharacter gameCharacter = GameCharacter.create("NIGHT_CLASS", "야간반", "기본 캐릭터", "night");
         ReflectionTestUtils.setField(gameCharacter, "id", 1L);
         when(gameCharacterRepository.findByIdAndActiveTrue(1L)).thenReturn(Optional.of(gameCharacter));
         when(userCharacterRepository.existsByUserIdAndRepresentativeTrue(USER_ID)).thenReturn(false);
@@ -52,13 +52,16 @@ class CharacterOnboardingServiceTest {
 
         var result = service.createRepresentativeCharacter(
                 USER_ID,
-                new CreateUserCharacterCommand(1L, "  야간반장  ")
+                new CreateUserCharacterCommand(1L, "  야간반장  ", "pistachio")
         );
 
         assertAll(
                 () -> assertEquals("야간반장", result.nickname()),
                 () -> assertEquals("야간반장", result.displayName()),
                 () -> assertEquals("NIGHT_CLASS", result.gameCharacterCode()),
+                () -> assertEquals("night", result.type()),
+                () -> assertEquals("pistachio", result.colorId()),
+                () -> assertEquals("night/pistachio", result.assetKey()),
                 () -> assertEquals("야간반", result.gameCharacterName()),
                 () -> assertEquals(0, result.totalXp()),
                 () -> assertEquals(1, result.level()),

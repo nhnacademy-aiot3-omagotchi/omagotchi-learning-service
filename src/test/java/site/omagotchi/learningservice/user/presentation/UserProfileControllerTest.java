@@ -19,6 +19,7 @@ import site.omagotchi.learningservice.global.security.SecurityConfig;
 import site.omagotchi.learningservice.global.security.SecurityErrorResponseHandler;
 import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 import site.omagotchi.learningservice.user.application.UserProfileService;
+import site.omagotchi.learningservice.user.application.result.CurrentCharacterResult;
 import site.omagotchi.learningservice.user.application.result.UserNicknameResult;
 import site.omagotchi.learningservice.user.application.result.UserProfileResult;
 
@@ -59,13 +60,32 @@ class UserProfileControllerTest {
     @DisplayName("프로필 조회는 JWT subject를 현재 사용자로 사용한다")
     void getsProfileWithJwtSubject() throws Exception {
         given(userProfileService.getMyProfile(USER_ID))
-                .willReturn(new UserProfileResult("오마", 0L, 0L, 0, null, null));
+                .willReturn(new UserProfileResult(
+                        "오마",
+                        0L,
+                        0L,
+                        0,
+                        null,
+                        new CurrentCharacterResult(
+                                "오마",
+                                1,
+                                0L,
+                                100L,
+                                "야간반",
+                                "night",
+                                "pistachio",
+                                "night/pistachio"
+                        )
+                ));
 
         mockMvc.perform(get("/api/v1/user-profiles/me/profile")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
                         .header("X-User-Id", SPOOFED_USER_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nickname").value("오마"))
+                .andExpect(jsonPath("$.currentCharacter.type").value("night"))
+                .andExpect(jsonPath("$.currentCharacter.colorId").value("pistachio"))
+                .andExpect(jsonPath("$.currentCharacter.assetKey").value("night/pistachio"))
                 .andDo(document("user-profile/get-my-profile"));
 
         verify(userProfileService).getMyProfile(USER_ID);

@@ -30,6 +30,11 @@ public enum GamificationErrorCode implements ErrorCode {
             "INVALID_CHARACTER_NICKNAME",
             "캐릭터 별명은 1~30자여야 합니다."
     ),
+    INVALID_CHARACTER_COLOR(
+            ErrorType.INVALID_INPUT,
+            "INVALID_CHARACTER_COLOR",
+            "지원하지 않는 캐릭터 색상입니다."
+    ),
     LEVEL_POLICY_NOT_FOUND(
             ErrorType.NOT_FOUND,
             "LEVEL_POLICY_NOT_FOUND",

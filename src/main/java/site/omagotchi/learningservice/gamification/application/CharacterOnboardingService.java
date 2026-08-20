@@ -7,6 +7,7 @@ import site.omagotchi.learningservice.gamification.application.command.CreateUse
 import site.omagotchi.learningservice.gamification.application.result.GameCharacterResult;
 import site.omagotchi.learningservice.gamification.application.result.UserCharacterResult;
 import site.omagotchi.learningservice.gamification.domain.CharacterNicknameValidator;
+import site.omagotchi.learningservice.gamification.domain.CharacterAppearance;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
 import site.omagotchi.learningservice.gamification.domain.GamificationErrorCode;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
@@ -41,10 +42,12 @@ public class CharacterOnboardingService {
                 .orElseThrow(() -> new BusinessException(GamificationErrorCode.GAME_CHARACTER_NOT_FOUND));
 
         String nickname = normalizeNickname(command.nickname());
+        String colorId = normalizeColorId(command.colorId());
         UserCharacter userCharacter = userCharacterRepository.save(UserCharacter.representative(
                 userId,
                 gameCharacter.getId(),
-                nickname
+                nickname,
+                colorId
         ));
         return UserCharacterResult.from(userCharacter, gameCharacter);
     }
@@ -55,6 +58,14 @@ public class CharacterOnboardingService {
         } catch (IllegalArgumentException exception) {
             // 도메인 검증 실패를 API 응답 계약이 있는 오류로 바꿔서 밖으로 내보냄
             throw new BusinessException(GamificationErrorCode.INVALID_CHARACTER_NICKNAME, exception);
+        }
+    }
+
+    private String normalizeColorId(String colorId) {
+        try {
+            return CharacterAppearance.normalizeColorId(colorId);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(GamificationErrorCode.INVALID_CHARACTER_COLOR, exception);
         }
     }
 }

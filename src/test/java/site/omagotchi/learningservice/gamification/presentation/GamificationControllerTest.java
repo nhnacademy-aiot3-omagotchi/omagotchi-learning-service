@@ -70,13 +70,14 @@ class GamificationControllerTest {
     @DisplayName("선택 가능한 캐릭터 목록을 조회한다")
     void getsCharacters() throws Exception {
         given(characterOnboardingService.getAvailableCharacters())
-                .willReturn(List.of(new GameCharacterResult(1L, "NIGHT_CLASS", "야간반", "기본 캐릭터")));
+                .willReturn(List.of(new GameCharacterResult(1L, "NIGHT_CLASS", "night", "야간반", "기본 캐릭터")));
 
         mockMvc.perform(get("/api/v1/gamification/characters")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].gameCharacterId").value(1))
                 .andExpect(jsonPath("$[0].code").value("NIGHT_CLASS"))
+                .andExpect(jsonPath("$[0].assetKey").value("night"))
                 .andExpect(jsonPath("$[0].name").value("야간반"))
                 .andExpect(jsonPath("$[0].description").value("기본 캐릭터"))
                 .andDo(document("gamification/get-characters"));
@@ -87,11 +88,14 @@ class GamificationControllerTest {
     void createsRepresentativeCharacter() throws Exception {
         given(characterOnboardingService.createRepresentativeCharacter(
                 eq(USER_ID),
-                eq(new CreateUserCharacterCommand(1L, "오마"))
+                eq(new CreateUserCharacterCommand(1L, "오마", "pistachio"))
         )).willReturn(new UserCharacterResult(
                 10L,
                 1L,
                 "NIGHT_CLASS",
+                "night",
+                "pistachio",
+                "night/pistachio",
                 "야간반",
                 "오마",
                 "오마",
@@ -107,20 +111,25 @@ class GamificationControllerTest {
                         .content("""
                                 {
                                   "gameCharacterId": 1,
-                                  "nickname": "오마"
+                                  "nickname": "오마",
+                                  "colorId": "pistachio"
                                 }
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.userCharacterId").value(10))
                 .andExpect(jsonPath("$.gameCharacterId").value(1))
                 .andExpect(jsonPath("$.gameCharacterCode").value("NIGHT_CLASS"))
+                .andExpect(jsonPath("$.type").value("night"))
+                .andExpect(jsonPath("$.colorId").value("pistachio"))
+                .andExpect(jsonPath("$.assetKey").value("night/pistachio"))
                 .andExpect(jsonPath("$.gameCharacterName").value("야간반"))
                 .andExpect(jsonPath("$.nickname").value("오마"))
-                .andExpect(jsonPath("$.representative").value(true));
+                .andExpect(jsonPath("$.representative").value(true))
+                .andDo(document("gamification/create-representative-character"));
 
         verify(characterOnboardingService).createRepresentativeCharacter(
                 USER_ID,
-                new CreateUserCharacterCommand(1L, "오마")
+                new CreateUserCharacterCommand(1L, "오마", "pistachio")
         );
     }
 }

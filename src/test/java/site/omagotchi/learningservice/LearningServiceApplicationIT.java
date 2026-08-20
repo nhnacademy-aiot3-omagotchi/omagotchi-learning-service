@@ -59,4 +59,44 @@ class LearningServiceApplicationIT {
 				.allMatch("uuid"::equals);
 	}
 
+	@Test
+	void appliesFrontendCharacterAssetMigration() {
+		Integer characterCount = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM learning_service.game_characters",
+				Integer.class
+		);
+		List<String> assetKeys = jdbcTemplate.queryForList("""
+				SELECT asset_key
+				FROM learning_service.game_characters
+				ORDER BY asset_key
+				""", String.class);
+		String defaultColor = jdbcTemplate.queryForObject("""
+				SELECT column_default
+				FROM information_schema.columns
+				WHERE table_schema = 'learning_service'
+				  AND table_name = 'user_characters'
+				  AND column_name = 'color_id'
+				""", String.class);
+		Integer migrationCount = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM learning_service.flyway_schema_history
+				WHERE version = '9'
+				  AND success
+				""", Integer.class);
+
+		assertThat(characterCount).isEqualTo(8);
+		assertThat(assetKeys).containsExactly(
+				"caffeine",
+				"commit",
+				"debug",
+				"kid",
+				"night",
+				"server",
+				"sprout",
+				"study"
+		);
+		assertThat(defaultColor).contains("original");
+		assertThat(migrationCount).isEqualTo(1);
+	}
+
 }

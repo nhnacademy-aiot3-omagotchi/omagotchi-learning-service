@@ -54,6 +54,9 @@ public class UserCharacter {
     @Column(name = "advancement_stage", nullable = false, length = 20)
     private AdvancementStage advancementStage;
 
+    @Column(name = "color_id", nullable = false, length = 30)
+    private String colorId;
+
     @Version
     @Column(nullable = false)
     private Short version;
@@ -66,7 +69,12 @@ public class UserCharacter {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public static UserCharacter representative(UUID userId, Long gameCharacterId, String nickname) {
+    public static UserCharacter representative(
+            UUID userId,
+            Long gameCharacterId,
+            String nickname,
+            String colorId
+    ) {
         UserCharacter character = new UserCharacter();
         character.userId = userId;
         character.gameCharacterId = gameCharacterId;
@@ -75,6 +83,7 @@ public class UserCharacter {
         character.totalXp = 0;
         character.level = 1;
         character.advancementStage = AdvancementStage.BASE;
+        character.colorId = CharacterAppearance.normalizeColorId(colorId);
         return character;
     }
 

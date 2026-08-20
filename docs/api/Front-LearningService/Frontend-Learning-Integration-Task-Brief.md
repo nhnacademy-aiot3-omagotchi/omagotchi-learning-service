@@ -106,12 +106,14 @@ Frontend 상태 모델을 실제 서버 필드명으로 바꿔 주세요.
 ```json
 {
   "gameCharacterId": 1,
-  "nickname": "오마"
+  "nickname": "오마",
+  "colorId": "pistachio"
 }
 ```
 
 `GET /api/v1/gamification/characters`에서 숫자 `gameCharacterId`를 받은 뒤 사용해야 합니다.
-`colorId`는 현재 Backend 저장 계약이 없으므로 API로 보내지 않습니다.
+목록의 `assetKey`가 기존 Frontend `characterId`와 대응하며 `colorId`도 Backend에 저장됩니다.
+Profile의 이미지 경로는 `/images/characters/${currentCharacter.assetKey}.png`입니다.
 
 ### Ranking
 
@@ -160,13 +162,13 @@ Profile 응답에서 다음 값은 nullable입니다.
 approvedCohort
 currentCharacter
 nickname
-currentCharacter.type
-currentCharacter.assetKey
 ```
 
 - `approvedCohort=null`: 기수 가입/승인 대기 화면
 - `currentCharacter=null`: 캐릭터 선택 화면
 - 둘 다 존재: Home 및 Attendance API 호출
+
+`currentCharacter`가 존재하면 `type`, `colorId`, `assetKey`는 항상 존재합니다.
 
 ## 이번 연동에서 막히는 Backend 계약
 
@@ -175,10 +177,8 @@ currentCharacter.assetKey
 1. Presence 응답에 이름·닉네임·캐릭터 이미지가 없음
 2. 기수 멤버 응답에 이름·이메일이 없음
 3. 커뮤니티 첨부파일 다운로드 URL/API가 없음
-4. 캐릭터 `colorId` 저장 계약이 없음
-5. Profile의 `currentCharacter.type`, `assetKey`가 현재 `null`
-6. `/cohorts/{cohortId}/audit-logs` API가 없음
-7. Gateway에 `/ws` route가 없어 Presence 실시간 연결 불가
+4. `/cohorts/{cohortId}/audit-logs` API가 없음
+5. Gateway에 `/ws` route가 없어 Presence 실시간 연결 불가
 
 ## 구현 순서
 

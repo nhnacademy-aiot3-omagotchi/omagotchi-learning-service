@@ -128,8 +128,9 @@ class UserProfileServiceTest {
                 () -> assertEquals(2, result.currentCharacter().level()),
                 () -> assertEquals(150L, result.currentCharacter().currentExp()),
                 () -> assertEquals(300L, result.currentCharacter().requiredExp()),
-                () -> assertNull(result.currentCharacter().type()),
-                () -> assertNull(result.currentCharacter().assetKey())
+                () -> assertEquals("night", result.currentCharacter().type()),
+                () -> assertEquals("pistachio", result.currentCharacter().colorId()),
+                () -> assertEquals("night/pistachio", result.currentCharacter().assetKey())
         );
     }
 
@@ -206,7 +207,7 @@ class UserProfileServiceTest {
     }
 
     private UserCharacter representativeCharacter(String nickname) {
-        UserCharacter character = UserCharacter.representative(USER_ID, 1L, nickname);
+        UserCharacter character = UserCharacter.representative(USER_ID, 1L, nickname, "pistachio");
         ReflectionTestUtils.setField(character, "id", 30L);
         ReflectionTestUtils.setField(character, "totalXp", 250L);
         ReflectionTestUtils.setField(character, "level", 2);
@@ -215,7 +216,7 @@ class UserProfileServiceTest {
     }
 
     private GameCharacter gameCharacter() {
-        GameCharacter gameCharacter = GameCharacter.create("NIGHT_CLASS", "야간반", "기본 캐릭터");
+        GameCharacter gameCharacter = GameCharacter.create("NIGHT_CLASS", "야간반", "기본 캐릭터", "night");
         ReflectionTestUtils.setField(gameCharacter, "id", 1L);
         return gameCharacter;
     }

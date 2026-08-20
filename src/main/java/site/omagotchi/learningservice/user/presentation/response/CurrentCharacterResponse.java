@@ -9,6 +9,7 @@ public record CurrentCharacterResponse(
         long requiredExp,
         String name,
         String type,
+        String colorId,
         String assetKey
 ) {
 
@@ -23,6 +24,7 @@ public record CurrentCharacterResponse(
                 result.requiredExp(),
                 result.name(),
                 result.type(),
+                result.colorId(),
                 result.assetKey()
         );
     }

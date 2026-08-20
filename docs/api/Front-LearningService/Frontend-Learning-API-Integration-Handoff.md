@@ -248,8 +248,9 @@ GET /api/v1/user-profiles/me/profile
     "currentExp": 120,
     "requiredExp": 300,
     "name": "야간반",
-    "type": null,
-    "assetKey": null
+    "type": "night",
+    "colorId": "pistachio",
+    "assetKey": "night/pistachio"
   }
 }
 ```
@@ -258,7 +259,9 @@ GET /api/v1/user-profiles/me/profile
 
 - 가입 승인 전에는 `approvedCohort=null`이다.
 - 캐릭터 생성 전에는 `nickname=null`, `currentCharacter=null`이다.
-- 현재 구현에서 `currentCharacter.type`, `assetKey`는 `null`이다.
+- `type`은 Frontend의 `characterId`, `colorId`는 선택 색상, `assetKey`는 확장자를 제외한
+  `/images/characters/**` 상대 키다.
+- Frontend 정적 PNG 경로는 `/images/characters/${assetKey}.png`로 만든다.
 - 출결 BFF는 `approvedCohort.cohortId`가 없으면 downstream을 호출하지 않고 가입 안내 상태를 반환한다.
 
 ### 6.2 닉네임 변경
@@ -592,6 +595,7 @@ POST /api/v1/gamification/quests/{userDailyQuestId}/claim
   {
     "gameCharacterId": 1,
     "code": "NIGHT_CLASS",
+    "assetKey": "night",
     "name": "야간반",
     "description": "기본 캐릭터"
   }
@@ -603,17 +607,22 @@ POST /api/v1/gamification/quests/{userDailyQuestId}/claim
 ```json
 {
   "gameCharacterId": 1,
-  "nickname": "오마"
+  "nickname": "오마",
+  "colorId": "pistachio"
 }
 ```
 
-응답은 `201 Created`다. 현재 Frontend의 `{characterId, colorId}` payload와 맞지 않는다.
+응답은 `201 Created`다. Frontend는 목록 응답의 `assetKey`로 기존 `characterId`를
+`gameCharacterId`에 매핑하고 `colorId`를 함께 보낸다.
 
 ```json
 {
   "userCharacterId": 10,
   "gameCharacterId": 1,
   "gameCharacterCode": "NIGHT_CLASS",
+  "type": "night",
+  "colorId": "pistachio",
+  "assetKey": "night/pistachio",
   "gameCharacterName": "야간반",
   "nickname": "오마",
   "displayName": "오마",
@@ -625,9 +634,9 @@ POST /api/v1/gamification/quests/{userDailyQuestId}/claim
 ```
 
 - Frontend는 먼저 `/characters`에서 숫자 `gameCharacterId`를 받는다.
-- 선택 UI는 이 ID와 사용자가 입력한 `nickname`을 전송한다.
-- `colorId`는 현재 Learning Domain에 저장할 필드가 없다. UI 전용으로 둘지 Backend 계약을
-  추가할지 별도 합의 전까지 API payload에 넣지 않는다.
+- 선택 UI는 이 ID, 사용자가 입력한 `nickname`, `colorId`를 전송한다.
+- 허용 색상은 `original`, `pistachio`, `cyan`, `cream_can`, `light_coral`,
+  `light_purple`, `white`, `dark_gray`다. 생략하면 `original`이다.
 
 홈 응답:
 
@@ -845,15 +854,7 @@ PresenceStatus: ONLINE, AWAY, OFFLINE
    - 상세 응답에는 첨부 메타데이터만 있고 다운로드 URL/API가 없다.
    - 인증된 첨부파일 조회 endpoint 또는 외부 Object Storage URL 계약이 필요하다.
 
-4. 캐릭터 색상
-   - Backend에는 `colorId` 저장 계약이 없다.
-   - UI 전용 상태로 유지할지 Domain에 추가할지 결정이 필요하다.
-
-5. Profile 캐릭터 Asset
-   - `currentCharacter.type`, `assetKey`가 현재 `null`이다.
-   - Frontend가 `gameCharacterName`/code 기반 정적 매핑을 할지 Backend가 채울지 결정이 필요하다.
-
-6. 감사 로그
+4. 감사 로그
    - 과거 문서의 `/cohorts/{cohortId}/audit-logs`는 현재 구현되어 있지 않다.
 
 ## 16. 연동 권장 순서

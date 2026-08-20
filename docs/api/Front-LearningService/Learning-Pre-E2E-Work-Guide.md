@@ -28,26 +28,23 @@ checksum 등이 표시되므로 이번 오류와 구분한다.
 
 ## 2. Profile 캐릭터 `type`, `assetKey`
 
-현재 `UserProfileService.toCurrentCharacterResult()`가 `type`, `assetKey`에 명시적으로 `null`을 넣는다.
-반면 `GameCharacter`에는 `code`가 있으므로 최소 변경은 다음과 같다.
+Frontend의 실제 `characterId + colorId` 자산 구조를 기준으로 구현되었다.
 
-1. `gameCharacterRepository.findById(...)` 결과에서 `name`과 `code`를 함께 읽는다.
-2. `CurrentCharacterResult.type`에는 화면 분류가 정말 필요할 때만 별도 enum 값을 넣는다.
-3. 이미지 파일을 code로 결정할 수 있다면 `assetKey=gameCharacter.code`로 확정한다.
-4. 색상/진화 단계마다 이미지가 다르면 `code`를 재사용하지 말고 DB에 `asset_key`를 추가하고
-   Flyway 신규 migration으로 초기값을 넣는다.
-5. Service test와 `GET /api/v1/user-profiles/me/profile` 계약 테스트에서 null이 아닌 값을 검증한다.
+- `game_characters.asset_key`: `study`, `debug`, `sprout`, `server`, `night`, `kid`,
+  `caffeine`, `commit`
+- `user_characters.color_id`: `original`을 포함한 Frontend 8개 색상
+- Profile `type`: Frontend `characterId`
+- Profile `assetKey`: 확장자를 제외한 이미지 상대 키
 
-권장 계약은 `assetKey`를 프런트 이미지 map의 안정적인 키로 쓰고, `type`은 별도 의미가 확정되기
-전까지 제거하거나 nullable로 유지하는 것이다. 같은 값을 두 필드에 중복해서 넣는 것은 피한다.
-
-Frontend는 URL을 Backend에서 조립하지 않고 다음처럼 자신의 정적 asset map으로 변환한다.
+예시:
 
 ```text
-NIGHT_CLASS -> /assets/characters/night-class.png
+type=night, colorId=original, assetKey=night/night
+type=night, colorId=pistachio, assetKey=night/pistachio
 ```
 
-모르는 `assetKey`에는 기본 이미지를 표시한다.
+Frontend는 `/images/characters/${assetKey}.png`로 정적 PNG를 찾는다. 기존 `V6`는 수정하지 않고
+`V9__align_character_assets_with_frontend.sql`에서 캐릭터 8종과 색상 컬럼을 추가한다.
 
 ## 3. Community 첨부파일 다운로드
 

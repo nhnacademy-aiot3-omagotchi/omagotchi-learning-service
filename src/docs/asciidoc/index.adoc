@@ -42,6 +42,11 @@ include::{snippets}/community/get-posts/http-response.adoc[]
 include::{snippets}/gamification/get-characters/http-request.adoc[]
 include::{snippets}/gamification/get-characters/http-response.adoc[]
 
+=== 대표 캐릭터 생성
+
+include::{snippets}/gamification/create-representative-character/http-request.adoc[]
+include::{snippets}/gamification/create-representative-character/http-response.adoc[]
+
 == Presence
 
 === 내 기수 Presence snapshot 조회

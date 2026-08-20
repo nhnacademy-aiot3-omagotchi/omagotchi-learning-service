@@ -47,7 +47,7 @@ class XpRewardServiceTest {
     @Test
     @DisplayName("보상 EXP는 수령 시점의 대표 캐릭터에 지급된다")
     void rewardsRepresentativeCharacter() {
-        UserCharacter character = UserCharacter.representative(USER_ID, 1L, "야간반장");
+        UserCharacter character = UserCharacter.representative(USER_ID, 1L, "야간반장", "original");
         ReflectionTestUtils.setField(character, "id", 7L);
         XpTransaction savedTransaction = XpTransaction.create(
                 USER_ID,
@@ -86,7 +86,7 @@ class XpRewardServiceTest {
     @Test
     @DisplayName("Lv10 경계를 넘으면 전직 이력을 생성한다")
     void createsAdvancementHistory() {
-        UserCharacter character = UserCharacter.representative(USER_ID, 1L, "야간반장");
+        UserCharacter character = UserCharacter.representative(USER_ID, 1L, "야간반장", "original");
         ReflectionTestUtils.setField(character, "id", 7L);
         XpTransaction savedTransaction = XpTransaction.create(
                 USER_ID,
@@ -121,7 +121,7 @@ class XpRewardServiceTest {
     @Test
     @DisplayName("잠금 후 기존 원장이 있으면 중복 지급하지 않는다")
     void doesNotRewardWhenTransactionExistsAfterLock() {
-        UserCharacter character = UserCharacter.representative(USER_ID, 1L, "야간반장");
+        UserCharacter character = UserCharacter.representative(USER_ID, 1L, "야간반장", "original");
         ReflectionTestUtils.setField(character, "id", 7L);
         XpTransaction existingTransaction = XpTransaction.create(
                 USER_ID,

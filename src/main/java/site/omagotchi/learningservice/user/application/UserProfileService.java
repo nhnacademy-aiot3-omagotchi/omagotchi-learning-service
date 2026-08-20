@@ -10,6 +10,7 @@ import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepo
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
+import site.omagotchi.learningservice.gamification.domain.CharacterAppearance;
 import site.omagotchi.learningservice.gamification.domain.GamificationErrorCode;
 import site.omagotchi.learningservice.gamification.domain.LevelPolicy;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
@@ -117,18 +118,18 @@ public class UserProfileService {
         }
 
         var levelState = character.levelState(policies);
-        String characterName = gameCharacterRepository.findById(character.getGameCharacterId())
-                .map(GameCharacter::getName)
-                .orElse(null);
+        GameCharacter gameCharacter = gameCharacterRepository.findById(character.getGameCharacterId())
+                .orElseThrow(() -> new BusinessException(GamificationErrorCode.GAME_CHARACTER_NOT_FOUND));
 
         return new CurrentCharacterResult(
                 character.getNickname(),
                 levelState.level(),
                 levelState.currentLevelXp(),
                 levelState.nextLevelRequiredXp(),
-                characterName,
-                null,
-                null
+                gameCharacter.getName(),
+                gameCharacter.getAssetKey(),
+                character.getColorId(),
+                CharacterAppearance.assetKey(gameCharacter.getAssetKey(), character.getColorId())
         );
     }
 

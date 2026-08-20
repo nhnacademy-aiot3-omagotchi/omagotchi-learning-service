@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.restdocs.test.autoconfigure.AutoConfigureRestDocs;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
@@ -27,6 +28,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -40,6 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @EnableConfigurationProperties(JwtProperties.class)
 @ActiveProfiles("test")
+@AutoConfigureRestDocs(outputDir = "target/generated-snippets")
 @DisplayName("내 프로필 API")
 class UserProfileControllerTest {
 
@@ -62,7 +65,8 @@ class UserProfileControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
                         .header("X-User-Id", SPOOFED_USER_ID))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nickname").value("오마"));
+                .andExpect(jsonPath("$.nickname").value("오마"))
+                .andDo(document("user-profile/get-my-profile"));
 
         verify(userProfileService).getMyProfile(USER_ID);
     }

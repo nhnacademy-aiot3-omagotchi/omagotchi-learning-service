@@ -32,6 +32,7 @@
 		<telegrambots.version>6.9.7.1</telegrambots.version>
 		<openfeign-querydsl.version>7.4.0</openfeign-querydsl.version>
 		<influxdb-client.version>8.0.0</influxdb-client.version>
+		<asciidoctor-maven-plugin.version>3.2.0</asciidoctor-maven-plugin.version>
 		<sonar.projectKey>aiot3-team5-omagotchi-learning-service</sonar.projectKey>
 		<sonar.projectName>aiot3-team5-omagotchi-learning-service</sonar.projectName>
 		<argLine/>
@@ -249,7 +250,7 @@
 			<plugin>
 				<groupId>org.asciidoctor</groupId>
 				<artifactId>asciidoctor-maven-plugin</artifactId>
-				<version>2.2.1</version>
+				<version>${asciidoctor-maven-plugin.version}</version>
 				<executions>
 					<execution>
 						<id>generate-docs</id>
@@ -260,6 +261,11 @@
 						<configuration>
 							<backend>html</backend>
 							<doctype>book</doctype>
+							<sourceDirectory>${project.basedir}/src/docs/asciidoc</sourceDirectory>
+							<outputDirectory>${project.build.directory}/generated-docs</outputDirectory>
+							<attributes>
+								<snippets>${project.build.directory}/generated-snippets</snippets>
+							</attributes>
 						</configuration>
 					</execution>
 				</executions>

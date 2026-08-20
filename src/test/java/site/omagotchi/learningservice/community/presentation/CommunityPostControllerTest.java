@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.restdocs.test.autoconfigure.AutoConfigureRestDocs;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
@@ -39,6 +40,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -52,6 +54,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @EnableConfigurationProperties(JwtProperties.class)
 @ActiveProfiles("test")
+@AutoConfigureRestDocs(outputDir = "target/generated-snippets")
 @DisplayName("커뮤니티 게시글 조회 API")
 class CommunityPostControllerTest {
 
@@ -106,7 +109,8 @@ class CommunityPostControllerTest {
                 .andExpect(jsonPath("$.page.totalPages").value(2))
                 .andExpect(jsonPath("$.size").doesNotExist())
                 .andExpect(jsonPath("$.totalElements").doesNotExist())
-                .andExpect(jsonPath("$.totalPages").doesNotExist());
+                .andExpect(jsonPath("$.totalPages").doesNotExist())
+                .andDo(document("community/get-posts"));
 
         verify(communityPostQueryService).getPosts(
                 USER_ID,

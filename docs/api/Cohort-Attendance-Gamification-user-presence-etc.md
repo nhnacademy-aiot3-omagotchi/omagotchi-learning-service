@@ -1,5 +1,9 @@
 # Frontend API Handoff
 
+> **Deprecated:** 이 문서는 2026-08-10 시점의 과거 작업 참고 자료다. 현재 Frontend 연동은
+> [`Frontend-Learning-API-Integration-Handoff.md`](Front-LearningService/Frontend-Learning-API-Integration-Handoff.md)를 사용한다.
+> 특히 `/api/v1` Prefix, User Profile, Ranking, Presence/BFF 계약은 새 문서가 기준이다.
+
 범위: `attendance`, `cohort`, `community`, `gamification`, `ranking`, `realtime`, `telegram`, `user`.
 
 제외: `space`, `team`, `occupancy`, 일반 타이머/학습 세션 CRUD. 단, 게이미피케이션 진행도와 랭킹에서 노출되는 `studySeconds`, streak 관련 값은 포함한다.

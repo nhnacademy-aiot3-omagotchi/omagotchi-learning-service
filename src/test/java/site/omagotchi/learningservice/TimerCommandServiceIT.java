@@ -166,12 +166,14 @@ class TimerCommandServiceIT {
     void persistsTimerAtSecondsAndStudyRecordAtMinutes() {
         Instant startedAt = Instant.parse("2000-01-01T00:00:20Z");
         Instant endedAt = Instant.parse("2000-01-01T00:01:40Z");
-        given(clock.instant()).willReturn(startedAt, endedAt);
+        given(clock.instant()).willReturn(startedAt);
 
         TimerStateResult started = timerCommandService.start(
                 USER_ID,
                 COHORT_ID
         );
+
+        given(clock.instant()).willReturn(endedAt);
         timerCommandService.stop(
                 USER_ID,
                 COHORT_ID,

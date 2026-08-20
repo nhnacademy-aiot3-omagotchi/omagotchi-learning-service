@@ -20,7 +20,7 @@ import java.util.Locale;
  * 서비스의 select 선검사는 동시 요청을 막지 못한다 — 두 트랜잭션이 같은 시점에
  * "없음"을 확인하고 둘 다 INSERT할 수 있다. 부분 유니크 인덱스가 최종 방어선이다.
  *
- * V6 주석대로 이 유니크들은 테이블 제약이 아니라 인덱스이므로,
+ * V7 주석대로 이 유니크들은 테이블 제약이 아니라 인덱스이므로,
  * PostgreSQL이 23505와 함께 넘기는 이름은 "인덱스명"이다.
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)

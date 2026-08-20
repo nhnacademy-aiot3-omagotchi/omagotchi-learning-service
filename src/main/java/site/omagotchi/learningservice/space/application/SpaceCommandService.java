@@ -4,14 +4,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
-import site.omagotchi.learningservice.space.application.port.SpaceCohortAccessPort;
-import site.omagotchi.learningservice.space.application.port.SpaceOccupancyQueryPort;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceAttributes;
+import site.omagotchi.learningservice.space.domain.SpaceStateTransitionException;
 import site.omagotchi.learningservice.space.domain.SpaceType;
 import site.omagotchi.learningservice.space.domain.SpaceValidationException;
 
@@ -27,8 +28,8 @@ import java.util.UUID;
 public class SpaceCommandService {
 
     private final SpaceRepository spaceRepository;
-    private final SpaceOccupancyQueryPort spaceOccupancyQueryPort;
-    private final SpaceCohortAccessPort cohortAccessPort;
+    private final OccupancyQueryService occupancyQueryService;
+    private final CohortAccessService cohortAccessService;
     private final Clock clock;
 
     public Space create(
@@ -93,32 +94,9 @@ public class SpaceCommandService {
         boolean changesType = existingSpace.getSpaceType()
                 != attributes.spaceType();
 
-        if (changesType && existingSpace.isActive()) {
-            throw new BusinessException(
-                    SpaceErrorCode.ACTIVE_TYPE_CHANGE_NOT_ALLOWED
-            );
-        }
-
-        if (attributes.capacity() < existingSpace.getCapacity()
-                && existingSpace.isActive()) {
-            throw new BusinessException(
-                    SpaceErrorCode.ACTIVE_CAPACITY_REDUCTION_NOT_ALLOWED
-            );
-        }
-
-        Space updatedSpace = existingSpace
-                .changeName(
-                        attributes.name(),
-                        now
-                )
-                .changeType(
-                        attributes.spaceType(),
-                        now
-                )
-                .changeCapacity(
-                        attributes.capacity(),
-                        now
-                );
+        // 상태가 막는 변경(RM-14)은 Domain이 스스로 검사한다. 여기서 같은 조건을 미리 보면
+        // 불변식이 두 곳에 생겨 한쪽만 바뀌므로, 사유만 받아 외부 오류로 옮긴다.
+        Space updatedSpace = applyAttributes(existingSpace, attributes, now);
 
         if (changesType) {
             ensureNoActiveOccupancy(spaceId, now);
@@ -204,21 +182,15 @@ public class SpaceCommandService {
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
+        // 검증 순서는 명세 07 §2를 그대로 따른다:
+        // 대상 기수 권한(2·3) → 실습실 여부(4) → 배정 여부(6).
+        //
+        // 기존 배정 기수의 매니저인지는 묻지 않는다. 미배정 실습실은 기수 매니저 누구나
+        // 배정할 수 있고(RM-16), 이미 배정된 실습실이면 대상 기수 매니저인 요청자는 결과가
+        // 같다 — "이미 다른 기수에 배정됨"(409)이다. 소유 기수 권한을 먼저 보면 같은 상황이
+        // 요청자에 따라 403과 409로 갈려, 클라이언트가 배정 가능 여부를 오해한다.
         requireExistingCohort(cohortId);
-
-        if (existingSpace.getCohortId() == null) {
-            requireCohortManager(cohortId, actorUserId);
-        } else {
-            requireCohortManager(
-                    existingSpace.getCohortId(),
-                    actorUserId
-            );
-
-            if (!existingSpace.getCohortId().equals(cohortId)) {
-                requireCohortManager(cohortId, actorUserId);
-            }
-        }
-
+        requireCohortManager(cohortId, actorUserId);
         ensureLab(existingSpace);
 
         if (existingSpace.getCohortId() != null) {
@@ -270,7 +242,7 @@ public class SpaceCommandService {
             Long spaceId,
             ZonedDateTime now
     ) {
-        if (spaceOccupancyQueryPort.existsActiveOccupancy(spaceId, now)) {
+        if (occupancyQueryService.existsActive(spaceId, now.toOffsetDateTime())) {
             throw new BusinessException(
                     SpaceErrorCode.ACTIVE_OCCUPANCY_EXISTS
             );
@@ -303,7 +275,7 @@ public class SpaceCommandService {
             UUID actorUserId
     ) {
         if (requestedCohortId == null) {
-            List<Long> managedCohortIds = cohortAccessPort
+            List<Long> managedCohortIds = cohortAccessService
                     .findActiveManagedCohortIds(actorUserId);
 
             if (managedCohortIds.isEmpty()) {
@@ -333,7 +305,7 @@ public class SpaceCommandService {
             Long cohortId,
             UUID actorUserId
     ) {
-        if (!cohortAccessPort.isActiveManager(cohortId, actorUserId)) {
+        if (!cohortAccessService.isManager(cohortId, actorUserId)) {
             throw new BusinessException(SpaceErrorCode.ACCESS_DENIED);
         }
     }
@@ -349,7 +321,7 @@ public class SpaceCommandService {
      * <b>"시스템 관리자는 기수 내의 일에 관여할 수 없음"</b>으로 확정됐다 (명세 01 §4).</p>
      */
     private void requireAnyCohortManager(UUID actorUserId) {
-        if (cohortAccessPort.findActiveManagedCohortIds(actorUserId).isEmpty()) {
+        if (cohortAccessService.findActiveManagedCohortIds(actorUserId).isEmpty()) {
             throw new BusinessException(SpaceErrorCode.ACCESS_DENIED);
         }
     }
@@ -359,7 +331,7 @@ public class SpaceCommandService {
             throw new BusinessException(SpaceErrorCode.INVALID_COHORT_ID);
         }
 
-        if (!cohortAccessPort.exists(cohortId)) {
+        if (!cohortAccessService.exists(cohortId)) {
             throw new BusinessException(SpaceErrorCode.COHORT_NOT_FOUND);
         }
     }
@@ -370,6 +342,41 @@ public class SpaceCommandService {
                     SpaceErrorCode.LAB_ONLY_COHORT_ASSIGNMENT
             );
         }
+    }
+
+    /**
+     * 이름·유형·정원을 한 번에 반영하고, 상태가 막은 변경을 외부 오류로 옮긴다.
+     *
+     * <p>거절 사유는 {@link SpaceStateTransitionException.Rule}로 구분한다 — Domain은 어떤
+     * {@code ErrorCode}로 응답할지 모르고, 그 매핑이 이 Application의 책임이다.</p>
+     *
+     * <p>{@code cause}를 넘겨 원본을 보존한다. 예상 가능한 {@code 4xx}라 stack trace를 남기지는
+     * 않지만, 조사 시 어느 규칙이 어디서 걸렸는지 추적할 수 있어야 한다.</p>
+     */
+    private Space applyAttributes(
+            Space space,
+            SpaceAttributes attributes,
+            ZonedDateTime now
+    ) {
+        try {
+            return space
+                    .changeName(attributes.name(), now)
+                    .changeType(attributes.spaceType(), now)
+                    .changeCapacity(attributes.capacity(), now);
+        } catch (SpaceStateTransitionException exception) {
+            throw new BusinessException(toErrorCode(exception.violated()), exception);
+        }
+    }
+
+    private static SpaceErrorCode toErrorCode(
+            SpaceStateTransitionException.Rule violated
+    ) {
+        return switch (violated) {
+            case ACTIVE_TYPE_CHANGE ->
+                    SpaceErrorCode.ACTIVE_TYPE_CHANGE_NOT_ALLOWED;
+            case ACTIVE_CAPACITY_REDUCTION ->
+                    SpaceErrorCode.ACTIVE_CAPACITY_REDUCTION_NOT_ALLOWED;
+        };
     }
 
     private SpaceAttributes validateSpaceAttributes(

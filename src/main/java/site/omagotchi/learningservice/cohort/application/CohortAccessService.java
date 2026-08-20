@@ -3,11 +3,7 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
-import site.omagotchi.learningservice.cohort.domain.CohortMembership;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
-import site.omagotchi.learningservice.cohort.domain.CohortStatus;
+import site.omagotchi.learningservice.cohort.domain.*;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
@@ -62,6 +58,18 @@ public class CohortAccessService {
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
     }
 
+    /**
+     * 사용자가 해당 기수의 종료되지 않은 ACTIVE STUDENT인지 확인하고 소속 식별자를 반환한다.
+     */
+    public Long requireActiveStudentMembershipId(Long cohortId, UUID userId) {
+        CohortMembership membership = requireActiveMembership(cohortId, userId);
+        if (membership.getRole() != CohortMembershipRole.STUDENT
+                || membership.getEndedAt() != null) {
+            throw new BusinessException(CohortErrorCode.COHORT_ACCESS_DENIED);
+        }
+        return membership.getId();
+    }
+
     public CohortMembership requireCurrentActiveMembership(UUID userId) {
         return membershipRepository.findFirstByUserIdAndStatusAndEndedAtIsNullOrderByRequestedAtDesc(
                 userId,
@@ -76,15 +84,25 @@ public class CohortAccessService {
     public void requireManager(Long cohortId, UUID userId) {
         requireActiveMembershipId(cohortId, userId);
 
-        boolean isManager = membershipRepository.existsByCohortIdAndUserIdAndRoleAndStatus(
+        if (!isManager(cohortId, userId)) {
+            throw new BusinessException(CohortErrorCode.COHORT_MANAGER_REQUIRED);
+        }
+    }
+
+    /**
+     * 사용자가 해당 기수에서 MANAGER 역할의 ACTIVE 소속인지 boolean으로 확인
+     * 예외를 던지지 않는 단순 조건 분기용
+     *
+     * <p>소속이 아예 없는 경우와 소속은 있으나 매니저가 아닌 경우를 구분하지 않는다.
+     * 둘을 나눠 404와 403으로 응답해야 하면 {@link #requireManager}를 쓴다.</p>
+     */
+    public boolean isManager(Long cohortId, UUID userId) {
+        return membershipRepository.existsByCohortIdAndUserIdAndRoleAndStatus(
                 cohortId,
                 userId,
                 CohortMembershipRole.MANAGER,
                 CohortMembershipStatus.ACTIVE
         );
-        if (!isManager) {
-            throw new BusinessException(CohortErrorCode.COHORT_MANAGER_REQUIRED);
-        }
     }
 
     /**
@@ -116,7 +134,7 @@ public class CohortAccessService {
         Set<Long> activeCohortIds = cohortRepository
                 .findByStatus(CohortStatus.ACTIVE)
                 .stream()
-                .map(cohort -> cohort.getId())
+                .map(Cohort::getId)
                 .collect(Collectors.toSet());
 
         return membershipRepository

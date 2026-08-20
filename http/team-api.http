@@ -17,8 +17,9 @@
 ### =========================================================
 ### 사전 준비 (psql로 직접 INSERT)
 ###
-### 인증이 아직 연동되지 않아 X-User-Id 헤더로 요청자를 식별한다.
-### 따라서 헤더에 넣는 계정이 ACTIVE cohort_membership을 실제로 가지고 있어야 한다.
+### 요청자는 Access JWT의 sub에서만 읽는다 (TeamController 참고). 아래 각 계정의 sub로
+### 서명한 토큰을 파일 하단에 준비해뒀으니, 헤더에 넣는 토큰의 sub가 실제로 그 계정의
+### ACTIVE cohort_membership과 일치해야 한다.
 ###
 ### INSERT INTO learning_service.cohorts
 ###   (id, name, start_date, end_date, status, created_by_user_id)
@@ -56,8 +57,24 @@
 ###
 ### 재현 불가: GR-11(탈퇴 계정 추가 차단)은 StubAccountReader가 항상 ACTIVE를 돌려주므로
 ###           HTTP로 확인할 수 없다. Identity Service 연동 후에 추가한다.
-###           마스터 위임·팀 해체 API는 아직 없다 (이슈 #8).
+###           마스터 위임(POST /{team-id}/members/{member-id}/delegate)·팀 해체
+###           (DELETE /{team-id}) API는 이미 있다 — 이 파일에는 아직 시나리오가 없을 뿐이다.
 ### =========================================================
+
+### 요청자는 Access JWT의 sub에서만 읽는다 — X-User-Id 헤더는 더 이상 읽지 않는다
+### (게이트웨이가 default-filters로 들어오는 X-User-Id를 제거하므로, 헤더에 의존하면
+### 정상 경로에서는 오히려 동작하지 않는다). 위 7개 계정마다 그 sub로 서명한 토큰이다.
+### 이 토큰들은 로컬 secrets/jwt-private.pem으로 서명했고 secrets/jwt-public.pem으로 검증되니
+### .env.local에 JWT_PUBLIC_KEY_LOCATION=file:./secrets/jwt-public.pem이 설정된 상태여야 통과한다.
+### exp가 지나면(발급 후 24시간) 401 AUTH_AUTHENTICATION_REQUIRED로 바뀌니 그때는 새로 발급해야 한다.
+### 새 토큰 발급: scripts/issue-test-jwt.sh --sub {{master}}  (나머지 계정도 같은 방식)
+@masterToken = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NjY5NTEzNiwiZXhwIjoxNzg2NzgxNTM2LCJqdGkiOiJhNzQzM2Y2Zi05MzAzLTQyYWItYmZiNi05YWRmNDBmZjY4NjMifQ.i_jOOesqjBKStZvTnQEaqizbL_Bm0NrcGpRoW0v5dMJDHdkrn0Hk9IjUTGNhH1NRt3o4FjAJGuzHm6zHO6RpKdluaHgEOh-GZUtnOvgIYggei8s1BKD8Fueezj2yp4_YWbtEn2FDP1vZjwHW-u8ZCjRw-I5agqjJe4U5UNAEJBn2Bj1KNE3xjP626jdIWi35NpnCWkYa_3hpdBgOwcULu8KeCeRZlOdlO8WDt08mxjXL3INhVs_Z8-OXWwxkWhKIbbXS-anAOuMSBzr3kY_Jl2u6egg8bZtxAYXvkDo-T4zeSySufbhEtkib8JsfKTSX-y_TqJuzIohOF498xqtN1Q
+@outsiderToken = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiIyMjIyMjIyMi0yMjIyLTIyMjItMjIyMi0yMjIyMjIyMjIyMjIiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NjY5NTEzNiwiZXhwIjoxNzg2NzgxNTM2LCJqdGkiOiIzYzI2NWVmZS1kYjIwLTRjZWEtYWE0YS0yZWMzOTQxMmQ4YjUifQ.NFloPx5W9sLTFx494QnO0v8LcYJb71gYTIV_a1jcwHTzfdbYKWScnFq18T_cY9WUzt4n9sbe3Hg4tKZOGpbip5O3sT1d0DKK2fv9gUH7Oa4fxr_NwSxCuLjLu4WCIu9tbHqB_LnreKhS3SWniU--IZR09zNZnl2497FevHsKrad6UjTVn-CrTzGK7v94CNheGhrToD-sleSTe6K_iWq93yPUlg3HUdORIIrMwpTCrSrUEvE127OCGad2Z6tZbZojt7YAysdt6PjYzanI8vqOXl3Csu1W29QmioYmlDJ6qLAwcuIAu1M6jvfGkJiywqSzILoNGacX2YYTqgDXV5Zl-w
+@memberToken = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiIzMzMzMzMzMy0zMzMzLTMzMzMtMzMzMy0zMzMzMzMzMzMzMzMiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NjY5NTEzNiwiZXhwIjoxNzg2NzgxNTM2LCJqdGkiOiI5ODI1MzkxOS1hZGYyLTQ4M2MtYjNjNy01Mjk2YzJlNzNlMDYifQ.IsSJd_aaBxLg_xIGswUhqCpTHSRYOJcy1dGtw9Gwx_X_Bn34nrysh8ZcreV2YrvlUydGbtAfjbxXJEMSmATfAFKU9ayGqxbT7JSx_G2AqR0_X9oh1YTOqgJ7wETHY2A6UxTAXOotCdDN56Y_HPG2LITfQiAaaVOIvG-8qcICCBz4JOLfj8hciwa4KRdLe5M_UqgJmH1h_YQNze2faCX4vbUmUuaJF6H8HOBdPHPqZvvAvbIcXi0NIKBk2lQk8xJBpX8ueWDpNtrGT2tJ3PZh_h6Jqv1IvdwsUX8SyoqWPx3YGzlYqPC2RsFugU2Sr8-8b_uTD1NhksxfYGFW07rj7g
+@otherCohortToken = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiI0NDQ0NDQ0NC00NDQ0LTQ0NDQtNDQ0NC00NDQ0NDQ0NDQ0NDQiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NjY5NTEzNiwiZXhwIjoxNzg2NzgxNTM2LCJqdGkiOiJlNzMxZmUyMy0yZjRhLTRjZjEtOTViMi0xZjc1ODAwYzBkNDgifQ.ibE8osQXyCmK6Hr5PZ8t8qJ8Kn_Ib7VzYxa9ytX1vy4KqBuZ0QMGPsdloINVqHz8T7sT2w2nc6CslUDm-kKL22cuXNksKIpnzOF6n4mEwcW1zlhVAknJJLD0FgX5zYfKWsOOaU4GdO0VBe-Ba-4J2Kdxdj7QFHwv3NRmCTFfrquJON_lTO08eLOQv_UoTObuz3dSt8hfUI24GhF7oxgEDratrx5GAkpRTquTDHT86UC5FZCA-F7FJLqFMLacB1QMrQKMKpcAyCIuvY2_xaHkh4I9vSU7a_8bFUcown1Uul-1O6aesY5kkCMHhL6vQDpv7GfBFJ14QntM5SGBZmyxdw
+@multiCohortToken = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiI1NTU1NTU1NS01NTU1LTU1NTUtNTU1NS01NTU1NTU1NTU1NTUiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NjY5NTEzNiwiZXhwIjoxNzg2NzgxNTM2LCJqdGkiOiJjNGNhZDJiOC1lMjNhLTQ2ZWQtOGIyYy0yMGEwZDI4NGIxMTQifQ.b8o6cInem6bq334-gsxtbdUbgnOmmga1dIxnldf0wPRd8Eyvp4CVuS1ZDvttTPNIXEguGRlpDv3rOKMDOtE-lFGfkKdQ5hnpjgsA9t9d3oRwJc-vHsfHDgLnLFMwBdJH8CZ0BCfwitkVKpikeDDGcNBcAfk2XsUYLNnDSYZrrTszo_wrr3GXDxQmd3GHrStE7VBhWd7ucwMyLXQbY7GcR57kfd2JCpK4WTOoa6tBLrguKwZW-fyUrNUZz0GsxSefrneDAZgH8EmNKY83dqGRfXAZX-cm-EDRbvZAFAg8s-HjCe5RVKzQDU2BOBphwg3sqj1rSEN_8fMvncXoosL6VA
+@spare1Token = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiI2NjY2NjY2Ni02NjY2LTY2NjYtNjY2Ni02NjY2NjY2NjY2NjYiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NjY5NTEzNiwiZXhwIjoxNzg2NzgxNTM2LCJqdGkiOiJkMTJmNDU1NS0zZDJkLTQxMjctOTY4Yi1mZWEwZDQxZDY0MDUifQ.umDwg42CmTq2WenAXu79VlCiLYSx-NssUSw16h6OXcozADymlxYWS_VxVyGHrqczs2r6rsyxx_19QGgB5xjV9FIOKM1mkQSMqtwOQRER5KuocyTRf1VZki74xqP9V0ECbfa3gtatYfYrXGmtNrT0gmj8hR9dO18kkTnwbjqZGB0xdUddAiGzSbsrU3StSLONyxAB8kLRIZNSfUCSGqdvEsoqZKMqttA2axLBdnFfoTh7LygyGsJLRuhbtvRW_XidZXrqdDQXlLpp2EgrOTFB6XESWDN4r7uJTxDVcVhJTpIuyuciMRg3FI4XP_34Ig4_tnNA19AkpK0Yb5b8OZUieQ
+@spare2Token = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiI3Nzc3Nzc3Ny03Nzc3LTc3NzctNzc3Ny03Nzc3Nzc3Nzc3NzciLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NjY5NTEzNiwiZXhwIjoxNzg2NzgxNTM2LCJqdGkiOiI5YTI2ZWE5ZS01YjM5LTQwNGMtYWJhMi0xNzk0NDMzODdiYWEifQ.ENynjpGu_xTIbmrIHgKAJ9Pw2TqbZBA2D_bNpWECG66IEBh-BfvwkuKU-wXhR7T8G12drfkmjOpN8fclb2YH8CfpyHY-QIr-5w7aAV_7LBtmyszePTyB3qoWr2g2V1eCdKfrFWlntV2qJFoMmcqekMKyt2lf-jkS3QT7xZ-ctk0I2dpbcQjLergz3_K3fuymJ3v2mU3nSq9oa7_amHZ-zbYgiy1XHG0rGKnRMNqTBjXiAXI1xFQRJKeyLVisyNueP_P326rGcKw0_r3LmTf131_gVNKmEFKyymq41Fd958Pgd-vB7OEbSIUDGOJtDqqp9Wwo7hSWdh4F_6nbvhCm-w
 
 
 ### =========================================================
@@ -67,7 +84,7 @@
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 {
   "cohortId": 1,
@@ -76,11 +93,10 @@ X-User-Id: {{master}}
 
 
 ### =========================================================
-### 2. X-User-Id 헤더 누락
-### 기대: 400 Bad Request
-### 주의: MissingRequestHeaderException 핸들러가 GlobalExceptionHandler에 없어서
-###       공통 오류 형식({status, code, message, path})이 아니라 Spring 기본 응답이 온다.
-###       global 파트에 마지막 Exception 핸들러가 추가되면 형식이 통일된다.
+### 2. Authorization 헤더 누락
+### 기대: 401 Unauthorized / AUTH_AUTHENTICATION_REQUIRED
+### SecurityConfig가 anyRequest().authenticated()라 인증 자체가 없으면 여기서 막힌다 —
+### X-User-Id는 더 이상 요청자 식별에 쓰이지 않으므로 헤더에 넣어도 의미가 없다.
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
@@ -97,7 +113,7 @@ Content-Type: application/json
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{member}}
+Authorization: Bearer {{memberToken}}
 
 {
   "cohortId": 1,
@@ -112,7 +128,7 @@ X-User-Id: {{member}}
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{member}}
+Authorization: Bearer {{memberToken}}
 
 {
   "cohortId": 1,
@@ -126,7 +142,7 @@ X-User-Id: {{member}}
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{otherCohort}}
+Authorization: Bearer {{otherCohortToken}}
 
 {
   "cohortId": 2,
@@ -141,7 +157,7 @@ X-User-Id: {{otherCohort}}
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 {
   "cohortId": 1,
@@ -156,7 +172,7 @@ X-User-Id: {{master}}
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{member}}
+Authorization: Bearer {{memberToken}}
 
 {
   "cohortId": 999,
@@ -174,7 +190,7 @@ X-User-Id: {{member}}
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{member}}
+Authorization: Bearer {{memberToken}}
 
 {
   "cohortId": 1,
@@ -188,7 +204,7 @@ X-User-Id: {{member}}
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{member}}
+Authorization: Bearer {{memberToken}}
 
 {
   "cohortId": 1,
@@ -202,7 +218,7 @@ X-User-Id: {{member}}
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{member}}
+Authorization: Bearer {{memberToken}}
 
 {
   "cohortId": 1,
@@ -219,7 +235,7 @@ X-User-Id: {{member}}
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{spare1}}
+Authorization: Bearer {{spare1Token}}
 
 {
   "cohortId": 1,
@@ -233,7 +249,7 @@ X-User-Id: {{spare1}}
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{outsider}}
+Authorization: Bearer {{outsiderToken}}
 
 {
   "name": "기수생략팀"
@@ -247,7 +263,7 @@ X-User-Id: {{outsider}}
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{spare2}}
+Authorization: Bearer {{spare2Token}}
 
 {
   "name": "기수생략팀"
@@ -261,7 +277,7 @@ X-User-Id: {{spare2}}
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{multiCohort}}
+Authorization: Bearer {{multiCohortToken}}
 
 {
   "name": "기수생략팀"
@@ -275,7 +291,7 @@ X-User-Id: {{multiCohort}}
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{multiCohort}}
+Authorization: Bearer {{multiCohortToken}}
 
 {
   "cohortId": 1,
@@ -285,7 +301,7 @@ X-User-Id: {{multiCohort}}
 ###
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{multiCohort}}
+Authorization: Bearer {{multiCohortToken}}
 
 {
   "cohortId": 2,
@@ -300,7 +316,7 @@ X-User-Id: {{multiCohort}}
 ###       응답에 user_id·cohort_membership_id가 없어야 한다 (GR-15)
 ### =========================================================
 GET {{baseUrl}}/teams/1
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 
 ### =========================================================
@@ -308,7 +324,7 @@ X-User-Id: {{master}}
 ### 기대: 200 OK. 소속이 없으면 404가 아니라 빈 배열
 ### =========================================================
 GET {{baseUrl}}/teams/me
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 
 ### =========================================================
@@ -318,7 +334,7 @@ X-User-Id: {{master}}
 ### 팀원 여부를 보기 전에 기수 소속에서 먼저 걸리므로 TEAM_NOT_A_MEMBER가 아니다
 ### =========================================================
 GET {{baseUrl}}/teams/1
-X-User-Id: {{outsider}}
+Authorization: Bearer {{outsiderToken}}
 
 
 ### =========================================================
@@ -328,7 +344,7 @@ X-User-Id: {{outsider}}
 ### 404가 아니라 403인 것이 의도다 — 팀 존재 여부 자체를 알려주지 않는다
 ### =========================================================
 GET {{baseUrl}}/teams/1
-X-User-Id: {{member}}
+Authorization: Bearer {{memberToken}}
 
 
 ### =========================================================
@@ -336,7 +352,7 @@ X-User-Id: {{member}}
 ### 기대: 404 Not Found / TEAM_NOT_FOUND
 ### =========================================================
 GET {{baseUrl}}/teams/999999
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 
 ### =========================================================
@@ -346,7 +362,7 @@ X-User-Id: {{master}}
 ### =========================================================
 POST {{baseUrl}}/teams/1/members
 Content-Type: application/json
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 {
   "targetUserId": "{{member}}"
@@ -362,7 +378,7 @@ X-User-Id: {{master}}
 ### =========================================================
 POST {{baseUrl}}/teams/1/members
 Content-Type: application/json
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 {
   "targetUserId": "{{otherCohort}}"
@@ -376,7 +392,7 @@ X-User-Id: {{master}}
 ### =========================================================
 POST {{baseUrl}}/teams/1/members
 Content-Type: application/json
-X-User-Id: {{member}}
+Authorization: Bearer {{memberToken}}
 
 {
   "targetUserId": "{{spare1}}"
@@ -409,7 +425,7 @@ X-User-Id: {{member}}
 ### =========================================================
 POST {{baseUrl}}/teams/1/members
 Content-Type: application/json
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 {
   "targetUserId": "6aad2d10-3978-437d-baf5-b38ab8e0323d"
@@ -419,10 +435,9 @@ X-User-Id: {{master}}
 ### =========================================================
 ### 25. 팀원이 남아있는 상태에서 마스터가 탈퇴 시도
 ### 기대: 409 Conflict / TEAM_DELEGATION_REQUIRED
-### 위임 API가 아직 없어서(이슈 #8) 지금은 이 상태에서 마스터가 나갈 방법이 없다
 ### =========================================================
 POST {{baseUrl}}/teams/1/leave
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 
 ### =========================================================
@@ -432,7 +447,7 @@ X-User-Id: {{master}}
 ### 16번 응답의 members[].memberId를 그대로 쓰면 된다
 ### =========================================================
 DELETE {{baseUrl}}/teams/1/members/13
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 
 ### =========================================================
@@ -441,7 +456,7 @@ X-User-Id: {{master}}
 ### MASTER 0명 상태가 되면 아무도 그 팀을 관리할 수 없다
 ### =========================================================
 DELETE {{baseUrl}}/teams/1/members/1
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 
 ### =========================================================
@@ -453,7 +468,7 @@ X-User-Id: {{master}}
 ### SELECT id, team_id FROM learning_service.team_members WHERE team_id <> 1;
 ### =========================================================
 DELETE {{baseUrl}}/teams/1/members/77
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 
 ### =========================================================
@@ -461,7 +476,7 @@ X-User-Id: {{master}}
 ### 기대: 404 Not Found / TEAM_MEMBER_NOT_FOUND
 ### =========================================================
 DELETE {{baseUrl}}/teams/1/members/999999
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 
 ### =========================================================
@@ -471,7 +486,7 @@ X-User-Id: {{master}}
 ###       teams.deleted_at이 채워지고(행은 보존) team_members 행은 물리 삭제된다
 ### =========================================================
 POST {{baseUrl}}/teams/1/leave
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 
 ### =========================================================
@@ -480,7 +495,7 @@ X-User-Id: {{master}}
 ### 행은 남아 있지만 없는 것으로 취급된다
 ### =========================================================
 GET {{baseUrl}}/teams/1
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 
 ### =========================================================
@@ -491,7 +506,7 @@ X-User-Id: {{master}}
 ### =========================================================
 POST {{baseUrl}}/teams
 Content-Type: application/json
-X-User-Id: {{master}}
+Authorization: Bearer {{masterToken}}
 
 {
   "cohortId": 1,

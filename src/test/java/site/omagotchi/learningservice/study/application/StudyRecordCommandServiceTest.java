@@ -146,8 +146,8 @@ class StudyRecordCommandServiceTest {
         }
 
         @Test
-        @DisplayName("시간 정책에서 계산한 집계일 적용")
-        void savesAggregationDateCalculatedByStudyTimePolicy() {
+        @DisplayName("공통 집계 시간 기준으로 계산한 집계일 적용")
+        void savesAggregationDateCalculatedBySharedPolicy() {
             givenActiveMembership();
             Instant startTime = Instant.parse("2000-01-01T16:30:00Z");
             Instant endTime = Instant.parse("2000-01-01T17:30:00Z");

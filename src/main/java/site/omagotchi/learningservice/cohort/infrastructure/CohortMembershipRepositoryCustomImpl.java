@@ -1,7 +1,10 @@
 package site.omagotchi.learningservice.cohort.infrastructure;
 
+import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
+import site.omagotchi.learningservice.cohort.domain.CohortMembership;
+import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 
 import java.util.Collection;
@@ -97,5 +100,32 @@ public class CohortMembershipRepositoryCustomImpl implements CohortMembershipRep
     @Override
     public Optional<Long> findActiveMembershipId(UUID userId, Long cohortId) {
         return findActive(cohortId, userId).map(MembershipView::id);
+    }
+
+    /*
+     * SELECT cm.*
+     * FROM learning_service.cohort_memberships cm
+     * WHERE cm.cohort_id = :cohortId
+     *   AND cm.role = 'STUDENT'
+     *   AND cm.status = 'ACTIVE'
+     *   AND cm.ended_at IS NULL
+     * ORDER BY cm.id ASC;
+     */
+    @Override
+    public List<CohortMembership> findActiveStudents(Long cohortId) {
+        return queryFactory
+                .selectFrom(cohortMembership)
+                .where(
+                        cohortMembership.cohortId.eq(cohortId),
+                        activeStudent()
+                )
+                .orderBy(cohortMembership.id.asc())
+                .fetch();
+    }
+
+    private BooleanExpression activeStudent() {
+        return cohortMembership.role.eq(CohortMembershipRole.STUDENT)
+                .and(cohortMembership.status.eq(CohortMembershipStatus.ACTIVE))
+                .and(cohortMembership.endedAt.isNull());
     }
 }

@@ -87,7 +87,7 @@ class RoomOccupancyLifecycleServiceTest {
                 eventPublisher,
                 occupancyExpiration,
                 occupancyExpiryReminder,
-                List.of(reminderSender),
+                Optional.of(reminderSender),
                 clock
         );
     }
@@ -478,7 +478,7 @@ class RoomOccupancyLifecycleServiceTest {
                 eventPublisher,
                 occupancyExpiration,
                 occupancyExpiryReminder,
-                List.of(),
+                Optional.empty(),
                 clock
         );
 

@@ -11,6 +11,7 @@ import site.omagotchi.learningservice.occupancy.application.port.OccupancyRemind
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
+import site.omagotchi.learningservice.space.application.SpaceNameQueryService;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -35,10 +36,14 @@ class OccupancyExpiryReminderTest {
             OffsetDateTime.of(2026, 7, 24, 10, 0, 0, 0, ZoneOffset.ofHours(9));
     private static final Long OCCUPANCY_ID = 100L;
     private static final Long SPACE_ID = 1L;
+    private static final String SPACE_NAME = "테스트 회의실";
     private static final UUID USER_ID = UUID.randomUUID();
 
     @Mock
     private RoomOccupancyRepository occupancyRepository;
+
+    @Mock
+    private SpaceNameQueryService spaceNameQueryService;
 
     @Mock
     private OccupancyReminderSender sender;
@@ -48,7 +53,7 @@ class OccupancyExpiryReminderTest {
     @BeforeEach
     void setUp() {
         expiryReminder = new OccupancyExpiryReminder(
-                occupancyRepository, Clock.fixed(NOW.toInstant(), NOW.getOffset()));
+                occupancyRepository, spaceNameQueryService, Clock.fixed(NOW.toInstant(), NOW.getOffset()));
     }
 
     @Test
@@ -57,11 +62,12 @@ class OccupancyExpiryReminderTest {
         RoomOccupancy occupancy = occupancy(NOW.plusMinutes(10));
         RoomOccupancyRepository.ExpiringOccupancy candidate = candidate(occupancy);
         given(occupancyRepository.lockById(OCCUPANCY_ID)).willReturn(Optional.of(occupancy));
+        given(spaceNameQueryService.findName(SPACE_ID)).willReturn(Optional.of(SPACE_NAME));
 
         assertThat(expiryReminder.send(candidate, sender)).isTrue();
 
         verify(sender).sendExpiryReminder(new OccupancyReminderSender.ExpiryReminder(
-                OCCUPANCY_ID, SPACE_ID, USER_ID, NOW.plusMinutes(10)));
+                OCCUPANCY_ID, SPACE_ID, SPACE_NAME, USER_ID, NOW.plusMinutes(10)));
         assertThat(occupancy.getReminderSentAt()).isEqualTo(NOW);
     }
 
@@ -71,6 +77,7 @@ class OccupancyExpiryReminderTest {
         RoomOccupancy occupancy = occupancy(NOW.plusMinutes(5));
         RoomOccupancyRepository.ExpiringOccupancy candidate = candidate(occupancy);
         given(occupancyRepository.lockById(OCCUPANCY_ID)).willReturn(Optional.of(occupancy));
+        given(spaceNameQueryService.findName(SPACE_ID)).willReturn(Optional.of(SPACE_NAME));
         willThrow(new IllegalStateException("발송 실패"))
                 .given(sender).sendExpiryReminder(any());
 
@@ -86,6 +93,7 @@ class OccupancyExpiryReminderTest {
         RoomOccupancy occupancy = occupancy(NOW.plusMinutes(5));
         RoomOccupancyRepository.ExpiringOccupancy candidate = candidate(occupancy);
         given(occupancyRepository.lockById(OCCUPANCY_ID)).willReturn(Optional.of(occupancy));
+        given(spaceNameQueryService.findName(SPACE_ID)).willReturn(Optional.of(SPACE_NAME));
         doThrow(new IllegalStateException("첫 발송 실패"))
                 .doNothing()
                 .when(sender).sendExpiryReminder(any());
@@ -105,6 +113,7 @@ class OccupancyExpiryReminderTest {
         RoomOccupancy occupancy = occupancy(NOW.plusMinutes(5));
         RoomOccupancyRepository.ExpiringOccupancy candidate = candidate(occupancy);
         given(occupancyRepository.lockById(OCCUPANCY_ID)).willReturn(Optional.of(occupancy));
+        given(spaceNameQueryService.findName(SPACE_ID)).willReturn(Optional.of(SPACE_NAME));
 
         assertThat(expiryReminder.send(candidate, sender)).isTrue();
         assertThat(expiryReminder.send(candidate, sender)).isFalse();

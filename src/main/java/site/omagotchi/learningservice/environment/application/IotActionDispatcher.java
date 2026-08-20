@@ -24,15 +24,6 @@ public class IotActionDispatcher {
 
     /** 룰 히트검사 -> 조치 결정 -> 장소 쿨 다운 추가 -> IOT 제어기기 명령 -> 결과 확인*/
     public ActionOutcome dispatch(SensorEvent event){
-        try{
-            return doDispatch(event);
-        }catch (RuntimeException e){
-            log.error("조치 처리 중 예기치 못한 오류 id={}", event.id(), e);
-            return ActionOutcome.none();
-        }
-    }
-
-    private ActionOutcome doDispatch(SensorEvent event){
         SensorDetection detection = event.detection();
 
         //1. 룰 히트 이벤트인지 검사 룰 히트 외에는 모두 none()

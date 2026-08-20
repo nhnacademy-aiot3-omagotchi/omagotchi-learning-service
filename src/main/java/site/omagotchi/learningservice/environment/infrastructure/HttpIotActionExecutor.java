@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.environment.infrastructure;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -15,30 +16,20 @@ import java.util.Locale;
 import java.util.Objects;
 
 @Slf4j
+@RequiredArgsConstructor
 @Component
 public class HttpIotActionExecutor implements IotActionExecutor {
     private static final String TOKEN_HEADER = "X-iot-TOKEN";
 
     private final RestClient iotRestClient;
-    private final EnvironmentProperties.Iot iot;
-
-    public HttpIotActionExecutor(RestClient iotRestClient, EnvironmentProperties properties){
-        this.iotRestClient = iotRestClient;
-        this.iot = properties.iot();
-
-        if(!iot.configured()) {
-            log.warn("IOT_BASE_URL이 비어 있다. 룰 히트 조치가 전부 실패로 기록된다");
-        }
-
-        if(Objects.isNull(iot.secret()) || iot.secret().isBlank()){
-            log.warn("IOT_ENDPOINT_SECRET비어있음. 제어기 호출이 무인증으로 나감");
-        }
-    }
+    private final EnvironmentProperties properties;
 
     @Override
     public IotActionResult execute(IotAction action, SensorDetection detection) {
+        EnvironmentProperties.Iot iot = properties.iot();
+
         if(!iot.configured()){
-            return IotActionResult.failure("제어기 주소가 설정되지 않았습니다");
+            return IotActionResult.failure("제어기 주소 혹은 secret이 설정되지 않았습니다.");
         }
 
         String uri = iot.baseUrl() + "/" + action.name().toLowerCase(Locale.ROOT);

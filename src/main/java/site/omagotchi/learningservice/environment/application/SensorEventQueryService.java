@@ -63,28 +63,12 @@ public class SensorEventQueryService {
     }
 
     private List<SensorEventItem> attachDisplayNames(List<SensorEvent> events){
-        Set<String> deviceEuis = new HashSet<>();
-        for(SensorEvent event : events){
-            String deviceEui = event.detection().deviceEui();
 
-            if(!Objects.isNull(deviceEui)){
-                deviceEuis.add(deviceEui);
-            }
-        }
-
-        Map<String, String> displayNames;
-
-        if(deviceEuis.isEmpty()){
-            displayNames = Map.of();
-        }else{
-            displayNames = sensorDeviceService.findDisplayNames();
-        }
+        Map<String, String> displayNames = sensorDeviceService.findDisplayNames();
 
         List<SensorEventItem> items = new ArrayList<>();
         for(SensorEvent event : events){
-            String deviceEui = event.detection().deviceEui();
-            String displayName = (deviceEui == null) ? null : displayNames.get(deviceEui);
-
+            String displayName = displayNames.get(event.detection().deviceEui());
             items.add(new SensorEventItem(event, displayName));
         }
 

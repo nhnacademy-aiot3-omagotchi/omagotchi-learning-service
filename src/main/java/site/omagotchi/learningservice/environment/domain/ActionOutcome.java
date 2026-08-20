@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.environment.domain;
 
 import java.time.Instant;
+import java.util.Objects;
 
 /***
  * 룰 히트 때 어떤걸 했는지 확인용 영수증. 룰 히트가 아닌 타입은 none
@@ -20,8 +21,33 @@ public record ActionOutcome (
         String error,
         Instant notifiedAt
 ){
+    //컴팩트 생성자 검증
+    public ActionOutcome {
+        Objects.requireNonNull(status, "status가 null입니다.");
+
+        switch (status) {
+            case NONE -> require(Objects.isNull(action), "NONE은 action을 가질 수 없습니다.");
+            case SKIPPED -> require(Objects.nonNull(action), "SKIPPED는 action이 필요합니다.");
+            case CONFIRMED -> {
+                require(Objects.nonNull(action), "CONFIRMED는 action이 필요합니다.");
+                require(Objects.isNull(error), "CONFIRMED는 error를 가질 수 없습니다.");
+            }
+            case FAILED -> {
+                require(Objects.nonNull(action), "FAILED는 action이 필요합니다.");
+                require(Objects.isNull(confirmedAt), "FAILED는 confirmedAt을 가질 수 없습니다.");
+            }
+        }
+    }
+
+    private static void require(boolean condition, String message) {
+        if (!condition) {
+            throw new IllegalArgumentException(message);
+        }
+    }
+
     /** 룰 히트 제외 type일때만 */
     public static ActionOutcome none(){
+
         return new ActionOutcome(null, ActionStatus.NONE, null, false, null, null);
     }
 

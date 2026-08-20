@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.occupancy;
 
 import org.junit.jupiter.api.DisplayName;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,9 +35,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.willAnswer;
+import static org.mockito.Mockito.verify;
 
 /**
- * 공실 알림 신청·취소 (MR-02, MR-15, MR-17, MR-34).
+ * 공실 알림 신청·취소·발송 (MR-02, MR-03, MR-15, MR-17, MR-34).
  *
  * <p>실제 PostgreSQL이 있어야 의미가 있다 — 중복 신청을 막는 것이 애플리케이션 조건이
  * 아니라 부분 유니크 인덱스({@code uq_vacancy_alerts_waiting})이고, 서비스에는 선검사가
@@ -240,6 +242,40 @@ class VacancyAlertIT {
 
         assertThat(waitingRows(roomId)).isZero();
         assertThat(allRows(roomId)).isEqualTo(1);
+    }
+
+    /**
+     * 이름이 DB에서 실제로 실려 나가는지 확인한다.
+     *
+     * <p>단위 테스트는 {@code SpaceNameQueryService}를 Mock으로 두므로 조회가 실제로
+     * 무엇을 돌려주는지 보지 못한다. {@code findNameById}에 조건이 하나 붙거나(예:
+     * {@code deleted_at IS NULL}) 컬럼이 바뀌면 조용히 대체 문구로 내려앉는데,
+     * 그 회귀는 실제 DB가 있어야 드러난다.</p>
+     */
+    @Test
+    @DisplayName("알림에는 공간 식별자가 아니라 실제 이름이 실린다.")
+    void noticeCarriesActualSpaceName() {
+        Long cohortId = fixture.createCohort("공실-이름");
+        OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member waiter = fixture.createActiveMember(cohortId);
+        String roomName = "공실-이름-1";
+        Long roomId = fixture.createMeetingRoom(cohortId, roomName, 8);
+
+        roomOccupancyService.start(roomId, occupier.userId());
+        vacancyAlertService.request(roomId, null, waiter.userId());
+        OffsetDateTime vacatedAt = OffsetDateTime.now();
+
+        assertThat(vacancyAlertDispatcher.dispatch(roomId, vacatedAt)).isEqualTo(1);
+
+        ArgumentCaptor<VacancyAlertSender.VacancyNotice> captor =
+                ArgumentCaptor.forClass(VacancyAlertSender.VacancyNotice.class);
+        verify(vacancyAlertSender).sendVacancyAlert(captor.capture());
+
+        VacancyAlertSender.VacancyNotice notice = captor.getValue();
+        assertThat(notice.spaceId()).isEqualTo(roomId);
+        assertThat(notice.spaceName()).isEqualTo(roomName);
+        assertThat(notice.recipientUserId()).isEqualTo(waiter.userId());
+        assertThat(notice.vacatedAt()).isEqualTo(vacatedAt);
     }
 
     /** 회의실은 공유 자원이라 타 기수 대기자에게도 알림이 가야 한다 (MR-34, CE-03). */

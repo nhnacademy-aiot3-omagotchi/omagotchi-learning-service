@@ -160,6 +160,24 @@ class VacancyAlertDispatcherTest {
         verify(alertDelivery, never()).send(eq(ALERT_B), anyLong(), any(), any(), any(), any());
     }
 
+    /**
+     * 이름 조회 실패가 발송 자체를 막으면 안 된다. 공간이 그 사이 삭제됐다고 대기자
+     * 전원이 알림을 못 받으면, 정작 방이 비었다는 사실을 아무도 모른다.
+     */
+    @Test
+    @DisplayName("공간 이름을 찾지 못해도 식별자로 대체해 발송한다.")
+    void fallsBackToSpaceIdWhenNameIsMissing() {
+        givenWaiting(new WaitingAlert(ALERT_A, MEMBERSHIP_A));
+        givenRecipients(Map.of(MEMBERSHIP_A, USER_A));
+        given(spaceNameQueryService.findName(SPACE_ID)).willReturn(Optional.empty());
+        given(alertDelivery.send(anyLong(), eq(SPACE_ID), any(), any(), eq(VACATED_AT), eq(sender)))
+                .willReturn(true);
+
+        assertThat(dispatcher.dispatch(SPACE_ID, VACATED_AT)).isEqualTo(1);
+
+        verify(alertDelivery).send(ALERT_A, SPACE_ID, "공간 " + SPACE_ID, USER_A, VACATED_AT, sender);
+    }
+
     @Test
     @DisplayName("대기자가 없으면 수신자를 조회하지 않는다.")
     void doesNothingWithoutWaitingApplicants() {

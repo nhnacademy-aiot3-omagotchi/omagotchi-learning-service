@@ -56,6 +56,24 @@ class OccupancyExpiryReminderTest {
                 occupancyRepository, spaceNameQueryService, Clock.fixed(NOW.toInstant(), NOW.getOffset()));
     }
 
+    /**
+     * 이름 조회 실패가 알림 자체를 막으면 안 된다. 이름을 못 찾았다고 건너뛰면 점유자는
+     * 곧 방이 회수된다는 사실을 모른 채 쫓겨난다.
+     */
+    @Test
+    @DisplayName("공간 이름을 찾지 못해도 식별자로 대체해 발송한다.")
+    void fallsBackToSpaceIdWhenNameIsMissing() {
+        RoomOccupancy occupancy = occupancy(NOW.plusMinutes(10));
+        RoomOccupancyRepository.ExpiringOccupancy candidate = candidate(occupancy);
+        given(occupancyRepository.lockById(OCCUPANCY_ID)).willReturn(Optional.of(occupancy));
+        given(spaceNameQueryService.findName(SPACE_ID)).willReturn(Optional.empty());
+
+        assertThat(expiryReminder.send(candidate, sender)).isTrue();
+
+        verify(sender).sendExpiryReminder(new OccupancyReminderSender.ExpiryReminder(
+                OCCUPANCY_ID, SPACE_ID, "공간 " + SPACE_ID, USER_ID, NOW.plusMinutes(10)));
+    }
+
     @Test
     @DisplayName("실제 발송 성공 뒤에만 reminderSentAt을 기록한다.")
     void marksReminderOnlyAfterSuccessfulSend() {

@@ -92,7 +92,9 @@ cp .env.local.example .env.local
 - `/api/v1/threshold-rules/**`: 센서 임계치 기준
 
 - 최신 세부 계약: Spring REST Docs 기반 산출물로 관리 예정
-- `docs/api/`: 과거 작업 참고 자료, 최신 계약 근거로 사용 금지
+- Frontend 연동 구현 요청서: [`docs/api/Frontend-Learning-Integration-Task-Brief.md`](docs/api/Front-LearningService/Frontend-Learning-Integration-Task-Brief.md)
+- Frontend 상세 API 계약: [`docs/api/Frontend-Learning-API-Integration-Handoff.md`](docs/api/Front-LearningService/Frontend-Learning-API-Integration-Handoff.md)
+- 위 인수인계 문서를 제외한 기존 `docs/api/` 문서는 과거 작업 참고 자료이며 최신 계약 근거로 사용하지 않음
 
 ## Database·Migration
 

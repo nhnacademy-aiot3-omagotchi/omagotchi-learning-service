@@ -15,6 +15,7 @@ import site.omagotchi.learningservice.global.util.DateTimePolicy;
 import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSender;
 
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -52,9 +53,14 @@ public class TelegramVacancyAlertSender implements VacancyAlertSender {
      * 저장은 UTC 그대로 두고, 사람이 읽는 문구에서만 KST로 바꾼다. {@code vacatedAt} 자체는
      * 이미 올바른 순간(instant)이라 저장을 바꿀 이유가 없다 — 텔레그램 문자를 읽는 사람이
      * 알아보기 쉽도록 표시만 바꾼다.
+     *
+     * <p>표기를 {@code zzz}로 <b>파생</b>시키는 것이 의도다. "(KST)"를 문자열로 박으면
+     * {@link DateTimePolicy#ZONE_ID}가 바뀌었을 때 시각만 따라 바뀌고 라벨은 그대로 남아,
+     * <b>틀린 시간대를 단언하는 문구</b>가 된다. Locale을 고정하는 것도 같은 이유로,
+     * 서버 기본 Locale에 따라 표기가 흔들리지 않게 한다.</p>
      */
     private static final DateTimeFormatter DISPLAY_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss '('zzz')'", Locale.KOREA);
 
     private final AbsSender telegramSender;
     private final String chatId;

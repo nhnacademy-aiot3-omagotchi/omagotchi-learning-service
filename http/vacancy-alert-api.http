@@ -1,0 +1,164 @@
+@baseUrl = http://localhost:8084
+
+### 공실 알림 API (MR-02, MR-15, MR-17, MR-34)
+### 신청·중복 신청 차단·본인 방 거부·빈 방 거부·조회·취소까지 확인한다.
+### 발송(MR-03)은 아직 구현되어 있지 않다 — 여기서는 "취소까지" 되는지만 본다.
+### occupancy-api.http와 같은 DB에서 실행해도 되도록 cohortId=2, spaceId=10/11을 쓴다
+### (occupancy-api.http는 cohortId=1, spaceId=1~5를 쓴다).
+
+### =========================================================
+### 사전 준비 (psql로 직접 INSERT)
+###
+### INSERT INTO learning_service.cohorts
+###   (id, name, start_date, end_date, status, created_by_user_id)
+### VALUES
+###   (2, '공실 알림 테스트 기수', '2026-01-01', '2026-12-31', 'ACTIVE', gen_random_uuid());
+###
+### -- occupier: 방을 점유할 사람. waiter: 알림을 신청할 사람. stranger: 아무 신청도
+### -- 없지만 같은 기수 소속이라 "남의 신청 취소 시도"가 403이 아니라 404로 막히는 걸 보여준다.
+### INSERT INTO learning_service.cohort_memberships
+###   (cohort_id, user_id, role, status, processed_at, processed_by_user_id)
+### VALUES
+###   (2, '10101010-1010-1010-1010-101010101010', 'STUDENT', 'ACTIVE', now(), gen_random_uuid()),
+###   (2, '20202020-2020-2020-2020-202020202020', 'STUDENT', 'ACTIVE', now(), gen_random_uuid()),
+###   (2, '30303030-3030-3030-3030-303030303030', 'STUDENT', 'ACTIVE', now(), gen_random_uuid());
+###
+### -- occupier가 방을 점유하려면 재실이 필요하고, 재실 체크인은 출결 정책을 요구한다.
+### -- waiter·stranger는 신청/취소에 재실이 필요 없으므로 체크인하지 않는다.
+### INSERT INTO learning_service.cohort_attendance_policies
+###   (cohort_id, timezone, scheduled_start_time, scheduled_end_time, updated_by_user_id)
+### VALUES
+###   (2, 'Asia/Seoul', '09:00', '18:00', gen_random_uuid());
+###
+### -- spaceId=10: occupier가 점유해 알림 신청 대상이 될 회의실
+### -- spaceId=11: 아무도 점유하지 않는 채로 남겨 "빈 방 신청(400)" 케이스에 쓴다
+### INSERT INTO learning_service.spaces
+###   (id, name, space_type, capacity, status)
+### VALUES
+###   (10, '알림 테스트 회의실 A', 'MEETING', 4, 'ACTIVE'),
+###   (11, '알림 테스트 회의실 B(항상 빈 방)', 'MEETING', 4, 'ACTIVE');
+###
+### SELECT setval(
+###   pg_get_serial_sequence('learning_service.cohorts', 'id'),
+###   (SELECT MAX(id) FROM learning_service.cohorts));
+###
+### SELECT setval(
+###   pg_get_serial_sequence('learning_service.spaces', 'id'),
+###   (SELECT MAX(id) FROM learning_service.spaces));
+###
+### 확인:
+### 주의: 순서 의존이다. 1번부터 차례로 실행할 것.
+### SELECT id, user_id, status FROM learning_service.cohort_memberships WHERE cohort_id = 2 ORDER BY id;
+### SELECT id, name, status FROM learning_service.spaces WHERE id IN (10, 11) ORDER BY id;
+###
+### 토큰은 로컬 secrets/jwt-private.pem으로 서명했고 secrets/jwt-public.pem으로 검증되니
+### .env.local에 JWT_PUBLIC_KEY_LOCATION=file:./secrets/jwt-public.pem이 설정돼 있어야 통과한다.
+### exp가 지나면(발급 후 24시간) 401 AUTH_AUTHENTICATION_REQUIRED로 바뀌니 새로 발급해야 한다:
+###   scripts/issue-test-jwt.sh --sub {{occupier}}  (waiter·stranger도 같은 방식)
+### =========================================================
+
+@occupier = 10101010-1010-1010-1010-101010101010
+@waiter = 20202020-2020-2020-2020-202020202020
+@stranger = 30303030-3030-3030-3030-303030303030
+
+@occupierToken = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiIxMDEwMTAxMC0xMDEwLTEwMTAtMTAxMC0xMDEwMTAxMDEwMTAiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NzE4NzQ2MSwiZXhwIjoxNzg3MjczODYxLCJqdGkiOiI5YjlmNWViZS00YzYyLTQyMzUtYTM1Ni0xNmIwZGI3MWE0NDUifQ.DBpM--SAbPlXnL-BYCcpBeUmN3PmmHs1p05Z0-St1zb2fR_Yy6xxz36izMa9bjeBXlh1OK2p24zX1wrqYdFfsSnux4vLwnOgeF-oCdrtrlyKF6xaJ6P93y81yCdc7X6XxzgoJJd1UMypBIdkz4KBKsEpeS0_F29YLKdDawDnw7uj7mb7qW_hC5bJeYBvy4gO74K7jNxEHYnWvmpEa8kFPAKO7J1HU2lnIm_2zBG7l0t2iI2x3Z_9XvTVBf-9XzPDmhcwF8nmGLviN_6tZd4JZnIiRV3jHeFbm_FvmntkGEjeWqti19617LOyIaFZwp4arjtJDK2I1eISTraAanXGHg
+@waiterToken = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiIyMDIwMjAyMC0yMDIwLTIwMjAtMjAyMC0yMDIwMjAyMDIwMjAiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NzE4NzQ2MSwiZXhwIjoxNzg3MjczODYxLCJqdGkiOiI1MDdlMTA0Ni0xZmQ0LTRhODMtYjhlMi01MTM1NDQ1Zjg2MWUifQ.OC_wGmbYxby9NtHn53eBTOll37KiTVVJuAaEV1V6o-PBo7fNNtv0CqVfybZVTBe3ZbmGK-ReKl1QZ3KzpVBJPg7ZbxR9VJiArqF0JYjr1SPSM-MrWpFicbSZMvn7wVvO9CldD2kzL6plS1kiaAgTfz-2VrjS211_X9ek0Q8O6pB61LUqg3QpGunnzHTtyz2E6jpWVj-ZZ_WfHhwj7jjWKyC1Cd3iefECLQaOS1Ndd7Wzbm5bVbM05NdgkmoL2TMJfp5P72FTmKDAnKKZngW5H-WrlvPfKYvXHFiuYCB-ciDGXn4RncjL-zUGCPMzBVnBP-BG7YKUgSDr8fBlSKHzbg
+@strangerToken = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiIzMDMwMzAzMC0zMDMwLTMwMzAtMzAzMC0zMDMwMzAzMDMwMzAiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NzE4NzQ2MSwiZXhwIjoxNzg3MjczODYxLCJqdGkiOiIxNDY4OWE4NC0wYjJmLTQyMmQtODZkOC03ZTM0ODNlNzNjZDEifQ.WhFIr1g0j6JbQC8TVC_wqdkXncuN-NdPX4EMgS3DxA7WfqXEkqWVTiAJtusVpKpuuMA4yoKbb7khIADyt-iLqWoMGe86aCdcmXPoIZ0jxha-9gZBMyEb2riF_H-Id2lz7YkBliyfha-YpGn-nbNg2gWQR1MMBxfcfdBvnXPDGsoRUFHBP-E2o5O1fXEtwSoKlFJkF5FQi1Fh9XzxtL61ip8rALvAGXwZo6LJNPWk8dEMFIKiGRGJbrzAoNjZhJwtElopI0tf1uNSI8unT6s7dCW1K6Lr9WQi4xxQ5kGa2zigBXdcwtaQHdzPDwUvhUyyT6yXO4adIp7kMhdNMGH3YQ
+
+
+### =========================================================
+### [사전 준비] occupier 체크인 (재실이 있어야 방을 점유할 수 있다)
+### 기대: 200 OK
+### =========================================================
+POST {{baseUrl}}/api/v1/cohorts/2/attendance-records/check-in
+Authorization: Bearer {{occupierToken}}
+
+
+### =========================================================
+### [사전 준비] occupier가 spaceId=10 점유 시작
+### 기대: 201 Created — 이후 신청 케이스의 전제(방이 사용 중이어야 함)가 만들어진다
+### =========================================================
+POST {{baseUrl}}/api/v1/spaces/10/occupancies
+Authorization: Bearer {{occupierToken}}
+
+
+### 1. 공실 알림 신청 성공 (MR-02)
+### 기대: 201 Created, 응답 본문 없음
+### vacancy_alerts에 waiter 멤버십으로 대기 중(notified_at IS NULL) 행 1개 생성
+POST {{baseUrl}}/api/v1/spaces/10/vacancy-alerts
+Authorization: Bearer {{waiterToken}}
+
+
+### 2. 대기 중 중복 신청 (MR-15)
+### 기대: 409 Conflict / OCCUPANCY_ALERT_ALREADY_REQUESTED
+### uq_vacancy_alerts_waiting 위반이 최종 방어선이다 (서비스는 선검사를 하지 않는다)
+POST {{baseUrl}}/api/v1/spaces/10/vacancy-alerts
+Authorization: Bearer {{waiterToken}}
+
+
+### 3. 점유자 본인이 자기 방에 신청 시도 (MR-02)
+### 기대: 400 Bad Request / OCCUPANCY_ALERT_OCCUPIER_CANNOT_REQUEST
+POST {{baseUrl}}/api/v1/spaces/10/vacancy-alerts
+Authorization: Bearer {{occupierToken}}
+
+
+### 4. 빈 방(spaceId=11)에 신청 시도 (MR-02)
+### 기대: 400 Bad Request / OCCUPANCY_ALERT_ROOM_AVAILABLE
+### spaceId=11은 아무도 점유하지 않은 채로 남겨뒀다
+POST {{baseUrl}}/api/v1/spaces/11/vacancy-alerts
+Authorization: Bearer {{waiterToken}}
+
+
+### 5. Authorization 헤더 누락
+### 기대: 401 Unauthorized / AUTH_AUTHENTICATION_REQUIRED
+POST {{baseUrl}}/api/v1/spaces/10/vacancy-alerts
+
+
+### 6. 내 신청 목록 조회 (MR-17 1단계)
+### 기대: 200 OK, 배열에 1건(spaceId=10). alertId를 다음 취소 요청에 쓰도록 저장한다
+# @name findMyAlerts
+GET {{baseUrl}}/api/v1/vacancy-alerts/me
+Authorization: Bearer {{waiterToken}}
+Accept: application/json
+
+> {%
+    if (response.status === 200 && response.body.length > 0) {
+        client.global.set("alertId", response.body[0].alertId);
+    }
+%}
+
+
+### 7. 남의 신청을 취소 시도 (stranger가 waiter의 alertId를 취소)
+### 기대: 404 Not Found / OCCUPANCY_ALERT_NOT_FOUND
+### 남의 신청과 이미 발송된 신청을 같은 404로 돌려줘 존재 여부가 새어 나가지 않는다
+DELETE {{baseUrl}}/api/v1/vacancy-alerts/{{alertId}}
+Authorization: Bearer {{strangerToken}}
+
+
+### 8. 존재하지 않는 신청 취소
+### 기대: 404 Not Found / OCCUPANCY_ALERT_NOT_FOUND
+DELETE {{baseUrl}}/api/v1/vacancy-alerts/999999
+Authorization: Bearer {{waiterToken}}
+
+
+### 9. 본인 신청 취소 성공 (MR-17)
+### 기대: 204 No Content — vacancy_alerts 행이 물리 삭제된다
+DELETE {{baseUrl}}/api/v1/vacancy-alerts/{{alertId}}
+Authorization: Bearer {{waiterToken}}
+
+
+### 10. 취소 후 목록 재조회
+### 기대: 200 OK, 빈 배열
+GET {{baseUrl}}/api/v1/vacancy-alerts/me
+Authorization: Bearer {{waiterToken}}
+Accept: application/json
+
+
+### 11. 취소 후 재신청 (같은 방)
+### 기대: 201 Created — 취소가 uq_vacancy_alerts_waiting 슬롯을 실제로 비웠는지 확인
+POST {{baseUrl}}/api/v1/spaces/10/vacancy-alerts
+Authorization: Bearer {{waiterToken}}
+
+### 참고: 이 파일은 신청·중복·거부·목록·취소까지만 다룬다. 발송(MR-03)은 구현되어
+### 있지 않아 어떤 요청으로도 notified_at이 채워지지 않는다 — occupancy-api.http 28번
+### 참고 주석대로 RoomVacatedEvent를 받는 리스너가 아직 없다.

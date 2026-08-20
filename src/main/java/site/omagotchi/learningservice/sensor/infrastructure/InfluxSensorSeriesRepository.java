@@ -4,31 +4,37 @@ import com.influxdb.client.InfluxDBClient;
 import com.influxdb.query.FluxRecord;
 import com.influxdb.query.FluxTable;
 import org.springframework.stereotype.Repository;
+import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.sensor.application.port.SensorSeriesRepository;
 import site.omagotchi.learningservice.sensor.application.query.SensorSeriesQuery;
 import site.omagotchi.learningservice.sensor.domain.SeriesBucket;
 import site.omagotchi.learningservice.sensor.domain.SeriesPoint;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.regex.Pattern;
 
 @Repository
 public class InfluxSensorSeriesRepository implements SensorSeriesRepository {
 
-    private static final String FLUX = """
-            from(bucket: params.bucket)
-              |> range(start: time(v: params.start), stop: time(v: params.stop))
-              |> filter(fn: (r) => r._measurement == params.measurement)
-              |> filter(fn: (r) => r.device_eui == params.deviceEui)
-              |> filter(fn: (r) => r._field == "value")
-              |> aggregateWindow(
-                    every: duration(v: params.interval),
-                    fn: mean,
-                    timeSrc: "_start",
-                    createEmpty: params.createEmpty)
-              |> sort(columns: ["_time"])
-            """;
+    private static final String FLUX_TEMPLATE = """
+        from(bucket: "%s")
+          |> range(start: %s, stop: %s)
+          |> filter(fn: (r) => r._measurement == "%s")
+          |> filter(fn: (r) => r.device_eui == "%s")
+          |> filter(fn: (r) => r._field == "value")
+          |> aggregateWindow(
+                every: %s,
+                fn: mean,
+                timeSrc: "_start",
+                createEmpty: %s)
+          |> sort(columns: ["_time"])
+        """;
+
+    private static final Pattern DEVICE_EUI = Pattern.compile("^[0-9a-fA-F]{16}$");
+    private static final Pattern MEASUREMENT = Pattern.compile("^[A-Za-z0-9_]{1,32}$");
 
     private final InfluxDBClient client;
     private final SensorInfluxProperties properties;
@@ -41,6 +47,7 @@ public class InfluxSensorSeriesRepository implements SensorSeriesRepository {
     /** 두 구간을 각각 읽어서 이어붙인다 */
     @Override
     public List<SeriesPoint> findSeries(SensorSeriesQuery query) {
+        requireValid(query);
         List<SeriesPoint> points = new ArrayList<>();
 
         // 확정 구간: 빈 시간대를 null로 남긴다. 안 남기면 차트가 그 구간을 이어 그려 데이터가 있는 것처럼 보인다
@@ -56,19 +63,19 @@ public class InfluxSensorSeriesRepository implements SensorSeriesRepository {
 
     /** InfluxDB 조회 */
     private List<SeriesPoint> fetch(SensorSeriesQuery query, SeriesBucket bucket,
-                                    java.time.Instant start, java.time.Instant stop,
+                                    Instant start, Instant stop,
                                     boolean createEmpty, boolean partial) {
-        Map<String, Object> params = Map.of(
-                "bucket", bucketName(bucket),
-                "start", start.toString(),
-                "stop", stop.toString(),
-                "measurement", query.measurement(),
-                "deviceEui", query.deviceEui(),
-                "interval", query.window().fluxInterval(),
-                "createEmpty", createEmpty
+        String flux = FLUX_TEMPLATE.formatted(
+                bucketName(bucket),
+                start.toString(),
+                stop.toString(),
+                query.measurement(),
+                query.deviceEui(),
+                query.window().fluxInterval(),
+                createEmpty
         );
 
-        List<FluxTable> tables = client.getQueryApi().query(FLUX, properties.org(), params);
+        List<FluxTable> tables = client.getQueryApi().query(flux, properties.org());
 
         return tables.stream()
                 .flatMap(table -> table.getRecords().stream())
@@ -90,6 +97,16 @@ public class InfluxSensorSeriesRepository implements SensorSeriesRepository {
             case AVG_1H -> properties.buckets().avg1h();
             case AVG_1D -> properties.buckets().avg1d();
         };
+    }
+
+    /** 값을 질의문에 직접 넣으므로, 따옴표 같은 글자가 섞이지 못하게 막는다. */
+    private void requireValid(SensorSeriesQuery query) {
+        if (!DEVICE_EUI.matcher(query.deviceEui()).matches()) {
+            throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
+        }
+        if (!MEASUREMENT.matcher(query.measurement()).matches()) {
+            throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
+        }
     }
 
 }

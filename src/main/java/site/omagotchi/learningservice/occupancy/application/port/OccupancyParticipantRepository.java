@@ -16,7 +16,7 @@ import java.util.UUID;
  * 삭제 메서드를 추가하면 참여 이력이 사라지고, 재합류 시 행 재사용 규약(결정 #30)도
  * 깨진다.</p>
  *
- * <p>참여자 추가·이탈·제외(#6)에 필요한 조회는 아직 여기 없다. 쓰지 않는 메서드를
+ * <p>강제 종료 정리(MR-21)에 필요한 조회는 아직 여기 없다. 쓰지 않는 메서드를
  * 미리 Port에 두지 않는다 ({@code TeamMemberRepository}와 같은 규약).</p>
  */
 public interface OccupancyParticipantRepository {

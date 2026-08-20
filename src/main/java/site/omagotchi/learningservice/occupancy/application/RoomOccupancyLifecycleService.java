@@ -28,9 +28,11 @@ import java.util.UUID;
  * 필요하지만, 연장·반납은 이미 존재하는 점유 행의 상태만 바꾼다 — 요청자가 점유자인지만
  * 보면 되고 공간이나 재실은 다시 묻지 않는다.</p>
  *
- * <p>강제 종료(MR-21)도 같은 성격이라 여기 들어올 자리다. 아직 없는 이유는 요청자의
- * <b>활성 기수 집합</b>에서 점유자 기수의 매니저인지 판정해야 하는데(다기수 담당자 대응)
- * cohort 파트에 그 계약을 아직 요청하지 않았기 때문이다.</p>
+ * <p>강제 종료(MR-21)도 같은 성격이라 여기 들어올 자리다. 필요한 계약은 갖춰졌다 —
+ * 요청자의 <b>활성 기수 집합</b>에서 점유자 기수의 매니저인지 판정하는 것은
+ * {@code CohortAccessService.isManager}가, 점유자 기수를 되찾는 것은
+ * {@code CohortMembershipQueryService.findActiveMembership}이 한다. 남은 것은 대기 중
+ * 공실 알림 삭제이며, {@code FORCE_RELEASED}는 {@code RoomVacatedEvent}를 발행하지 않는다.</p>
  *
  * <p>두 메서드 모두 {@code room_occupancies} 행 락 하나만 잡는다. 점유 시작이
  * spaces → room_occupancies 순으로 잡으므로 부분집합이라 데드락이 없다.</p>

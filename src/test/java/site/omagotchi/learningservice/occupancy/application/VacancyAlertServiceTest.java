@@ -24,7 +24,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -122,6 +121,11 @@ class VacancyAlertServiceTest {
         verify(alertRepository).save(any(VacancyAlert.class));
     }
 
+    /**
+     * 만료됐지만 아직 ACTIVE인 행도 여기서는 "빈 방"이다. 그 판정은
+     * {@code findActiveBySpaceIds}가 {@code now}로 걸러 주므로 이 Service가 다시 하지
+     * 않는다 — 직접 판정하면 목록에는 공실인데 신청은 성공하는 상태가 생긴다.
+     */
     @Test
     @DisplayName("빈 회의실에는 신청할 수 없다.")
     void cannotRequestForAvailableRoom() {
@@ -134,23 +138,6 @@ class VacancyAlertServiceTest {
         );
 
         verify(alertRepository, never()).save(any(VacancyAlert.class));
-    }
-
-    /**
-     * 만료됐지만 스케줄러가 아직 EXPIRED로 바꾸지 않은 방은 공실이다.
-     * {@code findActiveBySpaceIds}가 만료를 걸러 주므로 여기서 다시 판정하지 않는다 —
-     * 직접 판정하면 목록에는 공실인데 신청은 성공하는 상태가 생긴다.
-     */
-    @Test
-    @DisplayName("만료된 점유만 남은 회의실은 빈 방으로 본다.")
-    void treatsExpiredOccupancyAsAvailable() {
-        given(occupancyQueryService.findActiveBySpaceIds(List.of(SPACE_ID), now()))
-                .willReturn(Map.of());
-
-        assertBusinessError(
-                OccupancyErrorCode.ALERT_ROOM_AVAILABLE,
-                () -> vacancyAlertService.request(SPACE_ID, null, REQUESTER_USER_ID)
-        );
     }
 
     @Test

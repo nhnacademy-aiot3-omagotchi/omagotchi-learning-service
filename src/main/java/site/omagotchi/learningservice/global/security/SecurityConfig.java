@@ -67,8 +67,8 @@ public class SecurityConfig {
                         ).hasRole("SYSTEM_ADMIN")
                         .requestMatchers(
                                 HttpMethod.GET,
-                                "/api/v1/sensors/**"
-                        ).hasRole("SYSTEM_ADMIN")
+                                "/api/v1/sensors/**")
+                        .hasRole("SYSTEM_ADMIN")
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

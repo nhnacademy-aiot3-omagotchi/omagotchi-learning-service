@@ -5,6 +5,7 @@ import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.rule.application.port.SensorDeviceRepository;
 import site.omagotchi.learningservice.rule.domain.SensorDevice;
 
+import java.util.Optional;
 import java.util.List;
 
 @Repository
@@ -23,4 +24,9 @@ public class SensorDeviceJpaPersistence implements SensorDeviceRepository {
         return sensorDeviceJpaRepository.findAll();
     }
 
+
+    @Override
+    public Optional<SensorDevice> findByDeviceEui(String deviceEui) {
+        return sensorDeviceJpaRepository.findById(deviceEui);
+    }
 }

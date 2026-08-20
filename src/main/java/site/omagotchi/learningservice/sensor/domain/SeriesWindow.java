@@ -50,4 +50,5 @@ public enum SeriesWindow {
     public SeriesBucket hotBucket() {
         return hotBucket;
     }
+
 }

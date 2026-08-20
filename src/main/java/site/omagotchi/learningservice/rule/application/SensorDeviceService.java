@@ -7,14 +7,22 @@ import site.omagotchi.learningservice.rule.application.port.SensorDeviceReposito
 import site.omagotchi.learningservice.rule.application.result.SensorDeviceResult;
 import site.omagotchi.learningservice.rule.domain.SensorDevice;
 
+import java.util.Optional;
 import java.util.*;
 
-@RequiredArgsConstructor
+/** 센서 기기 마스터 조회. 다른 Feature는 이 서비스를 통해서만 접근한다. */
 @Service
+@RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class SensorDeviceService {
 
     private final SensorDeviceRepository sensorDeviceRepository;
+
+    /** 표시명. 등록되지 않은 기기면 비어 있다. */
+    public Optional<String> findDisplayName(String deviceEui) {
+        return sensorDeviceRepository.findByDeviceEui(deviceEui)
+                .map(SensorDevice::getDisplayName);
+    }
 
     public List<SensorDeviceResult> findAll(){
         List<SensorDevice> sensorDevices = sensorDeviceRepository.findAll();

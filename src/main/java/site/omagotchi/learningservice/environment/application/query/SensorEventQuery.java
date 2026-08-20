@@ -1,6 +1,6 @@
 package site.omagotchi.learningservice.environment.application.query;
 
-import site.omagotchi.learningservice.environment.domain.EnvironmentErrorCode;
+import site.omagotchi.learningservice.environment.application.EnvironmentErrorCode;
 import site.omagotchi.learningservice.environment.domain.SensorEvent;
 import site.omagotchi.learningservice.environment.domain.SensorEventType;
 import site.omagotchi.learningservice.global.exception.BusinessException;

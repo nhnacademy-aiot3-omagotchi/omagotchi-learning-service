@@ -123,7 +123,7 @@ environment:
   cooldown: PT5M
   iot:
     request-timeout: PT3S
-    secret: ${IOT_ENDPOINT_SECRET:}
+    secret: ${IOT_SECRET:}
     base-url: ${IOT_BASE_URL:}
     simulator:
       enabled: ${IOT_SIMULATOR_ENABLED:false}

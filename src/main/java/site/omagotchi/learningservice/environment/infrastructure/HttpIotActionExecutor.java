@@ -26,8 +26,8 @@ public class HttpIotActionExecutor implements IotActionExecutor {
         this.iotRestClient = iotRestClient;
         this.iot = properties.iot();
 
-        if(iot.endpoints().isEmpty()) {
-            log.warn("등록된 iot기기 없음(시뮬 포함). 룰 히트 무반응");
+        if(!iot.configured()) {
+            log.warn("IOT_BASE_URL이 비어 있다. 룰 히트 조치가 전부 실패로 기록된다");
         }
 
         if(Objects.isNull(iot.secret()) || iot.secret().isBlank()){
@@ -37,13 +37,11 @@ public class HttpIotActionExecutor implements IotActionExecutor {
 
     @Override
     public IotActionResult execute(IotAction action, SensorDetection detection) {
-        String baseUrl = iot.getBaseUrl(detection.location());
-
-        if(baseUrl == null){
-            return IotActionResult.failure("장소에 등록된 Iot 제어기기가 없습니다. location = " + detection.location());
+        if(!iot.configured()){
+            return IotActionResult.failure("제어기 주소가 설정되지 않았습니다");
         }
 
-        String uri = baseUrl + "/" + action.name().toLowerCase(Locale.ROOT);
+        String uri = iot.baseUrl() + "/" + action.name().toLowerCase(Locale.ROOT);
 
         try{
             CommandResponse response = iotRestClient.post()

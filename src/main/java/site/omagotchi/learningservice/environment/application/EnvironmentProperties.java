@@ -3,8 +3,6 @@ package site.omagotchi.learningservice.environment.application;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -20,8 +18,17 @@ public record EnvironmentProperties(
 ) {
     // 컴팩트 생성자 검증
     public EnvironmentProperties {
+
+        if (Objects.isNull(cache)) {
+            cache = new Cache(0, null);
+        }
+
         if (Objects.isNull(coolDown) || coolDown.isNegative() || coolDown.isZero()) {
             coolDown = Duration.ofMinutes(5);
+        }
+
+        if (Objects.isNull(iot)) {
+            iot = new Iot(null, null, null);
         }
     }
 
@@ -47,46 +54,30 @@ public record EnvironmentProperties(
     }
 
     /**
-     * iot제어기 통신 엔트포인트 및 설정
+     * iot 제어기 통신 설정.
      *
-     * @param endpoints      장소별 제어기 url 맵
+     * <p>제어기가 하나인 전제다. 시뮬레이터 한 대가 모든 방을 처리하고 location은 요청 본문으로
+     * 전달된다. 실물 보드가 2대 이상 붙으면 location → baseUrl 매핑으로 넓힌다.</p>
+     *
+     * @param baseUrl        제어기 주소. 비어 있으면 조치하지 않는다
      * @param secret         제어기가 검사할 공유 토큰
-     * @param requestTimeout 응답 대기 상한
+     * @param requestTimeout 응답 대기 상한 (DEFAULT=3초). MQ 리스너 스레드를 붙잡는 시간이다
      */
     public record Iot(
-            Map<String, String> endpoints,
+            String baseUrl,
             String secret,
             Duration requestTimeout
     ) {
 
         // 컴팩트 생성자 검증
         public Iot {
-            if(Objects.isNull(endpoints)){
-                endpoints = Map.of();
-            }
-
-            Map<String, String> cleaned = new HashMap<>();
-            for(Map.Entry<String, String> entry : endpoints.entrySet()){ //baseURL이 비어있는경우는 맵에서 제거
-                String location = entry.getKey();
-                String baseUrl = entry.getValue();
-
-                if(Objects.isNull(baseUrl) || baseUrl.isBlank()){
-                    continue;
-                }
-
-                cleaned.put(location, baseUrl);
-            }
-
-            endpoints = Map.copyOf(cleaned);
-
             if (Objects.isNull(requestTimeout) || requestTimeout.isNegative() || requestTimeout.isZero()) {
                 requestTimeout = Duration.ofSeconds(3);
             }
         }
 
-
-        public String getBaseUrl(String location) {
-            return endpoints.get(location);
+        public boolean configured() {
+            return Objects.nonNull(baseUrl) && !baseUrl.isBlank();
         }
     }
 }

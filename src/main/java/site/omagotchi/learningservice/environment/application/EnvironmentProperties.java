@@ -77,7 +77,7 @@ public record EnvironmentProperties(
         }
 
         public boolean configured() {
-            return (Objects.nonNull(baseUrl) && !baseUrl.isBlank()) || (Objects.nonNull(secret) && secret.isBlank());
+            return (Objects.nonNull(baseUrl) && !baseUrl.isBlank()) || (Objects.nonNull(secret) && !secret.isBlank());
         }
     }
 }

@@ -65,6 +65,10 @@ public class SecurityConfig {
                                 HttpMethod.PATCH,
                                 "/api/v1/threshold-rules/*"
                         ).hasRole("SYSTEM_ADMIN")
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/sensors/**")
+                        .hasRole("SYSTEM_ADMIN")
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

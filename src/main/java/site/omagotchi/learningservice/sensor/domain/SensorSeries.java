@@ -5,6 +5,7 @@ import java.util.List;
 
 public record SensorSeries(
         String deviceEui,
+        String deviceDisplayName,
         String measurement,
         SeriesWindow window,
         Instant from,

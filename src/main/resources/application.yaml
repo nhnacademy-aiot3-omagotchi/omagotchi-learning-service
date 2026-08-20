@@ -123,6 +123,8 @@ auth:
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
 
 sensor:
+  series:
+    zone: ${SENSOR_SERIES_ZONE:Asia/Seoul}
   influx:
     url: ${INFLUXDB_URL}
     token: ${INFLUXDB_TOKEN}

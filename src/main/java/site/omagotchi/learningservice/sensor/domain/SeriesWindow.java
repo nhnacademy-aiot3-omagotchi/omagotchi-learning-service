@@ -1,9 +1,13 @@
 package site.omagotchi.learningservice.sensor.domain;
 
+import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.global.exception.CommonErrorCode;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.Locale;
 
 public enum SeriesWindow {
 
@@ -49,5 +53,17 @@ public enum SeriesWindow {
 
     public SeriesBucket hotBucket() {
         return hotBucket;
+    }
+
+    /** 요청으로 들어온 문자열을 enum 상수로 바꾼다. 모르는 값이면 400. */
+    public static SeriesWindow from(String value) {
+        if (value == null) {
+            throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
+        }
+        try {
+            return SeriesWindow.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
+        }
     }
 }

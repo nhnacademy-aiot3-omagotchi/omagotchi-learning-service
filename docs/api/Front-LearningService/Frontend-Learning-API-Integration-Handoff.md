@@ -432,7 +432,8 @@ PATCH /api/v1/cohorts/{cohortId}/attendance-records/{attendance-id}/status
 ```
 
 - `/me`: 날짜 내림차순 배열
-- `?date=`: 관리자용, `cohortMembershipId` 오름차순 배열
+- `?date=`: 관리자용 배열. 서버 내부에서는 `cohortMembershipId` 오름차순으로 안정 정렬하지만
+  이 내부 식별자는 HTTP 응답에 노출하지 않는다.
 - check-in/check-out: `AttendanceRecordResponse` 단건
 - 관리자 상태 변경: `204 No Content`
 
@@ -441,7 +442,6 @@ PATCH /api/v1/cohorts/{cohortId}/attendance-records/{attendance-id}/status
 ```json
 {
   "id": 10,
-  "cohortMembershipId": 100,
   "attendanceDate": "2026-08-20",
   "autoStatus": "LATE",
   "finalStatus": "PRESENT",
@@ -788,8 +788,34 @@ Browser EventSource
     → 연결 동안 /app/presence/heartbeat 주기 전송
 ```
 
-Gateway를 통과시킬 경우 별도의 `ws://localhost:8084/ws` WebSocket route와 Handshake 인증 정책을
-추가해야 한다. 이 변경 전까지 REST Snapshot만 연동 가능한 상태로 본다.
+Gateway WebSocket route는 외부 경로와 Learning upstream을 다음처럼 분리한다.
+
+```text
+Gateway 외부 경로: ws://localhost:8080/ws
+Gateway route predicate: Path=/ws
+Gateway route URI: ws://localhost:8084
+Learning endpoint: /ws
+```
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: learning-websocket
+          uri: ws://localhost:8084
+          predicates:
+            - Path=/ws
+```
+
+위 구성은 Gateway가 받은 `/ws`를 그대로 Learning Service의 `/ws`로 전달하므로
+`RewritePath`나 `SetPath` filter가 필요 없다.
+
+HTTP Upgrade Handshake에는 Bearer Token을 요구하지 않고 `/ws`를 Learning Service로 전달한다.
+인증은 Learning Service가 STOMP `CONNECT` 프레임의
+`Authorization: Bearer <access-token>`을 검증하는 정책이다. Token이 없거나 유효하지 않으면
+STOMP 연결을 거부하며, `SUBSCRIBE`는 JWT 사용자의 ACTIVE 기수 소속 여부를 추가로 검사한다.
+Gateway에 이 route가 추가되기 전까지는 REST Snapshot만 연동 가능한 상태로 본다.
 
 ## 13. Enum 목록
 

@@ -48,6 +48,8 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/spaces"
                         ).permitAll()
+                        .requestMatchers("/simulator/**")
+                        .permitAll()
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/cohorts",

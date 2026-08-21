@@ -20,6 +20,7 @@ import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 import site.omagotchi.learningservice.realtime.application.CohortPresenceService;
 import site.omagotchi.learningservice.realtime.application.CohortPresenceSnapshot;
 import site.omagotchi.learningservice.realtime.application.PresenceStatus;
+import site.omagotchi.learningservice.realtime.application.PresenceCharacterSnapshot;
 import site.omagotchi.learningservice.realtime.application.PresenceUserSnapshot;
 
 import java.time.OffsetDateTime;
@@ -60,7 +61,12 @@ class PresenceControllerTest {
     void getsMyCohortPresence() throws Exception {
         given(presenceService.currentUserSnapshot(USER_ID)).willReturn(new CohortPresenceSnapshot(
                 1L,
-                List.of(new PresenceUserSnapshot(USER_ID, PresenceStatus.ONLINE)),
+                List.of(new PresenceUserSnapshot(
+                        USER_ID,
+                        "오마",
+                        new PresenceCharacterSnapshot("night", "pistachio", "night/pistachio"),
+                        PresenceStatus.ONLINE
+                )),
                 OffsetDateTime.parse("2026-08-20T15:00:00+09:00")
         ));
 
@@ -70,7 +76,10 @@ class PresenceControllerTest {
                 .andExpect(jsonPath("$.cohortId").value(1))
                 .andExpect(jsonPath("$.users[0].userId").value(USER_ID.toString()))
                 .andExpect(jsonPath("$.users[0].status").value("ONLINE"))
-                .andExpect(jsonPath("$.users[0].nickname").doesNotExist())
+                .andExpect(jsonPath("$.users[0].nickname").value("오마"))
+                .andExpect(jsonPath("$.users[0].currentCharacter.type").value("night"))
+                .andExpect(jsonPath("$.users[0].currentCharacter.colorId").value("pistachio"))
+                .andExpect(jsonPath("$.users[0].currentCharacter.assetKey").value("night/pistachio"))
                 .andExpect(jsonPath("$.occurredAt").value("2026-08-20T15:00:00+09:00"))
                 .andDo(document("presence/get-my-cohort-snapshot"));
 

@@ -1,6 +1,5 @@
 package site.omagotchi.learningservice.occupancy.application;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -38,7 +37,6 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class VacancyAlertDispatcher {
 
     private final VacancyAlertRepository alertRepository;
@@ -47,12 +45,34 @@ public class VacancyAlertDispatcher {
     private final VacancyAlertDelivery alertDelivery;
 
     /**
-     * 발송 수단. {@code Optional}로 받는 것이 설정 검증을 겸한다 — 둘 이상 등록되면
-     * Container가 <b>기동 시점에</b> 거부하므로, 잘못된 설정을 "방이 비는 그 순간"이
-     * 아니라 배포할 때 발견한다. 비어 있는 것은 정상 상태이며(아직 발송 수단이 없다)
-     * 그때는 신청을 소진시키지 않는다.
+     * 발송 수단. 비어 있는 것은 정상 상태이며(아직 발송 수단이 없다) 그때는 신청을
+     * 소진시키지 않는다.
      */
     private final Optional<VacancyAlertSender> sender;
+
+    /**
+     * <b>{@code List}로 받아야 한다.</b> 0개를 허용해야 하므로 단건 주입은 쓸 수 없고,
+     * {@code Optional}로 받으면 후보가 둘이어도 {@code @Primary} 하나가 모호성을 없애 버려
+     * <b>나머지가 조용히 무시된다.</b> {@code List}만 후보 전부를 보여 준다.
+     */
+    public VacancyAlertDispatcher(
+            VacancyAlertRepository alertRepository,
+            CohortMembershipQueryService cohortMembershipQueryService,
+            SpaceNameQueryService spaceNameQueryService,
+            VacancyAlertDelivery alertDelivery,
+            List<VacancyAlertSender> senders
+    ) {
+        this.alertRepository = alertRepository;
+        this.cohortMembershipQueryService = cohortMembershipQueryService;
+        this.spaceNameQueryService = spaceNameQueryService;
+        this.alertDelivery = alertDelivery;
+        // 어느 발송의 성공을 완료로 볼지 정할 수 없는 설정이므로, 방이 비는 순간이 아니라
+        // 기동 시점에 멈춘다.
+        if (senders.size() > 1) {
+            throw new IllegalStateException("공실 알림 sender는 하나만 등록할 수 있습니다: " + senders);
+        }
+        this.sender = senders.stream().findFirst();
+    }
 
     /**
      * 이 회의실의 대기자 전원에게 발송한다.

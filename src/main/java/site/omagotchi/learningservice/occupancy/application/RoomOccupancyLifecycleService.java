@@ -49,13 +49,49 @@ public class RoomOccupancyLifecycleService {
     private final OccupancyExpiration occupancyExpiration;
     private final OccupancyExpiryReminder occupancyExpiryReminder;
     /**
-     * 발송 수단. {@code Optional}로 받는 것이 설정 검증을 겸한다 — 둘 이상 등록되면
-     * Container가 <b>기동 시점에</b> 거부하므로, 어느 발송의 성공을 완료로 볼지 모호한
-     * 설정이 배포 시점에 걸러진다. 비어 있는 것은 정상 상태이며(아직 발송 수단이 없다)
-     * 그때는 후보를 소진시키지 않는다 ({@code VacancyAlertDispatcher}와 같은 규약).
+     * 발송 수단. 비어 있는 것은 정상 상태이며(아직 발송 수단이 없다) 그때는 후보를
+     * 소진시키지 않는다 ({@code VacancyAlertDispatcher}와 같은 규약).
      */
     private final Optional<OccupancyReminderSender> reminderSender;
+    private final CohortAccessService cohortAccessService;
+    private final CohortMembershipQueryService cohortMembershipQueryService;
+    private final VacancyAlertRepository alertRepository;
     private final Clock clock;
+
+    /**
+     * <b>{@code List}로 받아야 한다.</b> 0개를 허용해야 하므로 단건 주입은 쓸 수 없고,
+     * {@code Optional}로 받으면 후보가 둘이어도 {@code @Primary} 하나가 모호성을 없애 버려
+     * <b>나머지가 조용히 무시된다.</b> {@code List}만 후보 전부를 보여 준다.
+     */
+    public RoomOccupancyLifecycleService(
+            RoomOccupancyRepository occupancyRepository,
+            OccupancyParticipantRepository participantRepository,
+            OccupancyEventPublisher eventPublisher,
+            OccupancyExpiration occupancyExpiration,
+            OccupancyExpiryReminder occupancyExpiryReminder,
+            List<OccupancyReminderSender> reminderSenders,
+            CohortAccessService cohortAccessService,
+            CohortMembershipQueryService cohortMembershipQueryService,
+            VacancyAlertRepository alertRepository,
+            Clock clock
+    ) {
+        this.occupancyRepository = occupancyRepository;
+        this.participantRepository = participantRepository;
+        this.eventPublisher = eventPublisher;
+        this.occupancyExpiration = occupancyExpiration;
+        this.occupancyExpiryReminder = occupancyExpiryReminder;
+        // 어느 발송의 성공을 완료로 볼지 정할 수 없는 설정이므로, 스케줄러가 도는 순간이
+        // 아니라 기동 시점에 멈춘다.
+        if (reminderSenders.size() > 1) {
+            throw new IllegalStateException(
+                    "점유 만료 임박 알림 sender는 하나만 등록할 수 있습니다: " + reminderSenders);
+        }
+        this.reminderSender = reminderSenders.stream().findFirst();
+        this.cohortAccessService = cohortAccessService;
+        this.cohortMembershipQueryService = cohortMembershipQueryService;
+        this.alertRepository = alertRepository;
+        this.clock = clock;
+    }
 
     /**
      * 점유를 30분 연장한다 (MR-06, MR-12).

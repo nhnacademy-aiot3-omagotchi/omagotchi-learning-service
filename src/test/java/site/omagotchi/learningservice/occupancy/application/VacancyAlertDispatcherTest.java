@@ -19,6 +19,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -81,7 +82,7 @@ class VacancyAlertDispatcherTest {
                 cohortMembershipQueryService,
                 spaceNameQueryService,
                 alertDelivery,
-                Optional.ofNullable(configured)
+                configured == null ? List.of() : List.of(configured)
         );
     }
 
@@ -203,6 +204,28 @@ class VacancyAlertDispatcherTest {
 
         verify(alertRepository, never()).findWaitingBySpaceId(anyLong());
         verify(alertDelivery, never()).send(anyLong(), anyLong(), any(), any(), any(), any());
+    }
+
+    /**
+     * 어느 발송의 성공을 완료로 볼지 정할 수 없는 설정이라 기동을 멈춘다.
+     *
+     * <p>주입을 {@code Optional}로 되돌리면 이 방어가 사라진다 — {@code @Primary}가 붙은
+     * 후보 하나만 조용히 선택되고 나머지는 무시된다. 그래서 생성자가 {@code List}를 받는다.</p>
+     */
+    @Test
+    @DisplayName("sender가 둘 이상이면 생성 시점에 실패한다.")
+    void failsToCreateWithMultipleSenders() {
+        VacancyAlertSender another = notice -> {
+        };
+
+        assertThatThrownBy(() -> new VacancyAlertDispatcher(
+                alertRepository,
+                cohortMembershipQueryService,
+                spaceNameQueryService,
+                alertDelivery,
+                List.of(sender, another)
+        )).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("하나만 등록할 수 있습니다");
     }
 
     // ────────────────────────────── 헬퍼 ──────────────────────────────

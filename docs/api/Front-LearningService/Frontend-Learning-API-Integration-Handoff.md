@@ -11,6 +11,11 @@
 다른 내용은 이 문서를 우선한다. 최종 계약 근거는 Learning Service의 Controller,
 request/response DTO와 자동화된 Controller Test다.
 
+BFF 구조가 익숙하지 않다면 계약표보다 먼저
+[`Frontend-BFF-Request-Flow-Guide.md`](Frontend-BFF-Request-Flow-Guide.md)를 읽는다.
+Browser, Frontend BFF, Gateway, Learning Service의 역할과 실제 출결 요청 흐름을 팀 공용
+용어로 설명한다.
+
 ## 1. 먼저 합의된 호출 구조
 
 ```text

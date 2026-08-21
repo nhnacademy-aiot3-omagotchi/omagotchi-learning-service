@@ -19,6 +19,8 @@ import site.omagotchi.learningservice.ranking.application.result.*;
 import site.omagotchi.learningservice.study.application.StudyRecordAggregationQueryService;
 import site.omagotchi.learningservice.study.application.result.MemberCurrentStudyDurationResult;
 import site.omagotchi.learningservice.study.application.result.MemberStudyDurationResult;
+import site.omagotchi.learningservice.team.application.CurrentTeamMembershipQueryService;
+import site.omagotchi.learningservice.team.application.result.CurrentTeamMembershipView;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -36,8 +38,10 @@ public class StudyRankingQueryService {
     private final CohortMembershipQueryService cohortMembershipQueryService;
     private final StudyRecordAggregationQueryService studyRecordAggregationQueryService;
     private final CharacterGrowthService characterGrowthService;
+    private final CurrentTeamMembershipQueryService currentTeamMembershipQueryService;
     private final Clock clock;
 
+    // 기수의 활성 학생 전체를 대상으로 오늘 실시간 개인 공부 순위를 조회한다.
     public TodayStudyRankingResult<MemberStudyRankingViewResult> getTodayMemberView(
             UUID userId,
             Long cohortId,
@@ -62,6 +66,7 @@ public class StudyRankingQueryService {
         );
     }
 
+    // 기수의 활성 학생 전체를 대상으로 종료된 집계일의 개인 공부 순위를 조회한다.
     public HistoricalStudyRankingResult<MemberStudyRankingViewResult> getHistoricalMemberView(
             UUID userId,
             Long cohortId,
@@ -87,6 +92,66 @@ public class StudyRankingQueryService {
         );
     }
 
+    // 특정 팀의 현재 구성원만 대상으로 오늘 실시간 개인 공부 순위를 조회한다.
+    public TodayStudyRankingResult<MemberStudyRankingViewResult> getTodayTeamMemberView(
+            UUID userId,
+            Long cohortId,
+            Long teamId,
+            StudyRankingQuery query
+    ) {
+        // TODO: 팀 내부 랭킹을 팀원 전용으로 제한할 때 요청 membership의 teamId 소속을 검증한다.
+        Long membershipId = cohortAccessService.requireActiveStudentMembershipId(
+                cohortId,
+                userId
+        );
+        Instant calculatedAt = clock.instant();
+        int maxRank = query.resolveMaxRank();
+        List<CohortMembershipView> memberships = findCurrentTeamMembers(cohortId, teamId);
+        StudyRankingRows rows = findTodayRankingRows(
+                memberships,
+                calculatedAt,
+                maxRank,
+                membershipId,
+                true
+        );
+        return new TodayStudyRankingResult<>(
+                AggregationDateTime.aggregationDate(calculatedAt),
+                calculatedAt,
+                memberViewResult(rows)
+        );
+    }
+
+    // 특정 팀의 현재 구성원만 대상으로 종료된 집계일의 개인 공부 순위를 조회한다.
+    public HistoricalStudyRankingResult<MemberStudyRankingViewResult> getHistoricalTeamMemberView(
+            UUID userId,
+            Long cohortId,
+            Long teamId,
+            StudyRankingPeriodSelection period,
+            StudyRankingQuery query
+    ) {
+        // TODO: 팀 내부 랭킹을 팀원 전용으로 제한할 때 요청 membership의 teamId 소속을 검증한다.
+        Long membershipId = cohortAccessService.requireActiveStudentMembershipId(
+                cohortId,
+                userId
+        );
+        StudyRankingWindow window = resolveWindow(period);
+        int maxRank = query.resolveMaxRank();
+        List<CohortMembershipView> memberships = findCurrentTeamMembers(cohortId, teamId);
+        StudyRankingRows rows = findHistoricalRankingRows(
+                memberships,
+                window,
+                maxRank,
+                membershipId,
+                true
+        );
+        return new HistoricalStudyRankingResult<>(
+                window.startDate(),
+                window.includedThroughDate(),
+                memberViewResult(rows)
+        );
+    }
+
+    // 요청 기간을 현재 집계일 기준으로 확정 기록만 포함하는 조회 구간으로 변환한다.
     private StudyRankingWindow resolveWindow(StudyRankingPeriodSelection period) {
         if (period == null) {
             throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
@@ -96,6 +161,7 @@ public class StudyRankingQueryService {
         return period.resolve(currentAggregationDate);
     }
 
+    // 기수의 활성 학생 후보를 조회한 뒤 오늘 공부시간 계산 흐름에 전달한다.
     private StudyRankingRows findTodayRankingRows(
             Long cohortId,
             Instant calculatedAt,
@@ -105,6 +171,32 @@ public class StudyRankingQueryService {
     ) {
         List<CohortMembershipView> memberships = cohortMembershipQueryService
                 .findActiveStudentMemberships(cohortId);
+        return findTodayRankingRows(
+                memberships,
+                calculatedAt,
+                maxRank,
+                focusedMembershipId,
+                includeLeaders
+        );
+    }
+
+    // 주어진 후보의 확정 기록과 실행 중 타이머를 합산해 오늘 순위 행을 만든다.
+    private StudyRankingRows findTodayRankingRows(
+            List<CohortMembershipView> memberships,
+            Instant calculatedAt,
+            int maxRank,
+            Long focusedMembershipId,
+            boolean includeLeaders
+    ) {
+        if (memberships.isEmpty()) {
+            return rankingRows(
+                    memberships,
+                    List.of(),
+                    maxRank,
+                    focusedMembershipId,
+                    includeLeaders
+            );
+        }
         List<MemberCurrentStudyDurationResult> durations = studyRecordAggregationQueryService
                 .getCurrentDurations(membershipIds(memberships), calculatedAt);
         return rankingRows(
@@ -122,6 +214,7 @@ public class StudyRankingQueryService {
         );
     }
 
+    // 기수의 활성 학생 후보를 조회한 뒤 과거 공부시간 계산 흐름에 전달한다.
     private StudyRankingRows findHistoricalRankingRows(
             Long cohortId,
             StudyRankingWindow window,
@@ -131,6 +224,32 @@ public class StudyRankingQueryService {
     ) {
         List<CohortMembershipView> memberships = cohortMembershipQueryService
                 .findActiveStudentMemberships(cohortId);
+        return findHistoricalRankingRows(
+                memberships,
+                window,
+                maxRank,
+                focusedMembershipId,
+                includeLeaders
+        );
+    }
+
+    // 주어진 후보의 종료된 집계일 확정 기록만 합산해 과거 순위 행을 만든다.
+    private StudyRankingRows findHistoricalRankingRows(
+            List<CohortMembershipView> memberships,
+            StudyRankingWindow window,
+            int maxRank,
+            Long focusedMembershipId,
+            boolean includeLeaders
+    ) {
+        if (memberships.isEmpty()) {
+            return rankingRows(
+                    memberships,
+                    List.of(),
+                    maxRank,
+                    focusedMembershipId,
+                    includeLeaders
+            );
+        }
         List<MemberStudyDurationResult> durations = window.includedThroughDate()
                 .map(endDate -> studyRecordAggregationQueryService.getConfirmedDurations(
                         membershipIds(memberships),
@@ -153,6 +272,7 @@ public class StudyRankingQueryService {
         );
     }
 
+    // 전체 순위에서 노출 상위권과 요청자 자신의 순위 행을 각각 선택한다.
     private StudyRankingRows rankingRows(
             List<CohortMembershipView> memberships,
             List<RankingDuration> durations,
@@ -179,6 +299,7 @@ public class StudyRankingQueryService {
         );
     }
 
+    // membership과 공부시간을 결합해 양수 시간의 competition ranking을 계산한다.
     private List<RankedStudyMember> rank(
             List<CohortMembershipView> memberships,
             List<RankingDuration> durations
@@ -189,36 +310,26 @@ public class StudyRankingQueryService {
                         Function.identity(),
                         (first, ignored) -> first
                 ));
-        List<UnrankedStudyMember> sortedMembers = durations.stream()
-                .filter(duration -> duration.studySeconds() > 0L)
+        List<UnrankedStudyMember> unrankedMembers = durations.stream()
                 .map(duration -> toUnrankedMember(duration, membershipById))
                 .flatMap(Optional::stream)
-                .sorted(Comparator
-                        .comparingLong(UnrankedStudyMember::studySeconds)
-                        .reversed()
-                        .thenComparing(UnrankedStudyMember::cohortMembershipId))
                 .toList();
-
-        List<RankedStudyMember> rankedMembers = new ArrayList<>(sortedMembers.size());
-        Long previousStudySeconds = null;
-        long rank = 0L;
-        for (int index = 0; index < sortedMembers.size(); index++) {
-            UnrankedStudyMember member = sortedMembers.get(index);
-            if (!Objects.equals(previousStudySeconds, member.studySeconds())) {
-                rank = index + 1L;
-                previousStudySeconds = member.studySeconds();
-            }
-            rankedMembers.add(new RankedStudyMember(
-                    member.cohortMembershipId(),
-                    member.userId(),
-                    rank,
-                    member.studySeconds(),
-                    member.timerRunning()
-            ));
-        }
-        return List.copyOf(rankedMembers);
+        return CompetitionRanking.rank(
+                        unrankedMembers,
+                        UnrankedStudyMember::studySeconds,
+                        Comparator.comparing(UnrankedStudyMember::cohortMembershipId)
+                ).stream()
+                .map(ranked -> new RankedStudyMember(
+                        ranked.value().cohortMembershipId(),
+                        ranked.value().userId(),
+                        ranked.rank(),
+                        ranked.value().studySeconds(),
+                        ranked.value().timerRunning()
+                ))
+                .toList();
     }
 
+    // 공부시간 결과를 같은 membership의 사용자 정보와 결합할 수 있을 때만 후보로 만든다.
     private Optional<UnrankedStudyMember> toUnrankedMember(
             RankingDuration duration,
             Map<Long, CohortMembershipView> membershipById
@@ -232,6 +343,7 @@ public class StudyRankingQueryService {
                 ));
     }
 
+    // 계산된 순위 행에 표시명을 결합해 목록과 내 순위 결과를 함께 조립한다.
     private MemberStudyRankingViewResult memberViewResult(StudyRankingRows rows) {
         Map<UUID, String> displayNames = findDisplayNames(rows);
         return new MemberStudyRankingViewResult(
@@ -240,6 +352,7 @@ public class StudyRankingQueryService {
         );
     }
 
+    // 노출 대상으로 선택된 상위 순위 행을 개인 랭킹 목록 결과로 변환한다.
     private StudyRankingBoardResult boardResult(
             StudyRankingRows rows,
             Map<UUID, String> displayNames
@@ -253,6 +366,7 @@ public class StudyRankingQueryService {
         );
     }
 
+    // 전체 순위 수와 요청자의 선택적 순위 행을 내 랭킹 결과로 변환한다.
     private MyStudyRankingResult mineResult(
             StudyRankingRows rows,
             Map<UUID, String> displayNames
@@ -265,6 +379,7 @@ public class StudyRankingQueryService {
         );
     }
 
+    // 내부 개인 순위 행에 대표 캐릭터 표시명을 붙여 Application 결과로 변환한다.
     private StudyRankingEntryResult entryResult(
             RankedStudyMember row,
             Map<UUID, String> displayNames
@@ -277,6 +392,7 @@ public class StudyRankingQueryService {
         );
     }
 
+    // 상위권과 요청자에게 필요한 대표 캐릭터 표시명만 한 번에 조회한다.
     private Map<UUID, String> findDisplayNames(StudyRankingRows rows) {
         Collection<UUID> userIds = new LinkedHashSet<>();
         rows.leaders().stream()
@@ -297,9 +413,27 @@ public class StudyRankingQueryService {
                 ));
     }
 
+    // 기수 소속 뷰에서 공부시간 배치 조회에 사용할 membership 식별자만 추출한다.
     private List<Long> membershipIds(List<CohortMembershipView> memberships) {
         return memberships.stream()
                 .map(CohortMembershipView::membershipId)
+                .toList();
+    }
+
+    // 기수의 활성 학생 중 요청한 활성 팀에 현재 소속된 학생만 후보로 남긴다.
+    private List<CohortMembershipView> findCurrentTeamMembers(Long cohortId, Long teamId) {
+        List<CohortMembershipView> memberships = cohortMembershipQueryService
+                .findActiveStudentMemberships(cohortId);
+        Set<Long> currentTeamMembershipIds = currentTeamMembershipQueryService
+                .findCurrentMemberships(cohortId, membershipIds(memberships))
+                .stream()
+                .filter(membership -> Objects.equals(membership.teamId(), teamId))
+                .map(CurrentTeamMembershipView::cohortMembershipId)
+                .collect(Collectors.toUnmodifiableSet());
+        return memberships.stream()
+                .filter(membership -> currentTeamMembershipIds.contains(
+                        membership.membershipId()
+                ))
                 .toList();
     }
 
@@ -333,6 +467,7 @@ public class StudyRankingQueryService {
             Optional<RankedStudyMember> focusedMember
     ) {
 
+        // 외부 리스트 변경이 계산된 순위 행에 영향을 주지 않도록 방어적 복사한다.
         private StudyRankingRows {
             leaders = List.copyOf(leaders);
             Objects.requireNonNull(focusedMember, "focusedMember must not be null");

@@ -23,6 +23,8 @@ import site.omagotchi.learningservice.ranking.application.result.TodayStudyRanki
 import site.omagotchi.learningservice.study.application.StudyRecordAggregationQueryService;
 import site.omagotchi.learningservice.study.application.result.MemberCurrentStudyDurationResult;
 import site.omagotchi.learningservice.study.application.result.MemberStudyDurationResult;
+import site.omagotchi.learningservice.team.application.CurrentTeamMembershipQueryService;
+import site.omagotchi.learningservice.team.application.result.CurrentTeamMembershipView;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -66,6 +68,9 @@ class StudyRankingQueryServiceTest {
 
     @Mock
     private CharacterGrowthService characterGrowthService;
+
+    @Mock
+    private CurrentTeamMembershipQueryService currentTeamMembershipQueryService;
 
     @Mock
     private Clock clock;
@@ -219,6 +224,160 @@ class StudyRankingQueryServiceTest {
 
             assertAll(
                     () -> assertEquals(Optional.empty(), result.includedThroughDate()),
+                    () -> assertEquals(0L, result.ranking().board().rankedMemberCount()),
+                    () -> assertEquals(List.of(), result.ranking().board().entries()),
+                    () -> assertFalse(result.ranking().mine().ranked())
+            );
+            verifyNoInteractions(studyRecordAggregationQueryService);
+            verifyNoInteractions(characterGrowthService);
+        }
+    }
+
+    @Nested
+    @DisplayName("팀 내부 회원 보드 조회")
+    class GetTeamMemberView {
+
+        @Test
+        @DisplayName("현재 팀원 필터를 적용한 뒤 오늘 순위 계산")
+        void ranksOnlyCurrentTeamMembers() {
+            List<CohortMembershipView> memberships = memberships();
+            givenStudentMembership();
+            given(clock.instant()).willReturn(CALCULATED_AT);
+            given(cohortMembershipQueryService.findActiveStudentMemberships(COHORT_ID))
+                    .willReturn(memberships);
+            given(currentTeamMembershipQueryService.findCurrentMemberships(
+                    COHORT_ID,
+                    membershipIds(memberships)
+            )).willReturn(List.of(
+                    new CurrentTeamMembershipView(100L, "선택 팀", 20L),
+                    new CurrentTeamMembershipView(100L, "선택 팀", 21L),
+                    new CurrentTeamMembershipView(200L, "다른 팀", 22L)
+            ));
+            given(studyRecordAggregationQueryService.getCurrentDurations(
+                    List.of(20L, 21L),
+                    CALCULATED_AT
+            )).willReturn(List.of(
+                    new MemberCurrentStudyDurationResult(20L, 7_200L, true),
+                    new MemberCurrentStudyDurationResult(21L, 3_600L, false)
+            ));
+            givenDisplayNames(Set.of(LEADER_USER_ID, FIRST_TIE_USER_ID));
+
+            TodayStudyRankingResult<MemberStudyRankingViewResult> result =
+                    studyRankingQueryService.getTodayTeamMemberView(
+                            USER_ID,
+                            COHORT_ID,
+                            100L,
+                            new StudyRankingQuery(null)
+                    );
+
+            assertAll(
+                    () -> assertEquals(2L, result.ranking().board().rankedMemberCount()),
+                    () -> assertEquals(
+                            List.of(1L, 2L),
+                            result.ranking().board().entries().stream()
+                                    .map(StudyRankingEntryResult::rank)
+                                    .toList()
+                    ),
+                    () -> assertTrue(
+                            result.ranking().board().entries().getFirst().timerRunning()
+                    ),
+                    () -> assertFalse(result.ranking().mine().ranked())
+            );
+        }
+
+        @Test
+        @DisplayName("선택 팀의 현재 소속이 없으면 오늘 빈 랭킹 반환")
+        void returnsEmptyTodayRankingWithoutCurrentTeamMembers() {
+            List<CohortMembershipView> memberships = memberships();
+            givenStudentMembership();
+            given(clock.instant()).willReturn(CALCULATED_AT);
+            given(cohortMembershipQueryService.findActiveStudentMemberships(COHORT_ID))
+                    .willReturn(memberships);
+            given(currentTeamMembershipQueryService.findCurrentMemberships(
+                    COHORT_ID,
+                    membershipIds(memberships)
+            )).willReturn(List.of(
+                    new CurrentTeamMembershipView(200L, "다른 팀", 20L)
+            ));
+
+            TodayStudyRankingResult<MemberStudyRankingViewResult> result =
+                    studyRankingQueryService.getTodayTeamMemberView(
+                            USER_ID,
+                            COHORT_ID,
+                            100L,
+                            new StudyRankingQuery(null)
+                    );
+
+            assertAll(
+                    () -> assertEquals(0L, result.ranking().board().rankedMemberCount()),
+                    () -> assertEquals(List.of(), result.ranking().board().entries()),
+                    () -> assertFalse(result.ranking().mine().ranked())
+            );
+            verifyNoInteractions(studyRecordAggregationQueryService);
+            verifyNoInteractions(characterGrowthService);
+        }
+
+        @Test
+        @DisplayName("팀 밖 요청자는 내 순위 미참여 처리")
+        void returnsUnrankedMineWhenRequesterIsOutsideTeam() {
+            List<CohortMembershipView> memberships = memberships();
+            LocalDate date = LocalDate.parse("2000-01-12");
+            givenStudentMembership();
+            given(clock.instant()).willReturn(CALCULATED_AT);
+            given(cohortMembershipQueryService.findActiveStudentMemberships(COHORT_ID))
+                    .willReturn(memberships);
+            given(currentTeamMembershipQueryService.findCurrentMemberships(
+                    COHORT_ID,
+                    membershipIds(memberships)
+            )).willReturn(List.of(
+                    new CurrentTeamMembershipView(100L, "선택 팀", 20L),
+                    new CurrentTeamMembershipView(200L, "다른 팀", 21L)
+            ));
+            given(studyRecordAggregationQueryService.getConfirmedDurations(
+                    List.of(20L),
+                    date,
+                    date
+            )).willReturn(List.of(new MemberStudyDurationResult(20L, 3_600L)));
+            givenDisplayNames(Set.of(LEADER_USER_ID));
+
+            HistoricalStudyRankingResult<MemberStudyRankingViewResult> result =
+                    studyRankingQueryService.getHistoricalTeamMemberView(
+                            USER_ID,
+                            COHORT_ID,
+                            100L,
+                            StudyRankingPeriodSelection.daily(date),
+                            new StudyRankingQuery(null)
+                    );
+
+            assertFalse(result.ranking().mine().ranked());
+        }
+
+        @Test
+        @DisplayName("선택 팀의 현재 소속이 없으면 과거 빈 랭킹 반환")
+        void returnsEmptyHistoricalRankingWithoutCurrentTeamMembers() {
+            List<CohortMembershipView> memberships = memberships();
+            LocalDate date = LocalDate.parse("2000-01-12");
+            givenStudentMembership();
+            given(clock.instant()).willReturn(CALCULATED_AT);
+            given(cohortMembershipQueryService.findActiveStudentMemberships(COHORT_ID))
+                    .willReturn(memberships);
+            given(currentTeamMembershipQueryService.findCurrentMemberships(
+                    COHORT_ID,
+                    membershipIds(memberships)
+            )).willReturn(List.of(
+                    new CurrentTeamMembershipView(200L, "다른 팀", 20L)
+            ));
+
+            HistoricalStudyRankingResult<MemberStudyRankingViewResult> result =
+                    studyRankingQueryService.getHistoricalTeamMemberView(
+                            USER_ID,
+                            COHORT_ID,
+                            100L,
+                            StudyRankingPeriodSelection.daily(date),
+                            new StudyRankingQuery(null)
+                    );
+
+            assertAll(
                     () -> assertEquals(0L, result.ranking().board().rankedMemberCount()),
                     () -> assertEquals(List.of(), result.ranking().board().entries()),
                     () -> assertFalse(result.ranking().mine().ranked())

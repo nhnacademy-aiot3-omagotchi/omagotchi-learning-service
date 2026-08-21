@@ -39,7 +39,7 @@ public record StudyRankingWindow(
             LocalDate currentAggregationDate
     ) {
         validateInputs(weekStartDate, currentAggregationDate);
-        if (weekStartDate.getDayOfWeek().equals(DayOfWeek.MONDAY)) {
+        if (!weekStartDate.getDayOfWeek().equals(DayOfWeek.MONDAY)) {
             throw invalidRequest();
         }
 

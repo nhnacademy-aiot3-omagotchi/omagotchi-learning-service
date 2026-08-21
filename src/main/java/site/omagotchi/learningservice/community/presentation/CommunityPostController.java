@@ -2,8 +2,12 @@ package site.omagotchi.learningservice.community.presentation;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +32,7 @@ import site.omagotchi.learningservice.community.presentation.response.CommunityP
 import site.omagotchi.learningservice.community.presentation.response.CommunityPostPageResponse;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.stream.IntStream;
 
@@ -72,6 +77,28 @@ public class CommunityPostController {
                 user.userId(),
                 postId
         ));
+    }
+
+    @GetMapping("/{postId}/attachments/{attachmentId}")
+    public ResponseEntity<Resource> downloadAttachment(
+            JwtAuthenticationToken authentication,
+            @PathVariable Long postId,
+            @PathVariable Long attachmentId
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        var download = communityPostQueryService.downloadAttachment(user.userId(), postId, attachmentId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(download.contentType()))
+                .contentLength(download.sizeBytes())
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(download.originalFileName(), StandardCharsets.UTF_8)
+                                .build()
+                                .toString()
+                )
+                .header("X-Content-Type-Options", "nosniff")
+                .body(download.resource());
     }
 
     @PostMapping

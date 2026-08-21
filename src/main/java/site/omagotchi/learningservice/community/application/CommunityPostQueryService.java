@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.community.application.port.CommunityPostQueryPort;
+import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentDownload;
+import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentStorage;
 import site.omagotchi.learningservice.community.application.query.CommunityPostDetail;
 import site.omagotchi.learningservice.community.application.query.CommunityPostPage;
 import site.omagotchi.learningservice.community.application.query.CommunityPostSearchCondition;
@@ -26,6 +28,7 @@ public class CommunityPostQueryService {
     private static final int MAX_SIZE = 100;
 
     private final CommunityPostQueryPort communityPostQueryPort;
+    private final CommunityAttachmentStorage communityAttachmentStorage;
 
     public CommunityPostPage getPosts(
             UUID userId,
@@ -52,6 +55,21 @@ public class CommunityPostQueryService {
     public CommunityPostDetail getPost(UUID userId, Long postId) {
         return communityPostQueryPort.findVisiblePost(userId, postId)
                 .orElseThrow(() -> new BusinessException(CommunityErrorCode.POST_NOT_FOUND));
+    }
+
+    public CommunityAttachmentDownload downloadAttachment(UUID userId, Long postId, Long attachmentId) {
+        CommunityPostDetail post = getPost(userId, postId);
+        var attachment = post.attachments().stream()
+                .filter(candidate -> candidate.attachmentId().equals(attachmentId))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(CommunityErrorCode.ATTACHMENT_NOT_FOUND));
+
+        return new CommunityAttachmentDownload(
+                attachment.originalFileName(),
+                attachment.contentType(),
+                attachment.sizeBytes(),
+                communityAttachmentStorage.load(attachment.storageKey())
+        );
     }
 
     private String normalizeSearch(String search) {

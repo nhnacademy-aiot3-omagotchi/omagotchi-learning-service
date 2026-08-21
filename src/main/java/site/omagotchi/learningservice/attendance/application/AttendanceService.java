@@ -1,12 +1,17 @@
 package site.omagotchi.learningservice.attendance.application;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.command.ChangeAttendanceStatusCommand;
 import site.omagotchi.learningservice.attendance.application.event.AttendanceCheckedInEvent;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceEventPublisher;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordResult;
+import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordPageResult;
+import site.omagotchi.learningservice.attendance.application.query.AttendancePageQuery;
 import site.omagotchi.learningservice.attendance.domain.AttendanceChangeLog;
 import site.omagotchi.learningservice.attendance.domain.AttendanceDecision;
 import site.omagotchi.learningservice.attendance.domain.AttendanceDecisionPolicy;
@@ -121,15 +126,42 @@ public class AttendanceService {
         return AttendanceRecordResult.from(attendanceRecordRepository.save(record));
     }
 
-    public List<AttendanceRecordResult> getMyRecords(Long cohortId, UUID userId) {
+    public AttendanceRecordPageResult getMyRecords(
+            Long cohortId,
+            UUID userId,
+            AttendancePageQuery query
+    ) {
         Long membershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
-
-        return attendanceRecordRepository.findByCohortMembershipIdOrderByAttendanceDateDesc(membershipId).stream()
-                .map(AttendanceRecordResult::from)
-                .toList();
+        var pageable = PageRequest.of(
+                query.page(),
+                query.size(),
+                Sort.by(Sort.Order.desc("attendanceDate"), Sort.Order.desc("id"))
+        );
+        Page<AttendanceRecord> records;
+        if (query.from() != null && query.to() != null) {
+            records = attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDateBetween(
+                    membershipId, query.from(), query.to(), pageable
+            );
+        } else if (query.from() != null) {
+            records = attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDateGreaterThanEqual(
+                    membershipId, query.from(), pageable
+            );
+        } else if (query.to() != null) {
+            records = attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDateLessThanEqual(
+                    membershipId, query.to(), pageable
+            );
+        } else {
+            records = attendanceRecordRepository.findByCohortMembershipId(membershipId, pageable);
+        }
+        return pageResult(records);
     }
 
-    public List<AttendanceRecordResult> getDailyRecords(Long cohortId, UUID managerUserId, java.time.LocalDate date) {
+    public AttendanceRecordPageResult getDailyRecords(
+            Long cohortId,
+            UUID managerUserId,
+            LocalDate date,
+            AttendancePageQuery query
+    ) {
         cohortAccessService.requireManager(cohortId, managerUserId);
 
         List<Long> membershipIds = membershipRepository
@@ -139,14 +171,29 @@ public class AttendanceService {
                 .toList();
 
         if (membershipIds.isEmpty()) {
-            return List.of();
+            return new AttendanceRecordPageResult(List.of(), query.page(), query.size(), 0, 0);
         }
 
-        return attendanceRecordRepository
-                .findByAttendanceDateAndCohortMembershipIdInOrderByCohortMembershipIdAsc(date, membershipIds)
-                .stream()
-                .map(AttendanceRecordResult::from)
-                .toList();
+        var pageable = PageRequest.of(
+                query.page(),
+                query.size(),
+                Sort.by(Sort.Order.asc("cohortMembershipId"), Sort.Order.asc("id"))
+        );
+        return pageResult(attendanceRecordRepository.findByAttendanceDateAndCohortMembershipIdIn(
+                date,
+                membershipIds,
+                pageable
+        ));
+    }
+
+    private AttendanceRecordPageResult pageResult(Page<AttendanceRecord> records) {
+        return new AttendanceRecordPageResult(
+                records.getContent().stream().map(AttendanceRecordResult::from).toList(),
+                records.getNumber(),
+                records.getSize(),
+                records.getTotalElements(),
+                records.getTotalPages()
+        );
     }
 
     @Transactional

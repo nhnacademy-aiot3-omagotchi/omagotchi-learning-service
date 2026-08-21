@@ -13,6 +13,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.attendance.application.AttendanceService;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordResult;
+import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordPageResult;
+import site.omagotchi.learningservice.attendance.application.query.AttendancePageQuery;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
 import site.omagotchi.learningservice.global.security.JwtAuthorityConfig;
 import site.omagotchi.learningservice.global.security.JwtConfig;
@@ -59,21 +61,34 @@ class AttendanceControllerTest {
     @Test
     @DisplayName("내 출결 목록은 JWT subject의 기록을 반환한다")
     void getsMyAttendanceRecords() throws Exception {
-        given(attendanceService.getMyRecords(COHORT_ID, USER_ID))
-                .willReturn(List.of(record()));
+        AttendancePageQuery query = AttendancePageQuery.of(
+                LocalDate.of(2026, 8, 1),
+                LocalDate.of(2026, 8, 31),
+                0,
+                10
+        );
+        given(attendanceService.getMyRecords(COHORT_ID, USER_ID, query))
+                .willReturn(new AttendanceRecordPageResult(List.of(record()), 0, 10, 1, 1));
 
         mockMvc.perform(get("/api/v1/cohorts/{cohortId}/attendance-records/me", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .param("from", "2026-08-01")
+                        .param("to", "2026-08-31")
+                        .param("page", "0")
+                        .param("size", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(10))
-                .andExpect(jsonPath("$[0].cohortMembershipId").doesNotExist())
-                .andExpect(jsonPath("$[0].attendanceDate").value("2026-08-20"))
-                .andExpect(jsonPath("$[0].autoStatus").value("PRESENT"))
-                .andExpect(jsonPath("$[0].finalStatus").value("PRESENT"))
-                .andExpect(jsonPath("$[0].checkedInAt").value("2026-08-20T00:00:00Z"))
+                .andExpect(jsonPath("$.items[0].id").value(10))
+                .andExpect(jsonPath("$.items[0].cohortMembershipId").doesNotExist())
+                .andExpect(jsonPath("$.items[0].attendanceDate").value("2026-08-20"))
+                .andExpect(jsonPath("$.items[0].autoStatus").value("PRESENT"))
+                .andExpect(jsonPath("$.items[0].finalStatus").value("PRESENT"))
+                .andExpect(jsonPath("$.items[0].checkedInAt").value("2026-08-20T00:00:00Z"))
+                .andExpect(jsonPath("$.page.number").value(0))
+                .andExpect(jsonPath("$.page.size").value(10))
+                .andExpect(jsonPath("$.page.totalElements").value(1))
                 .andDo(document("attendance/get-my-records"));
 
-        verify(attendanceService).getMyRecords(COHORT_ID, USER_ID);
+        verify(attendanceService).getMyRecords(COHORT_ID, USER_ID, query);
     }
 
     private AttendanceRecordResult record() {

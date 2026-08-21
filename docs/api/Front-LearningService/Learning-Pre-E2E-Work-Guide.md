@@ -48,8 +48,7 @@ Frontend는 `/images/characters/${assetKey}.png`로 정적 PNG를 찾는다. 기
 
 ## 3. Community 첨부파일 다운로드
 
-현재 저장 Port는 `store`, `delete`만 있고 상세 응답은 첨부 메타데이터만 제공한다. 구현 순서는
-다음과 같다.
+구현 완료. 저장 Port의 `load`와 아래 인증 endpoint를 사용한다.
 
 1. `CommunityAttachmentStorage`에 `load(storageKey)` 읽기 Port를 추가한다.
 2. 로컬 구현은 기존 `targetPath()`의 root 이탈 검사를 그대로 거쳐 `Resource` 또는 stream을 반환한다.
@@ -75,10 +74,8 @@ Frontend/BFF는 상세 응답의 `attachmentId`로 위 API를 호출해 byte str
 - 데이터 소유 서비스: 닉네임/캐릭터는 Learning, 실명/이메일은 Identity 중 누가 제공하는지
 - REST 초기 snapshot과 STOMP 실시간 event가 같은 사용자 표시 필드를 갖는지
 
-권장안은 Learning이 자신이 소유한 `nickname`, `characterAssetKey`만 보강하고, 실명/이메일이
-필요하면 Frontend BFF가 Identity 결과와 `userId`로 조합하는 것이다. Presence event마다 Identity를
-동기 호출하지 않는다. 확정 전 현재 계약은 `userId`, `status`만이며 Frontend는 사용자 ID 축약 또는
-별도 캐시된 멤버 map으로 표시한다.
+확정 계약은 `userId`, `status`, `nickname`, `currentCharacter(type, colorId, assetKey)`다.
+대표 캐릭터가 없는 사용자의 닉네임과 캐릭터는 nullable이며 실명·이메일은 포함하지 않는다.
 
 ## 5. Gamification 이벤트 연결
 
@@ -114,8 +111,7 @@ Frontend는 출석 또는 학습 완료 API 성공 후 `/events/**`를 추가 �
 
 ## 6. 출결 날짜 조회와 Pagination
 
-현재 내 출결 조회는 전체 이력을 `List`로 반환하고 관리자 조회만 단일 `date`를 받는다. 다음 계약을
-권장한다.
+구현 완료. 내 출결은 날짜 범위와 페이지를 받고 관리자 일별 조회도 같은 Page 응답을 사용한다.
 
 ```http
 GET /api/v1/cohorts/{cohortId}/attendance-records/me
@@ -134,9 +130,9 @@ GET /api/v1/cohorts/{cohortId}/attendance-records/me
 }
 ```
 
-구현 시 repository는 membership ID와 inclusive `attendanceDate between from and to` 조건에
-`Pageable`을 적용하고 `attendanceDate DESC`를 고정한다. `from <= to`, 최대 조회 기간 366일,
-`size <= 100`을 검증한다. 날짜를 생략할 때의 기본값은 최근 31일로 둔다.
+repository는 membership ID와 inclusive `attendanceDate between from and to` 조건에 `Pageable`을
+적용하고 `attendanceDate DESC`, ID DESC를 고정한다. `from <= to`, 최대 조회 기간 366일,
+`size <= 100`을 검증한다. 날짜를 생략하면 전체 범위에 Pagination만 적용한다.
 
 관리자 일별 조회는 현재 `?date=` 계약을 유지할 수 있다. 기수 규모가 커지면 같은 Page 응답으로
 바꾸되, active membership 전체와 출결 record를 결합해 미입실자도 화면에 나타나야 하는지는 별도

@@ -97,7 +97,7 @@ Authorization: Bearer {JWT}
 ```json
 {
   "aggregationDate": "2026-08-20",
-  "calculatedAt": "2026-08-20T05:30:00Z",
+  "calculatedAt": "2026-08-19T20:30:00Z",
   "rankedMemberCount": 4,
   "returnedEntryCount": 3,
   "entries": [
@@ -213,7 +213,11 @@ Authorization: Bearer {JWT}
       "displayName": "둘째",
       "studySeconds": 10800
     }
-  ]
+  ],
+  "myRanking": {
+    "ranked": false,
+    "raking": null
+  }
 }
 ```
 

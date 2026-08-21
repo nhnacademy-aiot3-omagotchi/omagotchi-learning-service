@@ -9,7 +9,19 @@
 - 비범위: 팀별 학습 기록 저장, 과거 팀 소속 복원, DB migration
 
 이 문서는 팀 내부 개인 랭킹과 팀 간 랭킹의 현재 HTTP 및 Application 구현 계약이다.
-기간 계산과 오늘 타이머 반영 규칙은 `StudyRanking-API-계약.md`를 함께 따른다.
+인증·권한·오류 계약과 기간 계산·오늘 타이머 반영 규칙은 `StudyRanking-API-계약.md`를
+함께 따른다.
+
+## 공통 계약
+
+### 인증과 권한
+
+- 모든 요청에 `Authorization: Bearer {JWT}`가 필요하다.
+- 수강생 여부는 JWT의 전역 role이 아니라 기수 membership으로 판정한다.
+- 활성 기수 소속이 없으면 `404 COHORT_NOT_FOUND`를 반환한다.
+- 활성 소속은 있지만 `STUDENT`가 아니면 `403 COHORT_ACCESS_DENIED`를 반환한다.
+
+세부 오류 코드와 공통 오류 body 형식은 `StudyRanking-API-계약.md`의 오류 계약을 따른다.
 
 ## 핵심 결정
 
@@ -165,7 +177,7 @@ GET /api/v1/cohorts/{cohortId}/study-rankings/teams/monthly/{month}?maxRank={N}
 ```json
 {
   "aggregationDate": "2026-08-20",
-  "calculatedAt": "2026-08-20T05:30:00Z",
+  "calculatedAt": "2026-08-19T20:30:00Z",
   "rankedTeamCount": 2,
   "returnedEntryCount": 2,
   "entries": [

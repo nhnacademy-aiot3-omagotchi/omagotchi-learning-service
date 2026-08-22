@@ -55,6 +55,7 @@ class VacancyAlertServiceTest {
 
     private static final Long SPACE_ID = 1L;
     private static final Long ALERT_ID = 500L;
+    private static final Long OTHER_ALERT_ID = 501L;
     private static final Long OCCUPANCY_ID = 100L;
 
     private static final Long COHORT_ID = 3L;
@@ -363,10 +364,16 @@ class VacancyAlertServiceTest {
                 membership(MEMBERSHIP_ID, COHORT_ID),
                 membership(OTHER_MEMBERSHIP_ID, OTHER_COHORT_ID));
         given(alertRepository.findWaitingByMembershipIds(anyCollection()))
-                .willReturn(List.of(alert(MEMBERSHIP_ID), alert(OTHER_MEMBERSHIP_ID)));
+                .willReturn(List.of(
+                        alert(ALERT_ID, MEMBERSHIP_ID),
+                        alert(OTHER_ALERT_ID, OTHER_MEMBERSHIP_ID)));
 
         List<VacancyAlertView> result = vacancyAlertService.findMine(REQUESTER_USER_ID);
 
+        // alertId까지 서로 달라야 한다 — 화면이 cohortId만으로는 "취소" 대상 행을
+        // 특정할 수 없다. 같은 값이면 매핑이 뒤섞이거나 한쪽으로 덮여도 통과한다.
+        assertThat(result).extracting(VacancyAlertView::alertId)
+                .containsExactly(ALERT_ID, OTHER_ALERT_ID);
         assertThat(result).extracting(VacancyAlertView::cohortId)
                 .containsExactly(COHORT_ID, OTHER_COHORT_ID);
         assertThat(result).allSatisfy(view ->
@@ -414,9 +421,9 @@ class VacancyAlertServiceTest {
         return new CohortMembershipView(membershipId, cohortId, REQUESTER_USER_ID);
     }
 
-    private VacancyAlert alert(Long membershipId) {
+    private VacancyAlert alert(Long alertId, Long membershipId) {
         VacancyAlert alert = VacancyAlert.request(SPACE_ID, membershipId, now());
-        ReflectionTestUtils.setField(alert, "id", ALERT_ID);
+        ReflectionTestUtils.setField(alert, "id", alertId);
         return alert;
     }
 

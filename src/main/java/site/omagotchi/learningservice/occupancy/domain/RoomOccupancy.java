@@ -27,9 +27,6 @@ import java.util.UUID;
  * 조건은 {@code boolean}으로만 표현하고 오류 코드로 옮기는 것은 Application의 책임이다
  * ({@code TeamErrorCode} 주석 참고).</p>
  *
- * <p>{@code space} 파트의 {@code RoomOccupancyJpaEntity}가 같은 테이블에 붙어 있다.
- * JPA entity name이 서로 달라 충돌하지 않으며, 저쪽은 공간 목록의 사용 상태 파생
- * 계산용 읽기 전용이고 쓰기 주체는 이 클래스 하나다.</p>
  */
 @Entity
 @Table(name = "room_occupancies", schema = "learning_service")

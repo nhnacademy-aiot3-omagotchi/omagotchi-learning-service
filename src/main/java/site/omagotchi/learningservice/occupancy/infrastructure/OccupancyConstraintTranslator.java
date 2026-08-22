@@ -27,6 +27,7 @@ public final class OccupancyConstraintTranslator {
     private static final String UQ_ONE_ACTIVE_PER_USER = "uq_room_occupancies_one_active_per_user";
     private static final String UQ_PARTICIPANTS_ONE_ACTIVE = "uq_occupancy_participants_one_active";
     private static final String UQ_PARTICIPANTS_PAIR = "uq_occupancy_participants_pair";
+    private static final String UQ_ALERTS_WAITING = "uq_vacancy_alerts_waiting";
 
     /**
      * 유니크 위반 예외를 대응하는 도메인 에러로 바꾼다.
@@ -59,6 +60,9 @@ public final class OccupancyConstraintTranslator {
         if (normalized.contains(UQ_PARTICIPANTS_ONE_ACTIVE)
                 || normalized.contains(UQ_PARTICIPANTS_PAIR)) {
             return new BusinessException(OccupancyErrorCode.ALREADY_PARTICIPATING, exception);
+        }
+        if (normalized.contains(UQ_ALERTS_WAITING)) {
+            return new BusinessException(OccupancyErrorCode.ALERT_ALREADY_REQUESTED, exception);
         }
         return exception;
     }

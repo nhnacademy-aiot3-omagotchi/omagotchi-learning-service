@@ -1,6 +1,6 @@
 package site.omagotchi.learningservice.attendance.application.query;
 
-import site.omagotchi.learningservice.attendance.domain.AttendanceErrorCode;
+import site.omagotchi.learningservice.attendance.application.AttendanceErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.LocalDate;

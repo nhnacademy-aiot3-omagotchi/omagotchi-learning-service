@@ -6,7 +6,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.util.unit.DataSize;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentFile;
-import site.omagotchi.learningservice.community.domain.CommunityErrorCode;
+import site.omagotchi.learningservice.community.application.CommunityErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.nio.file.Files;

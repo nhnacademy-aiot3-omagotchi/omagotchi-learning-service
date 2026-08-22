@@ -7,14 +7,12 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
-import site.omagotchi.learningservice.attendance.domain.AttendanceErrorCode;
+import site.omagotchi.learningservice.attendance.application.AttendanceErrorCode;
 import site.omagotchi.learningservice.attendance.application.query.AttendancePageQuery;
 import site.omagotchi.learningservice.attendance.application.event.AttendanceCheckedInEvent;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceEventPublisher;
+import site.omagotchi.learningservice.attendance.application.port.AttendanceRecordQueryRepository;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceChangeLogRepository;
@@ -66,6 +64,9 @@ class AttendanceServiceTest {
 
     @Mock
     private AttendanceRecordRepository attendanceRecordRepository;
+
+    @Mock
+    private AttendanceRecordQueryRepository attendanceRecordQueryRepository;
 
     @Mock
     private AttendanceChangeLogRepository attendanceChangeLogRepository;
@@ -226,16 +227,15 @@ class AttendanceServiceTest {
                 CohortMembershipStatus.ACTIVE
         )).willReturn(java.util.List.of(membership));
         AttendancePageQuery query = AttendancePageQuery.of(ATTENDANCE_DATE, ATTENDANCE_DATE, 0, 20);
-        PageRequest pageable = PageRequest.of(
-                0,
-                20,
-                Sort.by(Sort.Order.asc("cohortMembershipId"), Sort.Order.asc("id"))
-        );
-        given(attendanceRecordRepository.findByAttendanceDateAndCohortMembershipIdIn(
+        // 정렬과 Pageable 생성은 infrastructure 책임이므로 여기에서 검증하지 않는다.
+        given(attendanceRecordQueryRepository.findDailyRecords(
                 ATTENDANCE_DATE,
                 java.util.List.of(MEMBERSHIP_ID),
-                pageable
-        )).willReturn(new PageImpl<>(java.util.List.of(record), pageable, 1));
+                0,
+                20
+        )).willReturn(new AttendanceRecordQueryRepository.AttendanceRecordPage(
+                java.util.List.of(record), 0, 20, 1L, 1
+        ));
 
         var results = attendanceService.getDailyRecords(COHORT_ID, MANAGER_ID, ATTENDANCE_DATE, query);
 
@@ -254,18 +254,17 @@ class AttendanceServiceTest {
                 1,
                 10
         );
-        PageRequest pageable = PageRequest.of(
-                1,
-                10,
-                Sort.by(Sort.Order.desc("attendanceDate"), Sort.Order.desc("id"))
-        );
         given(cohortAccessService.requireActiveMembershipId(COHORT_ID, USER_ID)).willReturn(MEMBERSHIP_ID);
-        given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDateBetween(
+        // 날짜 조건 분기와 정렬은 infrastructure 책임이므로 조회 조건 전달만 검증한다.
+        given(attendanceRecordQueryRepository.findMemberRecords(
                 MEMBERSHIP_ID,
                 query.from(),
                 query.to(),
-                pageable
-        )).willReturn(new PageImpl<>(java.util.List.of(record), pageable, 11));
+                1,
+                10
+        )).willReturn(new AttendanceRecordQueryRepository.AttendanceRecordPage(
+                java.util.List.of(record), 1, 10, 11L, 2
+        ));
 
         var result = attendanceService.getMyRecords(COHORT_ID, USER_ID, query);
 

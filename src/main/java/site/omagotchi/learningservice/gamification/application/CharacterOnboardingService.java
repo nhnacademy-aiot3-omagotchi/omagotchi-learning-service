@@ -11,6 +11,7 @@ import site.omagotchi.learningservice.gamification.domain.CharacterAppearance;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
 import site.omagotchi.learningservice.gamification.infrastructure.GameCharacterRepository;
+import site.omagotchi.learningservice.gamification.application.port.UserCharacterWriteRepository;
 import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
@@ -24,6 +25,7 @@ public class CharacterOnboardingService {
 
     private final GameCharacterRepository gameCharacterRepository;
     private final UserCharacterRepository userCharacterRepository;
+    private final UserCharacterWriteRepository userCharacterWriteRepository;
 
     public List<GameCharacterResult> getAvailableCharacters() {
         return gameCharacterRepository.findByActiveTrueOrderByIdAsc().stream()
@@ -45,12 +47,17 @@ public class CharacterOnboardingService {
             throw new BusinessException(GamificationErrorCode.DUPLICATE_NICKNAME);
         }
         String colorId = normalizeColorId(command.colorId());
-        UserCharacter userCharacter = userCharacterRepository.save(UserCharacter.representative(
-                userId,
-                gameCharacter.getId(),
-                nickname,
-                colorId
-        ));
+
+        // 위 exists 확인은 정상 경로용이다. 확인과 저장 사이의 경합은 부분 유니크 인덱스가 막고,
+        // 저장소 구현이 그 위반을 DUPLICATE_NICKNAME으로 바꿔서 돌려준다.
+        UserCharacter userCharacter = userCharacterWriteRepository.saveRepresentative(
+                UserCharacter.representative(
+                        userId,
+                        gameCharacter.getId(),
+                        nickname,
+                        colorId
+                )
+        );
         return UserCharacterResult.from(userCharacter, gameCharacter);
     }
 

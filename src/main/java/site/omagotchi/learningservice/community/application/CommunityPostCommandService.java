@@ -19,7 +19,7 @@ import site.omagotchi.learningservice.community.application.command.PinCommunity
 import site.omagotchi.learningservice.community.application.command.UpdateCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.query.CommunityAttachmentMetadata;
 import site.omagotchi.learningservice.community.application.query.CommunityPostDetail;
-import site.omagotchi.learningservice.community.domain.CommunityErrorCode;
+import site.omagotchi.learningservice.community.application.CommunityErrorCode;
 import site.omagotchi.learningservice.community.domain.CommunityPost;
 import site.omagotchi.learningservice.community.domain.CommunityPostAttachment;
 import site.omagotchi.learningservice.community.domain.CommunityPostScope;

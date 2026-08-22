@@ -9,7 +9,7 @@ import site.omagotchi.learningservice.community.application.attachment.Community
 import site.omagotchi.learningservice.community.application.query.CommunityPostDetail;
 import site.omagotchi.learningservice.community.application.query.CommunityPostPage;
 import site.omagotchi.learningservice.community.application.query.CommunityPostSearchCondition;
-import site.omagotchi.learningservice.community.domain.CommunityErrorCode;
+import site.omagotchi.learningservice.community.application.CommunityErrorCode;
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 

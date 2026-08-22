@@ -14,4 +14,6 @@ public interface SensorDeviceRepository {
     Optional<SensorDevice> findByDeviceEui(String deviceEui);
 
     List<SensorDevice> findAll();
+
+    List<SensorDevice> findAllActive();
 }

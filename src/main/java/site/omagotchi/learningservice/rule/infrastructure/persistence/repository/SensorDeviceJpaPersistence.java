@@ -29,4 +29,9 @@ public class SensorDeviceJpaPersistence implements SensorDeviceRepository {
     public Optional<SensorDevice> findByDeviceEui(String deviceEui) {
         return sensorDeviceJpaRepository.findById(deviceEui);
     }
+
+    @Override
+    public List<SensorDevice> findAllActive() {
+        return sensorDeviceJpaRepository.findByActiveTrue();
+    }
 }

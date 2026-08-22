@@ -20,6 +20,8 @@ import java.util.regex.Pattern;
 public class InfluxSensorSeriesRepository implements SensorSeriesRepository {
 
     private static final String FLUX_TEMPLATE = """
+        import "timezone"
+        option location = timezone.location(name: "Asia/Seoul")
         from(bucket: "%s")
           |> range(start: %s, stop: %s)
           |> filter(fn: (r) => r._measurement == "%s")

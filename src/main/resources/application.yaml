@@ -93,6 +93,10 @@ management:
 timer:
   max-duration: ${TIMER_MAX_DURATION}
 
+prediction:
+  client:
+    base-url: ${PREDICTION_SERVICE_BASE_URL}
+
 telegram:
   bot:
     username: ${TELEGRAM_BOT_USERNAME}

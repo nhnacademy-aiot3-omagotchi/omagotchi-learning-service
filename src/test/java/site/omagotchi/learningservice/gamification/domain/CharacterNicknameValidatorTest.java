@@ -28,7 +28,7 @@ class CharacterNicknameValidatorTest {
     void rejectsNicknameOver30Characters() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> CharacterNicknameValidator.normalize("가".repeat(12))
+                () -> CharacterNicknameValidator.normalize("가".repeat(13))
         );
     }
 

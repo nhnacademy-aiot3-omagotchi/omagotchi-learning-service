@@ -1,6 +1,5 @@
 package site.omagotchi.learningservice.occupancy.application;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -10,7 +9,11 @@ import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEve
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyReminderSender;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
+import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertRepository;
 import site.omagotchi.learningservice.occupancy.application.result.RoomOccupancyResult;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
@@ -39,7 +42,6 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class RoomOccupancyLifecycleService {
 

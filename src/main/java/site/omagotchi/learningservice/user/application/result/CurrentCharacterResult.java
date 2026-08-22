@@ -7,6 +7,7 @@ public record CurrentCharacterResult(
         long requiredExp,
         String name,
         String type,
+        String colorId,
         String assetKey
 ) {
 }

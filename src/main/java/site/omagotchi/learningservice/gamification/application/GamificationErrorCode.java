@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.gamification.domain;
+package site.omagotchi.learningservice.gamification.application;
 
 import lombok.RequiredArgsConstructor;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
@@ -28,7 +28,17 @@ public enum GamificationErrorCode implements ErrorCode {
     INVALID_CHARACTER_NICKNAME(
             ErrorType.INVALID_INPUT,
             "INVALID_CHARACTER_NICKNAME",
-            "캐릭터 별명은 1~30자여야 합니다."
+            "닉네임은 2~12자의 한글, 영문, 숫자만 사용할 수 있으며 금칙어를 포함할 수 없습니다."
+    ),
+    DUPLICATE_NICKNAME(
+            ErrorType.CONFLICT,
+            "DUPLICATE_NICKNAME",
+            "이미 사용 중인 닉네임입니다."
+    ),
+    INVALID_CHARACTER_COLOR(
+            ErrorType.INVALID_INPUT,
+            "INVALID_CHARACTER_COLOR",
+            "지원하지 않는 캐릭터 색상입니다."
     ),
     LEVEL_POLICY_NOT_FOUND(
             ErrorType.NOT_FOUND,

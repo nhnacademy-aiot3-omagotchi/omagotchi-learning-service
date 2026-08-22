@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.community.domain;
+package site.omagotchi.learningservice.community.application;
 
 import lombok.RequiredArgsConstructor;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
@@ -31,6 +31,11 @@ public enum CommunityErrorCode implements ErrorCode {
             ErrorType.INVALID_INPUT,
             "COMMUNITY_INVALID_ATTACHMENT",
             "첨부파일이 올바르지 않습니다."
+    ),
+    ATTACHMENT_NOT_FOUND(
+            ErrorType.NOT_FOUND,
+            "COMMUNITY_ATTACHMENT_NOT_FOUND",
+            "첨부파일을 찾을 수 없습니다."
     ),
     ATTACHMENT_STORAGE_FAILED(
             ErrorType.INTERNAL,

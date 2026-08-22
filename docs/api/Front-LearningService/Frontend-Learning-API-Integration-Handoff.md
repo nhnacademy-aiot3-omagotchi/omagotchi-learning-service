@@ -11,6 +11,11 @@
 다른 내용은 이 문서를 우선한다. 최종 계약 근거는 Learning Service의 Controller,
 request/response DTO와 자동화된 Controller Test다.
 
+BFF 구조가 익숙하지 않다면 계약표보다 먼저
+[`Frontend-BFF-Request-Flow-Guide.md`](Frontend-BFF-Request-Flow-Guide.md)를 읽는다.
+Browser, Frontend BFF, Gateway, Learning Service의 역할과 실제 출결 요청 흐름을 팀 공용
+용어로 설명한다.
+
 ## 1. 먼저 합의된 호출 구조
 
 ```text
@@ -248,8 +253,9 @@ GET /api/v1/user-profiles/me/profile
     "currentExp": 120,
     "requiredExp": 300,
     "name": "야간반",
-    "type": null,
-    "assetKey": null
+    "type": "night",
+    "colorId": "pistachio",
+    "assetKey": "night/pistachio"
   }
 }
 ```
@@ -258,7 +264,9 @@ GET /api/v1/user-profiles/me/profile
 
 - 가입 승인 전에는 `approvedCohort=null`이다.
 - 캐릭터 생성 전에는 `nickname=null`, `currentCharacter=null`이다.
-- 현재 구현에서 `currentCharacter.type`, `assetKey`는 `null`이다.
+- `type`은 Frontend의 `characterId`, `colorId`는 선택 색상, `assetKey`는 확장자를 제외한
+  `/images/characters/**` 상대 키다.
+- Frontend 정적 PNG 경로는 `/images/characters/${assetKey}.png`로 만든다.
 - 출결 BFF는 `approvedCohort.cohortId`가 없으면 downstream을 호출하지 않고 가입 안내 상태를 반환한다.
 
 ### 6.2 닉네임 변경
@@ -274,7 +282,10 @@ Content-Type: application/json
 }
 ```
 
-닉네임은 trim 후 2~12자이며, 대표 캐릭터가 없으면 `404 REPRESENTATIVE_CHARACTER_NOT_FOUND`다.
+닉네임은 Unicode 정규화와 trim 후 2~12자이며 한글, 영문, 숫자만 허용한다. 금칙어·운영 주체
+사칭·특수문자 우회 입력은 `400 USER_PROFILE_INVALID_NICKNAME`, 이미 사용 중인 닉네임은
+`409 USER_PROFILE_DUPLICATE_NICKNAME`이다. 대표 캐릭터가 없으면
+`404 REPRESENTATIVE_CHARACTER_NOT_FOUND`다.
 
 ## 7. Cohort 계약
 
@@ -426,18 +437,19 @@ PUT /api/v1/cohorts/{cohortId}/attendance-policy
 ```http
 POST  /api/v1/cohorts/{cohortId}/attendance-records/check-in
 POST  /api/v1/cohorts/{cohortId}/attendance-records/check-out
-GET   /api/v1/cohorts/{cohortId}/attendance-records/me
-GET   /api/v1/cohorts/{cohortId}/attendance-records?date=2026-08-20
+GET   /api/v1/cohorts/{cohortId}/attendance-records/me?from=2026-08-01&to=2026-08-31&page=0&size=20
+GET   /api/v1/cohorts/{cohortId}/attendance-records?date=2026-08-20&page=0&size=20
 PATCH /api/v1/cohorts/{cohortId}/attendance-records/{attendance-id}/status
 ```
 
-- `/me`: 날짜 내림차순 배열
-- `?date=`: 관리자용 배열. 서버 내부에서는 `cohortMembershipId` 오름차순으로 안정 정렬하지만
-  이 내부 식별자는 HTTP 응답에 노출하지 않는다.
+- `/me`: `from`, `to`는 inclusive이며 생략 가능하다. 날짜 내림차순으로 페이지를 반환한다.
+- 날짜 범위는 최대 366일이고 `page` 기본값은 0, `size` 기본값은 20이며 최대 100이다.
+- `?date=`: 관리자용 페이지. `cohortMembershipId`, ID 오름차순으로 안정 정렬하지만 내부 식별자는
+  HTTP 응답에 노출하지 않는다.
 - check-in/check-out: `AttendanceRecordResponse` 단건
 - 관리자 상태 변경: `204 No Content`
 
-응답:
+목록 응답은 Community와 같은 `{ "items": [], "page": {} }` 구조다. `items`의 단건 형식:
 
 ```json
 {
@@ -475,6 +487,7 @@ PATCH /api/v1/cohorts/{cohortId}/attendance-records/{attendance-id}/status
 ```http
 GET    /api/v1/community/posts?page=0&size=20&type=NOTICE&search=공지
 GET    /api/v1/community/posts/{postId}
+GET    /api/v1/community/posts/{postId}/attachments/{attachmentId}
 POST   /api/v1/community/posts
 PATCH  /api/v1/community/posts/{postId}
 DELETE /api/v1/community/posts/{postId}
@@ -574,6 +587,10 @@ part "attachments"
 허용 확장자·Content-Type은 `jpg`, `jpeg`, `png`, `gif`와 대응 이미지 MIME이며 기본 파일당
 최대 5MB다. Browser `FormData`를 BFF에서 JSON stringify하지 말고 multipart 그대로 재구성한다.
 
+첨부파일 다운로드는 게시글 공개 범위와 ACTIVE 기수 소속을 먼저 검증한 뒤 `attachmentId`가 해당
+`postId` 소속인지 확인한다. 성공 응답에는 저장된 `Content-Type`, `Content-Length`, UTF-8 원본
+파일명의 `Content-Disposition: attachment`가 포함된다.
+
 ## 10. Gamification 계약
 
 ```http
@@ -592,6 +609,7 @@ POST /api/v1/gamification/quests/{userDailyQuestId}/claim
   {
     "gameCharacterId": 1,
     "code": "NIGHT_CLASS",
+    "assetKey": "night",
     "name": "야간반",
     "description": "기본 캐릭터"
   }
@@ -603,17 +621,22 @@ POST /api/v1/gamification/quests/{userDailyQuestId}/claim
 ```json
 {
   "gameCharacterId": 1,
-  "nickname": "오마"
+  "nickname": "오마",
+  "colorId": "pistachio"
 }
 ```
 
-응답은 `201 Created`다. 현재 Frontend의 `{characterId, colorId}` payload와 맞지 않는다.
+응답은 `201 Created`다. Frontend는 목록 응답의 `assetKey`로 기존 `characterId`를
+`gameCharacterId`에 매핑하고 `colorId`를 함께 보낸다.
 
 ```json
 {
   "userCharacterId": 10,
   "gameCharacterId": 1,
   "gameCharacterCode": "NIGHT_CLASS",
+  "type": "night",
+  "colorId": "pistachio",
+  "assetKey": "night/pistachio",
   "gameCharacterName": "야간반",
   "nickname": "오마",
   "displayName": "오마",
@@ -625,9 +648,11 @@ POST /api/v1/gamification/quests/{userDailyQuestId}/claim
 ```
 
 - Frontend는 먼저 `/characters`에서 숫자 `gameCharacterId`를 받는다.
-- 선택 UI는 이 ID와 사용자가 입력한 `nickname`을 전송한다.
-- `colorId`는 현재 Learning Domain에 저장할 필드가 없다. UI 전용으로 둘지 Backend 계약을
-  추가할지 별도 합의 전까지 API payload에 넣지 않는다.
+- 선택 UI는 이 ID, 사용자가 입력한 `nickname`, `colorId`를 전송한다.
+- 캐릭터 생성 닉네임에도 같은 정책을 적용하며 중복은
+  `409 DUPLICATE_NICKNAME`으로 반환한다.
+- 허용 색상은 `original`, `pistachio`, `cyan`, `cream_can`, `light_coral`,
+  `light_purple`, `white`, `dark_gray`다. 생략하면 `original`이다.
 
 홈 응답:
 
@@ -672,15 +697,18 @@ POST /api/v1/gamification/quests/{userDailyQuestId}/claim
 }
 ```
 
-다음 이벤트 API는 실제 Controller에 존재하지만 UI 버튼에서 직접 호출할 API로 확정하지 않는다.
-출결·학습 완료 Domain 동작에서 서버가 발생시키는 방식이 우선이다.
+`/api/v1/gamification/events/**`는 공개 API가 아니며 Controller에서도 제거되었다. Frontend가
+출석이나 학습 완료 후 이벤트 API를 추가로 호출하면 안 된다. 출석 체크인과 학습 기록 생성·타이머
+정상 종료가 커밋되면 Learning Service가 내부 이벤트로 일일 퀘스트를 진행한다. Frontend는 해당
+Domain API 성공 후 `/gamification/home` 또는 `/gamification/quests/daily`를 재조회한다.
 
-```http
-POST /api/v1/gamification/events/attendance
-POST /api/v1/gamification/events/study-completed
-POST /api/v1/gamification/events/character-checked
-POST /api/v1/gamification/events/llm-quest-completed
-```
+내부 이벤트는 원 트랜잭션의 커밋 전에 Outbox에 함께 저장된다. 커밋 직후 처리가 실패하거나
+인스턴스가 종료되어도 재시도 워커가 미처리 이벤트를 다시 처리하며, receipt의
+`(event_type, source_id)` 유일 키가 중복 퀘스트 진행을 막는다. 이 재처리 과정은 내부 동작이므로
+Frontend가 별도의 재시도 API를 호출할 필요는 없다.
+
+`character-checked`, `llm-quest-completed`는 신뢰할 수 있는 내부 발생 조건이 확정될 때까지
+외부에서 발생시킬 수 없다.
 
 ## 11. Ranking 계약
 
@@ -754,6 +782,12 @@ GET /api/v1/cohorts/me/presence
   "users": [
     {
       "userId": "00000000-0000-0000-0000-000000000002",
+      "nickname": "오마",
+      "currentCharacter": {
+        "type": "night",
+        "colorId": "pistachio",
+        "assetKey": "night/pistachio"
+      },
       "status": "ONLINE"
     }
   ],
@@ -761,7 +795,8 @@ GET /api/v1/cohorts/me/presence
 }
 ```
 
-사용자의 현재 ACTIVE 기수를 서버가 결정한다. 기수 ID Query Parameter는 받지 않는다.
+사용자의 현재 ACTIVE 기수를 서버가 결정한다. 기수 ID Query Parameter는 받지 않는다. 대표 캐릭터가
+없으면 `nickname`, `currentCharacter`는 `null`이며 REST Snapshot과 STOMP event는 같은 DTO를 사용한다.
 
 ### 12.2 Learning WebSocket/STOMP
 
@@ -841,45 +876,28 @@ PresenceStatus: ONLINE, AWAY, OFFLINE
 
 ## 14. 현재 Frontend 코드에서 반드시 바꿀 부분
 
-| 현재 Frontend | 실제 계약/조치 |
-|---|---|
-| `api.js`의 API Base `/bff/v1` | 유지하고 BFF Controller를 실제 구현한다. |
+| 현재 Frontend | 실제 계약/조치                                                             |
+|---|----------------------------------------------------------------------|
+| `api.js`의 API Base `/bff/v1` | 유지하고 BFF Controller를 실제 구현한다.                                        |
 | `attendance/history`, `attendance/today` | BFF가 Profile의 `approvedCohortId`로 `/attendance-records/me` 호출 후 변환한다. |
-| `checkInAt`, `checkOutAt` | `checkedInAt`, `checkedOutAt`으로 변경한다. |
-| `character.saveSelection({characterId, colorId})` | `{gameCharacterId, nickname}`으로 변경한다. |
-| Character ID가 `study` 같은 문자열 | `/gamification/characters`의 숫자 ID를 사용한다. |
-| Presence `/presence/lab/stream` SSE | BFF STOMP→SSE Bridge를 만들거나 REST Snapshot까지만 우선 연동한다. |
-| 출결·프로필·레벨 `localStorage` | 서버 응답을 Source of Truth로 바꾸고 Prototype 저장을 제거한다. |
-| `404`일 때 Prototype fallback | 실제 연동 완료 후 제거한다. |
-| BFF 쓰기 요청에 CSRF Header 없음 | `X-CSRF-TOKEN`을 모든 쓰기 요청에 추가한다. |
-| Community JSON 전용 request helper | 첨부파일용 `FormData` request helper를 추가한다. |
+| `checkInAt`, `checkOutAt` | `checkedInAt`, `checkedOutAt`으로 변경한다.                                |
+| `character.saveSelection({characterId, colorId})` | `{gameCharacterId, nickname, colorId}`로 변경한다.                        |
+| Character ID가 `study` 같은 문자열 | `/gamification/characters`의 숫자 ID를 사용한다.                             |
+| Presence `/presence/lab/stream` SSE | BFF STOMP→SSE Bridge를 만들거나 REST Snapshot까지만 우선 연동한다.                 |
+| 출결·프로필·레벨 `localStorage` | 서버 응답을 Source of Truth로 바꾸고 Prototype 저장을 제거한다.                      |
+| `404`일 때 Prototype fallback | 실제 연동 완료 후 제거한다.                                                     |
+| BFF 쓰기 요청에 CSRF Header 없음 | `X-CSRF-TOKEN`을 모든 쓰기 요청에 추가한다.                                      |
+| Community JSON 전용 request helper | 첨부파일용 `FormData` request helper를 추가한다.                               |
 
 ## 15. 현재 계약으로 화면을 완성할 수 없는 항목
 
 다음 항목은 Frontend 매핑만으로 해결되지 않으며 Backend/API 추가 또는 Identity 조합이 필요하다.
 
-1. Presence 사용자 표시
-   - 응답에는 `userId`, `status`만 있다.
-   - 현재 UI가 요구하는 사용자 이름·닉네임·캐릭터 이미지가 없다.
-   - UUID 목록을 사용자 요약으로 바꾸는 Batch API 또는 BFF의 Identity/Learning 조합이 필요하다.
-
-2. 기수 멤버 관리자 화면
+1. 기수 멤버 관리자 화면
    - 소속 응답에는 `userId`만 있고 이름·이메일이 없다.
    - BFF에서 Identity 사용자 정보와 조합하거나 Backend Projection을 추가해야 한다.
 
-3. 커뮤니티 첨부파일 표시
-   - 상세 응답에는 첨부 메타데이터만 있고 다운로드 URL/API가 없다.
-   - 인증된 첨부파일 조회 endpoint 또는 외부 Object Storage URL 계약이 필요하다.
-
-4. 캐릭터 색상
-   - Backend에는 `colorId` 저장 계약이 없다.
-   - UI 전용 상태로 유지할지 Domain에 추가할지 결정이 필요하다.
-
-5. Profile 캐릭터 Asset
-   - `currentCharacter.type`, `assetKey`가 현재 `null`이다.
-   - Frontend가 `gameCharacterName`/code 기반 정적 매핑을 할지 Backend가 채울지 결정이 필요하다.
-
-6. 감사 로그
+2. 감사 로그
    - 과거 문서의 `/cohorts/{cohortId}/audit-logs`는 현재 구현되어 있지 않다.
 
 ## 16. 연동 권장 순서

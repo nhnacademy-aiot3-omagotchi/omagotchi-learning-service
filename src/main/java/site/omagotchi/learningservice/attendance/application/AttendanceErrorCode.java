@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.attendance.domain;
+package site.omagotchi.learningservice.attendance.application;
 
 import lombok.RequiredArgsConstructor;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
@@ -40,6 +40,11 @@ public enum AttendanceErrorCode implements ErrorCode {
             ErrorType.INVALID_INPUT,
             "ATTENDANCE_CHANGE_REASON_REQUIRED",
             "출결 변경 사유는 필수입니다."
+    ),
+    ATTENDANCE_INVALID_PAGE_REQUEST(
+            ErrorType.INVALID_INPUT,
+            "ATTENDANCE_INVALID_PAGE_REQUEST",
+            "출결 조회 조건이 올바르지 않습니다."
     );
 
     private final ErrorType type;

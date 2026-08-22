@@ -12,7 +12,7 @@ import site.omagotchi.learningservice.gamification.domain.UserCharacter;
 import site.omagotchi.learningservice.gamification.domain.XpSourceType;
 import site.omagotchi.learningservice.gamification.domain.XpTransaction;
 import site.omagotchi.learningservice.gamification.infrastructure.AdvancementHistoryRepository;
-import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;
+import site.omagotchi.learningservice.gamification.application.port.UserCharacterQueryRepository;
 import site.omagotchi.learningservice.gamification.infrastructure.XpTransactionRepository;
 
 import java.util.List;
@@ -33,7 +33,7 @@ class XpRewardServiceTest {
     private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     @Mock
-    private UserCharacterRepository userCharacterRepository;
+    private UserCharacterQueryRepository userCharacterQueryRepository;
 
     @Mock
     private XpTransactionRepository xpTransactionRepository;
@@ -47,7 +47,7 @@ class XpRewardServiceTest {
     @Test
     @DisplayName("보상 EXP는 수령 시점의 대표 캐릭터에 지급된다")
     void rewardsRepresentativeCharacter() {
-        UserCharacter character = UserCharacter.representative(USER_ID, 1L, "야간반장");
+        UserCharacter character = UserCharacter.representative(USER_ID, 1L, "야간반장", "original");
         ReflectionTestUtils.setField(character, "id", 7L);
         XpTransaction savedTransaction = XpTransaction.create(
                 USER_ID,
@@ -59,7 +59,7 @@ class XpRewardServiceTest {
         ReflectionTestUtils.setField(savedTransaction, "id", 20L);
 
         XpRewardService service = new XpRewardService(
-                userCharacterRepository,
+                userCharacterQueryRepository,
                 xpTransactionRepository,
                 advancementHistoryRepository,
                 characterGrowthService
@@ -67,7 +67,7 @@ class XpRewardServiceTest {
         when(xpTransactionRepository.findBySourceTypeAndSourceId(XpSourceType.DAILY_QUEST, 10L))
                 .thenReturn(Optional.empty());
         when(characterGrowthService.requireRepresentativeCharacter(USER_ID)).thenReturn(character);
-        when(userCharacterRepository.findWithLockById(7L)).thenReturn(Optional.of(character));
+        when(userCharacterQueryRepository.getForUpdate(7L)).thenReturn(character);
         when(characterGrowthService.requireLevelPolicies()).thenReturn(List.of(
                 LevelPolicy.create(1, 0),
                 LevelPolicy.create(2, 100)
@@ -86,7 +86,7 @@ class XpRewardServiceTest {
     @Test
     @DisplayName("Lv10 경계를 넘으면 전직 이력을 생성한다")
     void createsAdvancementHistory() {
-        UserCharacter character = UserCharacter.representative(USER_ID, 1L, "야간반장");
+        UserCharacter character = UserCharacter.representative(USER_ID, 1L, "야간반장", "original");
         ReflectionTestUtils.setField(character, "id", 7L);
         XpTransaction savedTransaction = XpTransaction.create(
                 USER_ID,
@@ -98,7 +98,7 @@ class XpRewardServiceTest {
         ReflectionTestUtils.setField(savedTransaction, "id", 20L);
 
         XpRewardService service = new XpRewardService(
-                userCharacterRepository,
+                userCharacterQueryRepository,
                 xpTransactionRepository,
                 advancementHistoryRepository,
                 characterGrowthService
@@ -106,7 +106,7 @@ class XpRewardServiceTest {
         when(xpTransactionRepository.findBySourceTypeAndSourceId(XpSourceType.DAILY_QUEST, 10L))
                 .thenReturn(Optional.empty());
         when(characterGrowthService.requireRepresentativeCharacter(USER_ID)).thenReturn(character);
-        when(userCharacterRepository.findWithLockById(7L)).thenReturn(Optional.of(character));
+        when(userCharacterQueryRepository.getForUpdate(7L)).thenReturn(character);
         when(characterGrowthService.requireLevelPolicies()).thenReturn(levelPoliciesTo10());
         when(xpTransactionRepository.save(any(XpTransaction.class))).thenReturn(savedTransaction);
         when(advancementHistoryRepository.existsByUserCharacterIdAndStage(7L, AdvancementStage.FIRST))
@@ -121,7 +121,7 @@ class XpRewardServiceTest {
     @Test
     @DisplayName("잠금 후 기존 원장이 있으면 중복 지급하지 않는다")
     void doesNotRewardWhenTransactionExistsAfterLock() {
-        UserCharacter character = UserCharacter.representative(USER_ID, 1L, "야간반장");
+        UserCharacter character = UserCharacter.representative(USER_ID, 1L, "야간반장", "original");
         ReflectionTestUtils.setField(character, "id", 7L);
         XpTransaction existingTransaction = XpTransaction.create(
                 USER_ID,
@@ -137,7 +137,7 @@ class XpRewardServiceTest {
         );
 
         XpRewardService service = new XpRewardService(
-                userCharacterRepository,
+                userCharacterQueryRepository,
                 xpTransactionRepository,
                 advancementHistoryRepository,
                 characterGrowthService
@@ -145,7 +145,7 @@ class XpRewardServiceTest {
         when(xpTransactionRepository.findBySourceTypeAndSourceId(XpSourceType.DAILY_QUEST, 10L))
                 .thenReturn(Optional.empty(), Optional.of(existingTransaction));
         when(characterGrowthService.requireRepresentativeCharacter(USER_ID)).thenReturn(character);
-        when(userCharacterRepository.findWithLockById(7L)).thenReturn(Optional.of(character));
+        when(userCharacterQueryRepository.getForUpdate(7L)).thenReturn(character);
         when(characterGrowthService.requireLevelPolicies()).thenReturn(policies);
 
         var result = service.reward(USER_ID, 100, XpSourceType.DAILY_QUEST, 10L);

@@ -32,6 +32,7 @@
 		<telegrambots.version>6.9.7.1</telegrambots.version>
 		<openfeign-querydsl.version>7.4.0</openfeign-querydsl.version>
 		<influxdb-client.version>8.0.0</influxdb-client.version>
+		<badwordfiltering.version>1.0.0</badwordfiltering.version>
 		<asciidoctor-maven-plugin.version>3.2.0</asciidoctor-maven-plugin.version>
 		<sonar.projectKey>aiot3-team5-omagotchi-learning-service</sonar.projectKey>
 		<sonar.projectName>aiot3-team5-omagotchi-learning-service</sonar.projectName>
@@ -39,6 +40,11 @@
 		<commons-io.version>2.20.0</commons-io.version>
 	</properties>
 	<dependencies>
+		<dependency>
+			<groupId>io.github.vaneproject</groupId>
+			<artifactId>badwordfiltering</artifactId>
+			<version>${badwordfiltering.version}</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
@@ -187,6 +193,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-restclient</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.github.vaneproject</groupId>
+			<artifactId>badwordfiltering</artifactId>
+			<version>1.0.0</version>
 		</dependency>
 	</dependencies>
 	<dependencyManagement>

@@ -5,6 +5,7 @@ import site.omagotchi.learningservice.gamification.application.result.GameCharac
 public record GameCharacterResponse(
         Long gameCharacterId,
         String code,
+        String assetKey,
         String name,
         String description
 ) {
@@ -13,6 +14,7 @@ public record GameCharacterResponse(
         return new GameCharacterResponse(
                 result.gameCharacterId(),
                 result.code(),
+                result.assetKey(),
                 result.name(),
                 result.description()
         );

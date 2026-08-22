@@ -463,11 +463,10 @@ POST /gamification/characters/representative
 GET /gamification/home
 GET /gamification/quests/daily
 POST /gamification/quests/{userDailyQuestId}/claim
-POST /gamification/events/attendance
-POST /gamification/events/study-completed
-POST /gamification/events/character-checked
-POST /gamification/events/llm-quest-completed
 ```
+
+> 현재 계약에서는 `/api/v1/gamification/events/**` 공개 API가 제거되었다. 출석과 학습 완료는
+> Learning Service 내부 이벤트로 처리하며 Frontend가 별도 이벤트 API를 호출하지 않는다.
 
 홈 응답:
 

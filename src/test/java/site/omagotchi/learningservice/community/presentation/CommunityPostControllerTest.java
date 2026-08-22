@@ -9,11 +9,13 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.community.application.CommunityPostCommandService;
 import site.omagotchi.learningservice.community.application.CommunityPostQueryService;
+import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentDownload;
 import site.omagotchi.learningservice.community.application.command.CreateCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.command.PinCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.command.UpdateCommunityPostCommand;
@@ -147,6 +149,30 @@ class CommunityPostControllerTest {
                 .andExpect(jsonPath("$.content").value("내용"));
 
         verify(communityPostQueryService).getPost(USER_ID, 1L);
+    }
+
+    @Test
+    @DisplayName("첨부파일 다운로드는 안전한 응답 헤더와 파일 본문을 반환한다")
+    void downloadsAttachment() throws Exception {
+        given(communityPostQueryService.downloadAttachment(USER_ID, 10L, 20L))
+                .willReturn(new CommunityAttachmentDownload(
+                        "화면.png",
+                        "image/png",
+                        3L,
+                        new ByteArrayResource(new byte[]{1, 2, 3})
+                ));
+
+        mockMvc.perform(get("/api/v1/community/posts/{postId}/attachments/{attachmentId}", 10L, 20L)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string(HttpHeaders.CONTENT_TYPE, "image/png"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("X-Content-Type-Options", "nosniff"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .bytes(new byte[]{1, 2, 3}));
+
+        verify(communityPostQueryService).downloadAttachment(USER_ID, 10L, 20L);
     }
 
     @Test

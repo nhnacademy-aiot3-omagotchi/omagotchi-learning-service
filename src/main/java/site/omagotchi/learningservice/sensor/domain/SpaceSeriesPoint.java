@@ -14,6 +14,17 @@ public record SpaceSeriesPoint(
         boolean partial
 ) {
 
+    public SpaceSeriesPoint {
+        if (count < 0) {
+            throw new IllegalArgumentException("count는 0 이상이어야 합니다: " + count);
+        }
+        if (count == 0 && (avg != null || min != null || max != null)) {
+            throw new IllegalArgumentException("수집이 없으면 집계값이 없어야 합니다: " + time);
+        }
+        if (count > 0 && (avg == null || min == null || max == null)) {
+            throw new IllegalArgumentException("수집이 있으면 집계값이 있어야 합니다: " + time);
+        }
+    }
     /** 그 시간대에 값을 보낸 센서가 하나도 없을 때. */
     public static SpaceSeriesPoint empty(Instant time, boolean partial) {
         return new SpaceSeriesPoint(time, null, null, null, null, null, 0, partial);

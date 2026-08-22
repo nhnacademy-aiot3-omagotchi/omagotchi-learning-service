@@ -8,9 +8,9 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.sensor.application.port.SpaceSeriesRepository;
 import site.omagotchi.learningservice.sensor.application.query.SpaceSeriesQuery;
-import site.omagotchi.learningservice.sensor.domain.SensorRef;
+import site.omagotchi.learningservice.sensor.application.result.SensorRef;
 import site.omagotchi.learningservice.sensor.domain.SeriesBucket;
-import site.omagotchi.learningservice.sensor.domain.SpaceSeries;
+import site.omagotchi.learningservice.sensor.application.result.SpaceSeries;
 import site.omagotchi.learningservice.sensor.domain.SpaceSeriesPoint;
 
 import java.time.Instant;
@@ -26,7 +26,7 @@ public class InfluxSpaceSeriesRepository implements SpaceSeriesRepository {
 
     private static final String FLUX_TEMPLATE = """
         import "timezone"
-        option location = timezone.location(name: "Asia/Seoul")
+        option location = timezone.location(name: "%s")
 
         from(bucket: "%s")
           |> range(start: %s, stop: %s)
@@ -57,6 +57,11 @@ public class InfluxSpaceSeriesRepository implements SpaceSeriesRepository {
     public SpaceSeries findSpaceSeries(SpaceSeriesQuery query) {
         requireValid(query);
 
+        if (query.includedDeviceEuis().isEmpty()) {
+            return new SpaceSeries(query.location(), query.measurement(), query.window(),
+                    query.from(), query.to(), List.of(), List.of());
+        }
+
         Map<String, String> pointByEui = new LinkedHashMap<>();
 
         List<SpaceSeriesPoint> points = new ArrayList<>();
@@ -81,6 +86,7 @@ public class InfluxSpaceSeriesRepository implements SpaceSeriesRepository {
                                          Map<String, String> pointByEui) {
 
         String flux = FLUX_TEMPLATE.formatted(
+                query.zone(),
                 bucketName(bucket), start.toString(), stop.toString(),
                 query.measurement(), query.location(),
                 query.window().fluxInterval(), createEmpty);

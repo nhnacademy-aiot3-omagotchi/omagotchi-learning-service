@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.sensor.domain;
+package site.omagotchi.learningservice.sensor.application.result;
 
 /** 공간에 속한 센서 하나. point는 InfluxDB 태그, displayName은 sensor_devices 테이블에서 온다. */
 public record SensorRef(

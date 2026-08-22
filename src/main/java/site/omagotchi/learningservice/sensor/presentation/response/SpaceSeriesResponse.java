@@ -1,9 +1,8 @@
 package site.omagotchi.learningservice.sensor.presentation.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import site.omagotchi.learningservice.sensor.domain.SensorRef;
 import site.omagotchi.learningservice.sensor.domain.SeriesWindow;
-import site.omagotchi.learningservice.sensor.domain.SpaceSeries;
+import site.omagotchi.learningservice.sensor.application.result.SpaceSeries;
 
 import java.time.Instant;
 import java.util.List;

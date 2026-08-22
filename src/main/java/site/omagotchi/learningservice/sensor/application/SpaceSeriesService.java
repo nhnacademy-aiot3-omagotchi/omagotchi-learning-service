@@ -7,14 +7,15 @@ import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.rule.application.SensorDeviceService;
 import site.omagotchi.learningservice.sensor.application.port.SpaceSeriesRepository;
 import site.omagotchi.learningservice.sensor.application.query.SpaceSeriesQuery;
-import site.omagotchi.learningservice.sensor.domain.SensorRef;
+import site.omagotchi.learningservice.sensor.application.result.SensorRef;
 import site.omagotchi.learningservice.sensor.domain.SeriesWindow;
-import site.omagotchi.learningservice.sensor.domain.SpaceSeries;
+import site.omagotchi.learningservice.sensor.application.result.SpaceSeries;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -38,16 +39,17 @@ public class SpaceSeriesService {
 
         SpaceSeries series = spaceSeriesRepository.findSpaceSeries(
                 new SpaceSeriesQuery(location, measurement, seriesWindow,
-                        from, boundary, now, activeEuis));
+                        from, boundary, now, properties.zone(), activeEuis));
 
         return withDisplayNames(series);
     }
 
     /** 저장소는 표시명을 모른다. 기기 마스터에서 찾아 채운다. */
     private SpaceSeries withDisplayNames(SpaceSeries series) {
+        Map<String, String> displayNames = sensorDeviceService.findDisplayNames();
+
         List<SensorRef> named = series.sensors().stream()
-                .map(sensor -> sensor.withDisplayName(
-                        sensorDeviceService.findDisplayName(sensor.deviceEui()).orElse(null)))
+                .map(sensor -> sensor.withDisplayName(displayNames.get(sensor.deviceEui())))
                 .toList();
 
         return new SpaceSeries(series.location(), series.measurement(), series.window(),

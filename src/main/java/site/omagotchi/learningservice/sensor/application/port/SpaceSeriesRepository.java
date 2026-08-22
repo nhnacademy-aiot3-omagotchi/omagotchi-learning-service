@@ -1,7 +1,7 @@
 package site.omagotchi.learningservice.sensor.application.port;
 
 import site.omagotchi.learningservice.sensor.application.query.SpaceSeriesQuery;
-import site.omagotchi.learningservice.sensor.domain.SpaceSeries;
+import site.omagotchi.learningservice.sensor.application.result.SpaceSeries;
 
 public interface SpaceSeriesRepository {
 

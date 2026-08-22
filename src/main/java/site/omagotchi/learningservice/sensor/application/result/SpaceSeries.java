@@ -1,4 +1,7 @@
-package site.omagotchi.learningservice.sensor.domain;
+package site.omagotchi.learningservice.sensor.application.result;
+
+import site.omagotchi.learningservice.sensor.domain.SeriesWindow;
+import site.omagotchi.learningservice.sensor.domain.SpaceSeriesPoint;
 
 import java.time.Instant;
 import java.util.List;

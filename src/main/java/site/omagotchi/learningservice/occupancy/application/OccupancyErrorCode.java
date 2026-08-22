@@ -66,7 +66,7 @@ public enum OccupancyErrorCode implements ErrorCode {
     CAPACITY_EXCEEDED(ErrorType.CONFLICT, "OCCUPANCY_CAPACITY_EXCEEDED",
             "회의실 정원을 초과했습니다."),                                    // MR-28
     OCCUPIER_MEMBERSHIP_INACTIVE(ErrorType.CONFLICT, "OCCUPANCY_OCCUPIER_MEMBERSHIP_INACTIVE",
-            "점유자의 기수 소속이 유효하지 않아 참여자를 추가할 수 없습니다."),  // MR-33, 대상이 아니라 점유자 쪽 원인
+            "점유자의 기수 소속이 유효하지 않습니다."),  // MR-33·MR-21, 요청자가 아니라 점유자 쪽 원인
     EXTENSION_TOO_EARLY(ErrorType.CONFLICT, "OCCUPANCY_EXTENSION_TOO_EARLY",
             "만료 30분 전부터 연장할 수 있습니다."),                            // MR-06
     EXTENSION_LIMIT_EXCEEDED(ErrorType.CONFLICT, "OCCUPANCY_EXTENSION_LIMIT_EXCEEDED",

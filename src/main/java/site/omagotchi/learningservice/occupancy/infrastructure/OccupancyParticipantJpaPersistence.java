@@ -69,6 +69,11 @@ public class OccupancyParticipantJpaPersistence implements OccupancyParticipantR
     }
 
     @Override
+    public int closeActiveByUserId(UUID userId, OffsetDateTime endedAt) {
+        return participantJpaRepository.closeActiveByUserId(userId, endedAt);
+    }
+
+    @Override
     public int closeAllActiveByOccupancyId(Long occupancyId, OffsetDateTime endedAt) {
         return participantJpaRepository.closeAllActiveByOccupancyId(occupancyId, endedAt);
     }

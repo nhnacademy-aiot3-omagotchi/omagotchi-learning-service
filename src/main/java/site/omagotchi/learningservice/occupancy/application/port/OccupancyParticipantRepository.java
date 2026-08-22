@@ -85,4 +85,18 @@ public interface OccupancyParticipantRepository {
      * @return 마감된 행 수
      */
     int closeAllActiveByOccupancyId(Long occupancyId, OffsetDateTime endedAt);
+
+    /**
+     * 이 계정의 열린 참여를 마감한다 (MR-26 참여 처리, 명세 06 §2 7항).
+     *
+     * <p>남의 점유에 참여자로 들어가 있는 경우가 대상이다. 열어 두면
+     * {@code uq_occupancy_participants_one_active}가 계정 기준이라 그 사람이 다시는
+     * 어떤 회의에도 들어갈 수 없다.</p>
+     *
+     * <p>{@code left_at IS NULL} 조건부라 멱등하다. 점유자 본인의 참여 행은 점유 종료가
+     * 이미 닫으므로 여기서 다시 닫히지 않는다.</p>
+     *
+     * @return 마감한 행 수
+     */
+    int closeActiveByUserId(UUID userId, OffsetDateTime endedAt);
 }

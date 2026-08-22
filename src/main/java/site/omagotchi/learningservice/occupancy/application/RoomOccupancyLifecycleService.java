@@ -175,7 +175,8 @@ public class RoomOccupancyLifecycleService {
      * 상태만 바꾸고 참여자를 열어 두면 {@code uq_occupancy_participants_one_active}가 계정
      * 기준이라 그 사람들이 영구히 다른 회의에 들어갈 수 없다.</p>
      *
-     * @throws BusinessException 점유자 기수의 매니저 아님(403), 활성 점유 없음·이미 종료(409)
+     * @throws BusinessException 점유자 기수의 매니저 아님(403),
+     *                           활성 점유 없음·이미 종료·<b>점유자 멤버십 종료</b>(409)
      */
     @Transactional
     public void forceRelease(Long spaceId, UUID actorUserId) {
@@ -340,14 +341,30 @@ public class RoomOccupancyLifecycleService {
      * 요청자가 점유자 기수의 매니저인지 확인한다 (MR-21).
      *
      * <p>점유 행에 {@code cohort_id}가 없으므로(ERD v3) {@code occupier_membership_id}로
-     * 기수를 되찾는다. 그 멤버십이 이미 끝났다면 기수를 특정할 수 없어 권한 판정 자체가
-     * 성립하지 않으므로 거절한다 — 그 점유는 계정 삭제·기수 종료 연동이 정리할 대상이다.</p>
+     * 기수를 되찾는다.</p>
+     *
+     * <p><b>두 실패를 다른 코드로 구분한다.</b> 멤버십이 이미 끝났으면 기수를 특정할 수 없어
+     * 권한 판정 자체가 성립하지 않는데, 이것을 권한 없음(403)으로 돌려주면 매니저가 <b>자기
+     * 권한을 의심하게 된다.</b> 원인은 요청자가 아니라 데이터 쪽이므로 참여자 추가 경로와
+     * 같은 {@code OCCUPIER_MEMBERSHIP_INACTIVE}(409)를 쓴다.</p>
+     *
+     * <p><b>정상 경로에서는 이 상태에 도달하지 않는다.</b> 소속이 끝나면
+     * {@code OccupancyMembershipEndedListener}가 점유를 반납 처리하므로(MR-26), 여기까지
+     * 왔다는 것은 그 정리가 일어나지 않았다는 뜻이다 — 이벤트 유실, 또는 이벤트를 거치지
+     * 않고 멤버십이 바뀐 경우다.</p>
+     *
+     * <p><b>그 복구 경로는 아직 없다.</b> 팀이 같은 이벤트에 대해
+     * {@code EndedMembershipSweep}(ADR space-team/0013)을 둔 것과 같은 정합성 스윕이
+     * 필요하며, 그때까지는 만료 스케줄러(#9)가 {@code expires_at} 경과 후 정리한다 —
+     * 최대 3시간(2h + 연장 1h) 동안 방이 잠기고, 참여자들은
+     * {@code uq_occupancy_participants_one_active}에 묶여 다른 회의에 들어가지 못한다.</p>
      */
     private void requireOccupierCohortManager(Long occupierMembershipId, UUID actorUserId) {
         Long occupierCohortId = cohortMembershipQueryService
                 .findActiveMembership(occupierMembershipId)
                 .map(CohortMembershipView::cohortId)
-                .orElseThrow(() -> new BusinessException(OccupancyErrorCode.NOT_COHORT_MANAGER));
+                .orElseThrow(() -> new BusinessException(
+                        OccupancyErrorCode.OCCUPIER_MEMBERSHIP_INACTIVE));
 
         if (!cohortAccessService.isManager(occupierCohortId, actorUserId)) {
             throw new BusinessException(OccupancyErrorCode.NOT_COHORT_MANAGER);

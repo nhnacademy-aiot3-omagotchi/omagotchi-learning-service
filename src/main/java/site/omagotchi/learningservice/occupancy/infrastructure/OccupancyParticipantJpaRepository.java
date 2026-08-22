@@ -82,4 +82,28 @@ public interface OccupancyParticipantJpaRepository extends JpaRepository<Occupan
             @Param("occupancyId") Long occupancyId,
             @Param("endedAt") OffsetDateTime endedAt
     );
+
+    /**
+     * 이 계정의 열린 참여를 마감한다 (MR-26 참여 처리).
+     *
+     * <p>{@code uq_occupancy_participants_one_active}가 계정 기준이라 열린 행은 최대
+     * 하나지만, 조건부 UPDATE라 0건이어도 안전하다 — 점유자 본인의 행은 점유 종료가
+     * 이미 닫았으므로 여기서 다시 닫히지 않는다.</p>
+     *
+     * <p>{@code joined_at} 보정은 위와 같은 이유다 —
+     * {@code ck_occupancy_participants_period}가 역전 구간을 거부한다.</p>
+     */
+    @Modifying
+    @Query("""
+                UPDATE OccupancyParticipant p
+                SET p.leftAt = CASE
+                        WHEN p.joinedAt > :endedAt THEN p.joinedAt
+                        ELSE :endedAt
+                    END
+                WHERE p.userId = :userId
+                  AND p.leftAt IS NULL""")
+    int closeActiveByUserId(
+            @Param("userId") UUID userId,
+            @Param("endedAt") OffsetDateTime endedAt
+    );
 }

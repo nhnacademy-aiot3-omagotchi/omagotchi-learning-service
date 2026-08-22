@@ -19,8 +19,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.BDDAssertions.then;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -54,6 +53,7 @@ class CohortPresenceServiceTest {
         given(redisTemplate.opsForHash()).willReturn(hashOperations);
         given(redisTemplate.opsForSet()).willReturn(setOperations);
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(presenceUserProfileQuery.findByUserIds(anyCollection())).willReturn(Map.of());
     }
 
     @Test

@@ -161,7 +161,7 @@ public class UserProfileService {
         try {
             return CharacterNicknameValidator.normalize(nickname);
         } catch (IllegalArgumentException exception) {
-            throw new BusinessException(UserProfileErrorCode.INVALID_NICKNAME);
+            throw new BusinessException(UserProfileErrorCode.INVALID_NICKNAME, exception);
         }
     }
 }

@@ -4,6 +4,7 @@ import site.omagotchi.learningservice.attendance.domain.AttendanceErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
 public record AttendancePageQuery(
         LocalDate from,
@@ -19,7 +20,7 @@ public record AttendancePageQuery(
         if (page < 0
                 || size < 1
                 || size > MAX_SIZE
-                || from != null && to != null && (from.isAfter(to) || from.plusDays(365).isBefore(to))) {
+                || from != null && to != null && (from.isAfter(to) || ChronoUnit.DAYS.between(from, to) > 365)){
             throw new BusinessException(AttendanceErrorCode.ATTENDANCE_INVALID_PAGE_REQUEST);
         }
     }

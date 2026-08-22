@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class CharacterNicknameValidator {
 

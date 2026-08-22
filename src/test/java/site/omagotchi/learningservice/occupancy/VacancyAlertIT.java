@@ -9,6 +9,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.support.TransactionTemplate;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.OccupancyErrorCode;
@@ -16,8 +18,11 @@ import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecyc
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
 import site.omagotchi.learningservice.occupancy.application.VacancyAlertDispatcher;
 import site.omagotchi.learningservice.occupancy.application.VacancyAlertService;
+import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
+import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertRepository;
 import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSender;
 import site.omagotchi.learningservice.occupancy.application.result.VacancyAlertView;
+import site.omagotchi.learningservice.occupancy.domain.VacancyAlert;
 import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 
 import java.time.OffsetDateTime;
@@ -28,6 +33,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,6 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.verify;
 
@@ -72,6 +79,23 @@ class VacancyAlertIT {
      */
     @MockitoBean
     VacancyAlertSender vacancyAlertSender;
+
+    /**
+     * 잠금 지점을 가로채 순서를 제어하려고 감싼다. Mock이 아니라 Spy인 것이 중요하다 —
+     * 대기 뒤에는 실제 잠금이 그대로 일어나야 이 검증이 의미를 갖는다.
+     */
+    @MockitoSpyBean
+    RoomOccupancyRepository occupancyRepository;
+
+    @Autowired
+    VacancyAlertRepository alertRepository;
+
+    @Autowired
+    TransactionTemplate transactionTemplate;
+
+    /** 잠금 직전에 멈출 Thread를 표시한다. 반납 Thread까지 멈추면 서로를 기다린다. */
+    private static final ThreadLocal<Boolean> PAUSE_BEFORE_LOCK =
+            ThreadLocal.withInitial(() -> false);
 
     @Autowired
     JdbcTemplate jdbcTemplate;
@@ -230,23 +254,71 @@ class VacancyAlertIT {
                         .isEqualTo(OccupancyErrorCode.ALERT_ROOM_AVAILABLE));
     }
 
+    /**
+     * <b>신청과 반납의 교차 실행을 결정적으로 재현한다.</b>
+     *
+     * <p>순서를 잠금 지점에서 직접 제어한다 — 신청 Transaction이 {@code lockById} <b>직전에</b>
+     * 멈추고, 그 사이 반납이 같은 행을 잠그고 커밋한 뒤, 신청을 재개시킨다. 간격을
+     * {@code Thread.sleep}으로 기대하지 않으므로 CI에서도 순서가 뒤집히지 않는다.</p>
+     *
+     * <p>잠그지 않던 시절에는 이 순서에서 신청이 <b>받아들여졌다.</b> 요약 조회가 반납 이전
+     * 스냅샷을 보고 통과시켰고, 반납의 {@code AFTER_COMMIT} 발송은 아직 커밋되지 않은 그
+     * 신청을 보지 못해 <b>이미 빈 방에 대기 신청</b>이 남았다 — 그 방이 다시 차고 비워질
+     * 때까지 발송되지 않는다.</p>
+     *
+     * <p>이 테스트가 성립하는 전제가 하나 더 있다 — 신청이 요약을 <b>값으로</b> 읽는다는 것.
+     * 엔티티로 읽으면 1차 캐시에 올라가 {@code lockById}가 반납 이전 스냅샷을 돌려주고,
+     * 잠금을 얻고도 ACTIVE로 판정한다.</p>
+     */
     @Test
-    @DisplayName("반납이 먼저 커밋되면 신청은 빈 방으로 거절된다.")
-    void requestAfterReleaseIsRejectedAsAvailable() {
-        Long cohortId = fixture.createCohort("공실-반납경합");
+    @DisplayName("신청이 잠금을 기다리는 사이 반납이 커밋되면 빈 방으로 거절된다.")
+    void requestBlockedAtLockSeesReleaseCommittedMeanwhile() throws Exception {
+        Long cohortId = fixture.createCohort("공실-잠금경합");
         OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
         OccupancyTestFixture.Member waiter = fixture.createActiveMember(cohortId);
-        Long roomId = fixture.createMeetingRoom(cohortId, "공실-반납경합-1", 8);
-
+        Long roomId = fixture.createMeetingRoom(cohortId, "공실-잠금경합-1", 8);
         UUID waiterUserId = waiter.userId();
+
         roomOccupancyService.start(roomId, occupier.userId());
-        roomOccupancyLifecycleService.release(roomId, occupier.userId());
 
-        assertThatThrownBy(() -> vacancyAlertService.request(roomId, null, waiterUserId))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
-                        .isEqualTo(OccupancyErrorCode.ALERT_ROOM_AVAILABLE));
+        CountDownLatch reachedLock = new CountDownLatch(1);
+        CountDownLatch releaseCommitted = new CountDownLatch(1);
 
+        // 신청 Thread에서만 멈춘다. 반납도 같은 Method로 행을 잠그므로, 구분하지 않으면
+        // 반납까지 멈춰 서로를 기다린다.
+        willAnswer(invocation -> {
+            if (PAUSE_BEFORE_LOCK.get()) {
+                reachedLock.countDown();
+                releaseCommitted.await(10, TimeUnit.SECONDS);
+            }
+            return invocation.callRealMethod();
+        }).given(occupancyRepository).lockById(anyLong());
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<Throwable> request = executor.submit(() -> {
+                PAUSE_BEFORE_LOCK.set(true);
+                try {
+                    return catchThrowable(
+                            () -> vacancyAlertService.request(roomId, null, waiterUserId));
+                } finally {
+                    PAUSE_BEFORE_LOCK.remove();
+                }
+            });
+
+            assertThat(reachedLock.await(10, TimeUnit.SECONDS)).isTrue();
+            roomOccupancyLifecycleService.release(roomId, occupier.userId());
+            releaseCommitted.countDown();
+
+            assertThat(request.get(20, TimeUnit.SECONDS))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(thrown -> assertThat(((BusinessException) thrown).getErrorCode())
+                            .isEqualTo(OccupancyErrorCode.ALERT_ROOM_AVAILABLE));
+        } finally {
+            executor.shutdownNow();
+        }
+
+        // 이미 빈 방을 기다리는 신청이 남으면 안 된다.
         assertThat(allRows(roomId)).isZero();
     }
 
@@ -362,51 +434,50 @@ class VacancyAlertIT {
     }
 
     /**
-     * 발송과 취소가 겹치면 <b>발송은 나갔는데 이력이 사라지는</b> 구간이 생긴다.
+     * <b>발송이 잠금을 쥔 사이 도착한 취소는 이력을 지우지 못한다.</b>
      *
-     * <p>취소가 잠금 없이 읽으면 아직 대기 중인 스냅샷을 보고 삭제로 진행한다. 그 DELETE는
-     * 발송 트랜잭션이 커밋될 때까지 행 잠금에 막혀 있다가, 커밋된 뒤(= {@code notified_at}이
-     * 찍힌 뒤) 그대로 실행된다 — {@code WHERE id = ?}뿐이라 그 사이 바뀐 상태를 보지 않는다.</p>
+     * <p>순서를 <b>테스트가 잠금을 직접 쥐어</b> 만든다. 잠금을 놓지 않는 동안 취소의 삭제는
+     * <b>반드시</b> 막혀 있으므로, 간격을 {@code Thread.sleep}으로 기대할 필요가 없다 —
+     * 아래 짧은 타임아웃은 "아직 막혀 있나"를 확인하는 탐침이지 순서를 만드는 장치가 아니다.</p>
      *
-     * <p>결과는 "알림은 받았는데 기록이 없다"이고, 명세 §3이 소진을 <b>행 보존</b>으로
-     * 정해 둔 것과 어긋난다. 잠금으로 읽으면 커밋 뒤 조건을 다시 평가해
-     * {@code notified_at IS NULL}에 걸리지 않으므로 404가 되어야 한다.</p>
+     * <p>취소가 먼저 읽고 지우던 시절에는 이 순서에서 <b>이미 발송된 신청이 지워졌다.</b>
+     * 삭제문이 {@code WHERE id = ?}뿐이라 잠금이 풀린 뒤 바뀐 상태를 보지 못했다. 지금은
+     * {@code notified_at IS NULL}을 함께 걸어, 잠금이 풀리면 조건을 다시 평가해 0행이 된다.</p>
+     *
+     * <p>결과가 "알림은 받았는데 기록이 없다"가 아니라 <b>404 + 행 보존</b>이어야 한다.
+     * 명세 04 §3이 소진을 행 보존으로 정해 두었다.</p>
      */
     @Test
-    @DisplayName("발송 중 도착한 취소는 이력을 지우지 못하고 404가 된다.")
-    void cancelDuringDispatchCannotEraseSentAlert() throws Exception {
+    @DisplayName("발송이 잠금을 쥔 사이 도착한 취소는 이력을 지우지 못하고 404가 된다.")
+    void cancelBlockedByDeliveryLockCannotEraseSentAlert() throws Exception {
         Long cohortId = fixture.createCohort("공실-발송중취소");
         OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
         OccupancyTestFixture.Member waiter = fixture.createActiveMember(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "공실-발송중취소-1", 8);
+        UUID waiterUserId = waiter.userId();
 
         roomOccupancyService.start(roomId, occupier.userId());
-        Long alertId = vacancyAlertService.request(roomId, null, waiter.userId());
+        Long alertId = vacancyAlertService.request(roomId, null, waiterUserId);
 
-        CountDownLatch sendingStarted = new CountDownLatch(1);
-        CountDownLatch cancelStarted = new CountDownLatch(1);
-
-        // 발송 트랜잭션이 행 잠금을 쥔 채 머무는 구간을 만든다. 취소가 그 안에서
-        // 읽기를 시도해야 두 경로가 실제로 겹친다.
-        willAnswer(invocation -> {
-            sendingStarted.countDown();
-            cancelStarted.await(5, TimeUnit.SECONDS);
-            Thread.sleep(300L);
-            return null;
-        }).given(vacancyAlertSender).sendVacancyAlert(any());
-
-        ExecutorService executor = Executors.newFixedThreadPool(2);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
         try {
-            Future<Integer> dispatch = executor.submit(
-                    () -> vacancyAlertDispatcher.dispatch(roomId, OffsetDateTime.now()));
+            Future<Throwable> cancel = transactionTemplate.execute(status -> {
+                // 발송 Transaction이 하는 것과 같은 잠금이다. 이 블록이 커밋될 때까지
+                // 다른 Transaction의 삭제는 이 행에서 진행할 수 없다.
+                VacancyAlert locked = alertRepository.lockWaitingById(alertId).orElseThrow();
 
-            Future<Throwable> cancel = executor.submit(() -> {
-                sendingStarted.await(5, TimeUnit.SECONDS);
-                cancelStarted.countDown();
-                return catchThrowable(() -> vacancyAlertService.cancel(alertId, waiter.userId()));
+                Future<Throwable> attempt = executor.submit(
+                        () -> catchThrowable(() -> vacancyAlertService.cancel(alertId, waiterUserId)));
+
+                // 잠금을 쥔 동안에는 반드시 막혀 있다 — 타임아웃이 나야 정상이다.
+                assertThatThrownBy(() -> attempt.get(1, TimeUnit.SECONDS))
+                        .isInstanceOf(TimeoutException.class);
+
+                // 발송 성공에 해당하는 기록. 커밋되면 막혀 있던 삭제가 재개된다.
+                locked.markNotified(OffsetDateTime.now());
+                return attempt;
             });
 
-            assertThat(dispatch.get(20, TimeUnit.SECONDS)).isEqualTo(1);
             assertThat(cancel.get(20, TimeUnit.SECONDS))
                     .isInstanceOf(BusinessException.class)
                     .satisfies(thrown -> assertThat(((BusinessException) thrown).getErrorCode())

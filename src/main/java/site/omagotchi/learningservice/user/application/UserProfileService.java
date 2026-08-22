@@ -11,7 +11,6 @@ import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
 import site.omagotchi.learningservice.gamification.domain.CharacterAppearance;
-import site.omagotchi.learningservice.gamification.domain.CharacterNicknameValidator;
 import site.omagotchi.learningservice.gamification.application.GamificationErrorCode;
 import site.omagotchi.learningservice.gamification.domain.LevelPolicy;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
@@ -89,18 +88,15 @@ public class UserProfileService {
     /**
      * 닉네임은 별도 설정 테이블 없이 대표 UserCharacter.nickname에 저장한다.
      */
-    @Transactional
+    /**
+     * 닉네임은 Gamification의 UserCharacter가 소유한다.
+     * 중복 확인, 상태 변경, 유니크 위반 변환은 소유 Feature의 트랜잭션 경계에서 처리하고
+     * 이 Feature는 결과만 자기 응답 계약으로 감싼다.
+     */
     public UserNicknameResult updateNickname(UUID userId, String nickname) {
-        String normalizedNickname = normalizeNickname(nickname);
-        UserCharacter character = characterGrowthService.requireRepresentativeCharacter(userId);
-        if (userCharacterRepository.existsByNicknameIgnoreCaseAndRepresentativeTrueAndIdNot(
-                normalizedNickname,
-                character.getId()
-        )) {
-            throw new BusinessException(UserProfileErrorCode.DUPLICATE_NICKNAME);
-        }
-        character.updateNickname(normalizedNickname);
-        return new UserNicknameResult(character.getNickname());
+        return new UserNicknameResult(
+                characterGrowthService.changeRepresentativeNickname(userId, nickname)
+        );
     }
 
     private Optional<CohortMembership> findApprovedMembership(UUID userId) {
@@ -155,13 +151,5 @@ public class UserProfileService {
             cursor = cursor.minusDays(1);
         }
         return streakDays;
-    }
-
-    private String normalizeNickname(String nickname) {
-        try {
-            return CharacterNicknameValidator.normalize(nickname);
-        } catch (IllegalArgumentException exception) {
-            throw new BusinessException(UserProfileErrorCode.INVALID_NICKNAME, exception);
-        }
     }
 }

@@ -30,6 +30,7 @@ import java.util.UUID;
 
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -86,9 +87,72 @@ class AttendanceControllerTest {
                 .andExpect(jsonPath("$.page.number").value(0))
                 .andExpect(jsonPath("$.page.size").value(10))
                 .andExpect(jsonPath("$.page.totalElements").value(1))
+                .andExpect(jsonPath("$.page.totalPages").value(1))
                 .andDo(document("attendance/get-my-records"));
 
         verify(attendanceService).getMyRecords(COHORT_ID, USER_ID, query);
+    }
+
+    /**
+     * 일자별 조회는 관리자용 엔드포인트다. date는 필수이고 page·size는 선택이며,
+     * Controller가 date를 AttendancePageQuery의 from·to에 동시에 넣는다.
+     * 이 바인딩이 깨지면 관리자 출결 화면이 조용히 다른 날짜를 보여준다.
+     */
+    @Test
+    @DisplayName("일자별 출결 목록은 date와 페이지 조건을 그대로 전달한다")
+    void getsDailyAttendanceRecords() throws Exception {
+        LocalDate date = LocalDate.of(2026, 8, 20);
+        AttendancePageQuery query = AttendancePageQuery.of(date, date, 0, 10);
+        given(attendanceService.getDailyRecords(COHORT_ID, USER_ID, date, query))
+                .willReturn(new AttendanceRecordPageResult(List.of(record()), 0, 10, 12, 2));
+
+        mockMvc.perform(get("/api/v1/cohorts/{cohortId}/attendance-records", COHORT_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .param("date", "2026-08-20")
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].id").value(10))
+                .andExpect(jsonPath("$.items[0].attendanceDate").value("2026-08-20"))
+                .andExpect(jsonPath("$.items[0].finalStatus").value("PRESENT"))
+                .andExpect(jsonPath("$.page.number").value(0))
+                .andExpect(jsonPath("$.page.size").value(10))
+                .andExpect(jsonPath("$.page.totalElements").value(12))
+                .andExpect(jsonPath("$.page.totalPages").value(2))
+                .andDo(document("attendance/get-daily-records"));
+
+        verify(attendanceService).getDailyRecords(COHORT_ID, USER_ID, date, query);
+    }
+
+    /** page·size는 선택 값이다. 생략하면 AttendancePageQuery의 기본값(0, 20)이 적용된다. */
+    @Test
+    @DisplayName("일자별 출결 목록은 page와 size를 생략하면 기본값을 사용한다")
+    void getsDailyAttendanceRecordsWithDefaultPaging() throws Exception {
+        LocalDate date = LocalDate.of(2026, 8, 20);
+        AttendancePageQuery query = AttendancePageQuery.of(date, date, null, null);
+        given(attendanceService.getDailyRecords(COHORT_ID, USER_ID, date, query))
+                .willReturn(new AttendanceRecordPageResult(List.of(record()), 0, 20, 1, 1));
+
+        mockMvc.perform(get("/api/v1/cohorts/{cohortId}/attendance-records", COHORT_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .param("date", "2026-08-20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.number").value(0))
+                .andExpect(jsonPath("$.page.size").value(20))
+                .andExpect(jsonPath("$.page.totalPages").value(1));
+
+        verify(attendanceService).getDailyRecords(COHORT_ID, USER_ID, date, query);
+    }
+
+    /** date는 필수다. 누락되면 Service를 호출하지 않고 400으로 끊어야 한다. */
+    @Test
+    @DisplayName("일자별 출결 목록은 date가 없으면 400을 반환한다")
+    void rejectsDailyAttendanceRecordsWithoutDate() throws Exception {
+        mockMvc.perform(get("/api/v1/cohorts/{cohortId}/attendance-records", COHORT_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(attendanceService);
     }
 
     private AttendanceRecordResult record() {

@@ -7,7 +7,7 @@ import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.rule.application.SensorDeviceService;
 import site.omagotchi.learningservice.sensor.application.port.SensorSeriesRepository;
 import site.omagotchi.learningservice.sensor.application.query.SensorSeriesQuery;
-import site.omagotchi.learningservice.sensor.domain.SensorSeries;
+import site.omagotchi.learningservice.sensor.application.result.SensorSeries;
 import site.omagotchi.learningservice.sensor.domain.SeriesPoint;
 import site.omagotchi.learningservice.sensor.domain.SeriesWindow;
 
@@ -34,7 +34,7 @@ public class SensorSeriesService {
         Instant boundary = seriesWindow.settledUntil(now, properties.zone());
 
         List<SeriesPoint> points = seriesRepository.findSeries(
-                new SensorSeriesQuery(deviceEui, measurement, seriesWindow, from, boundary, now));
+                new SensorSeriesQuery(deviceEui, measurement, seriesWindow, from, boundary, now, properties.zone()));
 
         String displayName = sensorDeviceService.findDisplayName(deviceEui)
                 .orElse(null);

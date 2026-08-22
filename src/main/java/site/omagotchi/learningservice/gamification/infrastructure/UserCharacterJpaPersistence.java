@@ -3,20 +3,72 @@ package site.omagotchi.learningservice.gamification.infrastructure;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
+import site.omagotchi.learningservice.gamification.application.GamificationErrorCode;
+import site.omagotchi.learningservice.gamification.application.port.UserCharacterQueryRepository;
 import site.omagotchi.learningservice.gamification.application.port.UserCharacterWriteRepository;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
+import site.omagotchi.learningservice.global.exception.BusinessException;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
- * 대표 캐릭터 쓰기의 JPA 구현.
+ * 대표 캐릭터 조회·쓰기의 JPA 구현.
  *
- * <p>유니크 위반을 업무 오류로 바꾸는 책임을 여기에 둔다. Hibernate 예외 계층과
- * DB 인덱스명은 전부 기술 정보이므로 application이 알 필요가 없다.
+ * <p>"대표 캐릭터" 조건과 정렬, 비관적 잠금, 유니크 위반 변환을 이 계층 안에서만 처리한다.
+ * Spring Data 메서드 이름 규칙과 Hibernate 예외 계층은 전부 기술 정보이므로
+ * application이 알 필요가 없다.
  */
 @Repository
 @RequiredArgsConstructor
-public class UserCharacterJpaPersistence implements UserCharacterWriteRepository {
+public class UserCharacterJpaPersistence
+        implements UserCharacterQueryRepository, UserCharacterWriteRepository {
 
     private final UserCharacterRepository userCharacterRepository;
+
+    @Override
+    public Optional<UserCharacter> findRepresentativeByUserId(UUID userId) {
+        return userCharacterRepository.findFirstByUserIdAndRepresentativeTrueOrderByIdAsc(userId);
+    }
+
+    @Override
+    public List<UserCharacter> findRepresentativesByUserIds(Collection<UUID> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return List.of();
+        }
+        return userCharacterRepository.findByUserIdInAndRepresentativeTrue(userIds);
+    }
+
+    @Override
+    public boolean existsRepresentativeByUserId(UUID userId) {
+        return userCharacterRepository.existsByUserIdAndRepresentativeTrue(userId);
+    }
+
+    @Override
+    public boolean existsRepresentativeByNickname(String nickname) {
+        return userCharacterRepository.existsByNicknameIgnoreCaseAndRepresentativeTrue(nickname);
+    }
+
+    @Override
+    public boolean existsRepresentativeByNicknameExcludingId(
+            String nickname,
+            Long excludedUserCharacterId
+    ) {
+        return userCharacterRepository.existsByNicknameIgnoreCaseAndRepresentativeTrueAndIdNot(
+                nickname,
+                excludedUserCharacterId
+        );
+    }
+
+    @Override
+    public UserCharacter getForUpdate(Long userCharacterId) {
+        return userCharacterRepository.findWithLockById(userCharacterId)
+                .orElseThrow(() -> new BusinessException(
+                        GamificationErrorCode.REPRESENTATIVE_CHARACTER_NOT_FOUND
+                ));
+    }
 
     /**
      * {@inheritDoc}

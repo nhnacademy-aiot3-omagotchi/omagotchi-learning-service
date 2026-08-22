@@ -12,7 +12,7 @@ import site.omagotchi.learningservice.gamification.domain.GameCharacter;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
 import site.omagotchi.learningservice.gamification.infrastructure.GameCharacterRepository;
 import site.omagotchi.learningservice.gamification.application.port.UserCharacterWriteRepository;
-import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;
+import site.omagotchi.learningservice.gamification.application.port.UserCharacterQueryRepository;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -34,7 +34,7 @@ class CharacterOnboardingServiceTest {
     private GameCharacterRepository gameCharacterRepository;
 
     @Mock
-    private UserCharacterRepository userCharacterRepository;
+    private UserCharacterQueryRepository userCharacterQueryRepository;
 
     @Mock
     private UserCharacterWriteRepository userCharacterWriteRepository;
@@ -45,7 +45,7 @@ class CharacterOnboardingServiceTest {
         GameCharacter gameCharacter = GameCharacter.create("NIGHT_CLASS", "야간반", "기본 캐릭터", "night");
         ReflectionTestUtils.setField(gameCharacter, "id", 1L);
         when(gameCharacterRepository.findByIdAndActiveTrue(1L)).thenReturn(Optional.of(gameCharacter));
-        when(userCharacterRepository.existsByUserIdAndRepresentativeTrue(USER_ID)).thenReturn(false);
+        when(userCharacterQueryRepository.existsRepresentativeByUserId(USER_ID)).thenReturn(false);
         when(userCharacterWriteRepository.saveRepresentative(any(UserCharacter.class))).thenAnswer(invocation -> {
             UserCharacter character = invocation.getArgument(0);
             ReflectionTestUtils.setField(character, "id", 10L);
@@ -53,7 +53,7 @@ class CharacterOnboardingServiceTest {
         });
         CharacterOnboardingService service = new CharacterOnboardingService(
                 gameCharacterRepository,
-                userCharacterRepository,
+                userCharacterQueryRepository,
                 userCharacterWriteRepository
         );
 
@@ -83,11 +83,11 @@ class CharacterOnboardingServiceTest {
         GameCharacter gameCharacter = GameCharacter.create("NIGHT_CLASS", "야간반", "기본 캐릭터", "night");
         ReflectionTestUtils.setField(gameCharacter, "id", 1L);
         when(gameCharacterRepository.findByIdAndActiveTrue(1L)).thenReturn(Optional.of(gameCharacter));
-        when(userCharacterRepository.existsByNicknameIgnoreCaseAndRepresentativeTrue("야간반장"))
+        when(userCharacterQueryRepository.existsRepresentativeByNickname("야간반장"))
                 .thenReturn(true);
         CharacterOnboardingService service = new CharacterOnboardingService(
                 gameCharacterRepository,
-                userCharacterRepository,
+                userCharacterQueryRepository,
                 userCharacterWriteRepository
         );
 
@@ -114,8 +114,8 @@ class CharacterOnboardingServiceTest {
         GameCharacter gameCharacter = GameCharacter.create("NIGHT_CLASS", "야간반", "기본 캐릭터", "night");
         ReflectionTestUtils.setField(gameCharacter, "id", 1L);
         when(gameCharacterRepository.findByIdAndActiveTrue(1L)).thenReturn(Optional.of(gameCharacter));
-        when(userCharacterRepository.existsByUserIdAndRepresentativeTrue(USER_ID)).thenReturn(false);
-        when(userCharacterRepository.existsByNicknameIgnoreCaseAndRepresentativeTrue("야간반장"))
+        when(userCharacterQueryRepository.existsRepresentativeByUserId(USER_ID)).thenReturn(false);
+        when(userCharacterQueryRepository.existsRepresentativeByNickname("야간반장"))
                 .thenReturn(false);
         when(userCharacterWriteRepository.saveRepresentative(any(UserCharacter.class)))
                 .thenThrow(new site.omagotchi.learningservice.global.exception.BusinessException(
@@ -123,7 +123,7 @@ class CharacterOnboardingServiceTest {
                 ));
         CharacterOnboardingService service = new CharacterOnboardingService(
                 gameCharacterRepository,
-                userCharacterRepository,
+                userCharacterQueryRepository,
                 userCharacterWriteRepository
         );
 

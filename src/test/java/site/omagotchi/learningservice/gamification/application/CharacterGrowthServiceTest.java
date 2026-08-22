@@ -10,7 +10,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.gamification.application.port.UserCharacterWriteRepository;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
 import site.omagotchi.learningservice.gamification.infrastructure.LevelPolicyRepository;
-import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;
+import site.omagotchi.learningservice.gamification.application.port.UserCharacterQueryRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.util.Optional;
@@ -37,7 +37,7 @@ class CharacterGrowthServiceTest {
     private static final Long CHARACTER_ID = 30L;
 
     @Mock
-    private UserCharacterRepository userCharacterRepository;
+    private UserCharacterQueryRepository userCharacterQueryRepository;
 
     @Mock
     private UserCharacterWriteRepository userCharacterWriteRepository;
@@ -52,9 +52,9 @@ class CharacterGrowthServiceTest {
     @DisplayName("닉네임을 trim해서 대표 캐릭터 별명을 변경한다")
     void changesNicknameWithNormalization() {
         UserCharacter character = representativeCharacter("오마");
-        given(userCharacterRepository.findFirstByUserIdAndRepresentativeTrueOrderByIdAsc(USER_ID))
+        given(userCharacterQueryRepository.findRepresentativeByUserId(USER_ID))
                 .willReturn(Optional.of(character));
-        given(userCharacterRepository.existsByNicknameIgnoreCaseAndRepresentativeTrueAndIdNot(
+        given(userCharacterQueryRepository.existsRepresentativeByNicknameExcludingId(
                 "새이름", CHARACTER_ID
         )).willReturn(false);
 
@@ -97,9 +97,9 @@ class CharacterGrowthServiceTest {
     @DisplayName("이미 사용 중인 닉네임은 변경할 수 없다")
     void rejectsDuplicateNickname() {
         UserCharacter character = representativeCharacter("오마");
-        given(userCharacterRepository.findFirstByUserIdAndRepresentativeTrueOrderByIdAsc(USER_ID))
+        given(userCharacterQueryRepository.findRepresentativeByUserId(USER_ID))
                 .willReturn(Optional.of(character));
-        given(userCharacterRepository.existsByNicknameIgnoreCaseAndRepresentativeTrueAndIdNot(
+        given(userCharacterQueryRepository.existsRepresentativeByNicknameExcludingId(
                 "새이름", CHARACTER_ID
         )).willReturn(true);
 
@@ -121,9 +121,9 @@ class CharacterGrowthServiceTest {
     @DisplayName("사전 확인 통과 후 반영 경합이 나면 DUPLICATE_NICKNAME이 그대로 전달된다")
     void propagatesDuplicateNicknameFromFlushRace() {
         UserCharacter character = representativeCharacter("오마");
-        given(userCharacterRepository.findFirstByUserIdAndRepresentativeTrueOrderByIdAsc(USER_ID))
+        given(userCharacterQueryRepository.findRepresentativeByUserId(USER_ID))
                 .willReturn(Optional.of(character));
-        given(userCharacterRepository.existsByNicknameIgnoreCaseAndRepresentativeTrueAndIdNot(
+        given(userCharacterQueryRepository.existsRepresentativeByNicknameExcludingId(
                 "새이름", CHARACTER_ID
         )).willReturn(false);
         given(userCharacterWriteRepository.flushRepresentative(character))
@@ -140,7 +140,7 @@ class CharacterGrowthServiceTest {
     @Test
     @DisplayName("대표 캐릭터가 없으면 닉네임을 변경할 수 없다")
     void rejectsWhenRepresentativeCharacterMissing() {
-        given(userCharacterRepository.findFirstByUserIdAndRepresentativeTrueOrderByIdAsc(USER_ID))
+        given(userCharacterQueryRepository.findRepresentativeByUserId(USER_ID))
                 .willReturn(Optional.empty());
 
         BusinessException exception = assertThrows(

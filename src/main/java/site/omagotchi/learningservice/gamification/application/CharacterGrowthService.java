@@ -8,9 +8,9 @@ import site.omagotchi.learningservice.gamification.application.result.Representa
 import site.omagotchi.learningservice.gamification.domain.LevelPolicy;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
 import site.omagotchi.learningservice.gamification.infrastructure.LevelPolicyRepository;
+import site.omagotchi.learningservice.gamification.application.port.UserCharacterQueryRepository;
 import site.omagotchi.learningservice.gamification.application.port.UserCharacterWriteRepository;
 import site.omagotchi.learningservice.gamification.domain.CharacterNicknameValidator;
-import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.util.Collection;
@@ -23,12 +23,12 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class CharacterGrowthService {
 
-    private final UserCharacterRepository userCharacterRepository;
+    private final UserCharacterQueryRepository userCharacterQueryRepository;
     private final UserCharacterWriteRepository userCharacterWriteRepository;
     private final LevelPolicyRepository levelPolicyRepository;
 
     public UserCharacter requireRepresentativeCharacter(UUID userId) {
-        return userCharacterRepository.findFirstByUserIdAndRepresentativeTrueOrderByIdAsc(userId)
+        return userCharacterQueryRepository.findRepresentativeByUserId(userId)
                 .orElseThrow(() -> new BusinessException(GamificationErrorCode.REPRESENTATIVE_CHARACTER_NOT_FOUND));
     }
 
@@ -48,7 +48,7 @@ public class CharacterGrowthService {
         String normalizedNickname = normalizeNickname(nickname);
         UserCharacter character = requireRepresentativeCharacter(userId);
 
-        if (userCharacterRepository.existsByNicknameIgnoreCaseAndRepresentativeTrueAndIdNot(
+        if (userCharacterQueryRepository.existsRepresentativeByNicknameExcludingId(
                 normalizedNickname,
                 character.getId()
         )) {
@@ -73,12 +73,12 @@ public class CharacterGrowthService {
     }
 
     public Optional<RepresentativeCharacterResult> findRepresentativeCharacter(UUID userId) {
-        return userCharacterRepository.findFirstByUserIdAndRepresentativeTrueOrderByIdAsc(userId)
+        return userCharacterQueryRepository.findRepresentativeByUserId(userId)
                 .map(RepresentativeCharacterResult::from);
     }
 
     public List<RepresentativeCharacterResult> findRepresentativeCharacters(Collection<UUID> userIds) {
-        return userCharacterRepository.findByUserIdInAndRepresentativeTrue(userIds)
+        return userCharacterQueryRepository.findRepresentativesByUserIds(userIds)
                 .stream()
                 .map(RepresentativeCharacterResult::from)
                 .toList();

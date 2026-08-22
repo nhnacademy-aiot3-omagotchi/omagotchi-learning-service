@@ -11,8 +11,8 @@ import site.omagotchi.learningservice.gamification.domain.CharacterAppearance;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
 import site.omagotchi.learningservice.gamification.infrastructure.GameCharacterRepository;
+import site.omagotchi.learningservice.gamification.application.port.UserCharacterQueryRepository;
 import site.omagotchi.learningservice.gamification.application.port.UserCharacterWriteRepository;
-import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.util.List;
@@ -24,7 +24,7 @@ import java.util.UUID;
 public class CharacterOnboardingService {
 
     private final GameCharacterRepository gameCharacterRepository;
-    private final UserCharacterRepository userCharacterRepository;
+    private final UserCharacterQueryRepository userCharacterQueryRepository;
     private final UserCharacterWriteRepository userCharacterWriteRepository;
 
     public List<GameCharacterResult> getAvailableCharacters() {
@@ -36,14 +36,14 @@ public class CharacterOnboardingService {
     @Transactional
     public UserCharacterResult createRepresentativeCharacter(UUID userId, CreateUserCharacterCommand command) {
         // 성장 상태는 대표 캐릭터 하나를 기준으로 잡아서 온보딩 중복 생성을 먼저 끊음
-        if (userCharacterRepository.existsByUserIdAndRepresentativeTrue(userId)) {
+        if (userCharacterQueryRepository.existsRepresentativeByUserId(userId)) {
             throw new BusinessException(GamificationErrorCode.REPRESENTATIVE_CHARACTER_ALREADY_EXISTS);
         }
         GameCharacter gameCharacter = gameCharacterRepository.findByIdAndActiveTrue(command.gameCharacterId())
                 .orElseThrow(() -> new BusinessException(GamificationErrorCode.GAME_CHARACTER_NOT_FOUND));
 
         String nickname = normalizeNickname(command.nickname());
-        if (userCharacterRepository.existsByNicknameIgnoreCaseAndRepresentativeTrue(nickname)) {
+        if (userCharacterQueryRepository.existsRepresentativeByNickname(nickname)) {
             throw new BusinessException(GamificationErrorCode.DUPLICATE_NICKNAME);
         }
         String colorId = normalizeColorId(command.colorId());

@@ -7,7 +7,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import site.omagotchi.learningservice.gamification.application.GamificationErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
-import java.util.Locale;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class UserCharacterConstraintTranslator {
@@ -31,7 +30,7 @@ public final class UserCharacterConstraintTranslator {
         if (name == null) {
             return exception;
         }
-        if (name.toLowerCase(Locale.ROOT).contains(UX_REPRESENTATIVE_NICKNAME)) {
+        if (UX_REPRESENTATIVE_NICKNAME.equalsIgnoreCase(name)) {
             return new BusinessException(GamificationErrorCode.DUPLICATE_NICKNAME, exception);
         }
         return exception;

@@ -12,7 +12,7 @@ import site.omagotchi.learningservice.gamification.domain.UserCharacter;
 import site.omagotchi.learningservice.gamification.domain.XpSourceType;
 import site.omagotchi.learningservice.gamification.domain.XpTransaction;
 import site.omagotchi.learningservice.gamification.infrastructure.AdvancementHistoryRepository;
-import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;
+import site.omagotchi.learningservice.gamification.application.port.UserCharacterQueryRepository;
 import site.omagotchi.learningservice.gamification.infrastructure.XpTransactionRepository;
 
 import java.util.List;
@@ -33,7 +33,7 @@ class XpRewardServiceTest {
     private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     @Mock
-    private UserCharacterRepository userCharacterRepository;
+    private UserCharacterQueryRepository userCharacterQueryRepository;
 
     @Mock
     private XpTransactionRepository xpTransactionRepository;
@@ -59,7 +59,7 @@ class XpRewardServiceTest {
         ReflectionTestUtils.setField(savedTransaction, "id", 20L);
 
         XpRewardService service = new XpRewardService(
-                userCharacterRepository,
+                userCharacterQueryRepository,
                 xpTransactionRepository,
                 advancementHistoryRepository,
                 characterGrowthService
@@ -67,7 +67,7 @@ class XpRewardServiceTest {
         when(xpTransactionRepository.findBySourceTypeAndSourceId(XpSourceType.DAILY_QUEST, 10L))
                 .thenReturn(Optional.empty());
         when(characterGrowthService.requireRepresentativeCharacter(USER_ID)).thenReturn(character);
-        when(userCharacterRepository.findWithLockById(7L)).thenReturn(Optional.of(character));
+        when(userCharacterQueryRepository.getForUpdate(7L)).thenReturn(character);
         when(characterGrowthService.requireLevelPolicies()).thenReturn(List.of(
                 LevelPolicy.create(1, 0),
                 LevelPolicy.create(2, 100)
@@ -98,7 +98,7 @@ class XpRewardServiceTest {
         ReflectionTestUtils.setField(savedTransaction, "id", 20L);
 
         XpRewardService service = new XpRewardService(
-                userCharacterRepository,
+                userCharacterQueryRepository,
                 xpTransactionRepository,
                 advancementHistoryRepository,
                 characterGrowthService
@@ -106,7 +106,7 @@ class XpRewardServiceTest {
         when(xpTransactionRepository.findBySourceTypeAndSourceId(XpSourceType.DAILY_QUEST, 10L))
                 .thenReturn(Optional.empty());
         when(characterGrowthService.requireRepresentativeCharacter(USER_ID)).thenReturn(character);
-        when(userCharacterRepository.findWithLockById(7L)).thenReturn(Optional.of(character));
+        when(userCharacterQueryRepository.getForUpdate(7L)).thenReturn(character);
         when(characterGrowthService.requireLevelPolicies()).thenReturn(levelPoliciesTo10());
         when(xpTransactionRepository.save(any(XpTransaction.class))).thenReturn(savedTransaction);
         when(advancementHistoryRepository.existsByUserCharacterIdAndStage(7L, AdvancementStage.FIRST))
@@ -137,7 +137,7 @@ class XpRewardServiceTest {
         );
 
         XpRewardService service = new XpRewardService(
-                userCharacterRepository,
+                userCharacterQueryRepository,
                 xpTransactionRepository,
                 advancementHistoryRepository,
                 characterGrowthService
@@ -145,7 +145,7 @@ class XpRewardServiceTest {
         when(xpTransactionRepository.findBySourceTypeAndSourceId(XpSourceType.DAILY_QUEST, 10L))
                 .thenReturn(Optional.empty(), Optional.of(existingTransaction));
         when(characterGrowthService.requireRepresentativeCharacter(USER_ID)).thenReturn(character);
-        when(userCharacterRepository.findWithLockById(7L)).thenReturn(Optional.of(character));
+        when(userCharacterQueryRepository.getForUpdate(7L)).thenReturn(character);
         when(characterGrowthService.requireLevelPolicies()).thenReturn(policies);
 
         var result = service.reward(USER_ID, 100, XpSourceType.DAILY_QUEST, 10L);

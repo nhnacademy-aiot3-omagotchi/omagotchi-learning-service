@@ -43,6 +43,8 @@ public enum OccupancyErrorCode implements ErrorCode {
             "점유자만 참여자를 관리할 수 있습니다."),                                 // MR-29, MR-31
     ALERT_COHORT_ACCESS_DENIED(ErrorType.AUTHORIZATION, "OCCUPANCY_ALERT_COHORT_ACCESS_DENIED",
             "해당 기수의 활성 소속이 아닙니다."),                                     // MR-02
+    NOT_COHORT_MANAGER(ErrorType.AUTHORIZATION, "OCCUPANCY_NOT_COHORT_MANAGER",
+            "점유자가 속한 기수의 매니저만 강제 종료할 수 있습니다."),               // MR-21
 
     // 404
     SPACE_NOT_FOUND(ErrorType.NOT_FOUND, "OCCUPANCY_SPACE_NOT_FOUND",

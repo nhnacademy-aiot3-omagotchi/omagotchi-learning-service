@@ -13,8 +13,8 @@ import java.util.Optional;
  * {@link OccupancyParticipantRepository}와의 차이다. 신청은 구간이 아니라 일회성
  * 의사표시라 "취소한 신청"의 이력을 남길 이유가 없다.</p>
  *
- * <p>강제 종료 정리(MR-21)·공간 비활성화 정리(RM-15)·기수 종료 정리(CE-02)에 필요한
- * 삭제는 아직 여기 없다. 쓰지 않는 Method를 미리 Port에 두지 않는다.</p>
+ * <p>공간 비활성화 정리(RM-15)·기수 종료 정리(CE-02)에 필요한 삭제는 아직 여기 없다.
+ * 쓰지 않는 Method를 미리 Port에 두지 않는다.</p>
  */
 public interface VacancyAlertRepository {
 
@@ -86,4 +86,17 @@ public interface VacancyAlertRepository {
      * @return 실제로 지웠으면 {@code true}. {@code false}는 호출부가 404로 옮긴다
      */
     boolean deleteWaiting(Long alertId, Collection<Long> cohortMembershipIds);
+
+    /**
+     * 이 회의실의 대기 중 신청을 전부 지운다 (MR-21).
+     *
+     * <p>강제 종료는 공간 회수가 목적이라 곧 쓸 수 없는 방이다. 신청을 남겨 두면 다음
+     * 공실에 <b>회수된 방을 기다리던 사람들</b>에게 알림이 나간다.</p>
+     *
+     * <p>소진된 신청({@code notified_at IS NOT NULL})은 건드리지 않는다. 그쪽은 이미 끝난
+     * 의사표시의 이력이라 지울 이유가 없고, 지우면 "알림을 보낸 적 있다"를 잃는다.</p>
+     *
+     * @return 지운 건수
+     */
+    int deleteWaitingBySpaceId(Long spaceId);
 }

@@ -160,6 +160,52 @@ public class RoomOccupancyLifecycleService {
     }
 
     /**
+     * 기수 매니저가 점유를 강제 종료한다 (MR-21).
+     *
+     * <p><b>반납({@link #release})과 후속 처리가 정반대다.</b> 저쪽은 공실 알림을 발송하지만
+     * 여기는 <b>발송하지 않고 대기 신청을 지운다</b> — 공간 회수가 목적이라 곧 쓸 수 없는
+     * 방을 대기자에게 알리면 안 되고, 신청을 남겨 두면 다음 공실에 <b>회수된 방을 기다리던
+     * 사람들</b>에게 알림이 나간다.</p>
+     *
+     * <p>권한을 <b>점유자의 기수</b>로 판정하는 것이 요점이다 (명세 02 §2). 요청자의 기수가
+     * 아니라 점유자의 기수에서 매니저여야 하며, 다기수 담당자 때문에 단일 기수 비교가 아니라
+     * 그 기수를 지정한 판정을 쓴다.</p>
+     *
+     * <p>참여자 마감·신청 삭제를 <b>같은 Transaction</b>에 두는 것도 명세가 정한 것이다.
+     * 상태만 바꾸고 참여자를 열어 두면 {@code uq_occupancy_participants_one_active}가 계정
+     * 기준이라 그 사람들이 영구히 다른 회의에 들어갈 수 없다.</p>
+     *
+     * @throws BusinessException 점유자 기수의 매니저 아님(403), 활성 점유 없음·이미 종료(409)
+     */
+    @Transactional
+    public void forceRelease(Long spaceId, UUID actorUserId) {
+
+        // 락 밖에서 값으로 읽는다. 여기서 엔티티를 읽으면 1차 캐시에 올라가
+        // 아래 lockById()의 상태 재확인이 락 이전 스냅샷을 보게 된다.
+        RoomOccupancyRepository.ActiveOccupancy summary =
+                occupancyRepository.findActiveSummaryBySpaceId(spaceId)
+                        .orElseThrow(() -> new BusinessException(OccupancyErrorCode.OCCUPANCY_ENDED));
+
+        requireOccupierCohortManager(summary.occupierMembershipId(), actorUserId);
+
+        RoomOccupancy occupancy = occupancyRepository.lockById(summary.id())
+                .orElseThrow(() -> new BusinessException(OccupancyErrorCode.OCCUPANCY_ENDED));
+        if (!occupancy.isActive()) {
+            throw new BusinessException(OccupancyErrorCode.OCCUPANCY_ENDED);
+        }
+
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        occupancy.forceRelease(now);
+
+        int closed = participantRepository.closeAllActiveByOccupancyId(occupancy.getId(), now);
+        int discarded = alertRepository.deleteWaitingBySpaceId(spaceId);
+
+        // RoomVacatedEvent를 발행하지 않는 것이 이 경로의 정의다 (MR-21).
+        log.info("점유를 강제 종료했습니다. spaceId={}, occupancyId={}, 참여자 마감={}건, 대기 신청 삭제={}건",
+                spaceId, occupancy.getId(), closed, discarded);
+    }
+
+    /**
      * 만료된 점유를 일괄 종료한다 (스케줄러 #9).
      *
      * <p>점유 시작이 대행하는 {@code expireStale*}와 <b>목적이 다르다.</b> 저쪽은 요청 경로에서
@@ -288,5 +334,23 @@ public class RoomOccupancyLifecycleService {
             throw new BusinessException(OccupancyErrorCode.OCCUPANCY_ENDED);
         }
         return locked;
+    }
+
+    /**
+     * 요청자가 점유자 기수의 매니저인지 확인한다 (MR-21).
+     *
+     * <p>점유 행에 {@code cohort_id}가 없으므로(ERD v3) {@code occupier_membership_id}로
+     * 기수를 되찾는다. 그 멤버십이 이미 끝났다면 기수를 특정할 수 없어 권한 판정 자체가
+     * 성립하지 않으므로 거절한다 — 그 점유는 계정 삭제·기수 종료 연동이 정리할 대상이다.</p>
+     */
+    private void requireOccupierCohortManager(Long occupierMembershipId, UUID actorUserId) {
+        Long occupierCohortId = cohortMembershipQueryService
+                .findActiveMembership(occupierMembershipId)
+                .map(CohortMembershipView::cohortId)
+                .orElseThrow(() -> new BusinessException(OccupancyErrorCode.NOT_COHORT_MANAGER));
+
+        if (!cohortAccessService.isManager(occupierCohortId, actorUserId)) {
+            throw new BusinessException(OccupancyErrorCode.NOT_COHORT_MANAGER);
+        }
     }
 }

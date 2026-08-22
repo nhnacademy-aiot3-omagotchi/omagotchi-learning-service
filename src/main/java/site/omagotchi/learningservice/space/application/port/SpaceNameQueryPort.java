@@ -12,5 +12,13 @@ import java.util.Optional;
  */
 public interface SpaceNameQueryPort {
 
+    /**
+     * 삭제되지 않은 공간의 이름을 읽는다.
+     *
+     * <p>소프트 삭제된 공간은 {@code Optional.empty()}다. 소비처가 이름 조회 실패를
+     * "공간 {id}"로 대체하는 fallback을 이미 갖추고 있는데(예: {@code VacancyAlertDispatcher}),
+     * 삭제된 공간의 옛 이름을 그대로 돌려주면 그 fallback이 걸리지 않아 사용자 알림에
+     * 이미 사라진 방 이름이 그대로 노출된다.</p>
+     */
     Optional<String> findName(Long spaceId);
 }

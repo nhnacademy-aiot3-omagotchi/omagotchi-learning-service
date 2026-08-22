@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -13,9 +14,11 @@ import site.omagotchi.learningservice.cohort.application.CohortMembershipQuerySe
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
+import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertRepository;
-import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
 import site.omagotchi.learningservice.occupancy.application.result.VacancyAlertView;
+import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
+import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 import site.omagotchi.learningservice.occupancy.domain.VacancyAlert;
 
 import java.time.Clock;
@@ -23,7 +26,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -33,6 +36,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -56,13 +60,14 @@ class VacancyAlertServiceTest {
     private static final Long COHORT_ID = 3L;
     private static final Long OTHER_COHORT_ID = 4L;
     private static final Long MEMBERSHIP_ID = 10L;
+    private static final Long OCCUPIER_MEMBERSHIP_ID = 99L;
     private static final Long OTHER_MEMBERSHIP_ID = 11L;
 
     private static final UUID REQUESTER_USER_ID = UUID.randomUUID();
     private static final UUID OCCUPIER_USER_ID = UUID.randomUUID();
 
     @Mock
-    private OccupancyQueryService occupancyQueryService;
+    private RoomOccupancyRepository occupancyRepository;
 
     @Mock
     private CohortMembershipQueryService cohortMembershipQueryService;
@@ -77,7 +82,7 @@ class VacancyAlertServiceTest {
     void setUp() {
         clock = Clock.fixed(NOW, SEOUL);
         vacancyAlertService = new VacancyAlertService(
-                occupancyQueryService,
+                occupancyRepository,
                 cohortMembershipQueryService,
                 alertRepository,
                 clock
@@ -112,7 +117,7 @@ class VacancyAlertServiceTest {
     @Test
     @DisplayName("타 기수가 점유 중인 회의실에도 신청할 수 있다.")
     void allowsRequestWhenOccupierIsFromAnotherCohort() {
-        givenOccupiedRoomOwnedByCohort(OTHER_COHORT_ID);
+        givenOccupiedRoom();
         givenMemberships(membership(MEMBERSHIP_ID, COHORT_ID));
         given(alertRepository.save(any(VacancyAlert.class))).willAnswer(call -> call.getArgument(0));
 
@@ -129,8 +134,7 @@ class VacancyAlertServiceTest {
     @Test
     @DisplayName("빈 회의실에는 신청할 수 없다.")
     void cannotRequestForAvailableRoom() {
-        given(occupancyQueryService.findActiveBySpaceIds(List.of(SPACE_ID), now()))
-                .willReturn(Map.of());
+        given(occupancyRepository.findActiveSummaryBySpaceId(SPACE_ID)).willReturn(Optional.empty());
 
         assertBusinessError(
                 OccupancyErrorCode.ALERT_ROOM_AVAILABLE,
@@ -143,7 +147,8 @@ class VacancyAlertServiceTest {
     @Test
     @DisplayName("본인이 점유 중인 회의실에는 신청할 수 없다.")
     void occupierCannotRequestForOwnRoom() {
-        givenOccupiedRoom();
+        // 본인 방 판정은 잠금 이전에 끝난다 — 잠글 필요가 없다는 것도 계약의 일부다.
+        givenActiveSummary();
 
         assertBusinessError(
                 OccupancyErrorCode.ALERT_OCCUPIER_CANNOT_REQUEST,
@@ -231,6 +236,65 @@ class VacancyAlertServiceTest {
         );
 
         verify(alertRepository, never()).findWaitingByMembershipIds(anyCollection());
+    }
+
+    /**
+     * <b>신청과 반납이 같은 점유 행에서 직렬화되어야 한다.</b> 잠그지 않으면 "조회 → 저장"
+     * 사이에 반납이 커밋될 수 있고, 그 반납의 발송이 아직 커밋되지 않은 이 신청을 보지
+     * 못한다 — 신청은 400도 발송도 아닌 채 대기로 남는다.
+     */
+    @Test
+    @DisplayName("신청은 점유 행을 잠근 뒤 저장한다.")
+    void locksOccupancyRowBeforeSaving() {
+        givenOccupiedRoom();
+        givenMemberships(membership(MEMBERSHIP_ID, COHORT_ID));
+        given(alertRepository.save(any(VacancyAlert.class))).willAnswer(call -> call.getArgument(0));
+
+        vacancyAlertService.request(SPACE_ID, null, REQUESTER_USER_ID);
+
+        InOrder order = inOrder(occupancyRepository, alertRepository);
+        order.verify(occupancyRepository).findActiveSummaryBySpaceId(SPACE_ID);
+        order.verify(occupancyRepository).lockById(OCCUPANCY_ID);
+        order.verify(alertRepository).save(any(VacancyAlert.class));
+    }
+
+    /**
+     * 잠근 뒤 다시 확인하는 이유다. 요약 조회에는 활성으로 보였지만 잠금을 얻고 보니
+     * 이미 끝난 경우 — 그대로 저장하면 <b>이미 빈 방에 대기 신청</b>이 생긴다.
+     */
+    @Test
+    @DisplayName("잠근 뒤 종료된 점유로 확인되면 빈 방으로 거절한다.")
+    void rejectsWhenOccupancyEndedBeforeLockAcquired() {
+        givenActiveSummary();
+        RoomOccupancy released = occupancy(now().plusHours(1));
+        ReflectionTestUtils.setField(released, "status", OccupancyStatus.RELEASED);
+        given(occupancyRepository.lockById(OCCUPANCY_ID)).willReturn(Optional.of(released));
+
+        assertBusinessError(
+                OccupancyErrorCode.ALERT_ROOM_AVAILABLE,
+                () -> vacancyAlertService.request(SPACE_ID, null, REQUESTER_USER_ID)
+        );
+
+        verify(alertRepository, never()).save(any(VacancyAlert.class));
+    }
+
+    /**
+     * 만료 시각이 지난 행은 스케줄러(#9)가 아직 쓸어가지 않았을 뿐 이미 빈 방이다.
+     * 여기서 걸러야 목록의 "사용 중" 판정과 어긋나지 않는다.
+     */
+    @Test
+    @DisplayName("만료 시각이 지났으면 아직 ACTIVE여도 빈 방으로 거절한다.")
+    void rejectsExpiredButStillActiveOccupancy() {
+        givenActiveSummary();
+        given(occupancyRepository.lockById(OCCUPANCY_ID))
+                .willReturn(Optional.of(occupancy(now().minusMinutes(1))));
+
+        assertBusinessError(
+                OccupancyErrorCode.ALERT_ROOM_AVAILABLE,
+                () -> vacancyAlertService.request(SPACE_ID, null, REQUESTER_USER_ID)
+        );
+
+        verify(alertRepository, never()).save(any(VacancyAlert.class));
     }
 
     // ────────────────────────────── 취소 ──────────────────────────────
@@ -321,21 +385,24 @@ class VacancyAlertServiceTest {
 
     // ────────────────────────────── 헬퍼 ──────────────────────────────
 
+    /** 사용 중인 회의실 — 요약 조회와 잠금 재확인이 모두 활성으로 보인다. */
     private void givenOccupiedRoom() {
-        givenOccupiedRoomOwnedByCohort(COHORT_ID);
+        givenActiveSummary();
+        given(occupancyRepository.lockById(OCCUPANCY_ID))
+                .willReturn(Optional.of(occupancy(now().plusHours(1))));
     }
 
-    private void givenOccupiedRoomOwnedByCohort(Long occupierCohortId) {
-        given(occupancyQueryService.findActiveBySpaceIds(List.of(SPACE_ID), now()))
-                .willReturn(Map.of(SPACE_ID, new SpaceOccupancyView(
-                        OCCUPANCY_ID,
-                        SPACE_ID,
-                        now().plusHours(1),
-                        occupierCohortId,
-                        99L,
-                        OCCUPIER_USER_ID,
-                        List.of()
-                )));
+    private void givenActiveSummary() {
+        given(occupancyRepository.findActiveSummaryBySpaceId(SPACE_ID)).willReturn(
+                Optional.of(new RoomOccupancyRepository.ActiveOccupancy(
+                        OCCUPANCY_ID, OCCUPIER_MEMBERSHIP_ID, OCCUPIER_USER_ID)));
+    }
+
+    private RoomOccupancy occupancy(OffsetDateTime expiresAt) {
+        RoomOccupancy occupancy = RoomOccupancy.start(
+                SPACE_ID, OCCUPIER_MEMBERSHIP_ID, OCCUPIER_USER_ID, now().minusHours(1), expiresAt);
+        ReflectionTestUtils.setField(occupancy, "id", OCCUPANCY_ID);
+        return occupancy;
     }
 
     private void givenMemberships(CohortMembershipView... memberships) {

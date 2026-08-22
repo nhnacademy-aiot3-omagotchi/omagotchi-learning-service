@@ -7,16 +7,16 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertRepository;
-import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
 import site.omagotchi.learningservice.occupancy.application.result.VacancyAlertView;
+import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 import site.omagotchi.learningservice.occupancy.domain.VacancyAlert;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class VacancyAlertService {
 
-    private final OccupancyQueryService occupancyQueryService;
+    private final RoomOccupancyRepository occupancyRepository;
     private final CohortMembershipQueryService cohortMembershipQueryService;
     private final VacancyAlertRepository alertRepository;
     private final Clock clock;
@@ -48,24 +48,40 @@ public class VacancyAlertService {
      *
      * @param cohortId 신청 주체로 쓸 기수. {@code null}이면 활성 소속이 하나일 때만
      *                 그것으로 정한다 — 여럿이면 어느 쪽인지 서버가 고를 수 없다
+     * <p><b>점유 행을 잠그고 신청까지 한 Transaction에서 끝낸다.</b> 잠그지 않으면 "조회 →
+     * 저장" 사이에 반납이 커밋될 수 있고, 그 반납의 {@code AFTER_COMMIT} 발송이 아직
+     * 커밋되지 않은 이 신청을 보지 못한다 — 신청은 <b>400도 발송도 아닌 채 대기로 남아</b>
+     * 그 방이 다시 차고 비워질 때까지 기다린다. 사용자는 지금 비어 있는 방을 기다리게 된다.
+     * 명세 04 §5가 "먼저 커밋되면 발송 대상, 늦으면 400"이라고 두 갈래로 적은 것은 이
+     * 직렬화를 전제한 서술이다.</p>
+     *
      * @throws BusinessException 빈 방·본인 방·기수 미지정(400), 활성 소속 없음(403),
      *                           중복 신청(409)
      */
     @Transactional
     public Long request(Long spaceId, Long cohortId, UUID requesterUserId) {
 
-        OffsetDateTime now = OffsetDateTime.now(clock);
-
-        // 사용 중 판정을 직접 하지 않고 점유 조회를 재사용한다. 여기서 room_occupancies를
-        // 다시 읽으면 "사용 중"의 정의가 복제되고, 만료 스케줄러(#9)나 강제 종료로 조건이
-        // 바뀔 때 목록에는 공실인데 신청은 400인 상태가 된다.
-        SpaceOccupancyView occupancy = findActiveOccupancy(spaceId, now)
-                .orElseThrow(() -> new BusinessException(OccupancyErrorCode.ALERT_ROOM_AVAILABLE));
+        // 엔티티가 아니라 값으로 읽는다. 여기서 RoomOccupancy를 읽으면 1차 캐시에 올라가
+        // 아래 lockById()의 상태 재확인이 락 이전 스냅샷을 보게 된다.
+        RoomOccupancyRepository.ActiveOccupancy summary =
+                occupancyRepository.findActiveSummaryBySpaceId(spaceId)
+                        .orElseThrow(() -> new BusinessException(OccupancyErrorCode.ALERT_ROOM_AVAILABLE));
 
         // 본인이 쓰고 있는 방을 스스로에게 알릴 이유가 없다. 점유자가 타 기수인 것은
         // 정상이므로(MR-34) 기수가 아니라 계정으로 비교한다.
-        if (requesterUserId.equals(occupancy.occupierUserId())) {
+        if (requesterUserId.equals(summary.occupierUserId())) {
             throw new BusinessException(OccupancyErrorCode.ALERT_OCCUPIER_CANNOT_REQUEST);
+        }
+
+        // ── 락 구간 ──────────────────────────────────────────────
+        RoomOccupancy locked = occupancyRepository.lockById(summary.id())
+                .orElseThrow(() -> new BusinessException(OccupancyErrorCode.ALERT_ROOM_AVAILABLE));
+        OffsetDateTime now = OffsetDateTime.now(clock);
+
+        // 잠근 뒤 다시 확인한다. 만료 시각이 지난 행은 스케줄러(#9)가 아직 쓸어가지
+        // 않았을 뿐 이미 빈 방이라, 여기서 걸러야 목록의 "사용 중" 판정과 어긋나지 않는다.
+        if (!locked.isActive() || locked.isExpiredAt(now)) {
+            throw new BusinessException(OccupancyErrorCode.ALERT_ROOM_AVAILABLE);
         }
 
         Long membershipId = resolveMembershipId(cohortId, requesterUserId);
@@ -127,18 +143,6 @@ public class VacancyAlertService {
     }
 
     // ────────────────────────────── 내부 헬퍼 ──────────────────────────────
-
-    /**
-     * 이 공간의 현재 점유. 만료됐지만 아직 ACTIVE인 행은 제외된다.
-     *
-     * <p>단건인데 배치 조회를 쓰는 이유는 만료 필터가 그쪽에만 있기 때문이다.
-     * {@code findActiveSummaryBySpaceId}는 {@code expires_at}을 보지 않아, 스케줄러가
-     * 쓸어가기 전의 방을 "사용 중"으로 판정해 <b>빈 방에 신청이 들어간다.</b></p>
-     */
-    private Optional<SpaceOccupancyView> findActiveOccupancy(Long spaceId, OffsetDateTime now) {
-        return Optional.ofNullable(
-                occupancyQueryService.findActiveBySpaceIds(List.of(spaceId), now).get(spaceId));
-    }
 
     /**
      * 신청 주체가 될 멤버십을 정한다.

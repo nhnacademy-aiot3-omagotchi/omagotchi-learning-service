@@ -22,6 +22,7 @@ import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -104,9 +105,10 @@ class VacancyAlertIT {
         Long roomId = fixture.createMeetingRoom(cohortId, "공실-중복-1", 8);
 
         roomOccupancyService.start(roomId, occupier.userId());
-        vacancyAlertService.request(roomId, null, waiter.userId());
+        UUID waiterUserId = waiter.userId();
+        vacancyAlertService.request(roomId, null, waiterUserId);
 
-        assertThatThrownBy(() -> vacancyAlertService.request(roomId, null, waiter.userId()))
+        assertThatThrownBy(() -> vacancyAlertService.request(roomId, null, waiterUserId))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
                         .isEqualTo(OccupancyErrorCode.ALERT_ALREADY_REQUESTED));
@@ -166,8 +168,9 @@ class VacancyAlertIT {
 
         roomOccupancyService.start(roomId, occupier.userId());
         Long alertId = vacancyAlertService.request(roomId, null, waiter.userId());
+        UUID strangerUserId = stranger.userId();
 
-        assertThatThrownBy(() -> vacancyAlertService.cancel(alertId, stranger.userId()))
+        assertThatThrownBy(() -> vacancyAlertService.cancel(alertId, strangerUserId))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
                         .isEqualTo(OccupancyErrorCode.ALERT_NOT_FOUND));
@@ -202,9 +205,10 @@ class VacancyAlertIT {
         OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "공실-본인방-1", 8);
 
-        roomOccupancyService.start(roomId, occupier.userId());
+        UUID occupierUserId = occupier.userId();
+        roomOccupancyService.start(roomId, occupierUserId);
 
-        assertThatThrownBy(() -> vacancyAlertService.request(roomId, null, occupier.userId()))
+        assertThatThrownBy(() -> vacancyAlertService.request(roomId, null, occupierUserId))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
                         .isEqualTo(OccupancyErrorCode.ALERT_OCCUPIER_CANNOT_REQUEST));
@@ -218,11 +222,32 @@ class VacancyAlertIT {
         Long cohortId = fixture.createCohort("공실-빈방");
         OccupancyTestFixture.Member waiter = fixture.createActiveMember(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "공실-빈방-1", 8);
+        UUID waiterUserId = waiter.userId();
 
-        assertThatThrownBy(() -> vacancyAlertService.request(roomId, null, waiter.userId()))
+        assertThatThrownBy(() -> vacancyAlertService.request(roomId, null, waiterUserId))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
                         .isEqualTo(OccupancyErrorCode.ALERT_ROOM_AVAILABLE));
+    }
+
+    @Test
+    @DisplayName("반납이 먼저 커밋되면 신청은 빈 방으로 거절된다.")
+    void requestAfterReleaseIsRejectedAsAvailable() {
+        Long cohortId = fixture.createCohort("공실-반납경합");
+        OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member waiter = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "공실-반납경합-1", 8);
+
+        UUID waiterUserId = waiter.userId();
+        roomOccupancyService.start(roomId, occupier.userId());
+        roomOccupancyLifecycleService.release(roomId, occupier.userId());
+
+        assertThatThrownBy(() -> vacancyAlertService.request(roomId, null, waiterUserId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isEqualTo(OccupancyErrorCode.ALERT_ROOM_AVAILABLE));
+
+        assertThat(allRows(roomId)).isZero();
     }
 
     // ────────────────────────────── 발송 ──────────────────────────────

@@ -1,3 +1,4 @@
+
 package site.omagotchi.learningservice.gamification.application;
 
 import org.junit.jupiter.api.DisplayName;

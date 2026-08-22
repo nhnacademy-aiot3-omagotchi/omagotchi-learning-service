@@ -16,7 +16,10 @@ import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEve
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyReminderSender;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
+import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertRepository;
 import site.omagotchi.learningservice.occupancy.application.result.RoomOccupancyResult;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
@@ -75,6 +78,15 @@ class RoomOccupancyLifecycleServiceTest {
     @Mock
     private OccupancyReminderSender reminderSender;
 
+    @Mock
+    private CohortAccessService cohortAccessService;
+
+    @Mock
+    private CohortMembershipQueryService cohortMembershipQueryService;
+
+    @Mock
+    private VacancyAlertRepository alertRepository;
+
     private Clock clock;
     private RoomOccupancyLifecycleService roomOccupancyLifecycleService;
 
@@ -87,7 +99,10 @@ class RoomOccupancyLifecycleServiceTest {
                 eventPublisher,
                 occupancyExpiration,
                 occupancyExpiryReminder,
-                Optional.of(reminderSender),
+                List.of(reminderSender),
+                cohortAccessService,
+                cohortMembershipQueryService,
+                alertRepository,
                 clock
         );
     }
@@ -478,7 +493,10 @@ class RoomOccupancyLifecycleServiceTest {
                 eventPublisher,
                 occupancyExpiration,
                 occupancyExpiryReminder,
-                Optional.empty(),
+                List.of(),
+                cohortAccessService,
+                cohortMembershipQueryService,
+                alertRepository,
                 clock
         );
 

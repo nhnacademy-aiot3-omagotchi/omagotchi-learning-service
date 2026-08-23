@@ -464,6 +464,9 @@ Browser 개발자 도구의 Network에서 `/bff/v1/**` 요청 하나를 고른 �
 Learning의 PostgreSQL은 팀 정책에 따라 로컬 DB에 직접 연결하지 않고 Testcontainers로
 실행·검증한다.
 
+Learning E2E 실행기의 범위, IntelliJ·CLI 설정과 전체 연동 검증 순서는
+[Learning Service E2E 실행·검증 가이드](../../testing/Learning-Service-E2E-Guide.md)를 참고한다.
+
 ## 15. 이것만 기억하면 된다
 
 ```text

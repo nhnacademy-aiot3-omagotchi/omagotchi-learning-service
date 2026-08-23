@@ -3,6 +3,7 @@
 - 기준일: `2026-08-20`
 - 대상 순서: 프로필 캐릭터 계약 → 커뮤니티 첨부 조회 → Presence 계약 → Gamification 내부 이벤트 → 출결 조회 개선 → API 계약 테스트/REST Docs
 - Frontend 전달 문서: `Frontend-Learning-API-Integration-Handoff.md`, `Frontend-Learning-Integration-Task-Brief.md`
+- E2E 정의·실행 방법: [Learning Service E2E 실행·검증 가이드](../../testing/Learning-Service-E2E-Guide.md)
 
 ## 0. 현재 IntelliJ 빌드 오류 해결
 

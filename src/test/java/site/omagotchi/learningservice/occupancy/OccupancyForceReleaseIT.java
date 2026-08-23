@@ -8,12 +8,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.OccupancyErrorCode;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
 import site.omagotchi.learningservice.occupancy.application.VacancyAlertService;
+import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertRepository;
 import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSender;
 import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 
@@ -21,6 +23,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -55,6 +58,13 @@ class OccupancyForceReleaseIT {
 
     @MockitoBean
     VacancyAlertSender vacancyAlertSender;
+
+    /**
+     * 마지막 단계를 실패시키려고 감싼다. Mock이 아니라 Spy인 것이 중요하다 — 다른
+     * 테스트에서는 실제 삭제가 그대로 일어나야 한다.
+     */
+    @MockitoSpyBean
+    VacancyAlertRepository alertRepository;
 
     /**
      * 세 가지가 <b>같은 Transaction에서 함께</b> 반영돼야 한다. 하나라도 빠지면 나머지가
@@ -229,6 +239,45 @@ class OccupancyForceReleaseIT {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
                         .isEqualTo(OccupancyErrorCode.OCCUPANCY_ENDED));
+    }
+
+    /**
+     * <b>셋은 쪼갤 수 없다.</b> 뒤 단계가 실패하면 앞 단계도 남으면 안 된다.
+     *
+     * <p>롤백 자체는 Spring이 하지만, 이 테스트가 지키는 것은 <b>전파 속성</b>이다. 바로 옆
+     * {@code OccupancyExpiration}·{@code VacancyAlertDelivery}·정합성 스윕이 모두
+     * {@code REQUIRES_NEW}로 건별 격리를 하고 있어, "여기도 격리하지" 하고 한 단계를 떼어
+     *내기 쉽다. 그러면 <b>신청만 지워지고 점유는 ACTIVE로 남는다</b> —
+     * {@code clearAutomatically}로 이미 한 번 겪은 것과 같은 증상이다.</p>
+     *
+     * <p>중간 상태로 커밋되는 것이 아무것도 안 한 것보다 나쁘다. 방은 잠긴 채인데 대기자는
+     * 알림을 못 받고, 그 방을 기다리던 사람들의 신청만 사라진다.</p>
+     */
+    @Test
+    @DisplayName("뒤 단계가 실패하면 점유·참여자·대기 신청이 모두 이전 상태로 남는다.")
+    void rollsBackEveryStepWhenLaterStepFails() {
+        Long cohortId = fixture.createCohort("강제종료-롤백");
+        OccupancyTestFixture.Member manager = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member waiter = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "강제종료-롤백-1", 8);
+        UUID managerUserId = manager.userId();
+
+        roomOccupancyService.start(roomId, occupier.userId());
+        Long occupancyId = activeOccupancyId(roomId);
+        vacancyAlertService.request(roomId, null, waiter.userId());
+
+        // 마지막 단계만 실패시킨다. 앞의 상태 전이와 참여자 마감은 이미 수행된 상태다.
+        willThrow(new IllegalStateException("대기 신청 삭제 실패"))
+                .given(alertRepository).deleteWaitingBySpaceId(roomId);
+
+        assertThatThrownBy(() -> roomOccupancyLifecycleService.forceRelease(roomId, managerUserId))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(occupancyStatus(occupancyId)).isEqualTo("ACTIVE");
+        assertThat(occupancyEndedAt(occupancyId)).isNull();
+        assertThat(openParticipantRows(occupancyId)).isEqualTo(1);
+        assertThat(waitingAlertRows(roomId)).isEqualTo(1);
     }
 
     // ────────────────────────────── 헬퍼 ──────────────────────────────

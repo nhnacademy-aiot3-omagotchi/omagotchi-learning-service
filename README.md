@@ -46,6 +46,21 @@ cp .env.local.example .env.local
 - Eureka: 기본 비활성화
 - Health: <http://localhost:8084/actuator/health>
 
+### Testcontainers 기반 E2E 연동 실행
+
+실제 Learning Service를 임시 PostgreSQL과 함께 띄워 Frontend BFF·Gateway 연동을 확인할 때는
+`E2eLearningServiceApplication`을 사용한다. 이 실행기는 PostgreSQL만 자동으로 준비하며,
+Redis·RabbitMQ·Identity·Gateway·View는 검증 범위에 따라 별도로 필요하다.
+
+```bash
+./mvnw spring-boot:test-run \
+  -Dspring-boot.run.main-class=site.omagotchi.learningservice.E2eLearningServiceApplication \
+  -Dspring-boot.run.profiles=local
+```
+
+정의, IntelliJ 설정, 전체 서비스 실행 순서와 오류별 해결 방법은
+[Learning Service E2E 실행·검증 가이드](docs/testing/Learning-Service-E2E-Guide.md)를 따른다.
+
 ### JWT Public Key
 
 - 용도: Identity Access JWT 검증

@@ -9,6 +9,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+import site.omagotchi.learningservice.gamification.application.DailyQuestService;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
 import site.omagotchi.learningservice.gamification.domain.CharacterAppearance;
 import site.omagotchi.learningservice.gamification.application.GamificationErrorCode;
@@ -50,11 +51,13 @@ public class UserProfileService {
     private final GameCharacterRepository gameCharacterRepository;
     private final LevelPolicyRepository levelPolicyRepository;
     private final CharacterGrowthService characterGrowthService;
+    private final DailyQuestService dailyQuestService;
     private final DateTimeProvider dateTimeProvider;
 
     /**
      * 현재 사용자 프로필에 필요한 데이터를 기존 도메인에서 모아 DTO 결과로 반환한다.
      */
+    @Transactional
     public UserProfileResult getMyProfile(UUID userId) {
         Optional<CohortMembership> approvedMembership = findApprovedMembership(userId);
         StudyProfileSummaryResult studySummary = approvedMembership
@@ -75,7 +78,7 @@ public class UserProfileService {
                 .map(UserCharacter::getNickname)
                 .orElse(null);
 
-        return new UserProfileResult(
+        UserProfileResult result = new UserProfileResult(
                 nickname,
                 studySummary.totalStudySeconds(),
                 studySummary.completedSessionCount(),
@@ -83,6 +86,10 @@ public class UserProfileService {
                 approvedMembership.flatMap(this::toApprovedCohortResult).orElse(null),
                 currentCharacter
         );
+        if (currentCharacter != null) {
+            dailyQuestService.handleCharacterChecked(userId);
+        }
+        return result;
     }
 
     /**

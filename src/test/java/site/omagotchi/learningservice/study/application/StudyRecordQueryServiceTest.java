@@ -11,6 +11,7 @@ import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
+import site.omagotchi.learningservice.gamification.application.DailyQuestService;
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.result.DailyStudyRecordsResult;
 import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
@@ -49,6 +50,9 @@ class StudyRecordQueryServiceTest {
 
     @Mock
     private CohortAccessService cohortAccessService;
+
+    @Mock
+    private DailyQuestService dailyQuestService;
 
     @Mock
     private Clock clock;
@@ -166,6 +170,7 @@ class StudyRecordQueryServiceTest {
                 () -> assertEquals(first.getStartTime(), result.records().getFirst().startTime()),
                 () -> assertEquals(second.getStartTime(), result.records().getLast().startTime())
         );
+        verify(dailyQuestService).handleRoutineReviewed(USER_ID);
     }
 
     @Test
@@ -188,6 +193,7 @@ class StudyRecordQueryServiceTest {
                 () -> assertEquals(0L, result.totalStudySeconds()),
                 () -> assertTrue(result.records().isEmpty())
         );
+        verify(dailyQuestService).handleRoutineReviewed(USER_ID);
     }
 
     @Test
@@ -207,6 +213,7 @@ class StudyRecordQueryServiceTest {
 
         assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
         verifyNoInteractions(studyRecordQueryRepository);
+        verifyNoInteractions(dailyQuestService);
     }
 
     @Test

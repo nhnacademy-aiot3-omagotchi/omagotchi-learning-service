@@ -70,6 +70,11 @@ public class DailyQuestService {
     }
 
     @Transactional
+    public DailyQuestResult handleRoutineReviewed(UUID userId) {
+        return progressToday(userId, ROUTINE_REVIEW_CODE);
+    }
+
+    @Transactional
     public DailyQuestResult handleLlmQuestCompleted(UUID userId) {
         return completeToday(userId, LLM_QUEST_CODE);
     }

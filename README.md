@@ -76,6 +76,18 @@ Redis·RabbitMQ·Identity·Gateway·View는 검증 범위에 따라 별도로 �
 - 첨부파일: `COMMUNITY_ATTACHMENT_STORAGE_ROOT`
 - Telegram: 사용자 연동·Webhook
 
+### Identity Service 연동
+
+- 용도: 팀원 계정 상태·표시 이름 조회
+- 호출 방식: Gateway를 경유하지 않는 직접 HTTP 호출
+- 인증: Learning–Identity 관계 전용 HTTP Basic Credential
+- 주소 선택
+  - `local`·`dev`: 환경 파일의 고정 Identity 주소
+  - `prod`: Eureka의 `identity-service`와 Client-side Load Balancing
+- 장애 변환
+  - 연결 실패·Timeout·Discovery 부재·`5xx`: `503 Service Unavailable`
+  - 미등록 오류 Code·응답 계약 위반: `502 Bad Gateway`
+
 ## 환경 Profile
 
 - `local`: `.env.local`, 로컬 PostgreSQL·Redis·RabbitMQ
@@ -152,6 +164,8 @@ Redis·RabbitMQ·Identity·Gateway·View는 검증 범위에 따라 별도로 �
 - 사용자 기능: `community`, `gamification`, `ranking`, `user`
 - 연동: `realtime`, `telegram`, `rule`
 - 공통: `global.security`, `global.exception`, `global.config`, `global.logging`
+- 팀 영속성: `team.infrastructure.persistence`
+- Identity 연동: `team.infrastructure.identity`
 - 내부 계층: `domain` → `application` → `infrastructure`·`presentation`
 
 ## 운영 원칙

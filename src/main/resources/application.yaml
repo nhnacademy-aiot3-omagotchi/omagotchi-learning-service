@@ -5,6 +5,14 @@ spring:
   application:
     name: learning-service
 
+  http:
+    clients:
+      connect-timeout: ${IDENTITY_SERVICE_CONNECT_TIMEOUT}
+      read-timeout: ${IDENTITY_SERVICE_READ_TIMEOUT}
+    serviceclient:
+      identity-service:
+        base-url: ${IDENTITY_SERVICE_BASE_URL}
+
   task:
     execution:
       # AsyncConfig의 eventTaskExecutor와 Boot 기본 실행기를 분리한다 (ADR space-team/0012).
@@ -135,6 +143,11 @@ auth:
     issuer: ${JWT_ISSUER}
     audience: ${JWT_AUDIENCE}
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
+
+clients:
+  identity:
+    username: ${LEARNING_IDENTITY_USERNAME}
+    password: ${LEARNING_IDENTITY_PASSWORD}
 
 sensor:
   series:

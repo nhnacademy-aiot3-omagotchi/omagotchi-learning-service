@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.team.infrastructure;
+package site.omagotchi.learningservice.team.infrastructure.persistence;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;

@@ -14,6 +14,7 @@ import site.omagotchi.learningservice.cohort.application.CohortMembershipQuerySe
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
+import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertRepository;
 import site.omagotchi.learningservice.occupancy.application.result.VacancyAlertView;
@@ -76,6 +77,9 @@ class VacancyAlertServiceTest {
     @Mock
     private VacancyAlertRepository alertRepository;
 
+    @Mock
+    private OccupancyEventPublisher eventPublisher;
+
     private Clock clock;
     private VacancyAlertService vacancyAlertService;
 
@@ -86,6 +90,7 @@ class VacancyAlertServiceTest {
                 occupancyRepository,
                 cohortMembershipQueryService,
                 alertRepository,
+                eventPublisher,
                 clock
         );
     }

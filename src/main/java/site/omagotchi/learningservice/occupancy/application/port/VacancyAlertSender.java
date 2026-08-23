@@ -47,6 +47,15 @@ public interface VacancyAlertSender {
      * @param recipientUserId 받는 사람. 신청은 멤버십 단위지만 발송은 계정으로 나간다
      * @param vacatedAt     비워진 시각. 발송이 늦어도 정본은 이 값이다
      */
+    record VacancyNotice(
+            Long alertId,
+            Long spaceId,
+            String spaceName,
+            UUID recipientUserId,
+            OffsetDateTime vacatedAt
+    ) {
+    }
+
     /**
      * 삭제 통보 한 건.
      *
@@ -58,15 +67,6 @@ public interface VacancyAlertSender {
             String spaceName,
             UUID recipientUserId,
             OffsetDateTime discardedAt
-    ) {
-    }
-
-    record VacancyNotice(
-            Long alertId,
-            Long spaceId,
-            String spaceName,
-            UUID recipientUserId,
-            OffsetDateTime vacatedAt
     ) {
     }
 }

@@ -215,8 +215,8 @@ class VacancyAlertDispatcherTest {
     @Test
     @DisplayName("sender가 둘 이상이면 생성 시점에 실패한다.")
     void failsToCreateWithMultipleSenders() {
-        VacancyAlertSender another = notice -> {
-        };
+        // Port에 Method가 둘이라 람다로 못 만든다. 개수만 늘리면 되므로 Mock으로 충분하다.
+        VacancyAlertSender another = org.mockito.Mockito.mock(VacancyAlertSender.class);
 
         assertThatThrownBy(() -> new VacancyAlertDispatcher(
                 alertRepository,

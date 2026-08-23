@@ -102,6 +102,18 @@ public interface RoomOccupancyRepository {
 
 
     /**
+     * 이 멤버십이 점유자인 활성 점유의 식별 정보 (MR-26, CE-07).
+     *
+     * <p><b>멤버십의 활성 여부를 보지 않는 것이 계약이다.</b> 이 조회가 도는 시점에는
+     * 이미 그 멤버십이 {@code ENDED}다 — 활성 필터를 걸면 대상을 하나도 찾지 못해
+     * <b>활성 점유가 영구히 잔존한다</b> (명세 06 §2 2항).</p>
+     *
+     * <p>{@link #findActiveSummaryBySpaceId}와 같은 이유로 값만 돌려준다. 엔티티로 읽으면
+     * 1차 캐시에 올라가 뒤이은 {@link #lockById}의 상태 재확인이 락 이전 스냅샷을 본다.</p>
+     */
+    Optional<ActiveOccupancy> findActiveSummaryByOccupierMembershipId(Long occupierMembershipId);
+
+    /**
      * 점유 행 배타 락. 반드시 트랜잭션 안에서 호출한다.
      *
      * <p>활성 조건을 쿼리에 넣지 않는 것이 의도다. 락을 잡은 뒤

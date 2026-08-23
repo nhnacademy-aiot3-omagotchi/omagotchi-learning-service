@@ -76,6 +76,16 @@ public class RoomOccupancyJpaPersistence implements RoomOccupancyRepository {
                 ));
     }
 
+    @Override
+    public Optional<ActiveOccupancy> findActiveSummaryByOccupierMembershipId(Long occupierMembershipId) {
+        return occupancyJpaRepository
+                .findSummaryByOccupierMembershipIdAndStatus(occupierMembershipId, OccupancyStatus.ACTIVE)
+                .map(projection -> new ActiveOccupancy(
+                        projection.getId(),
+                        projection.getOccupierMembershipId(),
+                        projection.getOccupierUserId()));
+    }
+
     /**
      * {@inheritDoc}
      *

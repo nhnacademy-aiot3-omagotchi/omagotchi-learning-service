@@ -158,6 +158,12 @@ omagotchi:
       fixed-delay: ${OCCUPANCY_EXPIRY_FIXED_DELAY:60000}
       # 기동 직후에는 Flyway·연결 풀 준비와 겹치지 않게 미룬다
       initial-delay: ${OCCUPANCY_EXPIRY_INITIAL_DELAY:30000}
+    membership-sweep:
+      # 소속 종료 정리(MR-26)가 유실됐을 때의 복구 지연 상한 (ADR space-team/0013).
+      # 만료 정리(1분)보다 길게 잡는다 — 이미 실패한 건만 다루는 예외 경로다.
+      fixed-delay: ${OCCUPANCY_MEMBERSHIP_SWEEP_FIXED_DELAY:300000}
+      initial-delay: ${OCCUPANCY_MEMBERSHIP_SWEEP_INITIAL_DELAY:60000}
+      batch-size: ${OCCUPANCY_MEMBERSHIP_SWEEP_BATCH_SIZE:200}
     telegram:
       # 실제 발송 테스트에서만 켠다. false이면 sender Bean 자체를 등록하지 않는다
       enabled: ${OCCUPANCY_TELEGRAM_ENABLED:false}

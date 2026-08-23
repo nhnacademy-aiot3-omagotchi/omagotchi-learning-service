@@ -374,6 +374,11 @@ class VacancyAlertIT {
 
         assertThat(allRows(roomId)).isEqualTo(1);
         assertThat(waitingRows(roomId)).isZero();
+
+        // 소진된 행의 (구)신청자에게 취소 통보가 가면 안 된다 — 방금 공실 알림을 받은
+        // 사람이 "신청이 취소됐다"는 안내를 받게 된다. 수신자가 삭제 결과(RETURNING)에서
+        // 나오므로 지워지지 않은 행은 목록에 오를 수 없다.
+        verify(vacancyAlertSender, never()).sendDiscardNotice(any());
     }
 
     /** 다른 공간의 신청까지 지우면 무관한 사람들이 조용히 대기에서 빠진다. */

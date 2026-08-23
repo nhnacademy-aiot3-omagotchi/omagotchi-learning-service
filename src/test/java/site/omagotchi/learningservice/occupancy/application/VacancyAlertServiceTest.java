@@ -14,6 +14,7 @@ import site.omagotchi.learningservice.cohort.application.CohortMembershipQuerySe
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
+import site.omagotchi.learningservice.occupancy.application.event.VacancyAlertsDiscardedEvent;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertRepository;
@@ -358,6 +359,43 @@ class VacancyAlertServiceTest {
                 OccupancyErrorCode.ALERT_NOT_FOUND,
                 () -> vacancyAlertService.cancel(ALERT_ID, REQUESTER_USER_ID)
         );
+    }
+
+    // ────────────────────────────── 공간 비활성화 정리 (RM-15) ──────────────────────────────
+
+    /**
+     * <b>통보 수신자는 삭제 결과에서만 나온다</b> (DELETE ... RETURNING). 삭제와 별도로
+     * 미리 읽으면 그 사이 공실 발송이 소진시킨 행이 목록에 남아, 방금 공실 알림을 받은
+     * 사람에게 "신청이 취소됐다"는 통보가 나간다.
+     */
+    @Test
+    @DisplayName("삭제 통보의 수신자는 실제로 지운 행에서만 나온다.")
+    void discardEventCarriesOnlyActuallyDeletedMemberships() {
+        given(alertRepository.deleteWaitingBySpaceId(SPACE_ID))
+                .willReturn(List.of(MEMBERSHIP_ID, OTHER_MEMBERSHIP_ID));
+
+        assertThat(vacancyAlertService.discardBySpace(SPACE_ID)).isEqualTo(2);
+
+        ArgumentCaptor<VacancyAlertsDiscardedEvent> captor =
+                ArgumentCaptor.forClass(VacancyAlertsDiscardedEvent.class);
+        verify(eventPublisher).publishVacancyAlertsDiscarded(captor.capture());
+        assertThat(captor.getValue().spaceId()).isEqualTo(SPACE_ID);
+        assertThat(captor.getValue().cohortMembershipIds())
+                .containsExactly(MEMBERSHIP_ID, OTHER_MEMBERSHIP_ID);
+
+        // 삭제와 별도의 읽기가 되살아나면 위 어긋남이 다시 생긴다.
+        verify(alertRepository, never()).findWaitingBySpaceId(anyLong());
+    }
+
+    /** 지운 행이 없으면 이벤트도 없다 — 아무에게도 보내지 않을 통보를 위해 리스너를 깨우지 않는다. */
+    @Test
+    @DisplayName("지운 신청이 없으면 이벤트를 발행하지 않는다.")
+    void discardPublishesNothingWhenNothingWasDeleted() {
+        given(alertRepository.deleteWaitingBySpaceId(SPACE_ID)).willReturn(List.of());
+
+        assertThat(vacancyAlertService.discardBySpace(SPACE_ID)).isZero();
+
+        verify(eventPublisher, never()).publishVacancyAlertsDiscarded(any());
     }
 
     // ────────────────────────────── 목록 ──────────────────────────────

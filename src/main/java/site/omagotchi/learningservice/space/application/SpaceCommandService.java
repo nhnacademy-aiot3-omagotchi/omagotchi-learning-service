@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
+import site.omagotchi.learningservice.occupancy.application.VacancyAlertService;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
@@ -29,6 +30,7 @@ public class SpaceCommandService {
 
     private final SpaceRepository spaceRepository;
     private final OccupancyQueryService occupancyQueryService;
+    private final VacancyAlertService vacancyAlertService;
     private final CohortAccessService cohortAccessService;
     private final Clock clock;
 
@@ -171,8 +173,15 @@ public class SpaceCommandService {
         ensureNoActiveOccupancy(spaceId, now);
 
         Space deactivatedSpace = existingSpace.deactivate(reason, now);
+        Space saved = spaceRepository.save(deactivatedSpace);
 
-        return spaceRepository.save(deactivatedSpace);
+        // 대기 신청 정리를 같은 Transaction에 두는 것이 명세 04 §2가 정한 것이다. 나누면
+        // 비활성 공간에 신청이 남아, 다시 활성화될 때까지 아무 일도 일어나지 않는 신청이
+        // 된다. 대기 중 알림은 비활성화를 막지 않는다 (RM-12) — 클릭 한 번의 의사표시가
+        // 관리 행위를 무력화하지 않도록 정리 대상으로만 취급한다.
+        vacancyAlertService.discardBySpace(spaceId);
+
+        return saved;
     }
 
     public Space assignCohort(

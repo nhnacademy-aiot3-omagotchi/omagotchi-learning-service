@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -160,8 +161,24 @@ class DailyQuestServiceTest {
         var characterResult = dailyQuestService.handleCharacterChecked(USER_ID);
         var reviewResult = dailyQuestService.handleRoutineReviewed(USER_ID);
 
-        assertEquals(QuestStatus.COMPLETED, characterResult.status());
-        assertEquals(QuestStatus.COMPLETED, reviewResult.status());
+        assertAll(
+                () -> assertEquals(DailyQuestService.CHARACTER_CHECKED_CODE, characterResult.code()),
+                () -> assertEquals(1, characterResult.progressCount()),
+                () -> assertEquals(QuestStatus.COMPLETED, characterResult.status()),
+                () -> assertEquals(DailyQuestService.ROUTINE_REVIEW_CODE, reviewResult.code()),
+                () -> assertEquals(1, reviewResult.progressCount()),
+                () -> assertEquals(QuestStatus.COMPLETED, reviewResult.status())
+        );
+        verify(userDailyQuestRepository).findByUserIdAndQuestDateAndCode(
+                USER_ID,
+                today,
+                DailyQuestService.CHARACTER_CHECKED_CODE
+        );
+        verify(userDailyQuestRepository).findByUserIdAndQuestDateAndCode(
+                USER_ID,
+                today,
+                DailyQuestService.ROUTINE_REVIEW_CODE
+        );
     }
 
     @Test

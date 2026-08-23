@@ -70,18 +70,6 @@ public class GamificationController {
                 .toList();
     }
 
-    @PostMapping("/quests/actions/character-checked")
-    public DailyQuestResponse completeCharacterCheckedQuest(JwtAuthenticationToken authentication) {
-        AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return DailyQuestResponse.from(dailyQuestService.handleCharacterChecked(user.userId()));
-    }
-
-    @PostMapping("/quests/actions/routine-reviewed")
-    public DailyQuestResponse completeRoutineReviewedQuest(JwtAuthenticationToken authentication) {
-        AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return DailyQuestResponse.from(dailyQuestService.handleRoutineReviewed(user.userId()));
-    }
-
     @GetMapping("/progression")
     public GamificationProgressionResponse getProgression(
             @RequestParam Long cohortId,

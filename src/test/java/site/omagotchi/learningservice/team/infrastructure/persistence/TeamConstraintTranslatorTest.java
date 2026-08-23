@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.team.infrastructure;
+package site.omagotchi.learningservice.team.infrastructure.persistence;
 
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;

@@ -158,8 +158,9 @@ public class TeamMemberService {
     /**
      * 대상 계정의 존재·미탈퇴를 확인한다 (GR-11).
      *
-     * <p>미존재 계정은 {@link IdentityAccountClient}가 {@code TEAM_ACCOUNT_NOT_FOUND}로 중단한다.
-     * 조회에 성공한 계정은 실제 상태를 반환하며, 탈퇴 상태는 이 Use Case에서 거절한다.</p>
+     * <p>미존재 계정은 {@link IdentityAccountClient}가 계정 미존재 오류로 중단하며,
+     * 공개 응답 코드는 {@code TEAM_ACCOUNT_NOT_FOUND}이다. 조회에 성공한 계정은 실제 상태를
+     * 반환하며, 탈퇴 상태는 이 Use Case에서 거절한다.</p>
      *
      * <p>계정은 Identity Service 소유라 서비스 간 DB 외래 키가 없다. 즉 이 확인을
      * 건너뛰면 탈퇴 계정도 그대로 팀에 들어간다 — DB가 대신 막아주지 않는다.</p>

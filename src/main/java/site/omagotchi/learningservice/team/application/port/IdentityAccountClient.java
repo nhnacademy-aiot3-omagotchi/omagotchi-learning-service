@@ -12,7 +12,8 @@ public interface IdentityAccountClient {
 
     /**
      * 계정 상태를 조회한다 (GR-11).
-     * 계정이 없으면 {@code TEAM_ACCOUNT_NOT_FOUND} 오류로 중단한다.
+     * 계정이 없으면 계정 미존재 오류로 중단하며, 공개 응답 코드는
+     * {@code TEAM_ACCOUNT_NOT_FOUND}이다.
      */
     IdentityAccountState getState(UUID userId);
 

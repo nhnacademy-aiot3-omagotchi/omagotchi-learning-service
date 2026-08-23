@@ -448,6 +448,44 @@ class VacancyAlertIT {
         verify(vacancyAlertSender, never()).sendDiscardNotice(any());
     }
 
+    /**
+     * <b>비활성화가 롤백되면 아무 일도 없었어야 한다</b> — 신청은 남고, 통보는 나가지 않는다.
+     *
+     * <p>롤백 자체는 Spring이 하지만, 이 테스트가 지키는 것은 우리 설정 둘이다.
+     * {@code discardBySpace}가 {@code REQUIRED}로 비활성화 Transaction에 합류한다는 것
+     * (주변의 {@code REQUIRES_NEW}들을 따라 떼어내면 <b>비활성화는 롤백됐는데 신청만
+     * 지워진다</b>), 그리고 리스너가 {@code AFTER_COMMIT}이라는 것 (일반
+     * {@code @EventListener}로 바꾸면 롤백된 삭제의 통보가 발송된다). 둘 다 코드에 이유가
+     * 적혀 있지만, 어기면 깨지는 것은 이 테스트뿐이다.</p>
+     */
+    @Test
+    @DisplayName("비활성화가 롤백되면 신청이 남고 삭제 통보도 나가지 않는다.")
+    void rolledBackDeactivationKeepsAlertsAndSendsNoNotice() throws Exception {
+        Long cohortId = fixture.createCohort("공실-비활성화롤백");
+        OccupancyTestFixture.Member manager = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member waiter = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "공실-비활성화롤백-1", 8);
+
+        roomOccupancyService.start(roomId, occupier.userId());
+        vacancyAlertService.request(roomId, null, waiter.userId());
+        expireOccupancy(roomId);
+        UUID managerUserId = manager.userId();
+
+        transactionTemplate.executeWithoutResult(status -> {
+            spaceCommandService.deactivate(roomId, "설비 점검", managerUserId);
+            status.setRollbackOnly();
+        });
+
+        assertThat(spaceStatus(roomId)).isEqualTo("ACTIVE");
+        assertThat(waitingRows(roomId)).isEqualTo(1);
+
+        // 부재는 기다릴 수 없고 표본만 뜰 수 있다 — 잘못 발행된 이벤트라면 @Async 실행기가
+        // 곧바로 집어 가므로, 짧게 가라앉힌 뒤 확인한다. 순서를 기대하는 sleep이 아니다.
+        Thread.sleep(300L);
+        verify(vacancyAlertSender, never()).sendDiscardNotice(any());
+    }
+
     // ────────────────────────────── 발송 ──────────────────────────────
 
     @Test

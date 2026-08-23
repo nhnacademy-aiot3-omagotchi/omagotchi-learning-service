@@ -16,9 +16,12 @@ import site.omagotchi.learningservice.gamification.application.CharacterOnboardi
 import site.omagotchi.learningservice.gamification.application.DailyQuestService;
 import site.omagotchi.learningservice.gamification.application.GamificationProgressionService;
 import site.omagotchi.learningservice.gamification.application.command.CreateUserCharacterCommand;
+import site.omagotchi.learningservice.gamification.application.result.DailyQuestResult;
 import site.omagotchi.learningservice.gamification.application.result.GameCharacterResult;
 import site.omagotchi.learningservice.gamification.application.result.UserCharacterResult;
 import site.omagotchi.learningservice.gamification.domain.AdvancementStage;
+import site.omagotchi.learningservice.gamification.domain.QuestStatus;
+import site.omagotchi.learningservice.gamification.domain.QuestType;
 import site.omagotchi.learningservice.global.security.JwtAuthorityConfig;
 import site.omagotchi.learningservice.global.security.JwtConfig;
 import site.omagotchi.learningservice.global.security.JwtProperties;
@@ -26,6 +29,7 @@ import site.omagotchi.learningservice.global.security.SecurityConfig;
 import site.omagotchi.learningservice.global.security.SecurityErrorResponseHandler;
 import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -134,10 +138,54 @@ class GamificationControllerTest {
     }
 
     @Test
+    @DisplayName("캐릭터 확인 행동은 JWT 사용자의 일일 퀘스트에 반영한다")
+    void completesCharacterCheckedQuest() throws Exception {
+        given(dailyQuestService.handleCharacterChecked(USER_ID))
+                .willReturn(completedQuest(DailyQuestService.CHARACTER_CHECKED_CODE, "캐릭터 확인하기"));
+
+        mockMvc.perform(post("/api/v1/gamification/quests/actions/character-checked")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(DailyQuestService.CHARACTER_CHECKED_CODE))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+
+        verify(dailyQuestService).handleCharacterChecked(USER_ID);
+    }
+
+    @Test
+    @DisplayName("학습 기록 열람 행동은 JWT 사용자의 일일 퀘스트에 반영한다")
+    void completesRoutineReviewedQuest() throws Exception {
+        given(dailyQuestService.handleRoutineReviewed(USER_ID))
+                .willReturn(completedQuest(DailyQuestService.ROUTINE_REVIEW_CODE, "오늘 학습 돌아보기"));
+
+        mockMvc.perform(post("/api/v1/gamification/quests/actions/routine-reviewed")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(DailyQuestService.ROUTINE_REVIEW_CODE))
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+
+        verify(dailyQuestService).handleRoutineReviewed(USER_ID);
+    }
+
+    @Test
     @DisplayName("클라이언트는 게이미피케이션 이벤트를 직접 발생시킬 수 없다")
     void doesNotExposeGamificationEventEndpoints() throws Exception {
         mockMvc.perform(post("/api/v1/gamification/events/attendance")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isNotFound());
+    }
+
+    private DailyQuestResult completedQuest(String code, String title) {
+        return new DailyQuestResult(
+                1L,
+                LocalDate.of(2026, 8, 23),
+                QuestType.ROUTINE,
+                code,
+                title,
+                1,
+                1,
+                10,
+                QuestStatus.COMPLETED
+        );
     }
 }

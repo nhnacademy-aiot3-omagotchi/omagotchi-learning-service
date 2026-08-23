@@ -135,6 +135,36 @@ class DailyQuestServiceTest {
     }
 
     @Test
+    @DisplayName("캐릭터 확인과 학습 돌아보기 행동은 해당 일일 퀘스트를 완료 처리한다")
+    void completesUserActionQuests() {
+        UserDailyQuest characterQuest = routineQuest(
+                DailyQuestService.CHARACTER_CHECKED_CODE,
+                "캐릭터 확인하기"
+        );
+        UserDailyQuest reviewQuest = routineQuest(
+                DailyQuestService.ROUTINE_REVIEW_CODE,
+                "오늘 학습 돌아보기"
+        );
+        when(userDailyQuestRepository.existsByUserIdAndQuestDate(USER_ID, today)).thenReturn(true);
+        when(userDailyQuestRepository.findByUserIdAndQuestDateAndCode(
+                USER_ID,
+                today,
+                DailyQuestService.CHARACTER_CHECKED_CODE
+        )).thenReturn(Optional.of(characterQuest));
+        when(userDailyQuestRepository.findByUserIdAndQuestDateAndCode(
+                USER_ID,
+                today,
+                DailyQuestService.ROUTINE_REVIEW_CODE
+        )).thenReturn(Optional.of(reviewQuest));
+
+        var characterResult = dailyQuestService.handleCharacterChecked(USER_ID);
+        var reviewResult = dailyQuestService.handleRoutineReviewed(USER_ID);
+
+        assertEquals(QuestStatus.COMPLETED, characterResult.status());
+        assertEquals(QuestStatus.COMPLETED, reviewResult.status());
+    }
+
+    @Test
     @DisplayName("완료된 퀘스트 보상은 DAILY_QUEST 원장으로 지급한다")
     void rewardsCompletedQuestByLedgerSource() {
         UserDailyQuest quest = completedQuest(today);
@@ -160,5 +190,18 @@ class DailyQuestServiceTest {
         );
         quest.complete(NOW);
         return quest;
+    }
+
+    private UserDailyQuest routineQuest(String code, String title) {
+        return UserDailyQuest.create(
+                USER_ID,
+                today,
+                null,
+                QuestType.ROUTINE,
+                code,
+                title,
+                1,
+                10
+        );
     }
 }

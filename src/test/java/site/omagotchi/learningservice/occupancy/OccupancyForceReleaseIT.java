@@ -163,6 +163,40 @@ class OccupancyForceReleaseIT {
         assertThat(occupancyStatus(occupancyId)).isEqualTo("ACTIVE");
     }
 
+    /**
+     * 점유자 멤버십이 끝나면 <b>권한 문제가 아니라 데이터 불일치</b>다.
+     *
+     * <p>기수를 특정할 수 없어 판정 자체가 성립하지 않는데, 이것을 403으로 돌려주면
+     * 매니저가 자기 권한을 의심하게 된다. 참여자 추가 경로가 같은 상황에 쓰는
+     * {@code OCCUPIER_MEMBERSHIP_INACTIVE}(409)로 맞춘다.</p>
+     *
+     * <p><b>이벤트를 거치지 않고 멤버십을 끝내 재현한다.</b> 정상 경로라면
+     * {@code OccupancyMembershipEndedListener}가 점유를 먼저 반납 처리하므로(MR-26) 이
+     * 상태가 되지 않는다. 여기서 검증하는 것은 <b>그 정리가 유실됐을 때</b>의 응답이며,
+     * 복구용 정합성 스윕이 붙으면 이 상태의 지속 시간이 짧아진다.</p>
+     */
+    @Test
+    @DisplayName("점유자 멤버십이 끝났으면 권한이 아니라 데이터 불일치로 거절한다.")
+    void reportsInactiveOccupierMembershipAsConflict() {
+        Long cohortId = fixture.createCohort("강제종료-멤버십종료");
+        OccupancyTestFixture.Member manager = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "강제종료-멤버십종료-1", 8);
+
+        roomOccupancyService.start(roomId, occupier.userId());
+        Long occupancyId = activeOccupancyId(roomId);
+
+        // 점유자의 소속만 끝낸다. 점유는 ACTIVE로 남는다 — 그것이 이 상황의 전제다.
+        endMembership(occupier.membershipId());
+
+        assertThatThrownBy(() -> roomOccupancyLifecycleService.forceRelease(roomId, manager.userId()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isEqualTo(OccupancyErrorCode.OCCUPIER_MEMBERSHIP_INACTIVE));
+
+        assertThat(occupancyStatus(occupancyId)).isEqualTo("ACTIVE");
+    }
+
     /** 이미 발송된 신청은 이력이다. 지우면 "알림을 보낸 적 있다"는 사실이 사라진다. */
     @Test
     @DisplayName("이미 발송된 신청은 강제 종료로 지워지지 않는다.")
@@ -198,6 +232,15 @@ class OccupancyForceReleaseIT {
     }
 
     // ────────────────────────────── 헬퍼 ──────────────────────────────
+
+    /** 점유는 건드리지 않고 소속만 끝낸다. 정리 리스너가 없다는 사실이 이 테스트의 전제다. */
+    private void endMembership(Long membershipId) {
+        jdbcTemplate.update("""
+                UPDATE learning_service.cohort_memberships
+                   SET status = 'ENDED', ended_at = now()
+                 WHERE id = ?
+                """, membershipId);
+    }
 
     private String occupancyStatus(Long occupancyId) {
         return jdbcTemplate.queryForObject("""

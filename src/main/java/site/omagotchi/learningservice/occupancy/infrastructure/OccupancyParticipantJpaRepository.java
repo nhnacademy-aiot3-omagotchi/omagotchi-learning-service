@@ -1,10 +1,12 @@
 package site.omagotchi.learningservice.occupancy.infrastructure;
 
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
 
 import java.time.OffsetDateTime;
@@ -81,6 +83,19 @@ public interface OccupancyParticipantJpaRepository extends JpaRepository<Occupan
     int closeAllActiveByOccupancyId(
             @Param("occupancyId") Long occupancyId,
             @Param("endedAt") OffsetDateTime endedAt
+    );
+
+    /** 열린 참여 커서 순회 (MR-26 스윕). 점유자도 참여 행을 가지므로 이 하나로 충분하다. */
+    @Query("""
+                SELECT new site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository$OpenParticipation(
+                       p.id, p.cohortMembershipId, p.userId)
+                  FROM OccupancyParticipant p
+                 WHERE p.id > :afterId
+                   AND p.leftAt IS NULL
+                 ORDER BY p.id ASC""")
+    List<OccupancyParticipantRepository.OpenParticipation> findOpenParticipationsAfter(
+            @Param("afterId") Long afterId,
+            Pageable pageable
     );
 
     /**

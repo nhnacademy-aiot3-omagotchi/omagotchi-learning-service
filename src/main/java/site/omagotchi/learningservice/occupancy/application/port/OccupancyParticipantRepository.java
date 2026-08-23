@@ -99,4 +99,29 @@ public interface OccupancyParticipantRepository {
      * @return 마감한 행 수
      */
     int closeActiveByUserId(UUID userId, OffsetDateTime endedAt);
+
+    /**
+     * 열린 참여 행을 커서로 훑는다 (MR-26 정합성 스윕).
+     *
+     * <p><b>열린 참여에서 출발하는 것이 요점이다.</b> 점유 시작이 점유자를 참여자로
+     * 자동 등록하므로(MR-27), 이 한 번의 순회가 <b>점유자와 참여자를 모두</b> 포함한다 —
+     * 점유 테이블과 참여 테이블을 따로 훑을 필요가 없다.</p>
+     *
+     * <p>커서로 전진하는 이유는 조회 대상이 "고아"가 아니라 <b>열린 참여 전체</b>이기
+     * 때문이다. 소속이 살아 있는지는 기수 파트에 물어야 알 수 있어 SQL로 걸러낼 수 없고,
+     * {@code LIMIT}만 두면 앞쪽 배치만 반복해 뒤쪽에 닿지 못한다
+     * ({@code TeamMemberRepository.findMembershipRefsAfter}와 같은 규약).</p>
+     *
+     * <p>엔티티가 아니라 값을 돌려주는 이유는 1차 캐시다. 여기서 엔티티로 읽으면 뒤이은
+     * 정리가 {@code FOR UPDATE}를 걸어도 Hibernate가 캐시 인스턴스를 돌려준다.</p>
+     *
+     * @param afterId 이 값보다 큰 {@code occupancy_participants.id}부터. 첫 배치는 0
+     * @param limit   한 배치 크기
+     * @return {@code id} 오름차순. 비면 순회 종료다
+     */
+    List<OpenParticipation> findOpenParticipationsAfter(Long afterId, int limit);
+
+    /** 스윕 후보 한 건. 소속 판정에 멤버십이, 정리에 계정이 필요하다. */
+    record OpenParticipation(Long participantId, Long cohortMembershipId, UUID userId) {
+    }
 }

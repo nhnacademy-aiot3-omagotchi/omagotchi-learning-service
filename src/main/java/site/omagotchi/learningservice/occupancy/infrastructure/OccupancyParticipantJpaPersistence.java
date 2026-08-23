@@ -2,6 +2,7 @@ package site.omagotchi.learningservice.occupancy.infrastructure;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
@@ -66,6 +67,12 @@ public class OccupancyParticipantJpaPersistence implements OccupancyParticipantR
                         .computeIfAbsent(participant.getOccupancyId(), key -> new ArrayList<>())
                         .add(participant.getUserId()));
         return userIdsByOccupancyId;
+    }
+
+    @Override
+    public List<OpenParticipation> findOpenParticipationsAfter(Long afterId, int limit) {
+        return participantJpaRepository.findOpenParticipationsAfter(
+                afterId, PageRequest.of(0, limit));
     }
 
     @Override

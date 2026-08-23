@@ -7,7 +7,8 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
-import site.omagotchi.learningservice.team.application.port.AccountReader;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 
 import java.util.UUID;
@@ -34,8 +35,7 @@ public class TeamMemberService {
     private final TeamMemberRepository teamMemberRepository;
     private final TeamAccessSupport accessSupport;
     private final CohortMembershipQueryService cohortMembershipQueryService;
-    private final AccountReader accountReader;
-
+    private final IdentityAccountClient identityAccountClient;
 
     /**
      * 팀원 추가 (GR-03). 수락 절차 없이 즉시 반영된다.
@@ -58,7 +58,6 @@ public class TeamMemberService {
 
         validateAccount(targetUserId);
 
-
         // GR-22: 팀의 기수로 대상 멤버십을 역조회한다.
         // 조회 방향을 뒤집으면 "대상의 기수 == 팀의 기수" 검증이 조회 결과로 자동 충족된다.
         // team_members에 cohort_id가 없으므로 이 앱 검증이 유일한 방어선이다.
@@ -66,7 +65,6 @@ public class TeamMemberService {
                 .findActiveMembership(cohortId, targetUserId)
                 .map(view -> new TeamMembership(view.membershipId(), view.cohortId(), view.userId()))
                 .orElseThrow(() -> new BusinessException(TeamErrorCode.TARGET_NOT_IN_COHORT));
-
 
         // 여기부터 락 구간.
         // 정원은 "최대 8행"이라 유니크 인덱스로 표현할 수 없다 — 락이 유일한 방어선이고,
@@ -160,19 +158,15 @@ public class TeamMemberService {
     /**
      * 대상 계정의 존재·미탈퇴를 확인한다 (GR-11).
      *
-     * <p>미존재(404)와 탈퇴(409)를 나누는 이유는 프런트가 다르게 안내해야 하기 때문이다 —
-     * 전자는 오타나 잘못된 대상, 후자는 실재했으나 지금은 초대할 수 없는 사람이다.
-     * 그래서 {@link AccountReader}가 boolean이 아니라 3-state를 돌려준다.</p>
+     * <p>미존재 계정은 {@link IdentityAccountClient}가 {@code TEAM_ACCOUNT_NOT_FOUND}로 중단한다.
+     * 조회에 성공한 계정은 실제 상태를 반환하며, 탈퇴 상태는 이 Use Case에서 거절한다.</p>
      *
      * <p>계정은 Identity Service 소유라 서비스 간 DB 외래 키가 없다. 즉 이 확인을
      * 건너뛰면 탈퇴 계정도 그대로 팀에 들어간다 — DB가 대신 막아주지 않는다.</p>
      */
     private void validateAccount(UUID targetUserId) {
-        AccountReader.AccountState state = accountReader.findState(targetUserId);
-        if (state == AccountReader.AccountState.NOT_FOUND) {
-            throw new BusinessException(TeamErrorCode.ACCOUNT_NOT_FOUND);
-        }
-        if (state == AccountReader.AccountState.WITHDRAWN) {
+        IdentityAccountState state = identityAccountClient.getState(targetUserId);
+        if (state == IdentityAccountState.WITHDRAWN) {
             throw new BusinessException(TeamErrorCode.ACCOUNT_WITHDRAWN);
         }
     }

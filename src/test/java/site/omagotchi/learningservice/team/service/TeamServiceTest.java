@@ -12,7 +12,7 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.application.*;
 import site.omagotchi.learningservice.team.application.result.TeamDetailResult;
 import site.omagotchi.learningservice.team.application.result.TeamResult;
-import site.omagotchi.learningservice.team.application.port.AccountReader;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.team.domain.Team;
@@ -50,7 +50,7 @@ class TeamServiceTest {
     CohortMembershipQueryService cohortMembershipQueryService;
 
     @Mock
-    AccountReader accountReader;
+    IdentityAccountClient identityAccountClient;
 
     @InjectMocks
     TeamService teamService;
@@ -135,7 +135,7 @@ class TeamServiceTest {
                 .willReturn(List.of(normalMember, masterMember));
         given(cohortMembershipQueryService.findUserIds(any()))
                 .willReturn(Map.of(10L, masterUserId, 20L, memberUserId));
-        given(accountReader.findDisplayNames(any()))
+        given(identityAccountClient.findDisplayNames(any()))
                 .willReturn(Map.of(masterUserId, "마스터닉네임", memberUserId, "멤버닉네임"));
 
         TeamDetailResult response = teamService.getTeam(teamId, userId);

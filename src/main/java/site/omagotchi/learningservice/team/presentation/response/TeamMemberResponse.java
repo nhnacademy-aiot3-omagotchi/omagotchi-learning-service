@@ -11,8 +11,9 @@ import java.time.OffsetDateTime;
  * <p>{@code memberId}는 {@code team_members.id}로 팀 모듈이 소유한 식별자이며,
  * 제외·위임 요청의 대상 지정에 그대로 쓰인다.</p>
  *
- * <p>{@code displayName}은 null일 수 있다 — 멤버십은 남았는데 계정 조회가 실패한
- * 경우다. 그때도 행을 빼지 않는다는 판단은 {@link TeamMemberResult}에 적혀 있다.</p>
+ * <p>{@code displayName}은 null일 수 있다 — 멤버십은 남았지만 Identity의 일괄 조회
+ * 결과에 계정이 없는 경우다. 그때도 행을 빼지 않는다는 판단은
+ * {@link TeamMemberResult}에 적혀 있다.</p>
  */
 public record TeamMemberResponse(
         Long memberId,

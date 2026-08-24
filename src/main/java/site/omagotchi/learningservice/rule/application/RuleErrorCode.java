@@ -23,11 +23,37 @@ public enum RuleErrorCode implements ErrorCode {
             "RULE_NOT_FOUND",
             "룰을 찾을 수 없습니다."
     ),
+    //
+
+    //센서
+    DEVICE_INVALID_ATTRIBUTE(
+            ErrorType.INVALID_INPUT,
+            "DEVICE_INVALID_ATRRIBUTE",
+            "디바이스의 정보가 올바르지않습니다."
+    ),
+
+    DEVICE_ALREADY_EXISTS(
+            ErrorType.CONFLICT,
+            "DEVICE_ALREADY_EXISTS",
+            "디바이스가 이미 존재합니다"
+    ),
 
     DEVICE_NOT_FOUND(
             ErrorType.NOT_FOUND,
             "DEVICE_NOT_FOUND",
             "디바이스를 찾을 수 없습니다."
+    ),
+
+    DEVICE_SPACE_NOT_FOUND(
+            ErrorType.NOT_FOUND,
+            "DEVICE_SPACE_NOT_FOUND",
+            "센서를 배치할 공간을 찾을 수 없습니다."
+    ),
+
+    SPACE_HAS_NO_DEVICE(
+            ErrorType.NOT_FOUND,
+            "SPACE_HAS_NO_DEVICE",
+            "해당 공간에 등록된 센서가 없습니다."
     ),
 
     RULE_VERSION_CONFLICT(

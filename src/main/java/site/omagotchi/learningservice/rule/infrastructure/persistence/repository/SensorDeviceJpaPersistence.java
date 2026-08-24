@@ -1,7 +1,10 @@
 package site.omagotchi.learningservice.rule.infrastructure.persistence.repository;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
+import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.rule.application.RuleErrorCode;
 import site.omagotchi.learningservice.rule.application.port.SensorDeviceRepository;
 import site.omagotchi.learningservice.rule.domain.SensorDevice;
 
@@ -15,6 +18,15 @@ public class SensorDeviceJpaPersistence implements SensorDeviceRepository {
     private final SensorDeviceJpaRepository sensorDeviceJpaRepository;
 
     @Override
+    public SensorDevice save(SensorDevice device) {
+        try{
+            return sensorDeviceJpaRepository.saveAndFlush(device);
+        }catch (DataIntegrityViolationException e){
+            throw new BusinessException(RuleErrorCode.DEVICE_INVALID_ATTRIBUTE, e.getMessage());
+        }
+    }
+
+    @Override
     public boolean existsByDeviceEui(String deviceEui) {
         return sensorDeviceJpaRepository.existsById(deviceEui);
     }
@@ -24,9 +36,18 @@ public class SensorDeviceJpaPersistence implements SensorDeviceRepository {
         return sensorDeviceJpaRepository.findAll();
     }
 
-
     @Override
     public Optional<SensorDevice> findByDeviceEui(String deviceEui) {
         return sensorDeviceJpaRepository.findById(deviceEui);
+    }
+
+    @Override
+    public List<SensorDevice> findBySpaceId(Long spaceId) {
+        return sensorDeviceJpaRepository.findBySpaceId(spaceId);
+    }
+
+    @Override
+    public List<SensorDevice> findAllWithSpace() {
+        return sensorDeviceJpaRepository.findBySpaceIdIsNotNullOrderBySpaceIdAsc();
     }
 }

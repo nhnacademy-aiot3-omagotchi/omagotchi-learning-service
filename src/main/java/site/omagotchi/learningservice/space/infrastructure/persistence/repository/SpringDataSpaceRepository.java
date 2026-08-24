@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.space.infrastructure.persistence.reposito
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import site.omagotchi.learningservice.space.infrastructure.persistence.entity.SpaceJpaEntity;
@@ -62,4 +63,16 @@ public interface SpringDataSpaceRepository
     Optional<String> findNameById(
             @Param("spaceId") Long spaceId
     );
+
+    /**
+     * 실습실 배정 일괄 해제 (CE-04). {@code LAB} 필터를 빼면 회의실·독서실의 관리 주체까지
+     * 사라져 아무도 지울 수 없는 공간이 생긴다 (RM-25).
+     */
+    @Modifying
+    @Query("""
+                UPDATE SpaceJpaEntity space
+                   SET space.cohortId = NULL
+                 WHERE space.cohortId = :cohortId
+                   AND space.spaceType = site.omagotchi.learningservice.space.domain.SpaceType.LAB""")
+    int unassignLabsByCohort(@Param("cohortId") Long cohortId);
 }

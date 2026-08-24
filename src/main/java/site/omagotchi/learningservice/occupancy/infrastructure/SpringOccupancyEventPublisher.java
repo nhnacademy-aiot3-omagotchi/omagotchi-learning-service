@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
+import site.omagotchi.learningservice.occupancy.application.event.VacancyAlertsDiscardedEvent;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
 
 /**
@@ -24,6 +25,13 @@ import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventP
 public class SpringOccupancyEventPublisher implements OccupancyEventPublisher {
 
     private final ApplicationEventPublisher applicationEventPublisher;
+
+    @Override
+    public void publishVacancyAlertsDiscarded(VacancyAlertsDiscardedEvent event) {
+        log.debug("공실 알림 삭제 이벤트 발행. spaceId={}, 대상={}건",
+                event.spaceId(), event.cohortMembershipIds().size());
+        applicationEventPublisher.publishEvent(event);
+    }
 
     @Override
     public void publishRoomVacated(RoomVacatedEvent event) {

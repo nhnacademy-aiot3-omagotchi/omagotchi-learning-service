@@ -13,8 +13,8 @@ import java.util.Optional;
  * {@link OccupancyParticipantRepository}와의 차이다. 신청은 구간이 아니라 일회성
  * 의사표시라 "취소한 신청"의 이력을 남길 이유가 없다.</p>
  *
- * <p>공간 비활성화 정리(RM-15)·기수 종료 정리(CE-02)에 필요한 삭제는 아직 여기 없다.
- * 쓰지 않는 Method를 미리 Port에 두지 않는다.</p>
+ * <p>기수 종료 정리(CE-02)에 필요한 삭제는 아직 여기 없다. 쓰지 않는 Method를 미리
+ * Port에 두지 않는다.</p>
  */
 public interface VacancyAlertRepository {
 
@@ -88,15 +88,20 @@ public interface VacancyAlertRepository {
     boolean deleteWaiting(Long alertId, Collection<Long> cohortMembershipIds);
 
     /**
-     * 이 회의실의 대기 중 신청을 전부 지운다 (MR-21).
+     * 이 회의실의 대기 중 신청을 전부 지우고, <b>실제로 지운 행의 멤버십</b>을 돌려준다
+     * (MR-21 강제 종료, RM-15 비활성화 정리).
      *
-     * <p>강제 종료는 공간 회수가 목적이라 곧 쓸 수 없는 방이다. 신청을 남겨 두면 다음
-     * 공실에 <b>회수된 방을 기다리던 사람들</b>에게 알림이 나간다.</p>
+     * <p><b>삭제와 수신자 확보가 한 문장인 것이 계약이다</b> ({@code DELETE ... RETURNING}).
+     * 먼저 읽고 나중에 지우면 그 사이 공실 발송이 행을 소진시킬 수 있다 — 삭제는
+     * {@code notified_at IS NULL} 조건으로 그 행을 건너뛰지만, 미리 읽어 둔 수신자 목록에는
+     * 남아서 <b>방금 공실 알림을 받은 사람에게 "신청이 취소됐다"는 통보</b>가 나간다.
+     * RETURNING은 지운 행만 돌려주므로 이 어긋남이 구조적으로 불가능하다.</p>
      *
      * <p>소진된 신청({@code notified_at IS NOT NULL})은 건드리지 않는다. 그쪽은 이미 끝난
      * 의사표시의 이력이라 지울 이유가 없고, 지우면 "알림을 보낸 적 있다"를 잃는다.</p>
      *
-     * @return 지운 건수
+     * @return 지운 행들의 {@code cohort_membership_id}. 삭제 통보의 수신자이며, 건수만
+     *         필요한 호출자(MR-21)는 크기를 쓴다. 지운 행이 없으면 빈 목록
      */
-    int deleteWaitingBySpaceId(Long spaceId);
+    List<Long> deleteWaitingBySpaceId(Long spaceId);
 }

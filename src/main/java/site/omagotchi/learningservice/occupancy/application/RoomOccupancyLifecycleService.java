@@ -199,7 +199,8 @@ public class RoomOccupancyLifecycleService {
         occupancy.forceRelease(now);
 
         int closed = participantRepository.closeAllActiveByOccupancyId(occupancy.getId(), now);
-        int discarded = alertRepository.deleteWaitingBySpaceId(spaceId);
+        // 지운 행의 멤버십이 돌아오지만 쓰지 않는다 — 강제 종료는 통보하지 않는 삭제다 (MR-21).
+        int discarded = alertRepository.deleteWaitingBySpaceId(spaceId).size();
 
         // RoomVacatedEvent를 발행하지 않는 것이 이 경로의 정의다 (MR-21).
         log.info("점유를 강제 종료했습니다. spaceId={}, occupancyId={}, 참여자 마감={}건, 대기 신청 삭제={}건",

@@ -7,11 +7,6 @@ import site.omagotchi.learningservice.global.exception.ErrorType;
 @RequiredArgsConstructor
 public enum PredictionErrorCode implements ErrorCode {
 
-    PREDICTION_FEATURE_NOT_READY(
-            ErrorType.CONFLICT,
-            "PREDICTION_FEATURE_NOT_READY",
-            "예측에 필요한 피처가 아직 확정되지 않았습니다."
-    ),
     PREDICTION_QUEST_DATA_INCONSISTENT(
             ErrorType.CONFLICT,
             "PREDICTION_QUEST_DATA_INCONSISTENT",

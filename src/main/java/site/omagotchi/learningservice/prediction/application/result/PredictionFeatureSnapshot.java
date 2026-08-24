@@ -7,7 +7,8 @@ import java.time.LocalDate;
 import java.util.List;
 
 public record PredictionFeatureSnapshot(
-        LocalDate baseDate,
+        // targetDate 전날까지 확정된 원천값을 조회하는 상한 날짜
+        LocalDate featureDate,
         LocalDate membershipStartDate,
         String attendanceTimezone,
         StudyHistory study,
@@ -18,7 +19,9 @@ public record PredictionFeatureSnapshot(
     public record StudyHistory(
             List<DailyStudySeconds> recentDailyStudySeconds,
             LocalDate firstStudyDate,
-            long totalStudySeconds
+            long totalStudySeconds,
+            // 소속 시작일부터 featureDate까지 확정 StudyRecord가 존재하는 고유 평일 수
+            long studiedWeekdaysAll
     ) {
         public StudyHistory {
             recentDailyStudySeconds = List.copyOf(recentDailyStudySeconds);
@@ -33,10 +36,8 @@ public record PredictionFeatureSnapshot(
 
     public record AttendanceHistory(
             List<DailyAttendance> recentAttendance,
-            long attendedDaysAll,
-            long lateDaysAll,
-            long pendingWeekdaysAll,
-            boolean noShowOnBaseDate
+            // 확정 StudyRecord가 존재하면서 지각·조퇴인 전체 고유 평일 수
+            long lateStudiedDaysAll
     ) {
         public AttendanceHistory {
             recentAttendance = List.copyOf(recentAttendance);

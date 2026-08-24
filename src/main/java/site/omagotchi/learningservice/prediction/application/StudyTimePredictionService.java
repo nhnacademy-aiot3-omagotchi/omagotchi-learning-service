@@ -11,7 +11,6 @@ import site.omagotchi.learningservice.prediction.application.result.PredictionFe
 import site.omagotchi.learningservice.prediction.application.result.StudyTimePredictionResult;
 
 import java.time.Clock;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -33,22 +32,20 @@ public class StudyTimePredictionService {
         // 예측의 모든 원천값은 API가 받은 cohort의 활성 소속에 귀속시킨다.
         Long cohortMembershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
 
-        // baseDate와 출결 마감 판정이 서로 다른 시각을 보지 않도록 Clock을 한 번만 읽는다.
-        Instant observedAt = clock.instant();
-        LocalDate baseDate = AggregationDateTime.aggregationDate(observedAt);
+        // 현재 KST 집계일이 targetDate이고, 모델 입력은 그 전날인 featureDate까지 사용한다.
+        LocalDate targetDate = AggregationDateTime.aggregationDate(clock.instant());
+        LocalDate featureDate = targetDate.minusDays(1L);
 
         PredictionFeatureSnapshot snapshot = featureSnapshotReader.read(
                 userId,
                 cohortId,
                 cohortMembershipId,
-                baseDate,
-                observedAt
+                featureDate
         );
         StudyTimePredictionRequest request = requestAssembler.assemble(snapshot);
 
-        StudyTimePredictionResult result = predictionClient.predict(request, requestId);
-
-        // TODO: prediction-service 응답 검증, 폴백 및 퀘스트 목표 정책은 후속 구현한다.
-        return result;
+        // 이 API는 예측값 조회만 수행하므로 의존 서비스 실패를 규칙값으로 숨기는 fallback은 적용하지 않는다.
+        // prediction 전용 응답 필드의 의미 검증과 퀘스트 목표 정책은 별도 유스케이스에서 결정한다.
+        return predictionClient.predict(request, requestId);
     }
 }

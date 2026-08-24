@@ -15,10 +15,8 @@ import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.gamification.application.GamificationErrorCode;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.prediction.application.PredictionErrorCode;
 import site.omagotchi.learningservice.prediction.application.result.PredictionFeatureSnapshot;
 
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -28,7 +26,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Import({
         TestcontainersConfiguration.class,
@@ -43,8 +40,7 @@ class PredictionFeatureQueryAdapterIT {
 
     private static final UUID USER_ID = new UUID(0L, 1L);
     private static final UUID MANAGER_ID = new UUID(0L, 2L);
-    private static final LocalDate BASE_DATE = LocalDate.parse("2000-01-30");
-    private static final Instant OBSERVED_AT = Instant.parse("2000-01-30T12:00:00Z");
+    private static final LocalDate FEATURE_DATE = LocalDate.parse("2000-01-30");
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -66,12 +62,11 @@ class PredictionFeatureQueryAdapterIT {
                 USER_ID,
                 cohortId,
                 membershipId,
-                BASE_DATE,
-                OBSERVED_AT
+                FEATURE_DATE
         );
 
         assertAll(
-                () -> assertEquals(BASE_DATE, snapshot.baseDate()),
+                () -> assertEquals(FEATURE_DATE, snapshot.featureDate()),
                 () -> assertEquals(LocalDate.parse("2000-01-05"), snapshot.membershipStartDate()),
                 () -> assertEquals("Asia/Seoul", snapshot.attendanceTimezone()),
                 () -> assertEquals(LocalDate.parse("2000-01-10"), snapshot.study().firstStudyDate()),
@@ -85,12 +80,11 @@ class PredictionFeatureQueryAdapterIT {
                         7_200L,
                         snapshot.study().recentDailyStudySeconds().getLast().studySeconds()
                 ),
-                () -> assertEquals(5, snapshot.attendance().recentAttendance().size()),
-                () -> assertEquals(3L, snapshot.attendance().attendedDaysAll()),
-                () -> assertEquals(1L, snapshot.attendance().lateDaysAll()),
-                () -> assertEquals(1L, snapshot.attendance().pendingWeekdaysAll()),
+                () -> assertEquals(1L, snapshot.study().studiedWeekdaysAll()),
+                () -> assertEquals(6, snapshot.attendance().recentAttendance().size()),
+                () -> assertEquals(0L, snapshot.attendance().lateStudiedDaysAll()),
                 () -> assertEquals(
-                        AttendanceStatus.PENDING,
+                        AttendanceStatus.PRESENT,
                         snapshot.attendance().recentAttendance().getLast().finalStatus()
                 ),
                 () -> assertEquals(8, snapshot.gamification().representativeLevel()),
@@ -119,18 +113,16 @@ class PredictionFeatureQueryAdapterIT {
                 USER_ID,
                 cohortId,
                 membershipId,
-                BASE_DATE,
-                OBSERVED_AT
+                FEATURE_DATE
         );
 
         assertAll(
                 () -> assertNull(snapshot.study().firstStudyDate()),
                 () -> assertEquals(0L, snapshot.study().totalStudySeconds()),
                 () -> assertEquals(0, snapshot.study().recentDailyStudySeconds().size()),
-                () -> assertEquals(0L, snapshot.attendance().attendedDaysAll()),
-                () -> assertEquals(0L, snapshot.attendance().lateDaysAll()),
-                () -> assertEquals(0L, snapshot.attendance().pendingWeekdaysAll()),
+                () -> assertEquals(0L, snapshot.study().studiedWeekdaysAll()),
                 () -> assertEquals(0, snapshot.attendance().recentAttendance().size()),
+                () -> assertEquals(0L, snapshot.attendance().lateStudiedDaysAll()),
                 () -> assertEquals(8, snapshot.gamification().representativeLevel()),
                 () -> assertEquals(0L, snapshot.gamification().completedQuestsTotal()),
                 () -> assertEquals(0, snapshot.gamification().dailyQuestSummaries().size())
@@ -150,8 +142,7 @@ class PredictionFeatureQueryAdapterIT {
                         USER_ID,
                         cohortId,
                         membershipId,
-                        BASE_DATE,
-                        OBSERVED_AT
+                        FEATURE_DATE
                 )
         );
 
@@ -159,72 +150,76 @@ class PredictionFeatureQueryAdapterIT {
     }
 
     @Test
-    @DisplayName("결석 마감 전 기록 없는 평일이면 피처 미확정 예외")
-    void rejectsPredictionBeforeAbsenceCutoff() {
+    @DisplayName("같은 날 확정 StudyRecord가 여러 개여도 학습일과 지각일을 한 번만 집계")
+    void countsDistinctStudiedAndLateDays() {
         Long cohortId = insertCohort();
         insertAttendancePolicy(cohortId);
         Long membershipId = insertMembership(cohortId);
         insertRepresentativeCharacter();
-        LocalDate monday = LocalDate.parse("2000-01-31");
-        Instant beforeCutoff = Instant.parse("2000-01-31T00:30:00Z");
-
-        BusinessException exception = assertThrows(
-                BusinessException.class,
-                () -> queryAdapter.read(
-                        USER_ID,
-                        cohortId,
-                        membershipId,
-                        monday,
-                        beforeCutoff
-                )
+        LocalDate featureDate = LocalDate.parse("2000-01-31");
+        insertStudyRecord(
+                membershipId,
+                "00000000-0000-0000-0000-000000000041",
+                featureDate.toString(),
+                "2000-01-31T00:00:00Z",
+                "2000-01-31T01:00:00Z",
+                3_600L,
+                null
         );
-
-        assertSame(PredictionErrorCode.PREDICTION_FEATURE_NOT_READY, exception.getErrorCode());
-    }
-
-    @Test
-    @DisplayName("결석 마감 후 기록 없는 평일이면 오늘 노쇼로 조회")
-    void readsMissingWeekdayAfterAbsenceCutoffAsNoShow() {
-        Long cohortId = insertCohort();
-        insertAttendancePolicy(cohortId);
-        Long membershipId = insertMembership(cohortId);
-        insertRepresentativeCharacter();
-        LocalDate monday = LocalDate.parse("2000-01-31");
-        Instant afterCutoff = Instant.parse("2000-01-31T12:00:00Z");
+        insertStudyRecord(
+                membershipId,
+                "00000000-0000-0000-0000-000000000042",
+                featureDate.toString(),
+                "2000-01-31T02:00:00Z",
+                "2000-01-31T03:00:00Z",
+                3_600L,
+                null
+        );
+        insertAttendance(membershipId, "2000-01-28", "LATE", "2000-01-28T00:30:00Z");
+        insertAttendance(membershipId, featureDate.toString(), "LATE", "2000-01-31T00:30:00Z");
 
         PredictionFeatureSnapshot snapshot = queryAdapter.read(
                 USER_ID,
                 cohortId,
                 membershipId,
-                monday,
-                afterCutoff
+                featureDate
         );
 
-        assertTrue(snapshot.attendance().noShowOnBaseDate());
+        assertAll(
+                () -> assertEquals(1, snapshot.study().recentDailyStudySeconds().size()),
+                () -> assertEquals(
+                        7_200L,
+                        snapshot.study().recentDailyStudySeconds().getFirst().studySeconds()
+                ),
+                () -> assertEquals(1L, snapshot.study().studiedWeekdaysAll()),
+                () -> assertEquals(1L, snapshot.attendance().lateStudiedDaysAll())
+        );
     }
 
     @Test
-    @DisplayName("오늘 출결이 PENDING이면 피처 미확정 예외")
-    void rejectsPendingAttendanceOnBaseDate() {
+    @DisplayName("PENDING 출결도 예측용 최근 출결 메타데이터로 조회")
+    void readsPendingAttendanceAsRecentMetadata() {
         Long cohortId = insertCohort();
         insertAttendancePolicy(cohortId);
         Long membershipId = insertMembership(cohortId);
         insertRepresentativeCharacter();
-        LocalDate monday = LocalDate.parse("2000-01-31");
-        insertAttendance(membershipId, monday.toString(), "PENDING", "2000-01-31T00:00:00Z");
+        LocalDate featureDate = LocalDate.parse("2000-03-15");
+        insertAttendance(membershipId, featureDate.toString(), "PENDING", "2000-03-15T00:00:00Z");
 
-        BusinessException exception = assertThrows(
-                BusinessException.class,
-                () -> queryAdapter.read(
-                        USER_ID,
-                        cohortId,
-                        membershipId,
-                        monday,
-                        Instant.parse("2000-01-31T12:00:00Z")
-                )
+        PredictionFeatureSnapshot snapshot = queryAdapter.read(
+                USER_ID,
+                cohortId,
+                membershipId,
+                featureDate
         );
 
-        assertSame(PredictionErrorCode.PREDICTION_FEATURE_NOT_READY, exception.getErrorCode());
+        assertAll(
+                () -> assertEquals(1, snapshot.attendance().recentAttendance().size()),
+                () -> assertSame(
+                        AttendanceStatus.PENDING,
+                        snapshot.attendance().recentAttendance().getFirst().finalStatus()
+                )
+        );
     }
 
     @Test
@@ -240,8 +235,7 @@ class PredictionFeatureQueryAdapterIT {
                 USER_ID,
                 cohortId,
                 membershipId,
-                BASE_DATE,
-                OBSERVED_AT
+                FEATURE_DATE
         );
 
         assertAll(
@@ -270,8 +264,7 @@ class PredictionFeatureQueryAdapterIT {
                         USER_ID,
                         cohortId,
                         nonExistentMembershipId,
-                        BASE_DATE,
-                        OBSERVED_AT
+                        FEATURE_DATE
                 )
         );
 
@@ -290,8 +283,7 @@ class PredictionFeatureQueryAdapterIT {
                         USER_ID,
                         cohortId,
                         membershipId,
-                        BASE_DATE,
-                        OBSERVED_AT
+                        FEATURE_DATE
                 )
         );
 
@@ -418,11 +410,12 @@ class PredictionFeatureQueryAdapterIT {
 
     private void insertAttendanceRecords(Long membershipId) {
         insertAttendance(membershipId, "2000-01-04", "PRESENT", "2000-01-04T00:00:00Z");
-        insertAttendance(membershipId, "2000-01-05", "PRESENT", "2000-01-05T00:00:00Z");
+        insertAttendance(membershipId, "2000-01-05", "LEFT_EARLY", "2000-01-05T00:00:00Z");
         insertAttendance(membershipId, "2000-01-06", "LATE", "2000-01-06T00:10:00Z");
         insertAttendance(membershipId, "2000-01-07", "MISSING_CHECK_OUT", "2000-01-07T00:00:00Z");
+        insertAttendance(membershipId, "2000-01-09", "PRESENT", "2000-01-09T00:00:00Z");
         insertAttendance(membershipId, "2000-01-08", "ABSENT", null);
-        insertAttendance(membershipId, "2000-01-10", "PENDING", null);
+        insertAttendance(membershipId, "2000-01-10", "PRESENT", null);
     }
 
     private void insertAttendance(

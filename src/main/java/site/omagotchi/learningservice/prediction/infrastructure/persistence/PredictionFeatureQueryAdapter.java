@@ -5,6 +5,7 @@ import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.DateExpression;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.core.types.dsl.NumberExpression;
+import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
@@ -20,23 +21,17 @@ import site.omagotchi.learningservice.gamification.application.GamificationError
 import site.omagotchi.learningservice.gamification.domain.QUserCharacter;
 import site.omagotchi.learningservice.gamification.domain.QUserDailyQuest;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.prediction.application.PredictionErrorCode;
 import site.omagotchi.learningservice.prediction.application.port.PredictionFeatureSnapshotReader;
 import site.omagotchi.learningservice.prediction.application.result.PredictionFeatureSnapshot;
 import site.omagotchi.learningservice.prediction.application.result.PredictionFeatureSnapshot.*;
 import site.omagotchi.learningservice.study.domain.QStudyRecord;
 
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
-import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Repository
 @RequiredArgsConstructor
@@ -44,22 +39,16 @@ import java.util.stream.Collectors;
 public class PredictionFeatureQueryAdapter implements PredictionFeatureSnapshotReader {
 
     private static final int RECENT_DAYS = 30;
-    private static final Set<AttendanceStatus> ATTENDED_STATUSES = Set.of(
-            AttendanceStatus.PRESENT,
-            AttendanceStatus.LATE,
-            AttendanceStatus.LEFT_EARLY,
-            AttendanceStatus.LATE_LEFT_EARLY,
-            AttendanceStatus.MISSING_CHECK_OUT
-    );
+    // 지각 피처는 지각과 조퇴가 각각 또는 함께 발생한 최종 상태를 모두 포함한다.
     private static final Set<AttendanceStatus> LATE_STATUSES = Set.of(
             AttendanceStatus.LATE,
+            AttendanceStatus.LEFT_EARLY,
             AttendanceStatus.LATE_LEFT_EARLY
     );
 
     private static final QCohort cohort = QCohort.cohort;
     private static final QCohortMembership cohortMembership = QCohortMembership.cohortMembership;
-    private static final QCohortAttendancePolicy attendancePolicy =
-            QCohortAttendancePolicy.cohortAttendancePolicy;
+    private static final QCohortAttendancePolicy attendancePolicy = QCohortAttendancePolicy.cohortAttendancePolicy;
     private static final QStudyRecord studyRecord = QStudyRecord.studyRecord;
     private static final QAttendanceRecord attendanceRecord = QAttendanceRecord.attendanceRecord;
     private static final QUserCharacter userCharacter = QUserCharacter.userCharacter;
@@ -73,28 +62,30 @@ public class PredictionFeatureQueryAdapter implements PredictionFeatureSnapshotR
             UUID userId,
             Long cohortId,
             Long cohortMembershipId,
-            LocalDate baseDate,
-            Instant observedAt
+            LocalDate featureDate
     ) {
         MembershipContext membershipContext = findMembershipContext(cohortId, cohortMembershipId);
         LocalDate membershipStartDate = membershipStartDate(membershipContext);
-        LocalDate recentStartDate = baseDate.minusDays(RECENT_DAYS - 1L);
+        LocalDate recentStartDate = featureDate.minusDays(RECENT_DAYS - 1L);
 
-        // 소속, 학습, 출결, 게임 조회를 하나의 스냅샷으로 묶어서 반환
+        // 모든 원천값은 targetDate의 전날인 featureDate까지만 조회한다.
         return new PredictionFeatureSnapshot(
-                baseDate,
+                featureDate,
                 membershipStartDate,
                 membershipContext.attendanceTimezone(),
-                findStudyHistory(cohortMembershipId, recentStartDate, baseDate),
+                findStudyHistory(
+                        cohortMembershipId,
+                        membershipStartDate,
+                        recentStartDate,
+                        featureDate
+                ),
                 findAttendanceHistory(
                         cohortMembershipId,
                         membershipStartDate,
                         recentStartDate,
-                        baseDate,
-                        observedAt,
-                        membershipContext
+                        featureDate
                 ),
-                findGamificationHistory(userId, membershipStartDate, baseDate)
+                findGamificationHistory(userId, membershipStartDate, featureDate)
         );
     }
 
@@ -103,10 +94,8 @@ public class PredictionFeatureQueryAdapter implements PredictionFeatureSnapshotR
         Tuple context = queryFactory
                 .select(
                         cohort.startDate,             // 기수 공식 시작일 (집계 시작일 하한선)
-                        cohortMembership.requestedAt, // 소속 가입 요청 일시 (processedAt 누락 시 fallback)
                         cohortMembership.processedAt, // 소속 승인/처리 일시 (소속 활성화 일자 계산 기준)
-                        attendancePolicy.timezone,    // 기수 출결 정책 시간대 (UTC -> 로컬 날짜 변환용 ZoneId)
-                        attendancePolicy.absenceCutoffTime // 오늘의 미등원 여부를 확정할 수 있는 마감 시각
+                        attendancePolicy.timezone    // 기수 출결 정책 시간대 (UTC -> 로컬 날짜 변환용 ZoneId)
                 )
                 .from(cohortMembership)
                 .join(cohort).on(cohort.id.eq(cohortMembership.cohortId))
@@ -125,18 +114,10 @@ public class PredictionFeatureQueryAdapter implements PredictionFeatureSnapshotR
         if (timezone == null || timezone.isBlank()) {
             throw new BusinessException(AttendanceErrorCode.ATTENDANCE_POLICY_NOT_FOUND);
         }
-        LocalTime absenceCutoffTime = context.get(attendancePolicy.absenceCutoffTime);
-        if (absenceCutoffTime == null) {
-            // 출결 정책은 존재하더라도 결석 마감 시각이 없으면 오늘 노쇼를 계산할 수 없다.
-            throw new BusinessException(AttendanceErrorCode.ATTENDANCE_POLICY_NOT_FOUND);
-        }
-
         return new MembershipContext(
                 context.get(cohort.startDate),
-                context.get(cohortMembership.requestedAt),
                 context.get(cohortMembership.processedAt),
-                timezone,
-                absenceCutoffTime
+                timezone
         );
     }
 
@@ -144,8 +125,8 @@ public class PredictionFeatureQueryAdapter implements PredictionFeatureSnapshotR
     private LocalDate membershipStartDate(MembershipContext context) {
         OffsetDateTime membershipStartedAt = context.processedAt();
         if (membershipStartedAt == null) {
-            // TODO: ACTIVE 소속의 processedAt 누락을 데이터 오류로 처리할지 확정한다.
-            membershipStartedAt = context.requestedAt();
+            // ACTIVE 소속은 processedAt이 필수이므로 신청 시각으로 대체하지 않는다.
+            throw new IllegalStateException("ACTIVE 소속의 processedAt이 누락되었습니다.");
         }
 
         LocalDate activatedDate = membershipStartedAt
@@ -160,8 +141,9 @@ public class PredictionFeatureQueryAdapter implements PredictionFeatureSnapshotR
     // 삭제되지 않은 확정 기록에서 최근 일별 공부시간과 전체 공부시간을 조회한다.
     private StudyHistory findStudyHistory(
             Long cohortMembershipId,
+            LocalDate membershipStartDate,
             LocalDate recentStartDate,
-            LocalDate baseDate
+            LocalDate featureDate
     ) {
         NumberExpression<Long> dailyStudySeconds = studyRecord.studySeconds
                 .sumLong()
@@ -175,7 +157,7 @@ public class PredictionFeatureQueryAdapter implements PredictionFeatureSnapshotR
                 .where(
                         studyRecord.cohortMembershipId.eq(cohortMembershipId),
                         studyRecord.deletedAt.isNull(),
-                        studyRecord.aggregationDate.between(recentStartDate, baseDate)
+                        studyRecord.aggregationDate.between(recentStartDate, featureDate)
                 )
                 .groupBy(studyRecord.aggregationDate)
                 .orderBy(studyRecord.aggregationDate.asc())
@@ -197,25 +179,36 @@ public class PredictionFeatureQueryAdapter implements PredictionFeatureSnapshotR
                 .where(
                         studyRecord.cohortMembershipId.eq(cohortMembershipId),
                         studyRecord.deletedAt.isNull(),
-                        studyRecord.aggregationDate.loe(baseDate)
+                        studyRecord.aggregationDate.loe(featureDate)
+                )
+                .fetchOne();
+
+        NumberExpression<Long> studiedWeekdaysAll = studyRecord.aggregationDate.countDistinct();
+        Long studiedWeekdaysAllValue = queryFactory
+                .select(studiedWeekdaysAll)
+                .from(studyRecord)
+                .where(
+                        studyRecord.cohortMembershipId.eq(cohortMembershipId),
+                        studyRecord.deletedAt.isNull(),
+                        studyRecord.aggregationDate.between(membershipStartDate, featureDate),
+                        studyDateIsWeekday()
                 )
                 .fetchOne();
 
         return new StudyHistory(
                 recentDailyStudySeconds,
                 allStudy == null ? null : allStudy.get(firstStudyDate),
-                allStudy == null ? 0L : valueOrZero(allStudy.get(totalStudySeconds))
+                allStudy == null ? 0L : valueOrZero(allStudy.get(totalStudySeconds)),
+                valueOrZero(studiedWeekdaysAllValue)
         );
     }
 
-    // finalStatus를 기준으로 최근 출결 내역과 전체 평일 등원·지각 일수를 조회
+    // 최근 출결 메타데이터와 확정 학습일에 해당하는 전체 지각·조퇴 일수를 조회
     private AttendanceHistory findAttendanceHistory(
             Long cohortMembershipId,
             LocalDate membershipStartDate,
             LocalDate recentStartDate,
-            LocalDate baseDate,
-            Instant observedAt,
-            MembershipContext membershipContext
+            LocalDate featureDate
     ) {
         LocalDate effectiveRecentStartDate = recentStartDate.isAfter(membershipStartDate)
                 ? recentStartDate
@@ -229,7 +222,7 @@ public class PredictionFeatureQueryAdapter implements PredictionFeatureSnapshotR
                 .from(attendanceRecord)
                 .where(
                         attendanceRecord.cohortMembershipId.eq(cohortMembershipId),
-                        attendanceRecord.attendanceDate.between(effectiveRecentStartDate, baseDate)
+                        attendanceRecord.attendanceDate.between(effectiveRecentStartDate, featureDate)
                 )
                 .orderBy(attendanceRecord.attendanceDate.asc())
                 .fetch()
@@ -241,115 +234,41 @@ public class PredictionFeatureQueryAdapter implements PredictionFeatureSnapshotR
                 ))
                 .toList();
 
-        NumberExpression<Long> attendedDays = attendedDaysExpression();
-        NumberExpression<Long> lateDays = lateDaysExpression();
-        NumberExpression<Long> pendingWeekdays = pendingWeekdaysExpression();
-        Tuple allAttendance = queryFactory
-                .select(attendedDays, lateDays, pendingWeekdays)
+        NumberExpression<Long> lateStudiedDaysAll =
+                attendanceRecord.attendanceDate.countDistinct();
+        Long lateStudiedDaysAllValue = queryFactory
+                .select(lateStudiedDaysAll)
                 .from(attendanceRecord)
                 .where(
                         attendanceRecord.cohortMembershipId.eq(cohortMembershipId),
-                        attendanceRecord.attendanceDate.between(membershipStartDate, baseDate)
+                        attendanceRecord.attendanceDate.between(membershipStartDate, featureDate),
+                        attendanceRecord.finalStatus.in(LATE_STATUSES),
+                        attendanceDateIsWeekday(),
+                        JPAExpressions
+                                .selectOne()
+                                .from(studyRecord)
+                                .where(
+                                        studyRecord.cohortMembershipId.eq(
+                                                attendanceRecord.cohortMembershipId
+                                        ),
+                                        studyRecord.aggregationDate.eq(
+                                                attendanceRecord.attendanceDate
+                                        ),
+                                        studyRecord.deletedAt.isNull()
+                                )
+                                .exists()
                 )
                 .fetchOne();
 
         return new AttendanceHistory(
                 recentAttendance,
-                allAttendance == null ? 0L : valueOrZero(allAttendance.get(attendedDays)),
-                allAttendance == null ? 0L : valueOrZero(allAttendance.get(lateDays)),
-                allAttendance == null ? 0L : valueOrZero(allAttendance.get(pendingWeekdays)),
-                resolveNoShowOnBaseDate(
-                        recentAttendance,
-                        membershipStartDate,
-                        baseDate,
-                        observedAt,
-                        membershipContext
-                )
+                valueOrZero(lateStudiedDaysAllValue)
         );
-    }
-
-    /**
-     * 계약의 {@code noshowYesterday}는 이름과 달리 baseDate(오늘)의 미등원 여부다.
-     * 기록 없는 평일은 결석 마감 이후에만 노쇼로 확정하고, 마감 전 또는 PENDING은
-     * DTO의 0/1 어느 쪽으로도 왜곡하지 않고 피처 미확정 오류로 처리한다.
-     */
-    private boolean resolveNoShowOnBaseDate(
-            List<DailyAttendance> recentAttendance,
-            LocalDate membershipStartDate,
-            LocalDate baseDate,
-            Instant observedAt,
-            MembershipContext membershipContext
-    ) {
-        if (baseDate.isBefore(membershipStartDate) || !isWeekday(baseDate)) {
-            return false;
-        }
-
-        Map<LocalDate, DailyAttendance> attendanceByDate = recentAttendance.stream()
-                .collect(Collectors.toMap(DailyAttendance::attendanceDate, Function.identity()));
-        DailyAttendance todayAttendance = attendanceByDate.get(baseDate);
-        if (todayAttendance == null) {
-            ZoneId zoneId = ZoneId.of(membershipContext.attendanceTimezone());
-            Instant absenceCutoff = baseDate
-                    .atTime(membershipContext.absenceCutoffTime())
-                    .atZone(zoneId)
-                    .toInstant();
-            if (observedAt.isBefore(absenceCutoff)) {
-                throw new BusinessException(PredictionErrorCode.PREDICTION_FEATURE_NOT_READY);
-            }
-            // 결석 행을 만드는 배치가 아직 없으므로 마감 후의 행 부재를 노쇼로 해석한다.
-            // TODO: 출결 확정 배치가 도입되면 배치 지연 시 허용할 유예 시간과 폴백 규칙을 확정한다.
-            return true;
-        }
-
-        if (todayAttendance.finalStatus() == AttendanceStatus.PENDING) {
-            // PENDING은 미확정 상태이므로 모든 출결 계산과 동일하게 0/1 변환에서 제외한다.
-            // TODO: 출결 확정 배치에서 장기 PENDING을 MISSING_CHECK_OUT으로 전환한다.
-            throw new BusinessException(PredictionErrorCode.PREDICTION_FEATURE_NOT_READY);
-        }
-        return todayAttendance.finalStatus() == AttendanceStatus.ABSENT;
-    }
-
-    // 최종 출결 상태 중 평일에 실제 등원으로 인정할 상태의 조건식
-    private NumberExpression<Long> attendedDaysExpression() {
-        return new com.querydsl.core.types.dsl.CaseBuilder()
-                .when(
-                        attendanceRecord.finalStatus.in(ATTENDED_STATUSES)
-                                .and(attendanceDateIsWeekday())
-                )
-                .then(1L)
-                .otherwise(0L)
-                .sumLong()
-                .coalesce(0L);
-    }
-
-    // 최종 출결 상태 중 평일에 지각으로 인정할 상태의 조건식
-    private NumberExpression<Long> lateDaysExpression() {
-        return new com.querydsl.core.types.dsl.CaseBuilder()
-                .when(
-                        attendanceRecord.finalStatus.in(LATE_STATUSES)
-                                .and(attendanceDateIsWeekday())
-                )
-                .then(1L)
-                .otherwise(0L)
-                .sumLong()
-                .coalesce(0L);
-    }
-
-    // 전체 등원율의 분모에서 제외할 미확정 평일 수 조건식
-    private NumberExpression<Long> pendingWeekdaysExpression() {
-        return new com.querydsl.core.types.dsl.CaseBuilder()
-                .when(
-                        attendanceRecord.finalStatus.eq(AttendanceStatus.PENDING)
-                                .and(attendanceDateIsWeekday())
-                )
-                .then(1L)
-                .otherwise(0L)
-                .sumLong()
-                .coalesce(0L);
     }
 
     // PostgreSQL ISO 요일(월=1, 일=7) 기준 평일 조건식
     private BooleanExpression attendanceDateIsWeekday() {
+        // 출결 피처의 날짜 분모는 PostgreSQL ISO 요일 기준 월요일~금요일만 사용한다.
         NumberExpression<Double> isoDayOfWeek = Expressions.numberTemplate(
                 Double.class,
                 "function('date_part', 'isodow', {0})",
@@ -359,12 +278,24 @@ public class PredictionFeatureQueryAdapter implements PredictionFeatureSnapshotR
         return isoDayOfWeek.between(1.0, 5.0);
     }
 
+    // PostgreSQL ISO 요일(월=1, 일=7) 기준 확정 학습 평일 조건식
+    private BooleanExpression studyDateIsWeekday() {
+        NumberExpression<Double> isoDayOfWeek = Expressions.numberTemplate(
+                Double.class,
+                "function('date_part', 'isodow', {0})",
+                studyRecord.aggregationDate
+        );
+
+        return isoDayOfWeek.between(1.0, 5.0);
+    }
+
     // 대표 캐릭터 레벨, 전체 완료 퀘스트 수와 소속 기간의 날짜별 퀘스트 집계를 조회
     private GamificationHistory findGamificationHistory(
             UUID userId,
             LocalDate membershipStartDate,
-            LocalDate baseDate
+            LocalDate featureDate
     ) {
+        // 레벨은 날짜 스냅샷이 아니라 요청 시점의 최신 대표 캐릭터 레벨을 사용한다.
         Integer representativeLevel = queryFactory
                 .select(userCharacter.level)
                 .from(userCharacter)
@@ -383,7 +314,7 @@ public class PredictionFeatureQueryAdapter implements PredictionFeatureSnapshotR
                 .from(userDailyQuest)
                 .where(
                         userDailyQuest.userId.eq(userId),
-                        userDailyQuest.questDate.loe(baseDate),
+                        userDailyQuest.questDate.loe(featureDate),
                         userDailyQuest.completedAt.isNotNull()
                 )
                 .fetchOne();
@@ -404,7 +335,7 @@ public class PredictionFeatureQueryAdapter implements PredictionFeatureSnapshotR
                 .from(userDailyQuest)
                 .where(
                         userDailyQuest.userId.eq(userId),
-                        userDailyQuest.questDate.between(membershipStartDate, baseDate)
+                        userDailyQuest.questDate.between(membershipStartDate, featureDate)
                 )
                 .groupBy(userDailyQuest.questDate)
                 .orderBy(userDailyQuest.questDate.asc())
@@ -424,22 +355,16 @@ public class PredictionFeatureQueryAdapter implements PredictionFeatureSnapshotR
         );
     }
 
-    private boolean isWeekday(LocalDate date) {
-        return date.getDayOfWeek().getValue() <= 5;
-    }
-
     // 집계 결과가 없을 때 QueryDSL의 null 값을 0으로 정규화
     private long valueOrZero(Long value) {
         return value == null ? 0L : value;
     }
 
-    // 예측 피처 산출에 필요한 소속 컨텍스트 (기수 시작일, 가입 요청/승인 일시, 출결 시간대)
+    // 예측 피처 산출에 필요한 소속 컨텍스트 (기수 시작일, 승인 일시, 출결 시간대)
     private record MembershipContext(
             LocalDate cohortStartDate,
-            OffsetDateTime requestedAt,
             OffsetDateTime processedAt,
-            String attendanceTimezone,
-            LocalTime absenceCutoffTime
+            String attendanceTimezone
     ) {
     }
 }

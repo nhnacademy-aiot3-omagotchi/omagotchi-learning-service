@@ -88,6 +88,14 @@ Redis·RabbitMQ·Identity·Gateway·View는 검증 범위에 따라 별도로 �
   - 연결 실패·Timeout·Discovery 부재·`5xx`: `503 Service Unavailable`
   - 미등록 오류 Code·응답 계약 위반: `502 Bad Gateway`
 
+### Rule Service 연동
+
+- 용도: Rule Engine의 초기 적재·5분 주기 누락 보정용 임계치 기준 조회
+- 경로: `GET /api/v1/internal/threshold-rules`
+- 호출 방식: Gateway를 경유하지 않는 Rule→Learning 직접 HTTP 호출
+- 인증: Rule–Learning 관계 전용 HTTP Basic Credential
+- 공개 사용자 API: `/api/v1/threshold-rules/**`의 Access JWT 정책과 분리
+
 ## 환경 Profile
 
 - `local`: `.env.local`, 로컬 PostgreSQL·Redis·RabbitMQ
@@ -99,6 +107,7 @@ Redis·RabbitMQ·Identity·Gateway·View는 검증 범위에 따라 별도로 �
 
 - 기본 Prefix: `/api/v1`
 - 일반 보호 API: Access JWT 필수
+- Rule 내부 조회: `GET /api/v1/internal/threshold-rules`, Rule 전용 HTTP Basic Credential
 - 관리자 API: `SYSTEM_ADMIN` 또는 기수 관리자 정책
 - 공개 조회: `GET /api/v1/spaces`
 - Telegram Webhook: `POST /api/v1/webhooks/telegram`, Access JWT 예외

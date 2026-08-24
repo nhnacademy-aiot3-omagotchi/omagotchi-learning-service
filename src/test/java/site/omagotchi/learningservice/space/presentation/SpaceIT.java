@@ -524,7 +524,7 @@ class SpaceIT {
             ))
                     .containsExactlyInAnyOrder(
                             "SUCCESS",
-                            "SPACE_LAB_ALREADY_ASSIGNED"
+                            "SPACE_ALREADY_ASSIGNED"
                     );
             assertThat(readCohortId(labId))
                     .isIn(firstCohortId, secondCohortId);
@@ -1085,7 +1085,7 @@ class SpaceIT {
     }
 
     @Test
-    void rejectsInvalidLabAssignmentStates() throws Exception {
+    void rejectsInvalidCohortAssignmentStates() throws Exception {
         Long cohortId = insertManagementCohort();
         Long assignedLabId = insertTypedSpace(
                 "통합 중복 배정 실습실",
@@ -1094,8 +1094,8 @@ class SpaceIT {
                 cohortId,
                 null
         );
-        Long meetingId = insertTypedSpace(
-                "통합 회의실 배정 차단",
+        Long assignedMeetingId = insertTypedSpace(
+                "통합 중복 배정 회의실",
                 "MEETING",
                 "INACTIVE",
                 cohortId,
@@ -1119,16 +1119,18 @@ class SpaceIT {
                         .content(request))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
-                        .value("SPACE_LAB_ALREADY_ASSIGNED"));
+                        .value("SPACE_ALREADY_ASSIGNED"));
 
+        // 유형을 가리지 않는 것이 지금의 계약이다 — 이미 배정된 회의실도 실습실과 같은
+        // 409다. 예전에는 "실습실이 아니라서" 400이었는데, 그 유형 제한을 폐기했다.
         mockMvc.perform(put(
                         "/api/v1/admin/spaces/{space-id}/cohort",
-                        meetingId
+                        assignedMeetingId
                 ).contentType(MediaType.APPLICATION_JSON)
                         .content(request))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
-                        .value("SPACE_LAB_ONLY_COHORT_ASSIGNMENT"));
+                        .value("SPACE_ALREADY_ASSIGNED"));
 
         mockMvc.perform(put(
                         "/api/v1/admin/spaces/{space-id}/cohort",
@@ -1159,10 +1161,10 @@ class SpaceIT {
     }
 
     @Test
-    void rejectsInvalidLabUnassignmentStates() throws Exception {
+    void rejectsInvalidCohortUnassignmentStates() throws Exception {
         Long cohortId = insertManagementCohort();
-        Long meetingId = insertTypedSpace(
-                "통합 회의실 해제 차단",
+        Long assignedMeetingId = insertTypedSpace(
+                "통합 회의실 해제",
                 "MEETING",
                 "INACTIVE",
                 cohortId,
@@ -1176,13 +1178,15 @@ class SpaceIT {
                 null
         );
 
+        // 유형을 가리지 않는 것이 지금의 계약이다 — 배정된 회의실도 실습실처럼 해제할 수
+        // 있다. 이 인수·해제 경로가 있어야 기수 종료로 주체가 풀린 회의실을 다른 기수가
+        // 인수해 최종적으로 삭제할 수 있다 (RM-25, 명세 08 §2 4단계).
         mockMvc.perform(delete(
                         "/api/v1/admin/spaces/{space-id}/cohort",
-                        meetingId
+                        assignedMeetingId
                 ))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code")
-                        .value("SPACE_LAB_ONLY_COHORT_ASSIGNMENT"));
+                .andExpect(status().isNoContent());
+        assertThat(readCohortId(assignedMeetingId)).isNull();
 
         mockMvc.perform(delete(
                         "/api/v1/admin/spaces/{space-id}/cohort",
@@ -1190,7 +1194,7 @@ class SpaceIT {
                 ))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
-                        .value("SPACE_LAB_NOT_ASSIGNED"));
+                        .value("SPACE_NOT_ASSIGNED"));
     }
 
     @Test
@@ -1220,7 +1224,7 @@ class SpaceIT {
                                 """.formatted(ownCohortId)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code")
-                        .value("SPACE_LAB_ALREADY_ASSIGNED"));
+                        .value("SPACE_ALREADY_ASSIGNED"));
 
         mockMvc.perform(delete(
                         "/api/v1/admin/spaces/{space-id}/cohort",

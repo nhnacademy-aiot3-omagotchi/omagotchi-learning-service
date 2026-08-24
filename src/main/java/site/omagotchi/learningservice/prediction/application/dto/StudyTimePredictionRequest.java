@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.prediction.application.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.*;
 
 public record StudyTimePredictionRequest(
@@ -79,8 +80,9 @@ public record StudyTimePredictionRequest(
      * Python 요청 계약과 동일하게 화요일~일요일은 최대 하나만 선택하고,
      * 주말 원-핫과 평일 여부가 모순되지 않게 한다.
      */
+    @JsonIgnore
     @AssertTrue(message = "내일 요일 원-핫 값과 평일 여부가 일치해야 합니다.")
-    public boolean validateTomorrowDayOfWeekConsistent() {
+    public boolean isTomorrowDayOfWeekConsistent() {
         if (tomorrowIsWeekday == null
                 || tomorrowDow1 == null
                 || tomorrowDow2 == null

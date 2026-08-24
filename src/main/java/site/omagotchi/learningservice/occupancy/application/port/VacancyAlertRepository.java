@@ -13,8 +13,6 @@ import java.util.Optional;
  * {@link OccupancyParticipantRepository}와의 차이다. 신청은 구간이 아니라 일회성
  * 의사표시라 "취소한 신청"의 이력을 남길 이유가 없다.</p>
  *
- * <p>기수 종료 정리(CE-02)에 필요한 삭제는 아직 여기 없다. 쓰지 않는 Method를 미리
- * Port에 두지 않는다.</p>
  */
 public interface VacancyAlertRepository {
 
@@ -104,4 +102,19 @@ public interface VacancyAlertRepository {
      *         필요한 호출자(MR-21)는 크기를 쓴다. 지운 행이 없으면 빈 목록
      */
     List<Long> deleteWaitingBySpaceId(Long spaceId);
+
+    /**
+     * 이 멤버십들이 신청한 대기 중 신청을 전부 지운다 (CE-02).
+     *
+     * <p>기수 종료 시 그 기수 신청만 지운다 — 다기수 담당자가 다른 기수 멤버십으로 신청한
+     * 건은 멤버십이 다르므로 자연히 남는다 (명세 04 §2). 통보하지 않으므로
+     * {@link #deleteWaitingBySpaceId}와 달리 수신자를 돌려줄 이유가 없다.</p>
+     *
+     * <p><b>이 삭제가 점유 종료(CE-03)보다 먼저여야 한다.</b> 뒤집히면 CE-03의 공실 발송이
+     * 방금 종료된 기수의 신청을 아직 대기 중으로 보고 <b>그 학생들에게 알림을 보낸다</b>
+     * (CE-05). 순서는 호출자가 지킨다.</p>
+     *
+     * @return 지운 건수
+     */
+    int deleteWaitingByMembershipIds(Collection<Long> cohortMembershipIds);
 }

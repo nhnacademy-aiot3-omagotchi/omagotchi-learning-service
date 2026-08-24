@@ -85,6 +85,14 @@ public interface VacancyAlertJpaRepository extends JpaRepository<VacancyAlert, L
                  RETURNING cohort_membership_id""", nativeQuery = true)
     List<Long> deleteWaitingBySpaceId(@Param("spaceId") Long spaceId);
 
+    /** 멤버십 기준 대기 신청 전부 삭제 (CE-02). 통보 없는 삭제라 RETURNING이 필요 없다. */
+    @Modifying
+    @Query("""
+                DELETE FROM VacancyAlert a
+                 WHERE a.cohortMembershipId IN :membershipIds
+                   AND a.notifiedAt IS NULL""")
+    int deleteWaitingByMembershipIds(@Param("membershipIds") Collection<Long> membershipIds);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
                 SELECT a

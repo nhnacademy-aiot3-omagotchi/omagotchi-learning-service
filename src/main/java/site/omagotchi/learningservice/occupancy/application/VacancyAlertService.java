@@ -17,6 +17,7 @@ import site.omagotchi.learningservice.occupancy.domain.VacancyAlert;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -160,6 +161,27 @@ public class VacancyAlertService {
         log.info("공간 비활성화로 대기 신청을 삭제했습니다. spaceId={}, 삭제={}건",
                 spaceId, membershipIds.size());
         return membershipIds.size();
+    }
+
+    /**
+     * 이 멤버십들의 대기 중 신청을 전부 지운다 (CE-02, 기수 종료 연동).
+     *
+     * <p>{@link #discardBySpace}와 달리 <b>통보하지 않는다</b> — 서비스 이용 자체가 끝나는
+     * 사람들이라 안내 실익이 없다 (명세 04 §3). 그래서 수신자 확보(RETURNING)도 이벤트도
+     * 없다.</p>
+     *
+     * <p><b>점유 종료(CE-03)보다 먼저 호출돼야 한다.</b> 뒤집히면 CE-03의 공실 발송이 방금
+     * 종료된 기수의 신청을 대기 중으로 보고 <b>그 학생들에게 알림을 보낸다</b> (CE-05).</p>
+     *
+     * @return 지운 건수
+     */
+    @Transactional
+    public int discardByMemberships(Collection<Long> cohortMembershipIds) {
+        int discarded = alertRepository.deleteWaitingByMembershipIds(cohortMembershipIds);
+        if (discarded > 0) {
+            log.info("기수 종료로 대기 신청을 삭제했습니다. 삭제={}건", discarded);
+        }
+        return discarded;
     }
 
     /**

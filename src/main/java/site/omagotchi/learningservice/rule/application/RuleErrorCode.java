@@ -28,7 +28,7 @@ public enum RuleErrorCode implements ErrorCode {
     //센서
     DEVICE_INVALID_ATTRIBUTE(
             ErrorType.INVALID_INPUT,
-            "DEVICE_INVALID_ATRRIBUTE",
+            "DEVICE_INVALID_ATTRIBUTE",
             "디바이스의 정보가 올바르지않습니다."
     ),
 

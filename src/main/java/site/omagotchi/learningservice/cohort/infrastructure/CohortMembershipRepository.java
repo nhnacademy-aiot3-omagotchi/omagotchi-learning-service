@@ -68,6 +68,12 @@ public interface CohortMembershipRepository extends
             CohortMembershipStatus status
     );
 
+    List<CohortMembership> findByCohortIdAndRoleAndStatusOrderByRequestedAtAsc(
+            Long cohortId,
+            CohortMembershipRole role,
+            CohortMembershipStatus status
+    );
+
     List<CohortMembership> findByCohortIdOrderByRequestedAtAsc(Long cohortId);
 
     boolean existsByCohortIdAndRoleAndStatus(

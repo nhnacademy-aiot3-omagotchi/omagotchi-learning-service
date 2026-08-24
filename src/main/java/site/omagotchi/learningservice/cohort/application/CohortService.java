@@ -9,6 +9,8 @@ import site.omagotchi.learningservice.cohort.application.command.UpdateCohortCom
 import site.omagotchi.learningservice.cohort.application.result.CohortResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
+import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
@@ -25,6 +27,7 @@ public class CohortService {
     private final CohortRepository repository;
     private final CohortMembershipRepository membershipRepository;
     private final CohortAccessService accessService;
+    private final CohortManagerAssignmentPolicy managerAssignmentPolicy;
 
     /**
      * 새 기수를 PREPARING 상태로 생성한다.
@@ -77,6 +80,20 @@ public class CohortService {
         accessService.requireManager(cohortId, actorUserId);
 
         Cohort cohort = getCohortOrThrow(cohortId);
+
+        membershipRepository.findByCohortIdAndRoleAndStatusOrderByRequestedAtAsc(
+                        cohortId,
+                        CohortMembershipRole.MANAGER,
+                        CohortMembershipStatus.ACTIVE
+                ).stream()
+                .map(membership -> membership.getUserId())
+                .sorted()
+                .forEach(managerUserId -> managerAssignmentPolicy.validateNoPeriodConflict(
+                        managerUserId,
+                        cohortId,
+                        command.startDate(),
+                        command.endDate()
+                ));
 
         cohort.updateBasicInfo(
                 command.name(),

@@ -18,7 +18,10 @@ import site.omagotchi.learningservice.cohort.application.CohortMembershipService
 import site.omagotchi.learningservice.cohort.application.CohortService;
 import site.omagotchi.learningservice.cohort.application.JoinCodeService;
 import site.omagotchi.learningservice.cohort.application.command.SaveAttendancePolicyCommand;
+import site.omagotchi.learningservice.cohort.application.command.AssignCohortManagerCommand;
 import site.omagotchi.learningservice.cohort.application.result.CohortAttendancePolicyResponse;
+import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.security.JwtAuthorityConfig;
 import site.omagotchi.learningservice.global.security.JwtConfig;
 import site.omagotchi.learningservice.global.security.JwtProperties;
@@ -31,9 +34,11 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -73,6 +78,27 @@ class CohortControllerTest {
 
     @MockitoBean
     private CohortAttendancePolicyService attendancePolicyService;
+
+    @Test
+    @DisplayName("운영 기간이 겹치는 관리자 배치는 409 계약 오류를 반환한다")
+    void rejectsOverlappingManagerAssignment() throws Exception {
+        UUID managerUserId = UUID.fromString("019d2a48-80c0-4d6a-9a15-0b16d2dd74f1");
+        given(managerService.assignManager(
+                eq(COHORT_ID),
+                eq(new AssignCohortManagerCommand(managerUserId)),
+                eq(USER_ID),
+                any()
+        )).willThrow(new BusinessException(CohortErrorCode.COHORT_MANAGER_PERIOD_CONFLICT));
+
+        mockMvc.perform(post("/api/v1/cohorts/{cohortId}/managers", COHORT_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue("SYSTEM_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"userId":"019d2a48-80c0-4d6a-9a15-0b16d2dd74f1"}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("COHORT_MANAGER_PERIOD_CONFLICT"));
+    }
 
     @Test
     @DisplayName("출결 정책 조회 요청을 현재 사용자로 서비스에 위임한다")

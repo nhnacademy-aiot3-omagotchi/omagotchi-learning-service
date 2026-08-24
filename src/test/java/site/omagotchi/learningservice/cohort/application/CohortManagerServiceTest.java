@@ -7,6 +7,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.command.ChangeCohortMemberRoleCommand;
+import site.omagotchi.learningservice.cohort.application.command.AssignCohortManagerCommand;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
@@ -42,8 +43,32 @@ class CohortManagerServiceTest {
     @Mock
     private CohortAccessService accessService;
 
+    @Mock
+    private CohortManagerAssignmentPolicy assignmentPolicy;
+
     @InjectMocks
     private CohortManagerService managerService;
+
+    @Test
+    void validatesManagerPeriodBeforeCreatingMembership() {
+        Long cohortId = 1L;
+        Cohort cohort = preparingCohort(cohortId);
+        when(cohortRepository.findById(cohortId)).thenReturn(Optional.of(cohort));
+        when(membershipRepository.findByCohortIdAndUserId(cohortId, MANAGER_USER_ID))
+                .thenReturn(Optional.empty());
+        when(membershipRepository.save(any(CohortMembership.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        managerService.assignManager(
+                cohortId,
+                new AssignCohortManagerCommand(MANAGER_USER_ID),
+                PROCESSOR_USER_ID,
+                GlobalRole.SYSTEM_ADMIN
+        );
+
+        verify(assignmentPolicy).validateNoPeriodConflict(MANAGER_USER_ID, cohort);
+        verify(membershipRepository).save(any(CohortMembership.class));
+    }
 
     @Test
     void cannotChangeLastActiveManagerToMentor() {

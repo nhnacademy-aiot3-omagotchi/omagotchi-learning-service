@@ -9,6 +9,7 @@ import site.omagotchi.learningservice.cohort.application.CohortMembershipQuerySe
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.space.application.CohortEndedSpaceCleanup;
 import site.omagotchi.learningservice.team.application.TeamMasterService;
+import site.omagotchi.learningservice.team.application.port.TeamRepository;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -33,6 +34,7 @@ import java.util.List;
 public class CohortEndedCleanup {
 
     private final TeamMasterService teamMasterService;
+    private final TeamRepository teamRepository;
     private final CohortMembershipQueryService cohortMembershipQueryService;
     private final VacancyAlertService vacancyAlertService;
     private final RoomOccupancyRepository occupancyRepository;
@@ -52,11 +54,7 @@ public class CohortEndedCleanup {
     public void cleanUp(Long endedCohortId) {
 
         // 1단계 — 팀 정리 (CE-01). 실패해도 나머지 단계와 무관하다.
-        try {
-            teamMasterService.disbandAllByCohort(endedCohortId);
-        } catch (Exception exception) {
-            log.error("기수 종료 팀 정리(CE-01)에 실패했습니다. cohortId={}", endedCohortId, exception);
-        }
+        disbandTeams(endedCohortId);
 
         // CE-02·03의 대상은 멤버십 조인으로만 나온다 (명세 08 §1). 이 조회가 실패하면 둘 다
         // 대상을 특정할 수 없으므로 함께 건너뛰고, 기수 단위인 CE-04만 진행한다.
@@ -90,6 +88,39 @@ public class CohortEndedCleanup {
         } catch (Exception exception) {
             log.error("기수 종료 공간 관리 주체 해제(CE-04)에 실패했습니다. 해당 공간이 동결됩니다. cohortId={}",
                     endedCohortId, exception);
+        }
+    }
+
+    /**
+     * 이 기수의 활성 팀을 전부 해체한다.
+     *
+     * <p>{@link TeamMasterService#disbandOne}을 팀별로 불러 <b>건별로 격리한다</b> — 한 팀의
+     * 해체가 실패해도 나머지 팀은 계속 처리된다. 이 루프를 {@code TeamMasterService} 안에
+     * 두지 않는 이유는 자기호출이 Spring Proxy를 거치지 않아 건별 Transaction이 성립하지
+     * 않기 때문이다 (ADR space-team/0013이 스윕 루프를 같은 이유로 밖에 둔 것과 같다).</p>
+     */
+    private void disbandTeams(Long endedCohortId) {
+        List<Long> teamIds;
+        try {
+            teamIds = teamRepository.findActiveIdsByCohortId(endedCohortId);
+        } catch (Exception exception) {
+            log.error("기수 종료 팀 조회(CE-01)에 실패했습니다. cohortId={}", endedCohortId, exception);
+            return;
+        }
+
+        int disbanded = 0;
+        for (Long teamId : teamIds) {
+            try {
+                if (teamMasterService.disbandOne(teamId)) {
+                    disbanded++;
+                }
+            } catch (Exception exception) {
+                // 한 팀의 실패가 나머지를 막지 않는다. 남은 팀은 멤버십 정합성 스윕이 받친다.
+                log.error("기수 종료 팀 해체(CE-01)에 실패했습니다. teamId={}", teamId, exception);
+            }
+        }
+        if (disbanded > 0) {
+            log.info("기수 종료로 팀을 해체했습니다. cohortId={}, 해체={}팀", endedCohortId, disbanded);
         }
     }
 

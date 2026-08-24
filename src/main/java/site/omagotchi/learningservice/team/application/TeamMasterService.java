@@ -108,7 +108,9 @@ public class TeamMasterService {
     }
 
     /**
-     * 이 기수의 활성 팀을 전부 해체한다 (CE-01, 기수 종료 연동).
+     * 팀 하나를 해체한다 (CE-01, 기수 종료 연동). 팀 단위로 격리된 Transaction이다 — 이
+     * 팀의 실패가 다른 팀의 해체를 막으면 안 되므로, 여러 팀에 걸친 반복은 호출자
+     * ({@code CohortEndedCleanup})가 건별로 이 메서드를 불러 나눠 가진다.
      *
      * <p>{@link #disband}와 달리 <b>행위자 검증도 통보도 없다.</b> 기수 종료라는 시스템
      * 사건이 근거이고, 서비스 이용 자체가 끝나므로 해체 통보를 보내지 않는다 (명세 08 §2
@@ -119,30 +121,22 @@ public class TeamMasterService {
      * 두 팀에 속하게 된다 — {@code uq_team_members_membership}은 멤버십 기준이라 이를
      * 막지 못한다.</p>
      *
-     * <p>같은 기수에 두 번 호출해도 안전하다. 첫 호출이 전부 해체하면 두 번째의 활성 팀
-     * 조회가 빈 결과다. 조회와 잠금 사이에 다른 경로가 해체했으면 잠금 후 재확인이
-     * 건너뛴다.</p>
+     * <p>같은 팀에 두 번 호출해도 안전하다. 조회와 잠금 사이에 다른 경로가 이미 해체했으면
+     * 잠금 후 재확인이 건너뛴다.</p>
      *
-     * @return 이번 호출로 해체한 팀 수
+     * @return 이번 호출로 해체했으면 {@code true}, 이미 해체됐거나 없으면 {@code false}
      */
     @Transactional
-    public int disbandAllByCohort(Long cohortId) {
-        int disbanded = 0;
-        for (Long teamId : teamRepository.findActiveIdsByCohortId(cohortId)) {
-            // 잠근 뒤 활성 여부를 다시 본다 — 조회와 잠금 사이에 마지막 팀원의 탈퇴가
-            // 해체를 먼저 커밋했을 수 있다.
-            Team team = teamRepository.findByIdForUpdate(teamId).orElse(null);
-            if (team == null || team.getDeletedAt() != null) {
-                continue;
-            }
-            teamMemberRepository.deleteByTeamId(teamId);
-            team.disband();
-            disbanded++;
+    public boolean disbandOne(Long teamId) {
+        // 잠근 뒤 활성 여부를 다시 본다 — 조회와 잠금 사이에 마지막 팀원의 탈퇴가
+        // 해체를 먼저 커밋했을 수 있다.
+        Team team = teamRepository.findByIdForUpdate(teamId).orElse(null);
+        if (team == null || team.getDeletedAt() != null) {
+            return false;
         }
-        if (disbanded > 0) {
-            log.info("기수 종료로 팀을 해체했습니다. cohortId={}, 해체={}팀", cohortId, disbanded);
-        }
-        return disbanded;
+        teamMemberRepository.deleteByTeamId(teamId);
+        team.disband();
+        return true;
     }
 
     /**

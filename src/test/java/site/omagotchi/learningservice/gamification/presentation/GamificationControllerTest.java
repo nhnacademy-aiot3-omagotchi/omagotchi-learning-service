@@ -32,6 +32,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
@@ -139,5 +140,13 @@ class GamificationControllerTest {
         mockMvc.perform(post("/api/v1/gamification/events/attendance")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/v1/gamification/quests/actions/character-checked")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/v1/gamification/quests/actions/routine-reviewed")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isNotFound());
+
+        verifyNoInteractions(dailyQuestService);
     }
 }

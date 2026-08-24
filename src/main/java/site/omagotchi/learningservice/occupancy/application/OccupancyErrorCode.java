@@ -27,6 +27,12 @@ public enum OccupancyErrorCode implements ErrorCode {
             "같은 기수의 사용자만 참여자로 추가할 수 있습니다."),                     // MR-33
     OCCUPIER_CANNOT_LEAVE(ErrorType.INVALID_INPUT, "OCCUPANCY_OCCUPIER_CANNOT_LEAVE",
             "점유자는 반납으로만 회의를 종료할 수 있습니다."),                        // MR-31
+    ALERT_ROOM_AVAILABLE(ErrorType.INVALID_INPUT, "OCCUPANCY_ALERT_ROOM_AVAILABLE",
+            "이미 사용 가능한 회의실입니다."),                                       // MR-02
+    ALERT_OCCUPIER_CANNOT_REQUEST(ErrorType.INVALID_INPUT, "OCCUPANCY_ALERT_OCCUPIER_CANNOT_REQUEST",
+            "본인이 점유 중인 회의실에는 공실 알림을 신청할 수 없습니다."),           // MR-02
+    ALERT_COHORT_ID_REQUIRED(ErrorType.INVALID_INPUT, "OCCUPANCY_ALERT_COHORT_ID_REQUIRED",
+            "여러 기수에 소속되어 있습니다. 신청할 기수를 지정해 주세요."),           // 다기수 담당자
 
     // 403
     NOT_PRESENT(ErrorType.AUTHORIZATION, "OCCUPANCY_NOT_PRESENT",
@@ -35,12 +41,18 @@ public enum OccupancyErrorCode implements ErrorCode {
             "재실 상태인 사용자만 참여자로 추가할 수 있습니다."),                     // MR-19
     NOT_OCCUPIER(ErrorType.AUTHORIZATION, "OCCUPANCY_NOT_OCCUPIER",
             "점유자만 참여자를 관리할 수 있습니다."),                                 // MR-29, MR-31
+    ALERT_COHORT_ACCESS_DENIED(ErrorType.AUTHORIZATION, "OCCUPANCY_ALERT_COHORT_ACCESS_DENIED",
+            "해당 기수의 활성 소속이 아닙니다."),                                     // MR-02
+    NOT_COHORT_MANAGER(ErrorType.AUTHORIZATION, "OCCUPANCY_NOT_COHORT_MANAGER",
+            "점유자가 속한 기수의 매니저만 강제 종료할 수 있습니다."),               // MR-21
 
     // 404
     SPACE_NOT_FOUND(ErrorType.NOT_FOUND, "OCCUPANCY_SPACE_NOT_FOUND",
             "공간을 찾을 수 없습니다."),
     PARTICIPANT_NOT_FOUND(ErrorType.NOT_FOUND, "OCCUPANCY_PARTICIPANT_NOT_FOUND",
             "참여자를 찾을 수 없습니다."),
+    ALERT_NOT_FOUND(ErrorType.NOT_FOUND, "OCCUPANCY_ALERT_NOT_FOUND",
+            "공실 알림 신청을 찾을 수 없습니다."),                                   // MR-17
 
     // 409
     ROOM_ALREADY_OCCUPIED(ErrorType.CONFLICT, "OCCUPANCY_ROOM_ALREADY_OCCUPIED",
@@ -54,11 +66,13 @@ public enum OccupancyErrorCode implements ErrorCode {
     CAPACITY_EXCEEDED(ErrorType.CONFLICT, "OCCUPANCY_CAPACITY_EXCEEDED",
             "회의실 정원을 초과했습니다."),                                    // MR-28
     OCCUPIER_MEMBERSHIP_INACTIVE(ErrorType.CONFLICT, "OCCUPANCY_OCCUPIER_MEMBERSHIP_INACTIVE",
-            "점유자의 기수 소속이 유효하지 않아 참여자를 추가할 수 없습니다."),  // MR-33, 대상이 아니라 점유자 쪽 원인
+            "점유자의 기수 소속이 유효하지 않습니다."),  // MR-33·MR-21, 요청자가 아니라 점유자 쪽 원인
     EXTENSION_TOO_EARLY(ErrorType.CONFLICT, "OCCUPANCY_EXTENSION_TOO_EARLY",
             "만료 30분 전부터 연장할 수 있습니다."),                            // MR-06
     EXTENSION_LIMIT_EXCEEDED(ErrorType.CONFLICT, "OCCUPANCY_EXTENSION_LIMIT_EXCEEDED",
-            "연장은 최대 2회까지 가능합니다.");                                 // MR-06
+            "연장은 최대 2회까지 가능합니다."),                                 // MR-06
+    ALERT_ALREADY_REQUESTED(ErrorType.CONFLICT, "OCCUPANCY_ALERT_ALREADY_REQUESTED",
+            "이미 신청한 공실 알림이 있습니다.");                               // MR-15
 
     // 만료 후 연장과 종료된 점유 반납에는 전용 코드를 두지 않고 OCCUPANCY_ENDED를 재사용한다.
     // "이미 종료된 점유입니다"가 두 상황 모두에서 사용자에게 정확한 설명이고,

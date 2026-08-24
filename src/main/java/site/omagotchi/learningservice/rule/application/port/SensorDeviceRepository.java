@@ -22,4 +22,6 @@ public interface SensorDeviceRepository {
     List<SensorDevice> findAllWithSpace();
 
     List<SensorDevice> findAll();
+
+    List<SensorDevice> findAllActive();
 }

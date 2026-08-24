@@ -11,4 +11,5 @@ public interface SensorDeviceJpaRepository extends JpaRepository<SensorDevice, S
 
     List<SensorDevice> findBySpaceIdIsNotNullOrderBySpaceIdAsc();
 
+    List<SensorDevice> findByActiveTrue();
 }

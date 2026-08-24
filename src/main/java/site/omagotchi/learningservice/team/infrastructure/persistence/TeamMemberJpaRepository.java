@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.team.infrastructure;
+package site.omagotchi.learningservice.team.infrastructure.persistence;
 
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;

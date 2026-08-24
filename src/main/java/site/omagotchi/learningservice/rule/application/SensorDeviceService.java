@@ -111,4 +111,15 @@ public class SensorDeviceService {
         return deviceMap;
     }
 
+    /** 운영 중인 기기의 EUI 집합. 대시보드 집계와 룰 대상은 이 목록으로 제한한다. */
+    public Set<String> findActiveDeviceEuis() {
+        Set<String> euis = new HashSet<>();
+
+        for (SensorDevice device : sensorDeviceRepository.findAllActive()) {
+            euis.add(device.getDeviceEui());
+        }
+
+        return euis;
+    }
+
 }

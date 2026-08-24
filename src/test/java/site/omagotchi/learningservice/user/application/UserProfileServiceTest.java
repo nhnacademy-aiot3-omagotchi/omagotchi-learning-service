@@ -16,6 +16,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+import site.omagotchi.learningservice.gamification.application.DailyQuestService;
 import site.omagotchi.learningservice.gamification.application.GamificationErrorCode;
 import site.omagotchi.learningservice.gamification.domain.AdvancementStage;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
@@ -77,6 +78,9 @@ class UserProfileServiceTest {
     private CharacterGrowthService characterGrowthService;
 
     @Mock
+    private DailyQuestService dailyQuestService;
+
+    @Mock
     private DateTimeProvider dateTimeProvider;
 
     @InjectMocks
@@ -133,6 +137,7 @@ class UserProfileServiceTest {
                 () -> assertEquals("pistachio", result.currentCharacter().colorId()),
                 () -> assertEquals("night/pistachio", result.currentCharacter().assetKey())
         );
+        verify(dailyQuestService).handleCharacterChecked(USER_ID);
     }
 
     @Test
@@ -155,7 +160,7 @@ class UserProfileServiceTest {
                 () -> assertNull(result.approvedCohort()),
                 () -> assertNull(result.currentCharacter())
         );
-        verifyNoInteractions(studyRecordQueryRepository, attendanceRecordRepository);
+        verifyNoInteractions(studyRecordQueryRepository, attendanceRecordRepository, dailyQuestService);
     }
 
     /**

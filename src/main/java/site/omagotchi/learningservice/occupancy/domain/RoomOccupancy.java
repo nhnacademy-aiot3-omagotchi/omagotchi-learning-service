@@ -27,9 +27,6 @@ import java.util.UUID;
  * 조건은 {@code boolean}으로만 표현하고 오류 코드로 옮기는 것은 Application의 책임이다
  * ({@code TeamErrorCode} 주석 참고).</p>
  *
- * <p>{@code space} 파트의 {@code RoomOccupancyJpaEntity}가 같은 테이블에 붙어 있다.
- * JPA entity name이 서로 달라 충돌하지 않으며, 저쪽은 공간 목록의 사용 상태 파생
- * 계산용 읽기 전용이고 쓰기 주체는 이 클래스 하나다.</p>
  */
 @Entity
 @Table(name = "room_occupancies", schema = "learning_service")
@@ -248,6 +245,32 @@ public class RoomOccupancy {
             return false;
         }
         this.status = OccupancyStatus.RELEASED;
+        this.endedAt = Objects.requireNonNull(endedAt, "종료 시각은 필수");
+        return true;
+    }
+
+    /**
+     * 기수 매니저가 점유를 강제 종료한다 (MR-21).
+     *
+     * <p><b>{@link #release}와 상태를 나누는 것이 요점이다.</b> 종료 사유가 통계의 원천이고
+     * (§3 "행은 이력으로 보존"), 무엇보다 후속 처리가 정반대다 — 반납은 공실 알림을
+     * 발송하지만 강제 종료는 <b>발송하지 않고 대기 신청을 지운다.</b> 공간 회수가 목적이라
+     * 곧 다시 쓸 수 없는 방을 대기자에게 알리면 안 된다.</p>
+     *
+     * <p>이 Class는 그 후속 처리를 알지 못한다. 여기서 하는 일은 사유를 상태에 남기는
+     * 것뿐이고, 이벤트를 발행할지 신청을 지울지는 Application이 상태를 보고 정한다
+     * (ADR space-team/0007).</p>
+     *
+     * <p>{@link #release}와 같은 이유로 멱등하다. 이미 끝난 점유에 다시 호출하면 종료
+     * 사유를 덮어쓰지 않고 {@code false}를 돌려준다.</p>
+     *
+     * @return 이번 호출로 강제 종료됐으면 {@code true}, 이미 종료된 상태였으면 {@code false}
+     */
+    public boolean forceRelease(OffsetDateTime endedAt) {
+        if (!isActive()) {
+            return false;
+        }
+        this.status = OccupancyStatus.FORCE_RELEASED;
         this.endedAt = Objects.requireNonNull(endedAt, "종료 시각은 필수");
         return true;
     }

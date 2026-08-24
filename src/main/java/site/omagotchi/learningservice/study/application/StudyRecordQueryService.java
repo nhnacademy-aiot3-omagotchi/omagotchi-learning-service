@@ -7,6 +7,7 @@ import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.time.AggregationDateTime;
+import site.omagotchi.learningservice.gamification.application.DailyQuestService;
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.result.DailyStudyRecordsResult;
 import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
@@ -30,6 +31,7 @@ public class StudyRecordQueryService {
 
     private final CohortAccessService cohortAccessService;
     private final StudyRecordQueryRepository studyRecordQueryRepository;
+    private final DailyQuestService dailyQuestService;
     private final Clock clock;
 
     public StudyRecordResult getRecord(
@@ -46,6 +48,7 @@ public class StudyRecordQueryService {
         return StudyRecordResult.from(entity);
     }
 
+    @Transactional
     public DailyStudyRecordsResult getDailyRecords(
             UUID userId,
             Long cohortId,
@@ -68,11 +71,13 @@ public class StudyRecordQueryService {
                 .mapToLong(StudyRecordResult::studySeconds)
                 .sum();
 
-        return new DailyStudyRecordsResult(
+        DailyStudyRecordsResult result = new DailyStudyRecordsResult(
                 aggregationDate,
                 totalStudySeconds,
                 records
         );
+        dailyQuestService.handleRoutineReviewed(userId);
+        return result;
     }
 
     public MonthlyStudySecondsResult getMonthlyStudySeconds(

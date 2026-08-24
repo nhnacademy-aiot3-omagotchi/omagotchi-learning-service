@@ -42,6 +42,11 @@ public class SensorDeviceJpaPersistence implements SensorDeviceRepository {
     }
 
     @Override
+    public List<SensorDevice> findAllActive() {
+        return sensorDeviceJpaRepository.findByActiveTrue();
+    }
+
+    @Override
     public List<SensorDevice> findBySpaceId(Long spaceId) {
         return sensorDeviceJpaRepository.findBySpaceId(spaceId);
     }

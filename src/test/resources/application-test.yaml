@@ -2,6 +2,13 @@ server:
   port: 0
 
 spring:
+  http:
+    clients:
+      connect-timeout: 1s
+      read-timeout: 2s
+    serviceclient:
+      identity-service:
+        base-url: http://localhost:8083
   datasource:
     # 통합 테스트에서는 @ServiceConnection이 이 값을 Testcontainers PostgreSQL로 덮어씀
     url: jdbc:postgresql://localhost:5432/unused_learning_test
@@ -51,6 +58,11 @@ auth:
     audience: omagotchi-api
     # TestJwtKeyConfig가 메모리에서 생성한 공개키 Bean을 제공
     public-key-location: classpath:unused-test-key.pem
+
+clients:
+  identity:
+    username: learning-service
+    password: test-only-learning-identity-password
 
 sensor:
   influx:

@@ -49,8 +49,8 @@ class TelegramOccupancyReminderSenderTest {
         verify(telegramSender).execute(request.capture());
         assertThat(request.getValue().getChatId()).isEqualTo(TEST_CHAT_ID);
         assertThat(request.getValue().getText())
-                .contains("공간 ID: 7")
-                .contains(EXPIRES_AT.toString());
+                .contains("공간: 테스트 회의실")
+                .contains("2026-08-13 18:30:00");
     }
 
     @Test
@@ -82,6 +82,7 @@ class TelegramOccupancyReminderSenderTest {
         return new OccupancyReminderSender.ExpiryReminder(
                 100L,
                 7L,
+                "테스트 회의실",
                 UUID.fromString("00000000-0000-0000-0000-000000000001"),
                 EXPIRES_AT
         );

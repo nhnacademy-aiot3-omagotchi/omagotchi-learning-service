@@ -8,6 +8,7 @@ public record SensorDeviceResult (
         String displayName,
         String model,
         String installationPoint,
+        Integer expectedIntervalSeconds,
         boolean active
 ){
     public static SensorDeviceResult from(SensorDevice device){
@@ -17,6 +18,7 @@ public record SensorDeviceResult (
                 device.getDisplayName(),
                 device.getModel(),
                 device.getInstallationPoint(),
+                device.getExpectedIntervalSeconds(),
                 device.getActive()
         );
     }

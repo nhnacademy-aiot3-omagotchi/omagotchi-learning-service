@@ -15,6 +15,7 @@ import site.omagotchi.learningservice.space.application.SpaceNameQueryService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,6 +26,8 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -69,6 +72,9 @@ class VacancyAlertDispatcherTest {
     @Mock
     private VacancyAlertSender sender;
 
+    @Mock
+    private StaleVacancyAlertDiscarder staleAlertDiscarder;
+
     private VacancyAlertDispatcher dispatcher;
 
     @BeforeEach
@@ -82,6 +88,7 @@ class VacancyAlertDispatcherTest {
                 cohortMembershipQueryService,
                 spaceNameQueryService,
                 alertDelivery,
+                staleAlertDiscarder,
                 configured == null ? List.of() : List.of(configured)
         );
     }
@@ -223,6 +230,7 @@ class VacancyAlertDispatcherTest {
                 cohortMembershipQueryService,
                 spaceNameQueryService,
                 alertDelivery,
+                staleAlertDiscarder,
                 List.of(sender, another)
         )).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("하나만 등록할 수 있습니다");
@@ -249,5 +257,91 @@ class VacancyAlertDispatcherTest {
     private void givenRecipients(Map<Long, UUID> userIdByMembershipId) {
         given(cohortMembershipQueryService.findUserIds(anyCollection()))
                 .willReturn(userIdByMembershipId);
+    }
+
+    private void givenTwoWaitingAlerts() {
+        givenWaiting(new WaitingAlert(ALERT_A, MEMBERSHIP_A), new WaitingAlert(ALERT_B, MEMBERSHIP_B));
+        givenRecipients(Map.of(MEMBERSHIP_A, USER_A, MEMBERSHIP_B, USER_B));
+        given(alertDelivery.send(anyLong(), eq(SPACE_ID), any(), any(), eq(VACATED_AT), eq(sender)))
+                .willReturn(true);
+    }
+
+    /**
+     * 정리 훅이 아예 실행되지 않으면 지킬순서 자체가 없고
+     * 남은 신청은 서비스를 떠난 사람에게 그대로 발송된다
+     */
+    @Test
+    @DisplayName("소속이 끝난 신청자에게는 발송하지 않는다.")
+    void doesNotSendToApplicantWhoseMembershipEnded() {
+        givenTwoWaitingAlerts();
+        given(cohortMembershipQueryService.findInactiveMembershipIds(anyCollection()))
+                .willReturn(Set.of(MEMBERSHIP_A));
+
+        dispatcher.dispatch(SPACE_ID, VACATED_AT);
+
+        verify(alertDelivery, never()).send(
+                eq(ALERT_A), anyLong(), anyString(), any(), any(), any());
+        verify(alertDelivery).send(
+                eq(ALERT_B), anyLong(), anyString(), eq(USER_B), any(), any());
+    }
+
+    /**
+     * <b>건너뛰지 않고 지우는 것이 계약이다.</b> 이 잔여를 치울 다른 주체가 없다 — 멤버십
+     * 정합성 스윕은 열린 참여 행을 커서로 돌기 때문에, 점유도 참여도 없이 신청만 남은
+     * 사람은 방문하지 않는다. 건너뛰기만 하면 그 행은 공실이 생길 때마다 다시 평가된다.
+     */
+    @Test
+    @DisplayName("소속이 끝난 신청은 건너뛰지 않고 폐기한다.")
+    void discardsStaleAlertsInsteadOfSkipping() {
+        givenTwoWaitingAlerts();
+        given(cohortMembershipQueryService.findInactiveMembershipIds(anyCollection()))
+                .willReturn(Set.of(MEMBERSHIP_A));
+
+        dispatcher.dispatch(SPACE_ID, VACATED_AT);
+
+        verify(staleAlertDiscarder).discard(Set.of(MEMBERSHIP_A));
+    }
+
+    /**
+     * 소속 판정이 실패했다고 발송을 멈추지 않는다 — 유효한 대기자까지 함께 막히는 것이
+     * 잔여 하나를 잘못 보내는 것보다 나쁘고, 순서(CE-05)가 여전히 1차 방어다.
+     */
+    @Test
+    @DisplayName("소속 판정이 실패해도 발송은 계속한다.")
+    void keepsSendingWhenStalenessCheckFails() {
+        givenTwoWaitingAlerts();
+        willThrow(new IllegalStateException("판정 실패"))
+                .given(cohortMembershipQueryService).findInactiveMembershipIds(anyCollection());
+
+        assertThat(dispatcher.dispatch(SPACE_ID, VACATED_AT)).isEqualTo(2);
+    }
+
+    /** 폐기에 실패해도 유효한 대기자에게는 발송한다. 지우지 못한 행은 다음 공실에 다시 걸린다. */
+    @Test
+    @DisplayName("폐기에 실패해도 나머지에게는 발송한다.")
+    void keepsSendingWhenDiscardFails() {
+        givenTwoWaitingAlerts();
+        given(cohortMembershipQueryService.findInactiveMembershipIds(anyCollection()))
+                .willReturn(Set.of(MEMBERSHIP_A));
+        willThrow(new IllegalStateException("폐기 실패"))
+                .given(staleAlertDiscarder).discard(anyCollection());
+
+        assertThat(dispatcher.dispatch(SPACE_ID, VACATED_AT)).isEqualTo(1);
+    }
+
+    /** 전원이 무효면 발송도 수신자 조회도 없다 — 아무에게도 안 보낼 일에 기수를 되묻지 않는다. */
+    @Test
+    @DisplayName("대기자 전원의 소속이 끝났으면 수신자를 조회하지 않는다.")
+    void skipsRecipientLookupWhenEveryApplicantIsStale() {
+        // 공유 헬퍼를 쓰지 않는다 — 전원이 무효면 이름·수신자·발송 Stub이 전부 미사용이 된다.
+        given(alertRepository.findWaitingBySpaceId(SPACE_ID)).willReturn(List.of(
+                new WaitingAlert(ALERT_A, MEMBERSHIP_A), new WaitingAlert(ALERT_B, MEMBERSHIP_B)));
+        given(cohortMembershipQueryService.findInactiveMembershipIds(anyCollection()))
+                .willReturn(Set.of(MEMBERSHIP_A, MEMBERSHIP_B));
+
+        assertThat(dispatcher.dispatch(SPACE_ID, VACATED_AT)).isZero();
+
+        verify(cohortMembershipQueryService, never()).findUserIds(anyCollection());
+        verify(staleAlertDiscarder).discard(Set.of(MEMBERSHIP_A, MEMBERSHIP_B));
     }
 }

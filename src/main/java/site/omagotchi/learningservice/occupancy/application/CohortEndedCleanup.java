@@ -15,22 +15,13 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * 기수 종료 시 팀·알림·점유·실습실을 정해진 순서로 정리한다 (CE-01~04, 명세 08).
+ * 기수 종료 시 팀·알림·점유·공간을 정해진 순서로 정리한다 (CE-01~04, 명세 08).
+ * 진입점은 {@link site.omagotchi.learningservice.occupancy.presentation.CohortClosedListener}.
  *
- * <p><b>이 Class의 존재 이유는 CE-05의 순서다.</b> 멤버십 단위 이벤트로 팬아웃하면 비동기라
- * 순서를 보장할 수 없어, 기수 종료는 한 곳에서 단계를 밟는다 (명세 08 §1). 특히 대기 알림
- * 삭제(CE-02)가 점유 종료(CE-03)보다 <b>반드시 먼저</b>다 — 뒤집히면 CE-03의 공실 발송이
- * 방금 종료된 기수의 신청을 대기 중으로 보고 <b>그 학생들에게 알림을 보낸다.</b></p>
- *
- * <p><b>단계별 격리가 계약이다</b> (명세 08 §5). 각 단계가 자기 Transaction에서 커밋되고,
- * 한 단계의 실패가 성공한 단계를 되돌리지 않는다. 예외는 하나 — CE-02가 실패하면 CE-03을
- * <b>건너뛴다.</b> 격리라고 진행하면 위의 순서 역전이 그대로 일어나기 때문이다. 건너뛴
- * 점유는 만료 스케줄러(#9)가 최대 3시간 안에 정리하므로 잘못된 알림보다 지연이 낫다.</p>
- *
- * <p><b>진입점이 아직 없다</b> (명세 08 §7 미해결). 기수 파트가 이벤트를 발행할지 본 파트가
- * 배치로 폴링할지 계약되지 않아, 트리거가 정해지면 리스너 또는 스케줄러가 이 Method를
- * 부른다. {@code CohortMembershipEndedEvent}(CE-07)로 대체하지 않는 이유는 그 이벤트
- * javadoc에 있다 — CE-04는 기수 단위라 멤버십 이벤트로 표현되지 않는다.</p>
+ * <p>단일 클래스·단계별 격리·순서 예외의 근거는 ADR space-team/0015. 요지만 남긴다 —
+ * <b>대기 알림 삭제(CE-02)는 점유 종료(CE-03)보다 반드시 먼저다.</b> 뒤집히면 CE-03의
+ * 공실 발송이 방금 종료된 기수의 신청을 대기 중으로 보고 그 학생들에게 알림을 보낸다.
+ * 그래서 CE-02 실패 시에는(단계별 격리 원칙의 유일한 예외로) CE-03을 건너뛴다.</p>
  *
  * <p>멤버십 목록은 기수 파트에 묻고({@code findMembershipIds}), <b>상태를 가리지 않는다</b>
  * — 종료 훅이 도는 시점에는 기수 파트가 멤버십을 이미 ENDED로 바꿨을 수 있다. 활성으로
@@ -93,12 +84,11 @@ public class CohortEndedCleanup {
             }
         }
 
-        // 4단계 — 실습실 배정 해제 (CE-04). 앞 단계와 무관하게 시도한다. 빠뜨리면 실습실이
-        // 배정 상태로 남아 다음 기수 배정이 409로 막힌다.
+        // 4단계 — 공간 관리 주체 해제 (CE-04). 앞 단계와 무관하게 시도한다.
         try {
-            spaceCleanup.unassignLabs(endedCohortId);
+            spaceCleanup.unassignSpaces(endedCohortId);
         } catch (Exception exception) {
-            log.error("기수 종료 실습실 해제(CE-04)에 실패했습니다. 다음 기수 배정이 막힙니다. cohortId={}",
+            log.error("기수 종료 공간 관리 주체 해제(CE-04)에 실패했습니다. 해당 공간이 동결됩니다. cohortId={}",
                     endedCohortId, exception);
         }
     }

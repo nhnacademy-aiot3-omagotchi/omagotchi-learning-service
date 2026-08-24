@@ -31,16 +31,12 @@ public interface SpaceRepository {
     Space save(Space space);
 
     /**
-     * 이 기수에 배정된 실습실의 배정을 전부 해제한다 (CE-04).
+     * 이 기수가 관리 주체인 공간의 배정을 전부 해제한다 (CE-04)
      *
-     * <p><b>{@code LAB} 필터가 안전선이다.</b> 빼면 그 기수가 생성한 회의실·독서실의 관리
-     * 주체까지 {@code NULL}이 되어, 삭제 권한이 관리 주체 기수 기준(RM-25)이라 <b>아무도
-     * 지울 수 없는 공간</b>이 생긴다. 회의실·독서실의 기수는 기수 종료 후에도 유지한다
-     * (명세 08 §2 4단계).</p>
+     * <p>해제 후에는 기수 매니저 누구나 수정·활성화·비활성화할 수 있고(RM-16), 삭제하려면
+     * 먼저 인수해야 한다(RM-25) — 그 인수 경로가 {@code assignCohort}다.</p>
      *
-     * <p>이 해제를 빠뜨리면 실습실이 배정 상태로 남아 다음 기수 배정이 409로 막힌다.</p>
-     *
-     * @return 해제한 실습실 수. 기수당 여러 개일 수 있다 (RM-26)
+     * @return 해제한 공간 수. 기수당 여러 개일 수 있다 (RM-26)
      */
-    int unassignLabsByCohort(Long cohortId);
+    int unassignByCohort(Long cohortId);
 }

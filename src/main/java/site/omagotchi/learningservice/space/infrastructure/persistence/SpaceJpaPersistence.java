@@ -64,8 +64,8 @@ public class SpaceJpaPersistence
     }
 
     @Override
-    public int unassignLabsByCohort(Long cohortId) {
-        return springDataSpaceRepository.unassignLabsByCohort(cohortId);
+    public int unassignByCohort(Long cohortId) {
+        return springDataSpaceRepository.unassignByCohort(cohortId);
     }
 
     @Override

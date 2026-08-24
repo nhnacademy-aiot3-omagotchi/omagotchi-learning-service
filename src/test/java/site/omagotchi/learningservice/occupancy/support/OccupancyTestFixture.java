@@ -167,6 +167,13 @@ public class OccupancyTestFixture {
         return spaceRepository.save(space).getId();
     }
 
+    /** 독서실. 점유 대상이 아니며 관리 주체 순환(CE-04) 검증에 쓴다. */
+    public Long createStudyRoom(Long cohortId, String name, int capacity) {
+        ZonedDateTime now = ZonedDateTime.now(SEOUL);
+        Space space = Space.create(name, SpaceType.STUDY, capacity, cohortId, now).activate(now);
+        return spaceRepository.save(space).getId();
+    }
+
     /**
      * 만들어진 멤버십의 두 얼굴.
      *

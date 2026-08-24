@@ -64,15 +64,11 @@ public interface SpringDataSpaceRepository
             @Param("spaceId") Long spaceId
     );
 
-    /**
-     * 실습실 배정 일괄 해제 (CE-04). {@code LAB} 필터를 빼면 회의실·독서실의 관리 주체까지
-     * 사라져 아무도 지울 수 없는 공간이 생긴다 (RM-25).
-     */
+    /** 관리 주체 일괄 해제 (CE-04). 유형을 가리지 않는다 — Port javadoc 참고. */
     @Modifying
     @Query("""
                 UPDATE SpaceJpaEntity space
                    SET space.cohortId = NULL
-                 WHERE space.cohortId = :cohortId
-                   AND space.spaceType = site.omagotchi.learningservice.space.domain.SpaceType.LAB""")
-    int unassignLabsByCohort(@Param("cohortId") Long cohortId);
+                 WHERE space.cohortId = :cohortId""")
+    int unassignByCohort(@Param("cohortId") Long cohortId);
 }

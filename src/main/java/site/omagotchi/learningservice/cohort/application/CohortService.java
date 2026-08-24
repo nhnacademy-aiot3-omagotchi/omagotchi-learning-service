@@ -1,12 +1,14 @@
 package site.omagotchi.learningservice.cohort.application;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.command.ChangeCohortStatusCommand;
 import site.omagotchi.learningservice.cohort.application.command.CreateCohortCommand;
 import site.omagotchi.learningservice.cohort.application.command.UpdateCohortCommand;
 import site.omagotchi.learningservice.cohort.application.result.CohortResponse;
+import site.omagotchi.learningservice.cohort.application.result.CohortAdminSummaryResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
@@ -17,7 +19,10 @@ import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -59,6 +64,31 @@ public class CohortService {
     public List<CohortResponse> getCohorts() {
         return repository.findAll().stream()
                 .map(CohortResponse::from)
+                .toList();
+    }
+
+    /**
+     * System Admin 전체 기수 화면에 필요한 활성 구성원 수와 관리자 ID를 함께 조회한다.
+     */
+    public List<CohortAdminSummaryResponse> getAdminSummaries(GlobalRole globalRole) {
+        accessService.requireSystemAdmin(globalRole);
+
+        Map<Long, Long> memberCounts = membershipRepository.countActiveMembershipsByCohort().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        CohortMembershipRepository.CohortMembershipCountProjection::getCohortId,
+                        CohortMembershipRepository.CohortMembershipCountProjection::getMemberCount
+                ));
+        Map<Long, List<UUID>> managerUserIds = new HashMap<>();
+        membershipRepository.findActiveManagersByCohort().forEach(manager ->
+                managerUserIds.computeIfAbsent(manager.getCohortId(), ignored -> new ArrayList<>())
+                        .add(manager.getUserId()));
+
+        return repository.findAll().stream()
+                .map(cohort -> CohortAdminSummaryResponse.from(
+                        cohort,
+                        memberCounts.getOrDefault(cohort.getId(), 0L),
+                        managerUserIds.getOrDefault(cohort.getId(), List.of())
+                ))
                 .toList();
     }
 
@@ -140,6 +170,26 @@ public class CohortService {
         }
 
         throw new BusinessException(CohortErrorCode.INVALID_COHORT_STATUS_TRANSITION);
+    }
+
+    /**
+     * 아직 운영을 시작하지 않은 PREPARING 기수만 삭제한다.
+     */
+    @Transactional
+    public void delete(Long cohortId, GlobalRole globalRole) {
+        accessService.requireSystemAdmin(globalRole);
+
+        Cohort cohort = getCohortOrThrow(cohortId);
+        if (cohort.getStatus() != CohortStatus.PREPARING) {
+            throw new BusinessException(CohortErrorCode.COHORT_DELETE_NOT_ALLOWED);
+        }
+
+        try {
+            repository.delete(cohort);
+            repository.flush();
+        } catch (DataIntegrityViolationException exception) {
+            throw new BusinessException(CohortErrorCode.COHORT_DELETE_CONFLICT);
+        }
     }
 
     private Cohort getCohortOrThrow(Long cohortId) {

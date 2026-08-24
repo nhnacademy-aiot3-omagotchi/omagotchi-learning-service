@@ -38,6 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
@@ -78,6 +79,28 @@ class CohortControllerTest {
 
     @MockitoBean
     private CohortAttendancePolicyService attendancePolicyService;
+
+    @Test
+    @DisplayName("SYSTEM_ADMIN은 전체 기수 요약을 조회한다")
+    void getsSystemAdminCohortSummaries() throws Exception {
+        given(cohortService.getAdminSummaries(any())).willReturn(java.util.List.of());
+
+        mockMvc.perform(get("/api/v1/cohorts/admin-summary")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue("SYSTEM_ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(cohortService).getAdminSummaries(any());
+    }
+
+    @Test
+    @DisplayName("SYSTEM_ADMIN의 PREPARING 기수 삭제는 204를 반환한다")
+    void deletesPreparingCohort() throws Exception {
+        mockMvc.perform(delete("/api/v1/cohorts/{cohortId}", COHORT_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue("SYSTEM_ADMIN")))
+                .andExpect(status().isNoContent());
+
+        verify(cohortService).delete(eq(COHORT_ID), any());
+    }
 
     @Test
     @DisplayName("운영 기간이 겹치는 관리자 배치는 409 계약 오류를 반환한다")

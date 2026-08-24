@@ -20,6 +20,18 @@ public interface CohortMembershipRepository extends
         JpaRepository<CohortMembership, Long>,
         CohortMembershipRepositoryCustom {
 
+    interface CohortMembershipCountProjection {
+        Long getCohortId();
+
+        long getMemberCount();
+    }
+
+    interface CohortManagerProjection {
+        Long getCohortId();
+
+        UUID getUserId();
+    }
+
     boolean existsByCohortIdAndUserIdAndStatusIn(
             Long cohortId,
             UUID userId,
@@ -75,6 +87,23 @@ public interface CohortMembershipRepository extends
     );
 
     List<CohortMembership> findByCohortIdOrderByRequestedAtAsc(Long cohortId);
+
+    @Query("""
+            select membership.cohortId as cohortId, count(membership.id) as memberCount
+            from CohortMembership membership
+            where membership.status = site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus.ACTIVE
+            group by membership.cohortId
+            """)
+    List<CohortMembershipCountProjection> countActiveMembershipsByCohort();
+
+    @Query("""
+            select membership.cohortId as cohortId, membership.userId as userId
+            from CohortMembership membership
+            where membership.role = site.omagotchi.learningservice.cohort.domain.CohortMembershipRole.MANAGER
+              and membership.status = site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus.ACTIVE
+            order by membership.cohortId asc, membership.requestedAt asc
+            """)
+    List<CohortManagerProjection> findActiveManagersByCohort();
 
     boolean existsByCohortIdAndRoleAndStatus(
             Long cohortId,

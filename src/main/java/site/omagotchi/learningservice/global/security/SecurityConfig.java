@@ -58,6 +58,14 @@ public class SecurityConfig {
                                 "/api/v1/cohorts/*/status"
                         ).hasRole("SYSTEM_ADMIN")
                         .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/cohorts/admin-summary"
+                        ).hasRole("SYSTEM_ADMIN")
+                        .requestMatchers(
+                                HttpMethod.DELETE,
+                                "/api/v1/cohorts/*"
+                        ).hasRole("SYSTEM_ADMIN")
+                        .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/threshold-rules"
                         ).hasRole("SYSTEM_ADMIN")

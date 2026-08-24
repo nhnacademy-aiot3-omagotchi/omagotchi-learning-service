@@ -14,6 +14,8 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -21,7 +23,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -96,5 +101,74 @@ class CohortServiceTest {
                 newStartDate,
                 newEndDate
         );
+    }
+
+    @Test
+    void returnsSystemAdminCohortSummariesWithActiveMemberAndManagerAggregates() {
+        Cohort cohort = Cohort.create(
+                "AIoT 3기",
+                "설명",
+                LocalDate.of(2026, 8, 1),
+                LocalDate.of(2026, 12, 18),
+                ACTOR_ID
+        );
+        ReflectionTestUtils.setField(cohort, "id", COHORT_ID);
+        CohortMembershipRepository.CohortMembershipCountProjection count =
+                mock(CohortMembershipRepository.CohortMembershipCountProjection.class);
+        CohortMembershipRepository.CohortManagerProjection manager =
+                mock(CohortMembershipRepository.CohortManagerProjection.class);
+        when(count.getCohortId()).thenReturn(COHORT_ID);
+        when(count.getMemberCount()).thenReturn(34L);
+        when(manager.getCohortId()).thenReturn(COHORT_ID);
+        when(manager.getUserId()).thenReturn(FIRST_MANAGER_ID);
+        when(membershipRepository.countActiveMembershipsByCohort()).thenReturn(List.of(count));
+        when(membershipRepository.findActiveManagersByCohort()).thenReturn(List.of(manager));
+        when(repository.findAll()).thenReturn(List.of(cohort));
+
+        var summaries = service.getAdminSummaries(GlobalRole.SYSTEM_ADMIN);
+
+        assertThat(summaries).singleElement().satisfies(summary -> {
+            assertThat(summary.id()).isEqualTo(COHORT_ID);
+            assertThat(summary.memberCount()).isEqualTo(34L);
+            assertThat(summary.managerUserIds()).containsExactly(FIRST_MANAGER_ID);
+        });
+        verify(accessService).requireSystemAdmin(GlobalRole.SYSTEM_ADMIN);
+    }
+
+    @Test
+    void deletesPreparingCohortAsSystemAdmin() {
+        Cohort cohort = Cohort.create(
+                "준비 기수",
+                "설명",
+                LocalDate.of(2027, 1, 1),
+                LocalDate.of(2027, 6, 30),
+                ACTOR_ID
+        );
+        ReflectionTestUtils.setField(cohort, "id", COHORT_ID);
+        when(repository.findById(COHORT_ID)).thenReturn(Optional.of(cohort));
+
+        service.delete(COHORT_ID, GlobalRole.SYSTEM_ADMIN);
+
+        verify(repository).delete(cohort);
+        verify(repository).flush();
+    }
+
+    @Test
+    void rejectsDeletingActiveCohort() {
+        Cohort cohort = Cohort.create(
+                "운영 기수",
+                "설명",
+                LocalDate.of(2026, 8, 1),
+                LocalDate.of(2026, 12, 18),
+                ACTOR_ID
+        );
+        ReflectionTestUtils.setField(cohort, "id", COHORT_ID);
+        cohort.activate(true);
+        when(repository.findById(COHORT_ID)).thenReturn(Optional.of(cohort));
+
+        assertThatThrownBy(() -> service.delete(COHORT_ID, GlobalRole.SYSTEM_ADMIN))
+                .isInstanceOf(BusinessException.class);
+
+        verify(repository, never()).delete(cohort);
     }
 }

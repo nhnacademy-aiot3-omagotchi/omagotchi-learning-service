@@ -2,11 +2,13 @@ package site.omagotchi.learningservice.cohort.presentation;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 import site.omagotchi.learningservice.cohort.application.CohortAttendancePolicyService;
 import site.omagotchi.learningservice.cohort.application.CohortManagerService;
 import site.omagotchi.learningservice.cohort.application.result.CohortAttendancePolicyResponse;
+import site.omagotchi.learningservice.cohort.application.result.CohortAdminSummaryResponse;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipResponse;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
 import site.omagotchi.learningservice.cohort.application.result.CohortResponse;
@@ -55,6 +57,14 @@ public class CohortController {
         return cohortService.getCohorts();
     }
 
+    @GetMapping("/admin-summary")
+    public List<CohortAdminSummaryResponse> getAdminSummaries(
+            JwtAuthenticationToken authentication
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        return cohortService.getAdminSummaries(user.globalRole());
+    }
+
     @GetMapping("/{cohortId}")
     public CohortResponse getCohort(@PathVariable Long cohortId) {
         return cohortService.getCohort(cohortId);
@@ -78,6 +88,16 @@ public class CohortController {
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return cohortService.changeStatus(cohortId, request.toCommand(), user.globalRole());
+    }
+
+    @DeleteMapping("/{cohortId}")
+    public ResponseEntity<Void> delete(
+            @PathVariable Long cohortId,
+            JwtAuthenticationToken authentication
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        cohortService.delete(cohortId, user.globalRole());
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{cohortId}/join-code")

@@ -327,6 +327,13 @@ class VacancyAlertDispatcherTest {
                 .given(staleAlertDiscarder).discard(anyCollection());
 
         assertThat(dispatcher.dispatch(SPACE_ID, VACATED_AT)).isEqualTo(1);
+
+        // 건수만으로는 "누구에게 갔는지"를 보장하지 못한다 — 필터가 뒤집혀 ALERT_A가
+        // 발송되고 ALERT_B가 스킵돼도 건수는 똑같이 1이다.
+        verify(alertDelivery, never()).send(
+                eq(ALERT_A), anyLong(), anyString(), any(), any(), any());
+        verify(alertDelivery).send(
+                eq(ALERT_B), anyLong(), anyString(), eq(USER_B), any(), any());
     }
 
     /** 전원이 무효면 발송도 수신자 조회도 없다 — 아무에게도 안 보낼 일에 기수를 되묻지 않는다. */

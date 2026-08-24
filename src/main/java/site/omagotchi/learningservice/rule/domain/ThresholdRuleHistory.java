@@ -5,7 +5,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -47,14 +47,14 @@ public class ThresholdRuleHistory {
     private String requestId;
 
     @Column(name = "changed_at", nullable = false, updatable = false)
-    private OffsetDateTime changedAt;
+    private Instant changedAt;
 
     @Column(name = "rule_version", nullable = false)
     private Long ruleVersion;
 
     @PrePersist
     void onPersist() {
-        this.changedAt = OffsetDateTime.now();
+        this.changedAt = Instant.now();
     }
 
     public static ThresholdRuleHistory record(

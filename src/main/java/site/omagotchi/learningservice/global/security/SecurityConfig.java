@@ -63,8 +63,11 @@ public class SecurityConfig {
                         ).hasRole("SYSTEM_ADMIN")
                         .requestMatchers(
                                 HttpMethod.PATCH,
-                                "/api/v1/threshold-rules/*"
                                 "/api/v1/threshold-rules/**"
+                        ).hasRole("SYSTEM_ADMIN")
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/threshold-rules/spaces"
                         ).hasRole("SYSTEM_ADMIN")
                         .requestMatchers(
                                 HttpMethod.POST,

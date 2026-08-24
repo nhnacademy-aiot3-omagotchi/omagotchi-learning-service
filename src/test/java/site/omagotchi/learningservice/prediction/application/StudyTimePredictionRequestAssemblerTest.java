@@ -311,6 +311,121 @@ class StudyTimePredictionRequestAssemblerTest {
         );
     }
 
+    @Test
+    @DisplayName("최초 학습일이 예측 기준일 이후이면 내부 계약 위반")
+    void rejectsFirstStudyDateAfterFeatureDateAsInternalContractViolation() {
+        LocalDate invalidFirstStudyDate = FEATURE_DATE.plusDays(1L);
+        PredictionFeatureSnapshot snapshot = new PredictionFeatureSnapshot(
+                FEATURE_DATE,
+                FEATURE_DATE,
+                "Asia/Seoul",
+                new StudyHistory(List.of(), invalidFirstStudyDate, 0L, 0L),
+                new AttendanceHistory(List.of(), 0L),
+                new GamificationHistory(1, 0L, List.of())
+        );
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> assembler.assemble(snapshot)
+        );
+
+        assertEquals(
+                "예측 피처 스냅샷의 날짜 범위가 일관되지 않습니다. "
+                        + "firstStudyDate=2000-01-11, featureDate=2000-01-10",
+                exception.getMessage()
+        );
+    }
+
+    @Test
+    @DisplayName("같은 날짜의 출결 기록이 중복되면 내부 계약 위반")
+    void rejectsDuplicateAttendanceAsInternalContractViolation() {
+        PredictionFeatureSnapshot snapshot = snapshotWith(
+                List.of(
+                        attendance("2000-01-10", AttendanceStatus.PRESENT, "2000-01-10T00:00:00Z"),
+                        attendance("2000-01-10", AttendanceStatus.LATE, "2000-01-10T00:30:00Z")
+                ),
+                List.of()
+        );
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> assembler.assemble(snapshot)
+        );
+
+        assertEquals(
+                "예측 피처 스냅샷에 같은 날짜의 출결 기록이 중복되었습니다. "
+                        + "attendanceDate=2000-01-10",
+                exception.getMessage()
+        );
+    }
+
+    @Test
+    @DisplayName("같은 날짜의 퀘스트 집계가 중복되면 내부 계약 위반")
+    void rejectsDuplicateDailyQuestSummaryAsInternalContractViolation() {
+        PredictionFeatureSnapshot snapshot = snapshotWith(
+                List.of(),
+                List.of(
+                        quest("2000-01-10", 5L, 3L),
+                        quest("2000-01-10", 5L, 4L)
+                )
+        );
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> assembler.assemble(snapshot)
+        );
+
+        assertEquals(
+                "예측 피처 스냅샷에 같은 날짜의 퀘스트 집계가 중복되었습니다. "
+                        + "questDate=2000-01-10",
+                exception.getMessage()
+        );
+    }
+
+    @Test
+    @DisplayName("일일 퀘스트 생성 및 완료 수가 모순되면 내부 계약 위반")
+    void rejectsInconsistentDailyQuestSummaryAsInternalContractViolation() {
+        assertAll(
+                () -> assertInvalidDailyQuestSummary(quest("2000-01-10", 0L, 0L)),
+                () -> assertInvalidDailyQuestSummary(quest("2000-01-10", 5L, -1L)),
+                () -> assertInvalidDailyQuestSummary(quest("2000-01-10", 5L, 6L))
+        );
+    }
+
+    private void assertInvalidDailyQuestSummary(DailyQuestSummary summary) {
+        PredictionFeatureSnapshot snapshot = snapshotWith(List.of(), List.of(summary));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> assembler.assemble(snapshot)
+        );
+
+        assertEquals(
+                "예측 피처 스냅샷의 일일 퀘스트 집계가 일관되지 않습니다. "
+                        + "questDate=%s, generatedCount=%d, completedCount=%d"
+                        .formatted(
+                                summary.questDate(),
+                                summary.generatedCount(),
+                                summary.completedCount()
+                        ),
+                exception.getMessage()
+        );
+    }
+
+    private PredictionFeatureSnapshot snapshotWith(
+            List<DailyAttendance> attendance,
+            List<DailyQuestSummary> dailyQuestSummaries
+    ) {
+        return new PredictionFeatureSnapshot(
+                FEATURE_DATE,
+                FEATURE_DATE,
+                "Asia/Seoul",
+                new StudyHistory(List.of(), null, 0L, 0L),
+                new AttendanceHistory(attendance, 0L),
+                new GamificationHistory(1, 0L, dailyQuestSummaries)
+        );
+    }
+
     private DailyAttendance attendance(
             String date,
             AttendanceStatus status,

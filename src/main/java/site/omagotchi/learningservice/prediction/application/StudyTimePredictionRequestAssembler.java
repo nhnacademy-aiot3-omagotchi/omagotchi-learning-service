@@ -2,7 +2,6 @@ package site.omagotchi.learningservice.prediction.application;
 
 import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
-import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.prediction.application.dto.StudyTimePredictionRequest;
 import site.omagotchi.learningservice.prediction.application.result.PredictionFeatureSnapshot;
 import site.omagotchi.learningservice.prediction.application.result.PredictionFeatureSnapshot.DailyAttendance;
@@ -155,7 +154,11 @@ public class StudyTimePredictionRequestAssembler {
 
         long allCalendarDays = ChronoUnit.DAYS.between(firstStudyDate, snapshot.featureDate()) + 1L;
         if (allCalendarDays <= 0L) {
-            throw new IllegalArgumentException("최초 학습일은 예측 기준일 이후일 수 없습니다.");
+            throw new IllegalArgumentException(
+                    "예측 피처 스냅샷의 날짜 범위가 일관되지 않습니다. "
+                            + "firstStudyDate=%s, featureDate=%s"
+                            .formatted(firstStudyDate, snapshot.featureDate())
+            );
         }
         // 전체 평균도 첫 기록일부터 featureDate까지 기록 없는 날을 0으로 포함한다.
         double studyAllMean = upperClampPredictionStudyHours(
@@ -187,7 +190,10 @@ public class StudyTimePredictionRequestAssembler {
         for (DailyAttendance attendance : snapshot.attendance().recentAttendance()) {
             DailyAttendance previous = attendanceByDate.put(attendance.attendanceDate(), attendance);
             if (previous != null) {
-                throw new IllegalArgumentException("같은 날짜의 출결 기록이 중복되었습니다.");
+                throw new IllegalArgumentException(
+                        "예측 피처 스냅샷에 같은 날짜의 출결 기록이 중복되었습니다. "
+                                + "attendanceDate=%s".formatted(attendance.attendanceDate())
+                );
             }
         }
 
@@ -263,7 +269,10 @@ public class StudyTimePredictionRequestAssembler {
             validateDailyQuestSummary(summary);
             DailyQuestSummary previous = questByDate.put(summary.questDate(), summary);
             if (previous != null) {
-                throw new BusinessException(PredictionErrorCode.PREDICTION_QUEST_DATA_INCONSISTENT);
+                throw new IllegalArgumentException(
+                        "예측 피처 스냅샷에 같은 날짜의 퀘스트 집계가 중복되었습니다. "
+                                + "questDate=%s".formatted(summary.questDate())
+                );
             }
         }
 
@@ -398,7 +407,15 @@ public class StudyTimePredictionRequestAssembler {
         if (summary.generatedCount() <= 0L
                 || summary.completedCount() < 0L
                 || summary.completedCount() > summary.generatedCount()) {
-            throw new BusinessException(PredictionErrorCode.PREDICTION_QUEST_DATA_INCONSISTENT);
+            throw new IllegalArgumentException(
+                    "예측 피처 스냅샷의 일일 퀘스트 집계가 일관되지 않습니다. "
+                            + "questDate=%s, generatedCount=%d, completedCount=%d"
+                            .formatted(
+                                    summary.questDate(),
+                                    summary.generatedCount(),
+                                    summary.completedCount()
+                            )
+            );
         }
     }
 

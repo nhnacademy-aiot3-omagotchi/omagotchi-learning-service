@@ -10,16 +10,12 @@ import site.omagotchi.learningservice.rule.application.ThresholdRuleService;
 import site.omagotchi.learningservice.rule.application.result.ApplySpaceThresholdResult;
 import site.omagotchi.learningservice.rule.application.result.SpaceThresholdResult;
 import site.omagotchi.learningservice.rule.application.result.UpdateThresholdRuleResult;
-import site.omagotchi.learningservice.rule.domain.ThresholdRule;
 import site.omagotchi.learningservice.rule.presentation.request.ApplySpaceThresholdRequest;
 import site.omagotchi.learningservice.rule.presentation.request.CreateThresholdRuleRequest;
 import site.omagotchi.learningservice.rule.presentation.request.UpdateThresholdRuleRequest;
-import site.omagotchi.learningservice.rule.presentation.response.ApplySpaceThresholdResponse;
-import site.omagotchi.learningservice.rule.presentation.response.CreateThresholdRuleResponse;
-import site.omagotchi.learningservice.rule.presentation.response.SpaceThresholdResponse;
-import site.omagotchi.learningservice.rule.presentation.response.ThresholdRuleResponse;
-import site.omagotchi.learningservice.rule.presentation.response.UpdateThresholdRuleResponse;
+import site.omagotchi.learningservice.rule.presentation.response.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @RestController

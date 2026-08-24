@@ -44,6 +44,7 @@ public class SensorDeviceService {
             throw new BusinessException(RuleErrorCode.DEVICE_ALREADY_EXISTS);
         }
 
+        sensorDeviceRepository.save(device);
         return device.getDeviceEui();
     }
 

@@ -7,6 +7,8 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.occupancy.application.event.VacancyAlertsDiscardedEvent;
+import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertRepository;
 import site.omagotchi.learningservice.occupancy.application.result.VacancyAlertView;
@@ -41,6 +43,7 @@ public class VacancyAlertService {
     private final RoomOccupancyRepository occupancyRepository;
     private final CohortMembershipQueryService cohortMembershipQueryService;
     private final VacancyAlertRepository alertRepository;
+    private final OccupancyEventPublisher eventPublisher;
     private final Clock clock;
 
     /**
@@ -118,6 +121,45 @@ public class VacancyAlertService {
         if (!alertRepository.deleteWaiting(alertId, membershipIds)) {
             throw new BusinessException(OccupancyErrorCode.ALERT_NOT_FOUND);
         }
+    }
+
+    /**
+     * 공간 비활성화로 그 공간의 대기 중 신청을 전부 지운다 (RM-15).
+     *
+     * <p><b>비활성화와 같은 Transaction에서 지운다</b> (명세 04 §2). 나눠서 지우면 비활성
+     * 공간에 대기 신청이 남아, 그 방이 다시 활성화될 때까지 아무 일도 일어나지 않는 신청이
+     * 된다. {@code space}가 이 Method를 호출하면 {@code REQUIRED}로 합류한다.</p>
+     *
+     * <p><b>수신자는 삭제 결과에서 나온다</b> ({@code DELETE ... RETURNING}). 물리 삭제
+     * 뒤에는 대상을 되찾을 수 없어 이벤트에 실어 보내는데, 삭제와 별도로 미리 읽으면
+     * 그 사이 공실 발송이 소진시킨 행이 목록에 남아 <b>방금 공실 알림을 받은 사람에게
+     * 취소 통보</b>가 나간다. {@code RoomVacatedEvent}가 "리스너가 조회해 정한다"는 규약을
+     * 쓰는 것과 대비된다.</p>
+     *
+     * <p>통보를 발송할 대상이 없으면 이벤트도 내지 않는다. 빈 목록을 실어 보내면 리스너가
+     * 아무에게도 보내지 않을 일을 위해 기수 조회를 한 번 더 한다.</p>
+     *
+     * @return 지운 건수
+     */
+    @Transactional
+    public int discardBySpace(Long spaceId) {
+
+        // 삭제와 수신자 확보를 한 문장으로 한다 (DELETE ... RETURNING). 먼저 읽고 나중에
+        // 지우면 그 사이 공실 발송이 소진시킨 행이 목록에 남아, 방금 공실 알림을 받은
+        // 사람에게 "신청이 취소됐다"는 통보가 나간다.
+        List<Long> membershipIds = alertRepository.deleteWaitingBySpaceId(spaceId);
+        if (membershipIds.isEmpty()) {
+            return 0;
+        }
+
+        // 커밋 후 비동기로 발송된다 (ADR space-team/0006). 발송 실패는 삭제를 되돌리지
+        // 않으며 재시도하지 않는다 — 원천이 이미 없다 (명세 04 §4, at-most-once).
+        eventPublisher.publishVacancyAlertsDiscarded(new VacancyAlertsDiscardedEvent(
+                spaceId, membershipIds, OffsetDateTime.now(clock)));
+
+        log.info("공간 비활성화로 대기 신청을 삭제했습니다. spaceId={}, 삭제={}건",
+                spaceId, membershipIds.size());
+        return membershipIds.size();
     }
 
     /**

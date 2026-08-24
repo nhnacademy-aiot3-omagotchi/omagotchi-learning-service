@@ -14,6 +14,7 @@ import site.omagotchi.learningservice.space.application.command.UpdateSpaceComma
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
+import site.omagotchi.learningservice.occupancy.application.VacancyAlertService;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
 import site.omagotchi.learningservice.space.domain.SpaceType;
@@ -53,6 +54,9 @@ class SpaceCommandServiceTest {
     private OccupancyQueryService occupancyQueryService;
 
     @Mock
+    private VacancyAlertService vacancyAlertService;
+
+    @Mock
     private CohortAccessService cohortAccessService;
 
     private TestSpaceCommandService spaceCommandService;
@@ -63,6 +67,7 @@ class SpaceCommandServiceTest {
         SpaceCommandService delegate = new SpaceCommandService(
                 spaceRepository,
                 occupancyQueryService,
+                vacancyAlertService,
                 cohortAccessService,
                 clock
         );

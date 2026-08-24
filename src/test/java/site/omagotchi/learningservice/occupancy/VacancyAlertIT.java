@@ -24,6 +24,7 @@ import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSen
 import site.omagotchi.learningservice.occupancy.application.result.VacancyAlertView;
 import site.omagotchi.learningservice.occupancy.domain.VacancyAlert;
 import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
+import site.omagotchi.learningservice.space.application.SpaceCommandService;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -43,6 +44,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.willAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -71,6 +73,9 @@ class VacancyAlertIT {
 
     @Autowired
     VacancyAlertDispatcher vacancyAlertDispatcher;
+
+    @Autowired
+    SpaceCommandService spaceCommandService;
 
     /**
      * 실제 발송 수단이 아직 없다. Mock을 넣지 않으면 Dispatcher가 "sender 없음"으로
@@ -322,6 +327,165 @@ class VacancyAlertIT {
         assertThat(allRows(roomId)).isZero();
     }
 
+    // ────────────────────────────── 공간 비활성화 정리 (RM-15) ──────────────────────────────
+
+    /**
+     * 비활성화와 <b>같은 Transaction</b>에서 지운다 (명세 04 §2). 나누면 비활성 공간에
+     * 신청이 남아, 그 방이 다시 활성화될 때까지 아무 일도 일어나지 않는 신청이 된다.
+     */
+    @Test
+    @DisplayName("공간을 비활성화하면 그 공간의 대기 신청이 함께 삭제된다.")
+    void deactivatingSpaceDiscardsWaitingAlerts() {
+        Long cohortId = fixture.createCohort("공실-비활성화");
+        OccupancyTestFixture.Member manager = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member waiter = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "공실-비활성화-1", 8);
+
+        roomOccupancyService.start(roomId, occupier.userId());
+        vacancyAlertService.request(roomId, null, waiter.userId());
+
+        // 반납이 아니라 만료로 비운다. 반납은 커밋 후 비동기 발송을 트리거해 신청이
+        // 소진되므로, 이 테스트가 보려는 "대기 중 신청"이 남지 않는다.
+        expireOccupancy(roomId);
+
+        spaceCommandService.deactivate(roomId, "설비 점검", manager.userId());
+
+        assertThat(waitingRows(roomId)).isZero();
+        assertThat(spaceStatus(roomId)).isEqualTo("INACTIVE");
+    }
+
+    /** 소진된 신청은 이력이다 (명세 04 §3) — 지우면 "알림을 보낸 적 있다"를 잃는다. */
+    @Test
+    @DisplayName("이미 발송된 신청은 비활성화로 지워지지 않는다.")
+    void deactivatingSpaceKeepsAlreadyNotifiedAlerts() {
+        Long cohortId = fixture.createCohort("공실-비활성화이력");
+        OccupancyTestFixture.Member manager = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member waiter = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "공실-비활성화이력-1", 8);
+
+        roomOccupancyService.start(roomId, occupier.userId());
+        vacancyAlertService.request(roomId, null, waiter.userId());
+        markAllNotified(roomId);
+        expireOccupancy(roomId);
+
+        spaceCommandService.deactivate(roomId, "설비 점검", manager.userId());
+
+        assertThat(allRows(roomId)).isEqualTo(1);
+        assertThat(waitingRows(roomId)).isZero();
+
+        // 소진된 행의 (구)신청자에게 취소 통보가 가면 안 된다 — 방금 공실 알림을 받은
+        // 사람이 "신청이 취소됐다"는 안내를 받게 된다. 수신자가 삭제 결과(RETURNING)에서
+        // 나오므로 지워지지 않은 행은 목록에 오를 수 없다.
+        verify(vacancyAlertSender, never()).sendDiscardNotice(any());
+    }
+
+    /** 다른 공간의 신청까지 지우면 무관한 사람들이 조용히 대기에서 빠진다. */
+    @Test
+    @DisplayName("다른 공간의 대기 신청은 건드리지 않는다.")
+    void deactivatingSpaceLeavesOtherSpacesAlertsUntouched() {
+        Long cohortId = fixture.createCohort("공실-비활성화범위");
+        OccupancyTestFixture.Member manager = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member otherOccupier = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member waiter = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "공실-비활성화범위-1", 8);
+        Long otherRoomId = fixture.createMeetingRoom(cohortId, "공실-비활성화범위-2", 8);
+
+        roomOccupancyService.start(otherRoomId, otherOccupier.userId());
+        vacancyAlertService.request(otherRoomId, null, waiter.userId());
+        roomOccupancyService.start(roomId, occupier.userId());
+        expireOccupancy(roomId);
+
+        spaceCommandService.deactivate(roomId, "설비 점검", manager.userId());
+
+        assertThat(waitingRows(otherRoomId)).isEqualTo(1);
+    }
+
+    /**
+     * 통보가 필요한 유일한 삭제 경로다 (명세 04 §3) — 사용자가 인지하지 못한 채 알림이
+     * 사라지기 때문이다. 본인 취소·강제 종료·기수 종료는 통보하지 않는다.
+     */
+    @Test
+    @DisplayName("비활성화로 삭제된 신청의 (구)신청자에게 통보가 발송된다.")
+    void notifiesFormerApplicantsWhenSpaceIsDeactivated() {
+        Long cohortId = fixture.createCohort("공실-삭제통보");
+        OccupancyTestFixture.Member manager = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member waiter = fixture.createActiveMember(cohortId);
+        String roomName = "공실-삭제통보-1";
+        Long roomId = fixture.createMeetingRoom(cohortId, roomName, 8);
+
+        roomOccupancyService.start(roomId, occupier.userId());
+        vacancyAlertService.request(roomId, null, waiter.userId());
+        expireOccupancy(roomId);
+
+        spaceCommandService.deactivate(roomId, "설비 점검", manager.userId());
+
+        ArgumentCaptor<VacancyAlertSender.DiscardNotice> captor =
+                ArgumentCaptor.forClass(VacancyAlertSender.DiscardNotice.class);
+        awaitUntil(() -> discardNoticeCount() == 1, "삭제 통보가 발송되지 않았습니다");
+        verify(vacancyAlertSender).sendDiscardNotice(captor.capture());
+
+        VacancyAlertSender.DiscardNotice notice = captor.getValue();
+        assertThat(notice.spaceId()).isEqualTo(roomId);
+        assertThat(notice.spaceName()).isEqualTo(roomName);
+        assertThat(notice.recipientUserId()).isEqualTo(waiter.userId());
+    }
+
+    /** 지운 신청이 없으면 이벤트를 내지 않는다 — 아무에게도 안 보낼 일에 조회를 더하지 않는다. */
+    @Test
+    @DisplayName("지운 신청이 없으면 통보하지 않는다.")
+    void sendsNoDiscardNoticeWhenNothingWasDiscarded() {
+        Long cohortId = fixture.createCohort("공실-삭제통보없음");
+        OccupancyTestFixture.Member manager = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "공실-삭제통보없음-1", 8);
+
+        spaceCommandService.deactivate(roomId, "설비 점검", manager.userId());
+
+        assertThat(spaceStatus(roomId)).isEqualTo("INACTIVE");
+        verify(vacancyAlertSender, never()).sendDiscardNotice(any());
+    }
+
+    /**
+     * <b>비활성화가 롤백되면 아무 일도 없었어야 한다</b> — 신청은 남고, 통보는 나가지 않는다.
+     *
+     * <p>롤백 자체는 Spring이 하지만, 이 테스트가 지키는 것은 우리 설정 둘이다.
+     * {@code discardBySpace}가 {@code REQUIRED}로 비활성화 Transaction에 합류한다는 것
+     * (주변의 {@code REQUIRES_NEW}들을 따라 떼어내면 <b>비활성화는 롤백됐는데 신청만
+     * 지워진다</b>), 그리고 리스너가 {@code AFTER_COMMIT}이라는 것 (일반
+     * {@code @EventListener}로 바꾸면 롤백된 삭제의 통보가 발송된다). 둘 다 코드에 이유가
+     * 적혀 있지만, 어기면 깨지는 것은 이 테스트뿐이다.</p>
+     */
+    @Test
+    @DisplayName("비활성화가 롤백되면 신청이 남고 삭제 통보도 나가지 않는다.")
+    void rolledBackDeactivationKeepsAlertsAndSendsNoNotice() throws Exception {
+        Long cohortId = fixture.createCohort("공실-비활성화롤백");
+        OccupancyTestFixture.Member manager = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member waiter = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "공실-비활성화롤백-1", 8);
+
+        roomOccupancyService.start(roomId, occupier.userId());
+        vacancyAlertService.request(roomId, null, waiter.userId());
+        expireOccupancy(roomId);
+        UUID managerUserId = manager.userId();
+
+        transactionTemplate.executeWithoutResult(status -> {
+            spaceCommandService.deactivate(roomId, "설비 점검", managerUserId);
+            status.setRollbackOnly();
+        });
+
+        assertThat(spaceStatus(roomId)).isEqualTo("ACTIVE");
+        assertThat(waitingRows(roomId)).isEqualTo(1);
+
+        // 부재는 기다릴 수 없고 표본만 뜰 수 있다 — 잘못 발행된 이벤트라면 @Async 실행기가
+        // 곧바로 집어 가므로, 짧게 가라앉힌 뒤 확인한다. 순서를 기대하는 sleep이 아니다.
+        Thread.sleep(300L);
+        verify(vacancyAlertSender, never()).sendDiscardNotice(any());
+    }
+
     // ────────────────────────────── 발송 ──────────────────────────────
 
     @Test
@@ -515,6 +679,37 @@ class VacancyAlertIT {
                  WHERE space_id = ? AND notified_at IS NULL
                 """, Integer.class, spaceId);
         return count == null ? 0 : count;
+    }
+
+    /**
+     * 만료 시각을 과거로 밀어 "사용 중"에서 뺀다.
+     *
+     * <p>비활성화는 활성 점유가 없어야 하는데(RM-12), 반납으로 비우면 커밋 후 비동기
+     * 발송이 신청을 소진시켜 이 테스트가 보려는 대기 신청이 남지 않는다. 만료는
+     * {@code existsActive}가 {@code expires_at}으로 판정하므로 스케줄러 없이도 즉시
+     * 반영되고, 발송을 트리거하지도 않는다.</p>
+     */
+    private void expireOccupancy(Long spaceId) {
+        jdbcTemplate.update("""
+                UPDATE learning_service.room_occupancies
+                   SET started_at = now() - interval '3 hours',
+                       expires_at = now() - interval '1 minute'
+                 WHERE space_id = ? AND status = 'ACTIVE'
+                """, spaceId);
+    }
+
+    /** Mock에 쌓인 삭제 통보 호출 수. 비동기 발송이 끝났는지 기다리는 데 쓴다. */
+    private int discardNoticeCount() {
+        return org.mockito.Mockito.mockingDetails(vacancyAlertSender).getInvocations().stream()
+                .filter(invocation -> "sendDiscardNotice".equals(invocation.getMethod().getName()))
+                .toList()
+                .size();
+    }
+
+    private String spaceStatus(Long spaceId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT status FROM learning_service.spaces WHERE id = ?
+                """, String.class, spaceId);
     }
 
     private int allRows(Long spaceId) {

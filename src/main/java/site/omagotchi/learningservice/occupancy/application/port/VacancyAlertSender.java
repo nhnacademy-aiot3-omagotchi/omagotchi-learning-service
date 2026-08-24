@@ -20,6 +20,19 @@ public interface VacancyAlertSender {
     void sendVacancyAlert(VacancyNotice notice);
 
     /**
+     * 공간 비활성화로 신청이 삭제됐음을 알린다 (RM-15).
+     *
+     * <p>같은 Port에 둔 이유는 채널도 수신자 개념도 같기 때문이다 — 둘 다 "신청자에게
+     * 그 신청에 관해" 보낸다. 발송 수단이 없으면 둘 다 나가지 않는 것도 같다.</p>
+     *
+     * <p><b>전달 보장은 다르다.</b> 공실 알림은 실패해도 신청이 대기로 남아 다음 공실에
+     * 다시 잡히지만(at-least-once), 이 통보는 대상 행을 <b>지운 뒤</b>에 보내므로 실패하면
+     * 끝이다 (at-most-once, 명세 04 §4). 실패를 예외로 알리는 계약은 같지만, 호출부가
+     * 그것으로 할 수 있는 일은 기록뿐이다.</p>
+     */
+    void sendDiscardNotice(DiscardNotice notice);
+
+    /**
      * 발송 한 건.
      *
      * <p>점유자·참여자 정보를 담지 않는 것이 의도다 (MR-36). 회의실은 여러 기수가
@@ -40,6 +53,20 @@ public interface VacancyAlertSender {
             String spaceName,
             UUID recipientUserId,
             OffsetDateTime vacatedAt
+    ) {
+    }
+
+    /**
+     * 삭제 통보 한 건.
+     *
+     * <p>왜 사라졌는지를 담는다. 공간이 비활성화됐다는 사실을 빼면 사용자는 자기 신청이
+     * 사라진 이유를 알 수 없고, 다시 신청하려다 400을 받는다.</p>
+     */
+    record DiscardNotice(
+            Long spaceId,
+            String spaceName,
+            UUID recipientUserId,
+            OffsetDateTime discardedAt
     ) {
     }
 }

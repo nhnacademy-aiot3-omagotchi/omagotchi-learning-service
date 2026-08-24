@@ -81,22 +81,58 @@ public class TelegramVacancyAlertSender implements VacancyAlertSender {
     @Override
     public void sendVacancyAlert(VacancyNotice notice) {
         Objects.requireNonNull(notice, "공실 알림은 필수입니다.");
+        send(messageOf(notice), "Telegram 공실 알림 발송에 실패했습니다.");
+    }
 
+    /**
+     * 실제 전송. 두 통보가 같은 채팅으로 가고 성공 판정도 같아 여기 모은다.
+     *
+     * <p>동기 응답을 확인한 뒤에만 정상 반환한다 — 호출부가 그 반환을 <b>실제 발송 성공</b>
+     * 으로 읽고 후속 처리를 하기 때문이다.</p>
+     */
+    private void send(String text, String failureMessage) {
         SendMessage request = SendMessage.builder()
                 .chatId(chatId)
-                .text(messageOf(notice))
+                .text(text)
                 .build();
 
         Message response;
         try {
             response = telegramSender.execute(request);
         } catch (TelegramApiException exception) {
-            throw new IllegalStateException("Telegram 공실 알림 발송에 실패했습니다.", exception);
+            throw new IllegalStateException(failureMessage, exception);
         }
 
         if (response == null || response.getMessageId() == null) {
             throw new IllegalStateException("Telegram 발송 성공 응답을 확인할 수 없습니다.");
         }
+    }
+
+    @Override
+    public void sendDiscardNotice(DiscardNotice notice) {
+        Objects.requireNonNull(notice, "삭제 통보는 필수입니다.");
+        send(discardMessageOf(notice), "Telegram 공실 알림 삭제 통보 발송에 실패했습니다.");
+    }
+
+    /**
+     * 삭제 통보 본문.
+     *
+     * <p><b>왜 사라졌는지를 반드시 적는다.</b> 이유가 없으면 사용자는 신청이 사라진 것만
+     * 보고 다시 신청하려다 "이미 사용 가능한 회의실입니다"(400)를 받는다 — 비활성 공간에는
+     * 활성 점유가 있을 수 없기 때문이다.</p>
+     *
+     * <p>재신청을 안내하지 않는 것도 의도다. 그 공간은 지금 신청 자체가 불가능하다.</p>
+     */
+    private static String discardMessageOf(DiscardNotice notice) {
+        return """
+                [공실 알림 신청 취소 안내]
+
+                공간: %s
+                해당 공간이 비활성화되어 신청하신 공실 알림이 취소되었습니다.
+                취소 시각: %s
+                """.formatted(notice.spaceName(),
+                notice.discardedAt().atZoneSameInstant(DateTimePolicy.ZONE_ID).format(DISPLAY_FORMATTER))
+                .stripTrailing();
     }
 
     /**

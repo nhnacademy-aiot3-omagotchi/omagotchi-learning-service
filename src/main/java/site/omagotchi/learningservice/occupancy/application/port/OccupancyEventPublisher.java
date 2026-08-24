@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.occupancy.application.port;
 
 import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
+import site.omagotchi.learningservice.occupancy.application.event.VacancyAlertsDiscardedEvent;
 
 /**
  * 점유 도메인 이벤트의 발행 경계.
@@ -33,4 +34,12 @@ public interface OccupancyEventPublisher {
      * 리스너의 {@code AFTER_COMMIT}이 그 시점을 정한다. 여기서 커밋을 기다리지 않는다.</p>
      */
     void publishRoomVacated(RoomVacatedEvent event);
+
+    /**
+     * 공간 비활성화로 대기 신청이 삭제됐음을 알린다 (RM-15).
+     *
+     * <p>{@link #publishRoomVacated}와 달리 <b>수신자를 함께 싣는다.</b> 통보 대상 행이
+     * 이미 삭제돼 리스너가 되찾을 수 없기 때문이다.</p>
+     */
+    void publishVacancyAlertsDiscarded(VacancyAlertsDiscardedEvent event);
 }

@@ -76,6 +76,8 @@ spring:
 
 eureka:
   client:
+    jersey:
+      enabled: false
     enabled: ${EUREKA_ENABLED}
     register-with-eureka: true
     fetch-registry: true

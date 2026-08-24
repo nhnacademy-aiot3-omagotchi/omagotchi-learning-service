@@ -50,7 +50,7 @@ public class VacancyAlertJpaPersistence implements VacancyAlertRepository {
     }
 
     @Override
-    public int deleteWaitingBySpaceId(Long spaceId) {
+    public List<Long> deleteWaitingBySpaceId(Long spaceId) {
         return alertJpaRepository.deleteWaitingBySpaceId(spaceId);
     }
 

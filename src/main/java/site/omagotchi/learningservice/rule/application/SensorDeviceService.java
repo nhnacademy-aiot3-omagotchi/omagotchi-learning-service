@@ -10,7 +10,6 @@ import site.omagotchi.learningservice.rule.application.command.UpdateSensorDevic
 import site.omagotchi.learningservice.rule.application.port.SensorDeviceRepository;
 import site.omagotchi.learningservice.rule.application.result.SensorDeviceResult;
 import site.omagotchi.learningservice.rule.domain.SensorDevice;
-import site.omagotchi.learningservice.rule.infrastructure.persistence.repository.SensorDeviceJpaRepository;
 
 import java.util.*;
 
@@ -22,7 +21,6 @@ import java.util.*;
 public class SensorDeviceService {
 
     private final SensorDeviceRepository sensorDeviceRepository;
-    private final SensorDeviceJpaRepository sensorDeviceJpaRepository;
 
     @Transactional
     public String create(CreateSensorDeviceCommand command){

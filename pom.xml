@@ -194,11 +194,6 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-restclient</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>io.github.vaneproject</groupId>
-			<artifactId>badwordfiltering</artifactId>
-			<version>1.0.0</version>
-		</dependency>
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>

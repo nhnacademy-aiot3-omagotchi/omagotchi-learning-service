@@ -41,7 +41,7 @@ public class SensorDeviceService {
         }
 
         if(sensorDeviceRepository.existsByDeviceEui(device.getDeviceEui())){
-            throw new BusinessException(RuleErrorCode.DEVICE_INVALID_ATTRIBUTE);
+            throw new BusinessException(RuleErrorCode.DEVICE_ALREADY_EXISTS);
         }
 
         return device.getDeviceEui();

@@ -170,7 +170,7 @@ class StudyRecordQueryServiceTest {
                 () -> assertEquals(first.getStartTime(), result.records().getFirst().startTime()),
                 () -> assertEquals(second.getStartTime(), result.records().getLast().startTime())
         );
-        verify(dailyQuestService).handleRoutineReviewed(USER_ID);
+        verifyNoInteractions(dailyQuestService);
     }
 
     @Test
@@ -193,6 +193,25 @@ class StudyRecordQueryServiceTest {
                 () -> assertEquals(0L, result.totalStudySeconds()),
                 () -> assertTrue(result.records().isEmpty())
         );
+        verifyNoInteractions(dailyQuestService);
+    }
+
+    @Test
+    @DisplayName("오늘 일간 기록을 조회하면 학습 돌아보기 퀘스트 진행")
+    void progressesRoutineReviewQuestWhenCurrentDailyRecordsAreViewed() {
+        LocalDate currentAggregationDate = LocalDate.of(2000, Month.JANUARY, 15);
+        given(clock.instant()).willReturn(JANUARY_15_CURRENT_TIME);
+        given(studyRecordQueryRepository.findDailyRecords(
+                COHORT_MEMBERSHIP_ID,
+                currentAggregationDate
+        )).willReturn(List.of());
+
+        studyRecordQueryService.getDailyRecords(
+                USER_ID,
+                COHORT_ID,
+                currentAggregationDate
+        );
+
         verify(dailyQuestService).handleRoutineReviewed(USER_ID);
     }
 

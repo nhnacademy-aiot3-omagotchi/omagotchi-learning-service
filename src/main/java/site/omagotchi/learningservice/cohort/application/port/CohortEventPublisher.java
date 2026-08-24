@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.cohort.application.port;
 
+import site.omagotchi.learningservice.cohort.application.event.CohortClosedEvent;
 import site.omagotchi.learningservice.cohort.application.event.CohortMembershipEndedEvent;
 
 /**
@@ -18,4 +19,13 @@ public interface CohortEventPublisher {
      * 리스너의 {@code AFTER_COMMIT}이 그 시점을 정한다. 여기서 커밋을 기다리지 않는다.</p>
      */
     void publishMembershipEnded(CohortMembershipEndedEvent event);
+
+    /**
+     * 교육 기수 하나가 종료됐음을 알린다 (CE-05 훅의 진입점).
+     *
+     * <p>{@link #publishMembershipEnded}와 나란히 두지만 성격이 다르다 — 이쪽은 기수 단위
+     * 단발이고, 수신 측이 정해진 순서로 4단계를 밟는다. 멤버십 단위로 쪼개 발행하면 그
+     * 순서가 깨진다 ({@link CohortClosedEvent} 참고).</p>
+     */
+    void publishCohortClosed(CohortClosedEvent event);
 }

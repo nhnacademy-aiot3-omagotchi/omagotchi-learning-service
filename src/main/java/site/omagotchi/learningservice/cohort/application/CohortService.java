@@ -6,6 +6,8 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.command.ChangeCohortStatusCommand;
 import site.omagotchi.learningservice.cohort.application.command.CreateCohortCommand;
 import site.omagotchi.learningservice.cohort.application.command.UpdateCohortCommand;
+import site.omagotchi.learningservice.cohort.application.event.CohortClosedEvent;
+import site.omagotchi.learningservice.cohort.application.port.CohortEventPublisher;
 import site.omagotchi.learningservice.cohort.application.result.CohortResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
@@ -15,6 +17,7 @@ import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,6 +28,7 @@ public class CohortService {
     private final CohortRepository repository;
     private final CohortMembershipRepository membershipRepository;
     private final CohortAccessService accessService;
+    private final CohortEventPublisher eventPublisher;
 
     /**
      * 새 기수를 PREPARING 상태로 생성한다.
@@ -118,7 +122,20 @@ public class CohortService {
                 throw new BusinessException(CohortErrorCode.INVALID_COHORT_STATUS_TRANSITION);
             }
 
+            OffsetDateTime closedAt = OffsetDateTime.now();
             cohort.close();
+
+            // 소속 종료를 같은 트랜잭션에 두는 것이 핵심이다. 커밋 직후부터 이 기수 누구도
+            // 새 점유·팀·공실 신청을 시작할 수 없어, 뒤따르는 정리가 정지된 대상을 본다.
+            // 여기서 멤버십별 이벤트를 내지 않는다 — 팬아웃이 CE-05 순서를 깨뜨린다
+            // (CohortMembershipRepository#endActiveByCohortId).
+            //
+            // 이 벌크 UPDATE는 clearAutomatically라 영속성 컨텍스트를 비운다. 바로 위의
+            // close()가 flushAutomatically 덕에 먼저 반영되기에 살아남는 것이지, 그 짝이
+            // 빠지면 상태 변경이 조용히 버려진다 — 확인함(CLOSED 기대, ACTIVE 관측).
+            membershipRepository.endActiveByCohortId(cohortId, closedAt);
+
+            eventPublisher.publishCohortClosed(new CohortClosedEvent(cohortId, closedAt));
             return CohortResponse.from(cohort);
         }
 

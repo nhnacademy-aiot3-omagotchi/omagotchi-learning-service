@@ -10,6 +10,7 @@ import site.omagotchi.learningservice.rule.application.command.UpdateSensorDevic
 import site.omagotchi.learningservice.rule.application.port.SensorDeviceRepository;
 import site.omagotchi.learningservice.rule.application.result.SensorDeviceResult;
 import site.omagotchi.learningservice.rule.domain.SensorDevice;
+import site.omagotchi.learningservice.space.application.SpaceAccessService;
 
 import java.util.*;
 
@@ -21,6 +22,7 @@ import java.util.*;
 public class SensorDeviceService {
 
     private final SensorDeviceRepository sensorDeviceRepository;
+    private final SpaceAccessService spaceAccessService;
 
     @Transactional
     public String create(CreateSensorDeviceCommand command){
@@ -44,6 +46,8 @@ public class SensorDeviceService {
             throw new BusinessException(RuleErrorCode.DEVICE_ALREADY_EXISTS);
         }
 
+        requireSpaceExists(device.getSpaceId());
+
         sensorDeviceRepository.save(device);
         return device.getDeviceEui();
     }
@@ -65,6 +69,8 @@ public class SensorDeviceService {
             throw new BusinessException(RuleErrorCode.DEVICE_INVALID_ATTRIBUTE, e.getMessage(), e);
         }
 
+        requireSpaceExists(device.getSpaceId());
+
         return SensorDeviceResult.from(sensorDeviceRepository.save(device));
     }
 
@@ -75,6 +81,17 @@ public class SensorDeviceService {
 
         device.changeActive(active);
         return SensorDeviceResult.from(device);
+    }
+
+
+    private void requireSpaceExists(Long spaceId){
+        if(Objects.isNull(spaceId)){
+            return;
+        }
+
+        if(spaceAccessService.find(spaceId).isEmpty()){
+            throw new BusinessException(RuleErrorCode.DEVICE_SPACE_NOT_FOUND);
+        }
     }
 
     /** 표시명. 등록되지 않은 기기면 비어 있다. */

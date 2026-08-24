@@ -213,7 +213,7 @@ class LearningSecurityMvcTest {
     }
 
     @Test
-    @DisplayName("임계치 룰 조회는 USER도 허용 - rule-service RuleSyncClient 의 적재 경로다")
+    @DisplayName("공개 임계치 룰 조회는 인증된 USER도 허용")
     void allowsUserToReadThresholdRules() throws Exception {
         given(thresholdRuleService.readAll()).willReturn(List.of());
         String userToken = TestJwtKeyConfig.issue("USER");

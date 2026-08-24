@@ -106,6 +106,8 @@ timer:
 prediction:
   client:
     base-url: ${PREDICTION_SERVICE_BASE_URL}
+    connect-timeout: ${PREDICTION_SERVICE_CONNECT_TIMEOUT:2s}
+    read-timeout: ${PREDICTION_SERVICE_READ_TIMEOUT:5s}
 
 telegram:
   bot:

@@ -37,7 +37,7 @@ public class SensorDeviceService {
             );
 
         }catch (IllegalArgumentException e){
-            throw new BusinessException(RuleErrorCode.DEVICE_INVALID_ATTRIBUTE, e.getMessage());
+            throw new BusinessException(RuleErrorCode.DEVICE_INVALID_ATTRIBUTE, e.getMessage(), e);
         }
 
         if(sensorDeviceRepository.existsByDeviceEui(device.getDeviceEui())){
@@ -61,7 +61,7 @@ public class SensorDeviceService {
                     command.installedAt()
             );
         }catch (IllegalArgumentException e){
-            throw new BusinessException(RuleErrorCode.DEVICE_INVALID_ATTRIBUTE);
+            throw new BusinessException(RuleErrorCode.DEVICE_INVALID_ATTRIBUTE, e.getMessage(), e);
         }
 
         return SensorDeviceResult.from(sensorDeviceRepository.save(device));

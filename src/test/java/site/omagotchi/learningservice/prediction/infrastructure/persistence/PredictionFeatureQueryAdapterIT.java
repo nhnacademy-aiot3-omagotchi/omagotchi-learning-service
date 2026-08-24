@@ -27,6 +27,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+/**
+ * Prediction의 교차 Feature 읽기 계약을 검증한다.
+ *
+ * <p>출결 상태, 삭제되지 않은 확정 학습 기록, 대표 캐릭터와 퀘스트 완료 시각 등의
+ * 스키마나 의미를 변경할 때는 {@link PredictionFeatureQueryAdapter}와 이 테스트를 함께
+ * 검토해야 한다.</p>
+ */
 @Import({
         TestcontainersConfiguration.class,
         QueryDslConfig.class,
@@ -35,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @ActiveProfiles("test")
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@DisplayName("예측 피처 원천 데이터 조회")
+@DisplayName("예측 교차 Feature 읽기 계약")
 class PredictionFeatureQueryAdapterIT {
 
     private static final UUID USER_ID = new UUID(0L, 1L);

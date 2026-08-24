@@ -33,6 +33,25 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * 예측 피처 산출을 위한 교차 Feature 읽기 전용 모델.
+ *
+ * <p>Prediction 전용 조회와 집계를 한곳에서 수행하기 위해 다른 Feature의 Persistence
+ * Model을 직접 참조한다. 일반적인 Feature 간 Application Service 호출 규칙에 대한
+ * 의도적인 예외이며, 이 Adapter는 원천 Feature의 상태를 변경하지 않는다.</p>
+ *
+ * <p>다음 스키마와 의미를 읽기 계약으로 사용한다.</p>
+ * <ul>
+ *     <li>Cohort: 기수 시작일, 소속 처리 일시와 소속 기수, 출결 정책 시간대</li>
+ *     <li>Study: 집계일, 공부 시간, {@code deletedAt == null}인 확정 기록</li>
+ *     <li>Attendance: 출결일, 최종 출결 상태와 입실 시각</li>
+ *     <li>Gamification: 대표 캐릭터 플래그와 레벨,
+ *         {@code completedAt != null}인 퀘스트 완료 사실</li>
+ * </ul>
+ *
+ * <p>위 스키마나 상태 의미를 변경할 때는 이 Adapter와
+ * {@code PredictionFeatureQueryAdapterIT}의 교차 Feature 읽기 계약을 함께 검토해야 한다.</p>
+ */
 @Repository
 @RequiredArgsConstructor
 @Transactional(readOnly = true)

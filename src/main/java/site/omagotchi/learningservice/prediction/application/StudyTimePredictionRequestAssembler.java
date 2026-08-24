@@ -19,9 +19,13 @@ import java.util.Set;
 @Component
 public class StudyTimePredictionRequestAssembler {
 
+    // TODO: 스냅샷 계약 위반은 내부 원문을 노출하지 않는 안전한 사용자 안내와 연결하고,
+    //       응답의 requestId로 아래 상세 진단 메시지를 서버 로그에서 추적할 수 있게 한다.
     private static final int STUDY_RECENT_DAYS = 30;
     private static final int RATE_RECENT_DAYS = 7;
     private static final double SECONDS_PER_HOUR = 3_600.0;
+    private static final double MIN_PREDICTION_ENTRY_MINUTES = 420.0;
+    private static final double MAX_PREDICTION_ENTRY_MINUTES = 830.0;
 
     /**
      * 예측 모델을 만들 때 정한 공부시간 입력 피처의 상한이다.
@@ -226,16 +230,17 @@ public class StudyTimePredictionRequestAssembler {
         );
 
         ZoneId attendanceZone = ZoneId.of(snapshot.attendanceTimezone());
-        Double entryLag1Min = studiedDates.contains(snapshot.featureDate())
+        Double rawEntryLag1Min = studiedDates.contains(snapshot.featureDate())
                 ? entryMinutes(attendanceByDate.get(snapshot.featureDate()), attendanceZone)
                 : null;
-        Double entry7dMeanMin = averageEntryMinutes(
+        Double entryLag1Min = clampPredictionEntryMinutes(rawEntryLag1Min);
+        Double entry7dMeanMin = clampPredictionEntryMinutes(averageEntryMinutes(
                 studiedDates,
                 attendanceByDate,
                 sevenDayStart,
                 snapshot.featureDate(),
                 attendanceZone
-        );
+        ));
         boolean noShowYesterday = !snapshot.featureDate().isBefore(snapshot.membershipStartDate())
                 && !studiedDates.contains(snapshot.featureDate());
         long attendedCalendarDays7d = countStudiedDays(
@@ -401,6 +406,15 @@ public class StudyTimePredictionRequestAssembler {
                 .atZone(zoneId)
                 .toLocalTime()
                 .toSecondOfDay() / 60.0;
+    }
+
+    private Double clampPredictionEntryMinutes(Double minutes) {
+        if (minutes == null) {
+            return null;
+        }
+        // 원본 입실 시각과 평균 계산은 보존하고, 계산 완료된 입력 피처만 모델 경계로 보정한다.
+        return Math.clamp(minutes,
+                MIN_PREDICTION_ENTRY_MINUTES, MAX_PREDICTION_ENTRY_MINUTES);
     }
 
     private void validateDailyQuestSummary(DailyQuestSummary summary) {

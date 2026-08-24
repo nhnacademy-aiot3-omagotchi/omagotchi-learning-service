@@ -1,5 +1,7 @@
 package site.omagotchi.learningservice.prediction.application;
 
+import jakarta.validation.Validation;
+import jakarta.validation.ValidatorFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
@@ -312,6 +314,71 @@ class StudyTimePredictionRequestAssemblerTest {
     }
 
     @Test
+    @DisplayName("계산한 입실 시각 피처는 예측 모델 범위로 보정")
+    void clampsCalculatedEntryFeaturesToPredictionModelBounds() {
+        PredictionFeatureSnapshot earlySnapshot = snapshotWithStudiedAttendance(
+                AttendanceStatus.PRESENT,
+                "2000-01-09T21:00:00Z"
+        );
+        PredictionFeatureSnapshot lateSnapshot = snapshotWithStudiedAttendance(
+                AttendanceStatus.LATE,
+                "2000-01-10T05:00:00Z"
+        );
+
+        StudyTimePredictionRequest earlyRequest = assembler.assemble(earlySnapshot);
+        StudyTimePredictionRequest lateRequest = assembler.assemble(lateSnapshot);
+
+        try (ValidatorFactory validatorFactory = Validation.buildDefaultValidatorFactory()) {
+            var validator = validatorFactory.getValidator();
+            assertAll(
+                    () -> assertEquals(420.0, earlyRequest.entryLag1Min(), DELTA),
+                    () -> assertEquals(420.0, earlyRequest.entry7dMeanMin(), DELTA),
+                    () -> assertEquals(830.0, lateRequest.entryLag1Min(), DELTA),
+                    () -> assertEquals(830.0, lateRequest.entry7dMeanMin(), DELTA),
+                    () -> assertTrue(validator.validate(earlyRequest).isEmpty()),
+                    () -> assertTrue(validator.validate(lateRequest).isEmpty())
+            );
+        }
+    }
+
+    @Test
+    @DisplayName("입실 평균은 원본 시각으로 계산한 뒤 예측 모델 범위로 보정")
+    void clampsEntryMeanAfterAveragingRawEntryMinutes() {
+        LocalDate firstStudyDate = FEATURE_DATE.minusDays(3L);
+        PredictionFeatureSnapshot snapshot = new PredictionFeatureSnapshot(
+                FEATURE_DATE,
+                firstStudyDate,
+                "Asia/Seoul",
+                new StudyHistory(
+                        List.of(
+                                new DailyStudySeconds(firstStudyDate, 3_600L),
+                                new DailyStudySeconds(FEATURE_DATE, 3_600L)
+                        ),
+                        firstStudyDate,
+                        7_200L,
+                        2L
+                ),
+                new AttendanceHistory(
+                        List.of(
+                                attendance("2000-01-07", AttendanceStatus.PRESENT,
+                                        "2000-01-06T21:00:00Z"),
+                                attendance("2000-01-10", AttendanceStatus.PRESENT,
+                                        "2000-01-10T00:00:00Z")
+                        ),
+                        0L
+                ),
+                new GamificationHistory(1, 0L, List.of())
+        );
+
+        StudyTimePredictionRequest request = assembler.assemble(snapshot);
+
+        assertAll(
+                () -> assertEquals(540.0, request.entryLag1Min(), DELTA),
+                () -> assertEquals(450.0, request.entry7dMeanMin(), DELTA)
+        );
+    }
+
+    @Test
     @DisplayName("최초 학습일이 예측 기준일 이후이면 내부 계약 위반")
     void rejectsFirstStudyDateAfterFeatureDateAsInternalContractViolation() {
         LocalDate invalidFirstStudyDate = FEATURE_DATE.plusDays(1L);
@@ -423,6 +490,28 @@ class StudyTimePredictionRequestAssemblerTest {
                 new StudyHistory(List.of(), null, 0L, 0L),
                 new AttendanceHistory(attendance, 0L),
                 new GamificationHistory(1, 0L, dailyQuestSummaries)
+        );
+    }
+
+    private PredictionFeatureSnapshot snapshotWithStudiedAttendance(
+            AttendanceStatus status,
+            String checkedInAt
+    ) {
+        return new PredictionFeatureSnapshot(
+                FEATURE_DATE,
+                FEATURE_DATE,
+                "Asia/Seoul",
+                new StudyHistory(
+                        List.of(new DailyStudySeconds(FEATURE_DATE, 3_600L)),
+                        FEATURE_DATE,
+                        3_600L,
+                        1L
+                ),
+                new AttendanceHistory(
+                        List.of(attendance(FEATURE_DATE.toString(), status, checkedInAt)),
+                        status == AttendanceStatus.LATE ? 1L : 0L
+                ),
+                new GamificationHistory(1, 0L, List.of())
         );
     }
 

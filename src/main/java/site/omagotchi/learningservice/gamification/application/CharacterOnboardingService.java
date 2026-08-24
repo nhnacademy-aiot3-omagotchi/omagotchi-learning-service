@@ -7,11 +7,12 @@ import site.omagotchi.learningservice.gamification.application.command.CreateUse
 import site.omagotchi.learningservice.gamification.application.result.GameCharacterResult;
 import site.omagotchi.learningservice.gamification.application.result.UserCharacterResult;
 import site.omagotchi.learningservice.gamification.domain.CharacterNicknameValidator;
+import site.omagotchi.learningservice.gamification.domain.CharacterAppearance;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
-import site.omagotchi.learningservice.gamification.domain.GamificationErrorCode;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
 import site.omagotchi.learningservice.gamification.infrastructure.GameCharacterRepository;
-import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;
+import site.omagotchi.learningservice.gamification.application.port.UserCharacterQueryRepository;
+import site.omagotchi.learningservice.gamification.application.port.UserCharacterWriteRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.util.List;
@@ -23,7 +24,8 @@ import java.util.UUID;
 public class CharacterOnboardingService {
 
     private final GameCharacterRepository gameCharacterRepository;
-    private final UserCharacterRepository userCharacterRepository;
+    private final UserCharacterQueryRepository userCharacterQueryRepository;
+    private final UserCharacterWriteRepository userCharacterWriteRepository;
 
     public List<GameCharacterResult> getAvailableCharacters() {
         return gameCharacterRepository.findByActiveTrueOrderByIdAsc().stream()
@@ -34,18 +36,28 @@ public class CharacterOnboardingService {
     @Transactional
     public UserCharacterResult createRepresentativeCharacter(UUID userId, CreateUserCharacterCommand command) {
         // 성장 상태는 대표 캐릭터 하나를 기준으로 잡아서 온보딩 중복 생성을 먼저 끊음
-        if (userCharacterRepository.existsByUserIdAndRepresentativeTrue(userId)) {
+        if (userCharacterQueryRepository.existsRepresentativeByUserId(userId)) {
             throw new BusinessException(GamificationErrorCode.REPRESENTATIVE_CHARACTER_ALREADY_EXISTS);
         }
         GameCharacter gameCharacter = gameCharacterRepository.findByIdAndActiveTrue(command.gameCharacterId())
                 .orElseThrow(() -> new BusinessException(GamificationErrorCode.GAME_CHARACTER_NOT_FOUND));
 
         String nickname = normalizeNickname(command.nickname());
-        UserCharacter userCharacter = userCharacterRepository.save(UserCharacter.representative(
-                userId,
-                gameCharacter.getId(),
-                nickname
-        ));
+        if (userCharacterQueryRepository.existsRepresentativeByNickname(nickname)) {
+            throw new BusinessException(GamificationErrorCode.DUPLICATE_NICKNAME);
+        }
+        String colorId = normalizeColorId(command.colorId());
+
+        // 위 exists 확인은 정상 경로용이다. 확인과 저장 사이의 경합은 부분 유니크 인덱스가 막고,
+        // 저장소 구현이 그 위반을 DUPLICATE_NICKNAME으로 바꿔서 돌려준다.
+        UserCharacter userCharacter = userCharacterWriteRepository.saveRepresentative(
+                UserCharacter.representative(
+                        userId,
+                        gameCharacter.getId(),
+                        nickname,
+                        colorId
+                )
+        );
         return UserCharacterResult.from(userCharacter, gameCharacter);
     }
 
@@ -55,6 +67,14 @@ public class CharacterOnboardingService {
         } catch (IllegalArgumentException exception) {
             // 도메인 검증 실패를 API 응답 계약이 있는 오류로 바꿔서 밖으로 내보냄
             throw new BusinessException(GamificationErrorCode.INVALID_CHARACTER_NICKNAME, exception);
+        }
+    }
+
+    private String normalizeColorId(String colorId) {
+        try {
+            return CharacterAppearance.normalizeColorId(colorId);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(GamificationErrorCode.INVALID_CHARACTER_COLOR, exception);
         }
     }
 }

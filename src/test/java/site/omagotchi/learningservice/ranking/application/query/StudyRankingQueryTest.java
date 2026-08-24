@@ -20,10 +20,7 @@ class StudyRankingQueryTest {
     })
     @DisplayName("기본값과 허용 범위 정상 처리")
     void resolvesMaxRank(Integer requested, int expected) {
-        StudyRankingQuery query = new StudyRankingQuery(
-                StudyRankingPeriod.DAILY,
-                requested
-        );
+        StudyRankingQuery query = new StudyRankingQuery(requested);
 
         assertEquals(expected, query.resolveMaxRank());
     }
@@ -32,10 +29,7 @@ class StudyRankingQueryTest {
     @CsvSource({"0", "-1", "1001"})
     @DisplayName("허용 범위 초과 예외")
     void rejectsOutOfRangeMaxRank(int requested) {
-        StudyRankingQuery query = new StudyRankingQuery(
-                StudyRankingPeriod.DAILY,
-                requested
-        );
+        StudyRankingQuery query = new StudyRankingQuery(requested);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,

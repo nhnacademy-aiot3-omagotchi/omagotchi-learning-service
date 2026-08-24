@@ -12,6 +12,8 @@ import org.springframework.boot.amqp.autoconfigure.RabbitProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import site.omagotchi.learningservice.environment.infrastructure.RabbitRecoverConfig;
+import site.omagotchi.learningservice.environment.infrastructure.RecoveryMetrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

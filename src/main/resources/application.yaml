@@ -5,6 +5,14 @@ spring:
   application:
     name: learning-service
 
+  http:
+    clients:
+      connect-timeout: ${IDENTITY_SERVICE_CONNECT_TIMEOUT}
+      read-timeout: ${IDENTITY_SERVICE_READ_TIMEOUT}
+    serviceclient:
+      identity-service:
+        base-url: ${IDENTITY_SERVICE_BASE_URL}
+
   task:
     execution:
       # AsyncConfig의 eventTaskExecutor와 Boot 기본 실행기를 분리한다 (ADR space-team/0012).
@@ -37,6 +45,8 @@ spring:
     create-schemas: true
     clean-disabled: true
     validate-on-migrate: true
+    postgresql:
+      transactional-lock: false
 
   jpa:
     hibernate:
@@ -66,6 +76,8 @@ spring:
 
 eureka:
   client:
+    jersey:
+      enabled: false
     enabled: ${EUREKA_ENABLED}
     register-with-eureka: true
     fetch-registry: true
@@ -116,11 +128,43 @@ realtime:
   presence:
     session-ttl: ${REALTIME_PRESENCE_SESSION_TTL}
 
+environment:
+  cache:
+    capacity: 1000
+    retention: P7D
+  cooldown: PT5M
+  iot:
+    request-timeout: PT3S
+    secret: ${IOT_SECRET:}
+    base-url: ${IOT_BASE_URL:}
+    simulator:
+      enabled: ${IOT_SIMULATOR_ENABLED:false}
+
 auth:
   jwt:
     issuer: ${JWT_ISSUER}
     audience: ${JWT_AUDIENCE}
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
+  rule:
+    username: ${RULE_LEARNING_USERNAME}
+    password: ${RULE_LEARNING_PASSWORD}
+
+clients:
+  identity:
+    username: ${LEARNING_IDENTITY_USERNAME}
+    password: ${LEARNING_IDENTITY_PASSWORD}
+
+sensor:
+  series:
+    zone: ${SENSOR_SERIES_ZONE:Asia/Seoul}
+  influx:
+    url: ${INFLUXDB_URL}
+    token: ${INFLUXDB_TOKEN}
+    org: ${INFLUXDB_ORG_ID}
+    buckets:
+      raw: omagotchi-raw
+      avg-1h: omagotchi-avg-1h
+      avg-1d: omagotchi-avg-1d
 
 omagotchi:
   scheduling:

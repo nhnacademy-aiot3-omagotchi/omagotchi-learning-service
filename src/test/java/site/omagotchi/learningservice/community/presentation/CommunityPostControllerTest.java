@@ -4,15 +4,18 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.restdocs.test.autoconfigure.AutoConfigureRestDocs;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.community.application.CommunityPostCommandService;
 import site.omagotchi.learningservice.community.application.CommunityPostQueryService;
+import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentDownload;
 import site.omagotchi.learningservice.community.application.command.CreateCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.command.PinCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.command.UpdateCommunityPostCommand;
@@ -39,6 +42,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -52,6 +56,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @EnableConfigurationProperties(JwtProperties.class)
 @ActiveProfiles("test")
+@AutoConfigureRestDocs(outputDir = "target/generated-snippets")
 @DisplayName("커뮤니티 게시글 조회 API")
 class CommunityPostControllerTest {
 
@@ -100,10 +105,14 @@ class CommunityPostControllerTest {
                 .andExpect(jsonPath("$.items[0].postId").value(1))
                 .andExpect(jsonPath("$.items[0].type").value("NOTICE"))
                 .andExpect(jsonPath("$.items[0].pinned").value(true))
-                .andExpect(jsonPath("$.page").value(1))
-                .andExpect(jsonPath("$.size").value(10))
-                .andExpect(jsonPath("$.totalElements").value(11))
-                .andExpect(jsonPath("$.totalPages").value(2));
+                .andExpect(jsonPath("$.page.number").value(1))
+                .andExpect(jsonPath("$.page.size").value(10))
+                .andExpect(jsonPath("$.page.totalElements").value(11))
+                .andExpect(jsonPath("$.page.totalPages").value(2))
+                .andExpect(jsonPath("$.size").doesNotExist())
+                .andExpect(jsonPath("$.totalElements").doesNotExist())
+                .andExpect(jsonPath("$.totalPages").doesNotExist())
+                .andDo(document("community/get-posts"));
 
         verify(communityPostQueryService).getPosts(
                 USER_ID,
@@ -140,6 +149,30 @@ class CommunityPostControllerTest {
                 .andExpect(jsonPath("$.content").value("내용"));
 
         verify(communityPostQueryService).getPost(USER_ID, 1L);
+    }
+
+    @Test
+    @DisplayName("첨부파일 다운로드는 안전한 응답 헤더와 파일 본문을 반환한다")
+    void downloadsAttachment() throws Exception {
+        given(communityPostQueryService.downloadAttachment(USER_ID, 10L, 20L))
+                .willReturn(new CommunityAttachmentDownload(
+                        "화면.png",
+                        "image/png",
+                        3L,
+                        new ByteArrayResource(new byte[]{1, 2, 3})
+                ));
+
+        mockMvc.perform(get("/api/v1/community/posts/{postId}/attachments/{attachmentId}", 10L, 20L)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string(HttpHeaders.CONTENT_TYPE, "image/png"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("X-Content-Type-Options", "nosniff"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .bytes(new byte[]{1, 2, 3}));
+
+        verify(communityPostQueryService).downloadAttachment(USER_ID, 10L, 20L);
     }
 
     @Test

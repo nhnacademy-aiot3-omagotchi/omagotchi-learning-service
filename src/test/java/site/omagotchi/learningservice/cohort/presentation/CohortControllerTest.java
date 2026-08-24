@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.restdocs.test.autoconfigure.AutoConfigureRestDocs;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
@@ -12,9 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.cohort.application.CohortAttendancePolicyService;
-import site.omagotchi.learningservice.cohort.application.CohortAuditLogService;
 import site.omagotchi.learningservice.cohort.application.CohortManagerService;
-import site.omagotchi.learningservice.cohort.application.result.CohortAuditLogResponse;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
 import site.omagotchi.learningservice.cohort.application.CohortService;
 import site.omagotchi.learningservice.cohort.application.JoinCodeService;
@@ -36,6 +35,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -49,6 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @EnableConfigurationProperties(JwtProperties.class)
 @ActiveProfiles("test")
+@AutoConfigureRestDocs(outputDir = "target/generated-snippets")
 @DisplayName("기수 API")
 class CohortControllerTest {
 
@@ -73,9 +74,6 @@ class CohortControllerTest {
     @MockitoBean
     private CohortAttendancePolicyService attendancePolicyService;
 
-    @MockitoBean
-    private CohortAuditLogService auditLogService;
-
     @Test
     @DisplayName("출결 정책 조회 요청을 현재 사용자로 서비스에 위임한다")
     void getsAttendancePolicy() throws Exception {
@@ -90,7 +88,8 @@ class CohortControllerTest {
                 .andExpect(jsonPath("$.scheduledStartTime").value("09:00:00"))
                 .andExpect(jsonPath("$.scheduledEndTime").value("18:00:00"))
                 .andExpect(jsonPath("$.absenceCutoffTime").value("10:00:00"))
-                .andExpect(jsonPath("$.allowedAwayMinutes").value(30));
+                .andExpect(jsonPath("$.allowedAwayMinutes").value(30))
+                .andDo(document("cohort/get-attendance-policy"));
 
         verify(attendancePolicyService).getPolicy(COHORT_ID, USER_ID);
     }
@@ -137,38 +136,6 @@ class CohortControllerTest {
                 ),
                 USER_ID
         );
-    }
-
-    @Test
-    @DisplayName("감사 로그 조회 요청을 현재 사용자로 서비스에 위임한다")
-    void getsAuditLogs() throws Exception {
-        given(auditLogService.getAuditLogs(COHORT_ID, USER_ID))
-                .willReturn(java.util.List.of(new CohortAuditLogResponse(
-                        1L,
-                        COHORT_ID,
-                        USER_ID,
-                        "COHORT_MEMBERSHIP",
-                        10L,
-                        "CHANGE_MEMBER_ROLE",
-                        null,
-                        null,
-                        "운영자 변경",
-                        "manual-001",
-                        OffsetDateTime.parse("2026-08-10T09:00:00+09:00")
-                )));
-
-        mockMvc.perform(get("/api/v1/cohorts/{cohortId}/audit-logs", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(1))
-                .andExpect(jsonPath("$[0].cohortId").value(COHORT_ID))
-                .andExpect(jsonPath("$[0].targetType").value("COHORT_MEMBERSHIP"))
-                .andExpect(jsonPath("$[0].targetId").value(10))
-                .andExpect(jsonPath("$[0].action").value("CHANGE_MEMBER_ROLE"))
-                .andExpect(jsonPath("$[0].reason").value("운영자 변경"))
-                .andExpect(jsonPath("$[0].requestId").value("manual-001"));
-
-        verify(auditLogService).getAuditLogs(COHORT_ID, USER_ID);
     }
 
     private CohortAttendancePolicyResponse policyResponse() {

@@ -11,6 +11,7 @@ import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
+import site.omagotchi.learningservice.gamification.application.DailyQuestService;
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.result.DailyStudyRecordsResult;
 import site.omagotchi.learningservice.study.application.result.DailyStudySecondsResult;
@@ -49,6 +50,9 @@ class StudyRecordQueryServiceTest {
 
     @Mock
     private CohortAccessService cohortAccessService;
+
+    @Mock
+    private DailyQuestService dailyQuestService;
 
     @Mock
     private Clock clock;
@@ -166,6 +170,7 @@ class StudyRecordQueryServiceTest {
                 () -> assertEquals(first.getStartTime(), result.records().getFirst().startTime()),
                 () -> assertEquals(second.getStartTime(), result.records().getLast().startTime())
         );
+        verifyNoInteractions(dailyQuestService);
     }
 
     @Test
@@ -188,6 +193,26 @@ class StudyRecordQueryServiceTest {
                 () -> assertEquals(0L, result.totalStudySeconds()),
                 () -> assertTrue(result.records().isEmpty())
         );
+        verifyNoInteractions(dailyQuestService);
+    }
+
+    @Test
+    @DisplayName("오늘 일간 기록을 조회하면 학습 돌아보기 퀘스트 진행")
+    void progressesRoutineReviewQuestWhenCurrentDailyRecordsAreViewed() {
+        LocalDate currentAggregationDate = LocalDate.of(2000, Month.JANUARY, 15);
+        given(clock.instant()).willReturn(JANUARY_15_CURRENT_TIME);
+        given(studyRecordQueryRepository.findDailyRecords(
+                COHORT_MEMBERSHIP_ID,
+                currentAggregationDate
+        )).willReturn(List.of());
+
+        studyRecordQueryService.getDailyRecords(
+                USER_ID,
+                COHORT_ID,
+                currentAggregationDate
+        );
+
+        verify(dailyQuestService).handleRoutineReviewed(USER_ID);
     }
 
     @Test
@@ -207,6 +232,7 @@ class StudyRecordQueryServiceTest {
 
         assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
         verifyNoInteractions(studyRecordQueryRepository);
+        verifyNoInteractions(dailyQuestService);
     }
 
     @Test

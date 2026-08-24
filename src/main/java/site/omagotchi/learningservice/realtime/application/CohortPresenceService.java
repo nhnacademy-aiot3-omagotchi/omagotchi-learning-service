@@ -35,6 +35,7 @@ public class CohortPresenceService {
     private final SimpMessagingTemplate messagingTemplate;
     private final CohortAccessService cohortAccessService;
     private final PresenceProperties presenceProperties;
+    private final PresenceUserProfileQuery presenceUserProfileQuery;
 
     /**
      * WebSocket CONNECT 성공 시 session hash, user session set, cohort online set을 갱신한다.
@@ -113,12 +114,33 @@ public class CohortPresenceService {
             return new CohortPresenceSnapshot(cohortId, java.util.List.of(), now());
         }
 
-        var users = userIds.stream()
+        var activeUsers = userIds.stream()
                 .map(userId -> cleanupAndSnapshotUser(userId, cohortId))
                 .flatMap(Optional::stream)
                 .sorted(Comparator.comparing(snapshot -> snapshot.userId().toString()))
                 .toList();
+        Map<UUID, PresenceUserProfile> profiles = presenceUserProfileQuery.findByUserIds(
+                activeUsers.stream().map(PresenceUserSnapshot::userId).toList()
+        );
+        var users = activeUsers.stream()
+                .map(snapshot -> enrichedSnapshot(snapshot, profiles.get(snapshot.userId())))
+                .toList();
         return new CohortPresenceSnapshot(cohortId, users, now());
+    }
+
+    private PresenceUserSnapshot enrichedSnapshot(
+            PresenceUserSnapshot snapshot,
+            PresenceUserProfile profile
+    ) {
+        if (profile == null) {
+            return snapshot;
+        }
+        return new PresenceUserSnapshot(
+                snapshot.userId(),
+                profile.nickname(),
+                profile.currentCharacter(),
+                snapshot.status()
+        );
     }
 
     private Optional<PresenceUserSnapshot> cleanupAndSnapshotUser(String userId, Long cohortId) {

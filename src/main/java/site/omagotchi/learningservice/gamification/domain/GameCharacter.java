@@ -36,6 +36,9 @@ public class GameCharacter {
     @Column(length = 255)
     private String description;
 
+    @Column(name = "asset_key", nullable = false, length = 30)
+    private String assetKey;
+
     @Column(nullable = false)
     private boolean active;
 
@@ -47,11 +50,12 @@ public class GameCharacter {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public static GameCharacter create(String code, String name, String description) {
+    public static GameCharacter create(String code, String name, String description, String assetKey) {
         GameCharacter gameCharacter = new GameCharacter();
         gameCharacter.code = code;
         gameCharacter.name = name;
         gameCharacter.description = description;
+        gameCharacter.assetKey = assetKey;
         gameCharacter.active = true;
         return gameCharacter;
     }

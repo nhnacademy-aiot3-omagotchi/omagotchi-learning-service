@@ -290,10 +290,6 @@ class StudyStatisticsControllerTest {
                     .andExpect(jsonPath("$.from").value("2000-01-01"))
                     .andExpect(jsonPath("$.to").value("2000-01-30"))
                     .andExpect(jsonPath("$.calculatedAt").value("2000-01-30T03:00:00Z"))
-                    .andExpect(jsonPath("$.page").value(0))
-                    .andExpect(jsonPath("$.size").value(20))
-                    .andExpect(jsonPath("$.totalElements").value(2L))
-                    .andExpect(jsonPath("$.totalPages").value(1))
                     .andExpect(jsonPath("$.items.length()").value(2))
                     .andExpect(jsonPath("$.items[0].cohortMembershipId").value(101L))
                     .andExpect(jsonPath("$.items[0].userId")
@@ -307,7 +303,14 @@ class StudyStatisticsControllerTest {
                     .andExpect(jsonPath("$.items[1].lastStudiedAt").doesNotExist())
                     .andExpect(jsonPath("$.items[0].name").doesNotExist())
                     .andExpect(jsonPath("$.items[0].email").doesNotExist())
-                    .andExpect(jsonPath("$.search").doesNotExist());
+                    .andExpect(jsonPath("$.search").doesNotExist())
+                    .andExpect(jsonPath("$.page.number").value(0))
+                    .andExpect(jsonPath("$.page.size").value(20))
+                    .andExpect(jsonPath("$.page.totalElements").value(2L))
+                    .andExpect(jsonPath("$.page.totalPages").value(1))
+                    .andExpect(jsonPath("$.size").doesNotExist())
+                    .andExpect(jsonPath("$.totalElements").doesNotExist())
+                    .andExpect(jsonPath("$.totalPages").doesNotExist());
         }
 
         @Test

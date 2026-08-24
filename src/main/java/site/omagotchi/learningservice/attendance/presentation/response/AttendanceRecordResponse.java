@@ -11,7 +11,6 @@ import java.time.LocalDate;
  */
 public record AttendanceRecordResponse(
         Long id,
-        Long cohortMembershipId,
         LocalDate attendanceDate,
         AttendanceStatus autoStatus,
         AttendanceStatus finalStatus,
@@ -27,7 +26,6 @@ public record AttendanceRecordResponse(
     public static AttendanceRecordResponse from(AttendanceRecordResult result) {
         return new AttendanceRecordResponse(
                 result.id(),
-                result.cohortMembershipId(),
                 result.attendanceDate(),
                 result.autoStatus(),
                 result.finalStatus(),

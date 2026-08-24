@@ -16,6 +16,8 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
 import site.omagotchi.learningservice.study.application.command.UpdateStudyRecordCommand;
+import site.omagotchi.learningservice.study.application.event.StudyCompletedEvent;
+import site.omagotchi.learningservice.study.application.port.StudyEventPublisher;
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
@@ -69,6 +71,9 @@ class StudyRecordCommandServiceTest {
     @Mock
     private StudyWriteLock studyWriteLock;
 
+    @Mock
+    private StudyEventPublisher studyEventPublisher;
+
     @InjectMocks
     private StudyRecordCommandService studyRecordCommandService;
 
@@ -86,7 +91,7 @@ class StudyRecordCommandServiceTest {
             );
             given(clock.instant()).willReturn(CURRENT_TIME);
             given(studyRecordRepository.save(any(StudyRecord.class)))
-                    .willAnswer(invocation -> invocation.getArgument(0));
+                    .willAnswer(invocation -> savedStudyRecord(invocation.getArgument(0)));
 
             StudyRecordResult result = studyRecordCommandService.create(
                     USER_ID,
@@ -116,6 +121,11 @@ class StudyRecordCommandServiceTest {
                     () -> assertEquals(3_600L, saved.getStudySeconds()),
                     () -> assertEquals(saved.getStudySeconds(), result.studySeconds())
             );
+            verify(studyEventPublisher).publishCompleted(new StudyCompletedEvent(
+                    USER_ID,
+                    STUDY_RECORD_ID,
+                    END_TIME
+            ));
         }
 
         @Test
@@ -157,7 +167,7 @@ class StudyRecordCommandServiceTest {
             );
             given(clock.instant()).willReturn(CURRENT_TIME);
             given(studyRecordRepository.save(any(StudyRecord.class)))
-                    .willAnswer(invocation -> invocation.getArgument(0));
+                    .willAnswer(invocation -> savedStudyRecord(invocation.getArgument(0)));
 
             StudyRecordResult result = studyRecordCommandService.create(
                     USER_ID,
@@ -610,5 +620,10 @@ class StudyRecordCommandServiceTest {
         ReflectionTestUtils.setField(entity, "id", STUDY_RECORD_ID);
         ReflectionTestUtils.setField(entity, "version", 0L);
         return entity;
+    }
+
+    private StudyRecord savedStudyRecord(StudyRecord record) {
+        ReflectionTestUtils.setField(record, "id", STUDY_RECORD_ID);
+        return record;
     }
 }

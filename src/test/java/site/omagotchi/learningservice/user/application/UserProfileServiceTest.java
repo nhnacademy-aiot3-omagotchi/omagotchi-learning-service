@@ -16,6 +16,8 @@ import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+import site.omagotchi.learningservice.gamification.application.DailyQuestService;
+import site.omagotchi.learningservice.gamification.application.GamificationErrorCode;
 import site.omagotchi.learningservice.gamification.domain.AdvancementStage;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
 import site.omagotchi.learningservice.gamification.domain.LevelPolicy;
@@ -76,6 +78,9 @@ class UserProfileServiceTest {
     private CharacterGrowthService characterGrowthService;
 
     @Mock
+    private DailyQuestService dailyQuestService;
+
+    @Mock
     private DateTimeProvider dateTimeProvider;
 
     @InjectMocks
@@ -128,9 +133,11 @@ class UserProfileServiceTest {
                 () -> assertEquals(2, result.currentCharacter().level()),
                 () -> assertEquals(150L, result.currentCharacter().currentExp()),
                 () -> assertEquals(300L, result.currentCharacter().requiredExp()),
-                () -> assertNull(result.currentCharacter().type()),
-                () -> assertNull(result.currentCharacter().assetKey())
+                () -> assertEquals("night", result.currentCharacter().type()),
+                () -> assertEquals("pistachio", result.currentCharacter().colorId()),
+                () -> assertEquals("night/pistachio", result.currentCharacter().assetKey())
         );
+        verify(dailyQuestService).handleCharacterChecked(USER_ID);
     }
 
     @Test
@@ -153,34 +160,38 @@ class UserProfileServiceTest {
                 () -> assertNull(result.approvedCohort()),
                 () -> assertNull(result.currentCharacter())
         );
-        verifyNoInteractions(studyRecordQueryRepository, attendanceRecordRepository);
+        verifyNoInteractions(studyRecordQueryRepository, attendanceRecordRepository, dailyQuestService);
     }
 
+    /**
+     * 닉네임 규칙(정규화·중복·금칙어)의 소유자는 Gamification이다.
+     * 이 Feature는 위임과 응답 계약 변환만 책임지므로 그것만 검증한다.
+     * 규칙 자체의 검증은 CharacterGrowthServiceTest에 있다.
+     */
     @Test
-    @DisplayName("닉네임을 trim하고 대표 캐릭터 별명을 변경한다")
-    void updatesNickname() {
-        UserCharacter character = representativeCharacter("오마");
-        given(characterGrowthService.requireRepresentativeCharacter(USER_ID)).willReturn(character);
+    @DisplayName("닉네임 변경을 Gamification에 위임하고 결과를 응답 계약으로 감싼다")
+    void delegatesNicknameChangeToGamification() {
+        given(characterGrowthService.changeRepresentativeNickname(USER_ID, "  새이름  "))
+                .willReturn("새이름");
 
         var result = userProfileService.updateNickname(USER_ID, "  새이름  ");
 
-        assertAll(
-                () -> assertEquals("새이름", result.nickname()),
-                () -> assertEquals("새이름", character.getNickname())
-        );
-        verify(characterGrowthService).requireRepresentativeCharacter(USER_ID);
+        assertEquals("새이름", result.nickname());
+        verify(characterGrowthService).changeRepresentativeNickname(USER_ID, "  새이름  ");
     }
 
     @Test
-    @DisplayName("닉네임은 2~12자로 제한한다")
-    void rejectsInvalidNicknameLength() {
+    @DisplayName("Gamification이 던진 닉네임 오류를 그대로 전달한다")
+    void propagatesNicknameErrorFromGamification() {
+        given(characterGrowthService.changeRepresentativeNickname(USER_ID, "새이름"))
+                .willThrow(new BusinessException(GamificationErrorCode.DUPLICATE_NICKNAME));
+
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> userProfileService.updateNickname(USER_ID, " a ")
+                () -> userProfileService.updateNickname(USER_ID, "새이름")
         );
 
-        assertSame(UserProfileErrorCode.INVALID_NICKNAME, exception.getErrorCode());
-        verifyNoInteractions(characterGrowthService);
+        assertSame(GamificationErrorCode.DUPLICATE_NICKNAME, exception.getErrorCode());
     }
 
     private CohortMembership activeMembership() {
@@ -206,7 +217,7 @@ class UserProfileServiceTest {
     }
 
     private UserCharacter representativeCharacter(String nickname) {
-        UserCharacter character = UserCharacter.representative(USER_ID, 1L, nickname);
+        UserCharacter character = UserCharacter.representative(USER_ID, 1L, nickname, "pistachio");
         ReflectionTestUtils.setField(character, "id", 30L);
         ReflectionTestUtils.setField(character, "totalXp", 250L);
         ReflectionTestUtils.setField(character, "level", 2);
@@ -215,7 +226,7 @@ class UserProfileServiceTest {
     }
 
     private GameCharacter gameCharacter() {
-        GameCharacter gameCharacter = GameCharacter.create("NIGHT_CLASS", "야간반", "기본 캐릭터");
+        GameCharacter gameCharacter = GameCharacter.create("NIGHT_CLASS", "야간반", "기본 캐릭터", "night");
         ReflectionTestUtils.setField(gameCharacter, "id", 1L);
         return gameCharacter;
     }

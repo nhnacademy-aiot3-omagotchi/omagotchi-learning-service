@@ -8,6 +8,7 @@ import site.omagotchi.learningservice.study.domain.QTimerRun;
 import site.omagotchi.learningservice.study.domain.TimerRun;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,6 +38,33 @@ public class TimerRunQueryDslRepository implements TimerRunQueryRepository {
                 .fetchOne();
 
         return Optional.ofNullable(result);
+    }
+
+    /*
+     * SELECT tr.*
+     * FROM learning_service.timer_runs tr
+     * WHERE tr.cohort_membership_id IN (:cohortMembershipIds)
+     *   AND tr.ended_at IS NULL
+     * ORDER BY tr.cohort_membership_id ASC,
+     *          tr.started_at ASC,
+     *          tr.id ASC;
+     */
+    @Override
+    public List<TimerRun> findActiveByCohortMembershipIds(
+            Collection<Long> cohortMembershipIds
+    ) {
+        return queryFactory
+                .selectFrom(timerRun)
+                .where(
+                        timerRun.cohortMembershipId.in(cohortMembershipIds),
+                        timerRun.endedAt.isNull()
+                )
+                .orderBy(
+                        timerRun.cohortMembershipId.asc(),
+                        timerRun.startedAt.asc(),
+                        timerRun.id.asc()
+                )
+                .fetch();
     }
 
     /*

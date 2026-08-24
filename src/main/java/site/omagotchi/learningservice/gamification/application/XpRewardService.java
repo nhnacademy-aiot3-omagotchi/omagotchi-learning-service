@@ -6,14 +6,13 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.gamification.application.result.XpRewardResult;
 import site.omagotchi.learningservice.gamification.domain.AdvancementHistory;
 import site.omagotchi.learningservice.gamification.domain.AdvancementStage;
-import site.omagotchi.learningservice.gamification.domain.GamificationErrorCode;
 import site.omagotchi.learningservice.gamification.domain.LevelPolicy;
 import site.omagotchi.learningservice.gamification.domain.LevelState;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
 import site.omagotchi.learningservice.gamification.domain.XpSourceType;
 import site.omagotchi.learningservice.gamification.domain.XpTransaction;
 import site.omagotchi.learningservice.gamification.infrastructure.AdvancementHistoryRepository;
-import site.omagotchi.learningservice.gamification.infrastructure.UserCharacterRepository;
+import site.omagotchi.learningservice.gamification.application.port.UserCharacterQueryRepository;
 import site.omagotchi.learningservice.gamification.infrastructure.XpTransactionRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
@@ -25,7 +24,7 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class XpRewardService {
 
-    private final UserCharacterRepository userCharacterRepository;
+    private final UserCharacterQueryRepository userCharacterQueryRepository;
     private final XpTransactionRepository xpTransactionRepository;
     private final AdvancementHistoryRepository advancementHistoryRepository;
     private final CharacterGrowthService characterGrowthService;
@@ -55,8 +54,7 @@ public class XpRewardService {
     ) {
         UserCharacter representative = characterGrowthService.requireRepresentativeCharacter(userId);
         // EXP와 레벨은 user_character 한 행에 모이므로 지급 시점에 잠금
-        UserCharacter character = userCharacterRepository.findWithLockById(representative.getId())
-                .orElseThrow(() -> new BusinessException(GamificationErrorCode.REPRESENTATIVE_CHARACTER_NOT_FOUND));
+        UserCharacter character = userCharacterQueryRepository.getForUpdate(representative.getId());
         List<LevelPolicy> policies = characterGrowthService.requireLevelPolicies();
         XpTransaction existingTransaction = xpTransactionRepository
                 .findBySourceTypeAndSourceId(sourceType, sourceId)

@@ -6,7 +6,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.util.unit.DataSize;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentFile;
-import site.omagotchi.learningservice.community.domain.CommunityErrorCode;
+import site.omagotchi.learningservice.community.application.CommunityErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.nio.file.Files;
@@ -50,6 +50,35 @@ class LocalCommunityAttachmentStorageTest {
                 () -> assertEquals(file.getSize(), result.sizeBytes()),
                 () -> assertTrue(Files.exists(tempDir.resolve(result.storageKey())))
         );
+    }
+
+    @Test
+    @DisplayName("저장 키로 첨부파일을 안전하게 읽는다")
+    void loadsStoredAttachment() throws Exception {
+        LocalCommunityAttachmentStorage storage = storage();
+        MockMultipartFile file = new MockMultipartFile(
+                "attachments",
+                "image.png",
+                "image/png",
+                pngBytes()
+        );
+        var stored = storage.store(attachmentFile(file, 0));
+
+        var resource = storage.load(stored.storageKey());
+
+        assertTrue(resource.exists());
+        assertEquals(file.getSize(), resource.contentLength());
+    }
+
+    @Test
+    @DisplayName("저장 루트 밖의 다운로드 경로를 거절한다")
+    void rejectsDownloadPathTraversal() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> storage().load("../secret.png")
+        );
+
+        assertEquals(CommunityErrorCode.INVALID_ATTACHMENT, exception.getErrorCode());
     }
 
     @Test

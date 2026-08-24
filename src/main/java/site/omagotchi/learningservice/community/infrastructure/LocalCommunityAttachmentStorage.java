@@ -1,11 +1,13 @@
 package site.omagotchi.learningservice.community.infrastructure;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentFile;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentStorage;
 import site.omagotchi.learningservice.community.application.attachment.StoredCommunityAttachment;
-import site.omagotchi.learningservice.community.domain.CommunityErrorCode;
+import site.omagotchi.learningservice.community.application.CommunityErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.io.IOException;
@@ -75,6 +77,15 @@ public class LocalCommunityAttachmentStorage implements CommunityAttachmentStora
         } catch (IOException exception) {
             throw new BusinessException(CommunityErrorCode.ATTACHMENT_STORAGE_FAILED, exception);
         }
+    }
+
+    @Override
+    public Resource load(String storageKey) {
+        Path path = targetPath(storageKey);
+        if (!Files.isRegularFile(path) || !Files.isReadable(path)) {
+            throw new BusinessException(CommunityErrorCode.ATTACHMENT_STORAGE_FAILED);
+        }
+        return new FileSystemResource(path);
     }
 
     private String safeOriginalFileName(String originalFileName) {

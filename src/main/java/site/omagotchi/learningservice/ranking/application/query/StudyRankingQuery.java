@@ -4,7 +4,6 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 
 public record StudyRankingQuery(
-        StudyRankingPeriod period,
         Integer maxRank
 ) {
 

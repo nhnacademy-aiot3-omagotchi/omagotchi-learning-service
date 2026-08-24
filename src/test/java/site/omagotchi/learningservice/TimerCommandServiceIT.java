@@ -6,10 +6,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.gamification.application.DailyQuestService;
 import site.omagotchi.learningservice.study.application.TimerCommandService;
 import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.port.TimerRunRepository;
@@ -35,6 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 
 @Import(TestcontainersConfiguration.class)
 @ActiveProfiles("test")
@@ -69,11 +73,17 @@ class TimerCommandServiceIT {
     @Autowired
     private StudyRecordJpaRepository studyRecordJpaRepository;
 
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
     @MockitoBean
     private CohortAccessService cohortAccessService;
 
     @MockitoBean
     private Clock clock;
+
+    @MockitoBean
+    private DailyQuestService dailyQuestService;
 
     @MockitoSpyBean
     private StudyRecordRepository studyRecordRepository;
@@ -82,6 +92,10 @@ class TimerCommandServiceIT {
     void setUp() {
         studyRecordJpaRepository.deleteAllInBatch();
         timerRunJpaRepository.deleteAllInBatch();
+        CohortMembershipTestFixture.ensureActiveMemberships(
+                jdbcTemplate,
+                COHORT_MEMBERSHIP_ID
+        );
         given(cohortAccessService.requireActiveMembershipId(COHORT_ID, USER_ID))
                 .willReturn(COHORT_MEMBERSHIP_ID);
     }
@@ -158,22 +172,33 @@ class TimerCommandServiceIT {
     void persistsTimerAtSecondsAndStudyRecordAtMinutes() {
         Instant startedAt = Instant.parse("2000-01-01T00:00:20Z");
         Instant endedAt = Instant.parse("2000-01-01T00:01:40Z");
-        given(clock.instant()).willReturn(startedAt, endedAt);
+        given(clock.instant()).willReturn(startedAt);
 
         TimerStateResult started = timerCommandService.start(
                 USER_ID,
                 COHORT_ID
         );
+
+        given(clock.instant()).willReturn(endedAt);
         timerCommandService.stop(
                 USER_ID,
                 COHORT_ID,
                 started.timerRunId()
         );
 
+        verify(dailyQuestService, timeout(5_000).times(1))
+                .handleStudyCompleted(USER_ID);
+
         TimerRun endedTimer = timerRunJpaRepository
                 .findById(started.timerRunId())
                 .orElseThrow();
         StudyRecord studyRecord = studyRecordJpaRepository.findAll().getFirst();
+        Integer receiptCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM learning_service.gamification_event_receipts
+                WHERE event_type = 'STUDY_COMPLETED'
+                  AND source_id = ?
+                """, Integer.class, started.timerRunId().toString());
         assertAll(
                 () -> assertEquals(startedAt, endedTimer.getStartedAt()),
                 () -> assertEquals(endedAt, endedTimer.getEndedAt()),
@@ -187,7 +212,8 @@ class TimerCommandServiceIT {
                         Instant.parse("2000-01-01T00:02:00Z"),
                         studyRecord.getEndTime()
                 ),
-                () -> assertEquals(80L, studyRecord.getStudySeconds())
+                () -> assertEquals(80L, studyRecord.getStudySeconds()),
+                () -> assertEquals(1, receiptCount)
         );
     }
 

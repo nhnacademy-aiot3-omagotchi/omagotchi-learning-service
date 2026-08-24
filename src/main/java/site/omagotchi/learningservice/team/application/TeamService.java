@@ -11,7 +11,7 @@ import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
-import site.omagotchi.learningservice.team.application.port.AccountReader;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.application.port.TeamRepository;
 
@@ -42,7 +42,7 @@ public class TeamService {
     private final TeamMemberRepository teamMemberRepository;
     private final TeamAccessSupport accessSupport;
     private final CohortMembershipQueryService cohortMembershipQueryService;
-    private final AccountReader accountReader;
+    private final IdentityAccountClient identityAccountClient;
 
     /**
      * 팀을 생성하고 생성자를 MASTER로 등록한다 (GR-01, GR-02, GR-18, GR-21).
@@ -138,7 +138,7 @@ public class TeamService {
                 .toList();
 
         Map<Long, UUID> userIdsByMembership = cohortMembershipQueryService.findUserIds(membershipIds);
-        Map<UUID, String> displayNames = accountReader.findDisplayNames(userIdsByMembership.values());
+        Map<UUID, String> displayNames = identityAccountClient.findDisplayNames(userIdsByMembership.values());
 
         return members.stream()
                 .sorted(Comparator

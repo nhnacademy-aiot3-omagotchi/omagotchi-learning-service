@@ -44,7 +44,7 @@ public class ThresholdRuleChangedPublisher {
 
         try{
             rabbitTemplate.convertAndSend(
-                    RabbitTopologyConfig.EXCHANGE_RULE_CHANGED,
+                    ThresholdRuleChangeConfig.EXCHANGE_RULE_CHANGED,
                     "",
                     ThresholdRuleChangedMessage.from(event),
                     correlation

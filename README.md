@@ -46,6 +46,21 @@ cp .env.local.example .env.local
 - Eureka: 기본 비활성화
 - Health: <http://localhost:8084/actuator/health>
 
+### Testcontainers 기반 E2E 연동 실행
+
+실제 Learning Service를 임시 PostgreSQL과 함께 띄워 Frontend BFF·Gateway 연동을 확인할 때는
+`E2eLearningServiceApplication`을 사용한다. 이 실행기는 PostgreSQL만 자동으로 준비하며,
+Redis·RabbitMQ·Identity·Gateway·View는 검증 범위에 따라 별도로 필요하다.
+
+```bash
+./mvnw spring-boot:test-run \
+  -Dspring-boot.run.main-class=site.omagotchi.learningservice.E2eLearningServiceApplication \
+  -Dspring-boot.run.profiles=local
+```
+
+정의, IntelliJ 설정, 전체 서비스 실행 순서와 오류별 해결 방법은
+[Learning Service E2E 실행·검증 가이드](docs/testing/Learning-Service-E2E-Guide.md)를 따른다.
+
 ### JWT Public Key
 
 - 용도: Identity Access JWT 검증
@@ -60,6 +75,18 @@ cp .env.local.example .env.local
 - RabbitMQ: Rule 품질 데이터 소비·복구 Queue
 - 첨부파일: `COMMUNITY_ATTACHMENT_STORAGE_ROOT`
 - Telegram: 사용자 연동·Webhook
+
+### Identity Service 연동
+
+- 용도: 팀원 계정 상태·표시 이름 조회
+- 호출 방식: Gateway를 경유하지 않는 직접 HTTP 호출
+- 인증: Learning–Identity 관계 전용 HTTP Basic Credential
+- 주소 선택
+  - `local`·`dev`: 환경 파일의 고정 Identity 주소
+  - `prod`: Eureka의 `identity-service`와 Client-side Load Balancing
+- 장애 변환
+  - 연결 실패·Timeout·Discovery 부재·`5xx`: `503 Service Unavailable`
+  - 미등록 오류 Code·응답 계약 위반: `502 Bad Gateway`
 
 ## 환경 Profile
 
@@ -92,7 +119,9 @@ cp .env.local.example .env.local
 - `/api/v1/threshold-rules/**`: 센서 임계치 기준
 
 - 최신 세부 계약: Spring REST Docs 기반 산출물로 관리 예정
-- `docs/api/`: 과거 작업 참고 자료, 최신 계약 근거로 사용 금지
+- Frontend 연동 구현 요청서: [`docs/api/Frontend-Learning-Integration-Task-Brief.md`](docs/api/Front-LearningService/Frontend-Learning-Integration-Task-Brief.md)
+- Frontend 상세 API 계약: [`docs/api/Frontend-Learning-API-Integration-Handoff.md`](docs/api/Front-LearningService/Frontend-Learning-API-Integration-Handoff.md)
+- 위 인수인계 문서를 제외한 기존 `docs/api/` 문서는 과거 작업 참고 자료이며 최신 계약 근거로 사용하지 않음
 
 ## Database·Migration
 
@@ -135,6 +164,8 @@ cp .env.local.example .env.local
 - 사용자 기능: `community`, `gamification`, `ranking`, `user`
 - 연동: `realtime`, `telegram`, `rule`
 - 공통: `global.security`, `global.exception`, `global.config`, `global.logging`
+- 팀 영속성: `team.infrastructure.persistence`
+- Identity 연동: `team.infrastructure.identity`
 - 내부 계층: `domain` → `application` → `infrastructure`·`presentation`
 
 ## 운영 원칙

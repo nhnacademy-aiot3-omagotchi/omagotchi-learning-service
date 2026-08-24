@@ -1,0 +1,163 @@
+@baseUrl = http://localhost:8084
+
+### 점유 강제 종료 API (MR-21)
+### 점유자 기수의 매니저가 점유를 강제 종료한다. 반납(/release)과 달리 공실 알림을
+### 발송하지 않고 대기 신청을 물리 삭제한다 — RoomOccupancyLifecycleService.forceRelease 참고.
+### occupancy-api.http(cohortId=1, spaceId=1~5), vacancy-alert-api.http(cohortId=2,
+### spaceId=10/11)와 겹치지 않도록 cohortId=3/4, spaceId=20/21을 쓴다.
+
+### =========================================================
+### 사전 준비 (psql로 직접 INSERT)
+###
+### -- 기수 A(3): 점유자·담당 매니저·일반 학생·공실 알림 대기자가 소속된 기수.
+### -- 기수 B(4): "담당하지 않는 기수의 매니저" 403 케이스(명세 04 §5)를 재현하기 위한
+### -- 무관한 기수 — otherManager는 기수 A와 아무 관계가 없다.
+### INSERT INTO learning_service.cohorts
+###   (id, name, start_date, end_date, status, created_by_user_id)
+### VALUES
+###   (3, '강제 종료 테스트 기수 A', '2026-01-01', '2026-12-31', 'ACTIVE', gen_random_uuid()),
+###   (4, '강제 종료 테스트 기수 B', '2026-01-01', '2026-12-31', 'ACTIVE', gen_random_uuid());
+###
+### INSERT INTO learning_service.cohort_memberships
+###   (cohort_id, user_id, role, status, processed_at, processed_by_user_id)
+### VALUES
+###   (3, '40404040-4040-4040-4040-404040404040', 'STUDENT', 'ACTIVE', now(), gen_random_uuid()),
+###   (3, '50505050-5050-5050-5050-505050505051', 'MANAGER', 'ACTIVE', now(), gen_random_uuid()),
+###   (3, '60606060-6060-6060-6060-606060606060', 'STUDENT', 'ACTIVE', now(), gen_random_uuid()),
+###   (3, '80808080-8080-8080-8080-808080808080', 'STUDENT', 'ACTIVE', now(), gen_random_uuid()),
+###   (4, '70707070-7070-7070-7070-707070707070', 'MANAGER', 'ACTIVE', now(), gen_random_uuid());
+###
+### -- occupier가 방을 점유하려면 재실이 필요하다. 기수 B는 아무도 체크인하지 않으므로
+### -- 출결 정책이 필요 없다.
+### INSERT INTO learning_service.cohort_attendance_policies
+###   (cohort_id, timezone, scheduled_start_time, scheduled_end_time, updated_by_user_id)
+### VALUES
+###   (3, 'Asia/Seoul', '09:00', '18:00', gen_random_uuid());
+###
+### -- spaceId=20: occupier가 점유해 강제 종료 대상이 될 회의실
+### -- spaceId=21: 아무도 점유하지 않는 채로 남겨 "활성 점유 없음(409)" 케이스에 쓴다
+### INSERT INTO learning_service.spaces
+###   (id, name, space_type, capacity, status)
+### VALUES
+###   (20, '강제 종료 테스트 회의실 A', 'MEETING', 4, 'ACTIVE'),
+###   (21, '강제 종료 테스트 회의실 B(항상 빈 방)', 'MEETING', 4, 'ACTIVE');
+###
+### SELECT setval(
+###   pg_get_serial_sequence('learning_service.cohorts', 'id'),
+###   (SELECT MAX(id) FROM learning_service.cohorts));
+###
+### SELECT setval(
+###   pg_get_serial_sequence('learning_service.spaces', 'id'),
+###   (SELECT MAX(id) FROM learning_service.spaces));
+###
+### 확인:
+### SELECT id, cohort_id, user_id, role, status FROM learning_service.cohort_memberships
+###  WHERE cohort_id IN (3, 4) ORDER BY id;
+### SELECT id, name, status FROM learning_service.spaces WHERE id IN (20, 21) ORDER BY id;
+###
+### 주의: 순서 의존이다. 1번부터 차례로 실행할 것.
+### 토큰은 로컬 secrets/jwt-private.pem으로 서명했고 secrets/jwt-public.pem으로 검증되니
+### .env.local에 JWT_PUBLIC_KEY_LOCATION=file:./secrets/jwt-public.pem이 설정돼 있어야 통과한다.
+### exp가 지나면(발급 후 24시간) 401 AUTH_AUTHENTICATION_REQUIRED로 바뀌니 새로 발급해야 한다:
+###   scripts/issue-test-jwt.sh --sub {{occupier}}  (manager·student·otherManager·waiter도 같은 방식)
+### =========================================================
+
+@occupier = 40404040-4040-4040-4040-404040404040
+@manager = 50505050-5050-5050-5050-505050505051
+@student = 60606060-6060-6060-6060-606060606060
+@otherManager = 70707070-7070-7070-7070-707070707070
+@waiter = 80808080-8080-8080-8080-808080808080
+
+@occupierToken = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiI0MDQwNDA0MC00MDQwLTQwNDAtNDA0MC00MDQwNDA0MDQwNDAiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NzIxMzMyMiwiZXhwIjoxNzg3Mjk5NzIyLCJqdGkiOiI0MzQ1OTRkMC1kZjUzLTQ5Y2QtYjc0Yi0yMGU4ZWJlMGY0NDEifQ.QYhAGbvzLZp5TuN9Q1kmoiqwXir2y9UHf8zlpwWo1-moXXSllCG3R5sXnICJRGkIzFV1vkevnVQln1VwaUzmgBCgrlLuXgNL0Uq-1j8QVcKcD3rl0hrm5mb2F90KAqHLi5N0kowfDznr-h5QdZhtpIuenHJeiW0bBS12JEA7gth1P2V9BQtztMTrMBP8zX9GxnU6KoIn734qtXE5bFadTYtvg9HB5HVH-GW68V9ukdiyvVeYELW714S3phXAnx06D8oeHKSwfdD4K5GvacHE5oLV-o6ZzxKjBGQ07neOziDE3ttyfTQpme1sPaSXgHYrBoP43DcFqiG0LJldQVzz4Q
+@managerToken = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiI1MDUwNTA1MC01MDUwLTUwNTAtNTA1MC01MDUwNTA1MDUwNTEiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NzIxNjE0MiwiZXhwIjoxNzg3MzAyNTQyLCJqdGkiOiIxMDdhZmU1ZC03MjYxLTQzNzktYTJiYi03YjRlZDUzYjhmMjQifQ.LowL9AoVwtS5pBiddwzUInFvwIPMPxX1EHhw_RBTt57GDjsV9AK9DaTuTSrBDlZIPg7nYPFsQdtf2Qv_gZMOwYAUzIHBqkGHewpQTkjMWejiYHRRysAe4BYpXN32kOVsK0dhjLLvUDAP1FNztDIooWRPfcN6sFkVCKsp4jBwgUTQomqROjmYSFHh1JBSIPLRYT90bUh7pRLEMQk63zwLqAA5i-3xgSkhiX2uLwvRmcjYmcHlosB479aDadjwX3jA8lrA9WlYKxB7iKvYY9LhCTXAdCQwRVVf6PRLSYR0HMXFHp4oi3v5zhs_zRPnTepgSGySZ_YF8V71a2POm4w4AQ
+@studentToken = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiI2MDYwNjA2MC02MDYwLTYwNjAtNjA2MC02MDYwNjA2MDYwNjAiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NzIxMzMyMiwiZXhwIjoxNzg3Mjk5NzIyLCJqdGkiOiI5ZjcxZWI5Yi05NzY0LTRiNDYtYmM0OS1hOTRkYWFlODEzZGUifQ.kRZUlVPrAhISKPvROUu4SLvj2yBFEH2B7S9vDG-DfbCp85gpuvw-8-3LVRBKILSGVrB86EfbDqarHD_8MEORWQzfDZumI86Z0GMKT-zbiMIWawZfYdt-du5M626KnCwvAouKrf-MwgJA_wCD-nEIdnGSiMjvi7L4kyoudgTamHglTtJ27iN5DYns1kENBLIgbO7jMyGq6p4ZS0qt599HnsVRsfpMWFVdXdSB2AqdhP2SK4KoDzP9lsGXJTxkxgKrCMNSZkAjuAFHr9v1HxOautx4RfxYBkkdVRybmZWFrR9jcQrGs4HzyWqbvf_LS0agIzYPE25du8I7Zh9m670cRw
+@otherManagerToken = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiI3MDcwNzA3MC03MDcwLTcwNzAtNzA3MC03MDcwNzA3MDcwNzAiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NzIxMzMyMiwiZXhwIjoxNzg3Mjk5NzIyLCJqdGkiOiIwZTFmMTBhZS1iODAzLTQxZWItOGU4NC1hNjIxZTdkZmUyMjMifQ.WgwJXWB07dGecyTIIuO953qMSzc18KCZ_60d13e_WKVGdZIjI8zxqIgFiZLmlada7iPcZugKEqPJfm7pYbauH9oVbcpLDF5fOLNS_QmqSD9J7-FmmTuFbZLVGNZfcJv1hThbwDltI-HlGb3wGP09pJCfU0WWW730LZBqH4ErS-RC8CHpi2bif2B2caALFS1XE_pqFn81V2w66HFlfi3aV955x-UN6RXE9ONuh4uk9BhyZ5ldNeCb5GLY2veiNi4yWGITRVtWHw7yrSh3zecqIoANYbYw72B1wOtIzs_sf87IOpNAfYfarmQYvO_h9IhhMh8e_ys9HluXxB7FofyVUA
+@waiterToken = eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2lkZW50aXR5Lm9tYWdvdGNoaS5sb2NhbCIsImF1ZCI6Im9tYWdvdGNoaS1hcGkiLCJzdWIiOiI4MDgwODA4MC04MDgwLTgwODAtODA4MC04MDgwODA4MDgwODAiLCJyb2xlIjoiVVNFUiIsImlhdCI6MTc4NzIxMzMyMiwiZXhwIjoxNzg3Mjk5NzIyLCJqdGkiOiI3MGJlMzc4Ni1kYmZhLTQzZWMtYmRlMS01NjE0YTQ2NzhmNjcifQ.E8euPXFV5tgliMo95xp-R6h3WzFusMmbCsG6MeZWMyr8I4n4iBY77zf-gTzf4rmYj0iZK7kE334NbNzp0VeY5_eH1ID-Dcu838ukYv4XW5dOTu3yo0ign9O3YD8f0IQ-IOR16rdp44LDise4CvqQ2rb2cbt4mvEerulghLhxiBuOiQDg4HCLVD6EqcFOM9GIhGA1qNNOPD0weEcn6ZYh3J_nP-7jbUshSddGRWFJ1eIj4B-fvXqg5C8_08jbj2xQPu6Tqtk1ALNCnL4HufjlwaSMz61Xqvcxd1gFaPLxTJdkY9d7y9qDuuzqfjRsLES_Q-5rBpkUNbuTIAVbW_K9Bw
+
+
+### =========================================================
+### [사전 준비] occupier 체크인 (재실이 있어야 방을 점유할 수 있다)
+### 기대: 200 OK
+### =========================================================
+POST {{baseUrl}}/api/v1/cohorts/3/attendance-records/check-in
+Authorization: Bearer {{occupierToken}}
+
+
+### =========================================================
+### [사전 준비] occupier가 spaceId=20 점유 시작
+### 기대: 201 Created — 이후 강제 종료 케이스의 전제(방이 사용 중이어야 함)가 만들어진다
+### =========================================================
+POST {{baseUrl}}/api/v1/spaces/20/occupancies
+Authorization: Bearer {{occupierToken}}
+
+
+### =========================================================
+### [사전 준비] waiter가 spaceId=20에 공실 알림 신청
+### 기대: 201 Created — 강제 종료가 이 신청을 "발송" 없이 물리 삭제하는지 8번에서 확인한다
+### =========================================================
+POST {{baseUrl}}/api/v1/spaces/20/vacancy-alerts
+Authorization: Bearer {{waiterToken}}
+
+
+### 1. 활성 점유가 없는 방의 강제 종료 시도
+### 기대: 409 Conflict / OCCUPANCY_ENDED
+### spaceId=21은 아무도 점유하지 않은 채로 남겨뒀다
+POST {{baseUrl}}/api/v1/spaces/21/occupancies/force-release
+Authorization: Bearer {{managerToken}}
+
+
+### 2. 담당하지 않는 기수 매니저의 강제 종료 시도 (명세 04 §5)
+### 기대: 403 Forbidden / OCCUPANCY_NOT_COHORT_MANAGER
+### otherManager는 기수 B(4)의 매니저일 뿐 occupier가 속한 기수 A(3)와 무관하다.
+### 회의실이 공유 자원이라 실제로 발생하는 케이스다.
+POST {{baseUrl}}/api/v1/spaces/20/occupancies/force-release
+Authorization: Bearer {{otherManagerToken}}
+
+
+### 3. 매니저가 아닌 같은 기수 학생의 강제 종료 시도
+### 기대: 403 Forbidden / OCCUPANCY_NOT_COHORT_MANAGER
+### student는 occupier와 같은 기수 A 소속이지만 role이 STUDENT다.
+POST {{baseUrl}}/api/v1/spaces/20/occupancies/force-release
+Authorization: Bearer {{studentToken}}
+
+
+### 4. 점유자 본인의 강제 종료 시도
+### 기대: 403 Forbidden / OCCUPANCY_NOT_COHORT_MANAGER
+### 강제 종료는 점유자가 아니라 점유자 기수의 매니저만 호출할 수 있다 — occupier는 STUDENT다.
+POST {{baseUrl}}/api/v1/spaces/20/occupancies/force-release
+Authorization: Bearer {{occupierToken}}
+
+
+### 5. Authorization 헤더 누락
+### 기대: 401 Unauthorized / AUTH_AUTHENTICATION_REQUIRED
+POST {{baseUrl}}/api/v1/spaces/20/occupancies/force-release
+
+
+### 6. 강제 종료 성공 (MR-21)
+### 기대: 204 No Content
+###
+### 확인할 것:
+###   SELECT status, ended_at FROM learning_service.room_occupancies WHERE space_id = 20;
+###     → FORCE_RELEASED, ended_at 기록됨
+###   SELECT user_id, left_at FROM learning_service.occupancy_participants p
+###     JOIN learning_service.room_occupancies o ON o.id = p.occupancy_id WHERE o.space_id = 20;
+###     → 점유자 본인 행이 left_at으로 마감됨
+###   SELECT count(*) FROM learning_service.vacancy_alerts WHERE space_id = 20;
+###     → 0건 — waiter의 대기 신청이 발송(notified_at) 없이 물리 삭제됐다
+### 로그로도 확인 가능: "RoomVacatedEvent를 발행하지 않는 것이 이 경로의 정의다"
+### (SpringOccupancyEventPublisher 로그가 찍히지 않아야 한다 — 반납과의 핵심 차이)
+POST {{baseUrl}}/api/v1/spaces/20/occupancies/force-release
+Authorization: Bearer {{managerToken}}
+
+
+### 7. 이미 강제 종료된 점유 재종료 시도
+### 기대: 409 Conflict / OCCUPANCY_ENDED
+POST {{baseUrl}}/api/v1/spaces/20/occupancies/force-release
+Authorization: Bearer {{managerToken}}
+
+
+### 8. 강제 종료 후 waiter의 신청 목록 재조회
+### 기대: 200 OK, 빈 배열 — 6번에서 대기 신청이 물리 삭제됐으므로 취소할 것도 없다
+GET {{baseUrl}}/api/v1/vacancy-alerts/me
+Authorization: Bearer {{waiterToken}}
+Accept: application/json

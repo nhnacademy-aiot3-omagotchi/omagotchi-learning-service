@@ -4,6 +4,8 @@ import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 
 import java.time.LocalDate;
@@ -34,11 +36,31 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
             LocalDate attendanceDate
     );
 
-    List<AttendanceRecord> findByCohortMembershipIdOrderByAttendanceDateDesc(Long cohortMembershipId);
+    Page<AttendanceRecord> findByCohortMembershipId(Long cohortMembershipId, Pageable pageable);
 
-    List<AttendanceRecord> findByAttendanceDateAndCohortMembershipIdInOrderByCohortMembershipIdAsc(
+    Page<AttendanceRecord> findByCohortMembershipIdAndAttendanceDateBetween(
+            Long cohortMembershipId,
+            LocalDate from,
+            LocalDate to,
+            Pageable pageable
+    );
+
+    Page<AttendanceRecord> findByCohortMembershipIdAndAttendanceDateGreaterThanEqual(
+            Long cohortMembershipId,
+            LocalDate from,
+            Pageable pageable
+    );
+
+    Page<AttendanceRecord> findByCohortMembershipIdAndAttendanceDateLessThanEqual(
+            Long cohortMembershipId,
+            LocalDate to,
+            Pageable pageable
+    );
+
+    Page<AttendanceRecord> findByAttendanceDateAndCohortMembershipIdIn(
             LocalDate attendanceDate,
-            List<Long> cohortMembershipIds
+            List<Long> cohortMembershipIds,
+            Pageable pageable
     );
 
     @Query("""

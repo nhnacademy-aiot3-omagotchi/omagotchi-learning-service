@@ -19,8 +19,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.BDDAssertions.then;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -40,11 +39,13 @@ class CohortPresenceServiceTest {
     private final ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
     private final SimpMessagingTemplate messagingTemplate = mock(SimpMessagingTemplate.class);
     private final CohortAccessService cohortAccessService = mock(CohortAccessService.class);
+    private final PresenceUserProfileQuery presenceUserProfileQuery = mock(PresenceUserProfileQuery.class);
     private final CohortPresenceService service = new CohortPresenceService(
             redisTemplate,
             messagingTemplate,
             cohortAccessService,
-            new PresenceProperties(Duration.ofSeconds(60))
+            new PresenceProperties(Duration.ofSeconds(60)),
+            presenceUserProfileQuery
     );
 
     @BeforeEach
@@ -52,6 +53,7 @@ class CohortPresenceServiceTest {
         given(redisTemplate.opsForHash()).willReturn(hashOperations);
         given(redisTemplate.opsForSet()).willReturn(setOperations);
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(presenceUserProfileQuery.findByUserIds(anyCollection())).willReturn(Map.of());
     }
 
     @Test
@@ -152,6 +154,31 @@ class CohortPresenceServiceTest {
         verify(setOperations).remove("presence:user:" + USER_ID + ":sessions", "expired-session");
         verify(valueOperations).set("presence:user:" + USER_ID, "OFFLINE");
         verify(setOperations).remove("presence:cohort:7", USER_ID.toString());
+    }
+
+    @Test
+    @DisplayName("snapshot에 닉네임과 대표 캐릭터 정보를 포함한다")
+    void enrichesSnapshotWithNicknameAndCharacter() {
+        given(setOperations.members("presence:cohort:7")).willReturn(Set.of(USER_ID.toString()));
+        given(setOperations.members("presence:user:" + USER_ID + ":sessions")).willReturn(Set.of(SESSION_ID));
+        given(redisTemplate.hasKey("realtime:session:" + SESSION_ID)).willReturn(true);
+        given(valueOperations.get("presence:user:" + USER_ID)).willReturn("ONLINE");
+        given(presenceUserProfileQuery.findByUserIds(java.util.List.of(USER_ID))).willReturn(Map.of(
+                USER_ID,
+                new PresenceUserProfile(
+                        "오마",
+                        new PresenceCharacterSnapshot("night", "pistachio", "night/pistachio")
+                )
+        ));
+
+        CohortPresenceSnapshot snapshot = service.snapshot(COHORT_ID);
+
+        then(snapshot.users()).containsExactly(new PresenceUserSnapshot(
+                USER_ID,
+                "오마",
+                new PresenceCharacterSnapshot("night", "pistachio", "night/pistachio"),
+                PresenceStatus.ONLINE
+        ));
     }
 
     private AuthenticatedUser user() {

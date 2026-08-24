@@ -4,6 +4,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.restdocs.test.autoconfigure.AutoConfigureRestDocs;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
@@ -34,6 +35,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -47,6 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 @EnableConfigurationProperties(JwtProperties.class)
 @ActiveProfiles("test")
+@AutoConfigureRestDocs(outputDir = "target/generated-snippets")
 @DisplayName("기수 API")
 class CohortControllerTest {
 
@@ -85,7 +88,8 @@ class CohortControllerTest {
                 .andExpect(jsonPath("$.scheduledStartTime").value("09:00:00"))
                 .andExpect(jsonPath("$.scheduledEndTime").value("18:00:00"))
                 .andExpect(jsonPath("$.absenceCutoffTime").value("10:00:00"))
-                .andExpect(jsonPath("$.allowedAwayMinutes").value(30));
+                .andExpect(jsonPath("$.allowedAwayMinutes").value(30))
+                .andDo(document("cohort/get-attendance-policy"));
 
         verify(attendancePolicyService).getPolicy(COHORT_ID, USER_ID);
     }

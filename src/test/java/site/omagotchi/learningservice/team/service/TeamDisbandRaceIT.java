@@ -13,7 +13,7 @@ import site.omagotchi.learningservice.team.application.TeamAccessSupport;
 import site.omagotchi.learningservice.team.application.TeamService;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
-import site.omagotchi.learningservice.team.infrastructure.TeamJpaRepository;
+import site.omagotchi.learningservice.team.infrastructure.persistence.TeamJpaRepository;
 import site.omagotchi.learningservice.team.support.TeamTestFixture;
 
 import static org.assertj.core.api.Assertions.assertThat;

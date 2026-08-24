@@ -8,7 +8,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import site.omagotchi.learningservice.team.application.port.AccountReader;
+import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.team.application.TeamAccessSupport;
@@ -42,7 +44,7 @@ class TeamMemberServiceTest {
     CohortMembershipQueryService cohortMembershipQueryService;
 
     @Mock
-    AccountReader accountReader;
+    IdentityAccountClient identityAccountClient;
 
     @InjectMocks
     TeamMemberService teamMemberService;
@@ -103,7 +105,7 @@ class TeamMemberServiceTest {
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
-        given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.ACTIVE);
+        given(identityAccountClient.getState(targetUserId)).willReturn(IdentityAccountState.ACTIVE);
         given(cohortMembershipQueryService.findActiveMembership(1L, targetUserId)).willReturn(Optional.of(targetMembership));
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
         given(teamMemberRepository.countByTeamId(1L)).willReturn(3L);
@@ -124,7 +126,7 @@ class TeamMemberServiceTest {
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
-        given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.ACTIVE);
+        given(identityAccountClient.getState(targetUserId)).willReturn(IdentityAccountState.ACTIVE);
         given(cohortMembershipQueryService.findActiveMembership(1L, targetUserId)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> teamMemberService.addMember(1L, targetUserId, userId))
@@ -141,7 +143,7 @@ class TeamMemberServiceTest {
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
-        given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.WITHDRAWN);
+        given(identityAccountClient.getState(targetUserId)).willReturn(IdentityAccountState.WITHDRAWN);
 
         assertThatThrownBy(() -> teamMemberService.addMember(1L, targetUserId, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.ACCOUNT_WITHDRAWN);
@@ -157,7 +159,8 @@ class TeamMemberServiceTest {
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
-        given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.NOT_FOUND);
+        given(identityAccountClient.getState(targetUserId))
+                .willThrow(new BusinessException(TeamErrorCode.ACCOUNT_NOT_FOUND));
 
         assertThatThrownBy(() -> teamMemberService.addMember(1L, targetUserId, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.ACCOUNT_NOT_FOUND);
@@ -174,7 +177,7 @@ class TeamMemberServiceTest {
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
-        given(accountReader.findState(targetUserId)).willReturn(AccountReader.AccountState.ACTIVE);
+        given(identityAccountClient.getState(targetUserId)).willReturn(IdentityAccountState.ACTIVE);
         given(cohortMembershipQueryService.findActiveMembership(1L, targetUserId)).willReturn(Optional.of(targetMembership));
         given(accessSupport.lockActiveTeam(1L)).willReturn(team);
         given(teamMemberRepository.countByTeamId(1L)).willReturn(8L);

@@ -5,6 +5,14 @@ spring:
   application:
     name: learning-service
 
+  http:
+    clients:
+      connect-timeout: ${IDENTITY_SERVICE_CONNECT_TIMEOUT}
+      read-timeout: ${IDENTITY_SERVICE_READ_TIMEOUT}
+    serviceclient:
+      identity-service:
+        base-url: ${IDENTITY_SERVICE_BASE_URL}
+
   task:
     execution:
       # AsyncConfig의 eventTaskExecutor와 Boot 기본 실행기를 분리한다 (ADR space-team/0012).
@@ -37,6 +45,8 @@ spring:
     create-schemas: true
     clean-disabled: true
     validate-on-migrate: true
+    postgresql:
+      transactional-lock: false
 
   jpa:
     hibernate:
@@ -116,13 +126,32 @@ realtime:
   presence:
     session-ttl: ${REALTIME_PRESENCE_SESSION_TTL}
 
+environment:
+  cache:
+    capacity: 1000
+    retention: P7D
+  cooldown: PT5M
+  iot:
+    request-timeout: PT3S
+    secret: ${IOT_SECRET:}
+    base-url: ${IOT_BASE_URL:}
+    simulator:
+      enabled: ${IOT_SIMULATOR_ENABLED:false}
+
 auth:
   jwt:
     issuer: ${JWT_ISSUER}
     audience: ${JWT_AUDIENCE}
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
 
+clients:
+  identity:
+    username: ${LEARNING_IDENTITY_USERNAME}
+    password: ${LEARNING_IDENTITY_PASSWORD}
+
 sensor:
+  series:
+    zone: ${SENSOR_SERIES_ZONE:Asia/Seoul}
   influx:
     url: ${INFLUXDB_URL}
     token: ${INFLUXDB_TOKEN}
@@ -142,6 +171,12 @@ omagotchi:
       fixed-delay: ${OCCUPANCY_EXPIRY_FIXED_DELAY:60000}
       # 기동 직후에는 Flyway·연결 풀 준비와 겹치지 않게 미룬다
       initial-delay: ${OCCUPANCY_EXPIRY_INITIAL_DELAY:30000}
+    membership-sweep:
+      # 소속 종료 정리(MR-26)가 유실됐을 때의 복구 지연 상한 (ADR space-team/0013).
+      # 만료 정리(1분)보다 길게 잡는다 — 이미 실패한 건만 다루는 예외 경로다.
+      fixed-delay: ${OCCUPANCY_MEMBERSHIP_SWEEP_FIXED_DELAY:300000}
+      initial-delay: ${OCCUPANCY_MEMBERSHIP_SWEEP_INITIAL_DELAY:60000}
+      batch-size: ${OCCUPANCY_MEMBERSHIP_SWEEP_BATCH_SIZE:200}
     telegram:
       # 실제 발송 테스트에서만 켠다. false이면 sender Bean 자체를 등록하지 않는다
       enabled: ${OCCUPANCY_TELEGRAM_ENABLED:false}

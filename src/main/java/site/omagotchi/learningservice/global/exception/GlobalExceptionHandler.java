@@ -27,6 +27,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             BusinessException exception,
             HttpServletRequest request
     ) {
+        if (ErrorHttpStatusMapper.map(exception.getErrorCode().type()).is5xxServerError()) {
+            logServerFailure(exception, exception.getErrorCode(), request);
+        }
         return response(exception.getErrorCode(), request);
     }
 
@@ -141,6 +144,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         log.error(
                 "예상하지 못한 서버 오류 code={}, exception={}, method={}, path={}",
                 CommonErrorCode.INTERNAL_SERVER_ERROR.code(),
+                exception.getClass().getName(),
+                request.getMethod(),
+                request.getRequestURI(),
+                exception
+        );
+    }
+
+    private void logServerFailure(
+            BusinessException exception,
+            ErrorCode errorCode,
+            HttpServletRequest request
+    ) {
+        log.error(
+                "서버 오류 code={}, exception={}, method={}, path={}",
+                errorCode.code(),
                 exception.getClass().getName(),
                 request.getMethod(),
                 request.getRequestURI(),

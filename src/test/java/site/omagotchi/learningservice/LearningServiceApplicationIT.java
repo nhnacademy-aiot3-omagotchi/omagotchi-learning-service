@@ -6,7 +6,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import site.omagotchi.learningservice.gamification.application.GamificationEventType;
+import site.omagotchi.learningservice.gamification.application.GamificationEventMessage;
+import site.omagotchi.learningservice.gamification.application.port.GamificationEventOutboxRepository;
+import site.omagotchi.learningservice.gamification.application.port.GamificationEventReceiptRepository;
+
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -17,6 +24,12 @@ class LearningServiceApplicationIT {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private GamificationEventReceiptRepository gamificationEventReceiptRepository;
+
+	@Autowired
+	private GamificationEventOutboxRepository gamificationEventOutboxRepository;
 
 	@Test
 	void contextLoads() {
@@ -57,6 +70,125 @@ class LearningServiceApplicationIT {
 		assertThat(userIdColumnTypes)
 				.isNotEmpty()
 				.allMatch("uuid"::equals);
+	}
+
+	@Test
+	void appliesFrontendCharacterAssetMigration() {
+		Integer characterCount = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM learning_service.game_characters",
+				Integer.class
+		);
+		List<String> assetKeys = jdbcTemplate.queryForList("""
+				SELECT asset_key
+				FROM learning_service.game_characters
+				ORDER BY asset_key
+				""", String.class);
+		String defaultColor = jdbcTemplate.queryForObject("""
+				SELECT column_default
+				FROM information_schema.columns
+				WHERE table_schema = 'learning_service'
+				  AND table_name = 'user_characters'
+				  AND column_name = 'color_id'
+				""", String.class);
+		Integer migrationCount = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM learning_service.flyway_schema_history
+				WHERE version IN ('9', '12', '13')
+				  AND success
+				""", Integer.class);
+
+		assertThat(characterCount).isEqualTo(8);
+		assertThat(assetKeys).containsExactly(
+				"caffeine",
+				"commit",
+				"debug",
+				"kid",
+				"night",
+				"server",
+				"sprout",
+				"study"
+		);
+		assertThat(defaultColor).contains("original");
+		assertThat(migrationCount).isEqualTo(3);
+	}
+
+	@Test
+	void appliesGamificationEventReceiptMigrationAndClaimsOnce() {
+		UUID userId = UUID.randomUUID();
+		String sourceId = UUID.randomUUID().toString();
+		Instant occurredAt = Instant.parse("2026-08-20T00:00:00Z");
+
+		boolean firstClaim = gamificationEventReceiptRepository.claim(
+				GamificationEventType.STUDY_COMPLETED,
+				sourceId,
+				userId,
+				occurredAt
+		);
+		boolean duplicateClaim = gamificationEventReceiptRepository.claim(
+				GamificationEventType.STUDY_COMPLETED,
+				sourceId,
+				userId,
+				occurredAt
+		);
+		Integer migrationCount = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM learning_service.flyway_schema_history
+				WHERE version = '10'
+				  AND success
+				""", Integer.class);
+
+		assertThat(firstClaim).isTrue();
+		assertThat(duplicateClaim).isFalse();
+		assertThat(migrationCount).isEqualTo(1);
+	}
+
+	@Test
+	void appliesGamificationOutboxMigrationAndEnqueuesOnce() {
+		UUID userId = UUID.randomUUID();
+		String sourceId = UUID.randomUUID().toString();
+		Instant occurredAt = Instant.parse("2026-08-20T00:00:00Z");
+		GamificationEventMessage event = new GamificationEventMessage(
+				GamificationEventType.STUDY_COMPLETED,
+				sourceId,
+				userId,
+				occurredAt);
+
+		gamificationEventOutboxRepository.enqueue(event);
+		gamificationEventOutboxRepository.enqueue(event);
+
+		Integer outboxCount = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM learning_service.gamification_event_outbox
+				WHERE event_type = 'STUDY_COMPLETED'
+				  AND source_id = ?
+				""", Integer.class, sourceId);
+		Integer migrationCount = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM learning_service.flyway_schema_history
+				WHERE version = '11'
+				  AND success
+				""", Integer.class);
+
+		assertThat(outboxCount).isEqualTo(1);
+		assertThat(migrationCount).isEqualTo(1);
+	}
+
+	@Test
+	void appliesUserNicknamePolicyMigration() {
+		String uniqueNicknameIndex = jdbcTemplate.queryForObject(
+				"SELECT to_regclass('learning_service.ux_user_characters_representative_nickname')::text",
+				String.class
+		);
+		Integer migrationCount = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM learning_service.flyway_schema_history
+				WHERE version IN ('14', '15')
+				  AND success
+				""", Integer.class);
+
+		assertThat(uniqueNicknameIndex)
+				.isEqualTo("learning_service.ux_user_characters_representative_nickname");
+		assertThat(migrationCount).isEqualTo(2);
 	}
 
 	@Test

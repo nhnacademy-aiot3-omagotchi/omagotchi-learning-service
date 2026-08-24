@@ -1,10 +1,12 @@
 package site.omagotchi.learningservice.occupancy.infrastructure;
 
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyParticipant;
 
 import java.time.OffsetDateTime;
@@ -80,6 +82,43 @@ public interface OccupancyParticipantJpaRepository extends JpaRepository<Occupan
                   AND p.leftAt IS NULL""")
     int closeAllActiveByOccupancyId(
             @Param("occupancyId") Long occupancyId,
+            @Param("endedAt") OffsetDateTime endedAt
+    );
+
+    /** 열린 참여 커서 순회 (MR-26 스윕). 점유자도 참여 행을 가지므로 이 하나로 충분하다. */
+    @Query("""
+                SELECT new site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository$OpenParticipation(
+                       p.id, p.cohortMembershipId, p.userId)
+                  FROM OccupancyParticipant p
+                 WHERE p.id > :afterId
+                   AND p.leftAt IS NULL
+                 ORDER BY p.id ASC""")
+    List<OccupancyParticipantRepository.OpenParticipation> findOpenParticipationsAfter(
+            @Param("afterId") Long afterId,
+            Pageable pageable
+    );
+
+    /**
+     * 이 계정의 열린 참여를 마감한다 (MR-26 참여 처리).
+     *
+     * <p>{@code uq_occupancy_participants_one_active}가 계정 기준이라 열린 행은 최대
+     * 하나지만, 조건부 UPDATE라 0건이어도 안전하다 — 점유자 본인의 행은 점유 종료가
+     * 이미 닫았으므로 여기서 다시 닫히지 않는다.</p>
+     *
+     * <p>{@code joined_at} 보정은 위와 같은 이유다 —
+     * {@code ck_occupancy_participants_period}가 역전 구간을 거부한다.</p>
+     */
+    @Modifying
+    @Query("""
+                UPDATE OccupancyParticipant p
+                SET p.leftAt = CASE
+                        WHEN p.joinedAt > :endedAt THEN p.joinedAt
+                        ELSE :endedAt
+                    END
+                WHERE p.userId = :userId
+                  AND p.leftAt IS NULL""")
+    int closeActiveByUserId(
+            @Param("userId") UUID userId,
             @Param("endedAt") OffsetDateTime endedAt
     );
 }

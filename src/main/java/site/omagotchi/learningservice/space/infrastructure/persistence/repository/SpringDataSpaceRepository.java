@@ -53,4 +53,13 @@ public interface SpringDataSpaceRepository
     Optional<SpaceJpaEntity> findByIdForUpdate(
             @Param("spaceId") Long spaceId
     );
+
+    @Query("""
+                SELECT space.name FROM SpaceJpaEntity space
+                 WHERE space.id = :spaceId
+                   AND space.deletedAt IS NULL
+            """)
+    Optional<String> findNameById(
+            @Param("spaceId") Long spaceId
+    );
 }

@@ -11,8 +11,10 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.bots.AbsSender;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import site.omagotchi.learningservice.global.util.DateTimePolicy;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyReminderSender;
 
+import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 
 /**
@@ -35,6 +37,13 @@ public class TelegramOccupancyReminderSender implements OccupancyReminderSender 
     private static final int CONNECTION_REQUEST_TIMEOUT_MILLIS = 5_000;
     private static final int CONNECT_TIMEOUT_MILLIS = 5_000;
     private static final int SOCKET_TIMEOUT_MILLIS = 10_000;
+
+    /**
+     * 저장은 UTC 그대로 두고, 사람이 읽는 문구에서만 KST로 바꾼다 — {@link TelegramVacancyAlertSender}와
+     * 같은 이유다.
+     */
+    private static final DateTimeFormatter DISPLAY_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final AbsSender telegramSender;
     private final String chatId;
@@ -77,10 +86,12 @@ public class TelegramOccupancyReminderSender implements OccupancyReminderSender 
         return """
                 [회의실 이용 종료 안내]
 
-                공간 ID: %s
+                공간: %s
                 이용 시간이 곧 종료됩니다.
                 종료 예정 시각: %s
-                """.formatted(reminder.spaceId(), reminder.expiresAt()).stripTrailing();
+                """.formatted(reminder.spaceName(),
+                reminder.expiresAt().atZoneSameInstant(DateTimePolicy.ZONE_ID).format(DISPLAY_FORMATTER))
+                .stripTrailing();
     }
 
     private static String requireConfigured(String value, String environmentVariable) {
@@ -90,20 +101,20 @@ public class TelegramOccupancyReminderSender implements OccupancyReminderSender 
         return value;
     }
 
-    private static DefaultBotOptions botOptions() {
-        DefaultBotOptions options = new DefaultBotOptions();
-        options.setRequestConfig(RequestConfig.custom()
-                .setConnectionRequestTimeout(CONNECTION_REQUEST_TIMEOUT_MILLIS)
-                .setConnectTimeout(CONNECT_TIMEOUT_MILLIS)
-                .setSocketTimeout(SOCKET_TIMEOUT_MILLIS)
-                .build());
-        return options;
-    }
-
     private static final class TelegramBotApiSender extends DefaultAbsSender {
 
         private TelegramBotApiSender(String botToken) {
             super(botOptions(), botToken);
+        }
+
+        private static DefaultBotOptions botOptions() {
+            DefaultBotOptions options = new DefaultBotOptions();
+            options.setRequestConfig(RequestConfig.custom()
+                    .setConnectionRequestTimeout(CONNECTION_REQUEST_TIMEOUT_MILLIS)
+                    .setConnectTimeout(CONNECT_TIMEOUT_MILLIS)
+                    .setSocketTimeout(SOCKET_TIMEOUT_MILLIS)
+                    .build());
+            return options;
         }
     }
 }

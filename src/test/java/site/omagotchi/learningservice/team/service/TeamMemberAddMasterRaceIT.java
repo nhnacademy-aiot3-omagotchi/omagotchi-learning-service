@@ -13,7 +13,8 @@ import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.application.TeamMasterService;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
-import site.omagotchi.learningservice.team.application.port.AccountReader;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.team.domain.TeamMemberRole;
@@ -44,7 +45,7 @@ import static org.mockito.BDDMockito.willAnswer;
  * <p>교차 순서는 스레드 타이밍이 아니라 <b>주입 지점</b>으로 결정적으로 만든다.
  * {@code addMember}의 실행 순서가
  * {@code requireMaster → validateAccount → lockActiveTeam → requireStillMaster}이므로,
- * {@link AccountReader#findState}가 정확히 "락 밖 검증 이후, 락 획득 이전"이다.
+ * {@link IdentityAccountClient#getState}가 정확히 "락 밖 검증 이후, 락 획득 이전"이다.
  * 그 안에서 위임을 커밋시키면 재현하려는 창이 그대로 열린다.</p>
  */
 @SpringBootTest
@@ -68,7 +69,7 @@ class TeamMemberAddMasterRaceIT {
     TeamMemberRepository teamMemberRepository;
 
     @MockitoSpyBean
-    AccountReader accountReader;
+    IdentityAccountClient identityAccountClient;
 
     /**
      * 락 전 검증을 통과한 요청자가 락을 잡기 전 사이에 위임으로 MEMBER가 되면,
@@ -95,8 +96,8 @@ class TeamMemberAddMasterRaceIT {
             if (delegated.compareAndSet(false, true)) {
                 delegateInSeparateTransaction(teamId, successorMemberId, master.userId());
             }
-            return AccountReader.AccountState.ACTIVE;
-        }).given(accountReader).findState(any());
+            return IdentityAccountState.ACTIVE;
+        }).given(identityAccountClient).getState(any());
 
         assertThatThrownBy(() ->
                 teamMemberService.addMember(teamId, outsider.userId(), master.userId()))

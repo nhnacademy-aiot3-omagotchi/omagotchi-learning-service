@@ -193,20 +193,31 @@ class OccupancyExpiryIT {
      *
      * <p>첫 실행의 건수를 정확히 못 박지 않는 것은 {@code expireAll}이 전역이기 때문이다.
      * 통합 테스트는 트랜잭션 롤백 없이 컨테이너를 공유하므로 앞선 테스트가 남긴 만료 행이
-     * 함께 정리될 수 있다. 고정할 것은 "두 번째 실행에 남는 것이 없다"이다.</p>
+     * 함께 정리될 수 있다. 따라서 전역 처리 건수가 아니라 이 테스트가 만든 점유가 두 번째
+     * 실행의 후보에서 제외되는지를 고정한다.</p>
      */
     @Test
-    @DisplayName("정리를 두 번 돌려도 두 번째는 대상이 없다.")
-    void secondExpiryRunFindsNoCandidates() {
+    @DisplayName("정리를 두 번 돌려도 이 점유는 다시 후보가 되지 않는다.")
+    void secondExpiryRunDoesNotReprocessThisOccupancy() {
         Long cohortId = fixture.createCohort("만료-멱등");
         OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "만료-멱등-1", 8);
 
         roomOccupancyService.start(roomId, member.userId());
         expire(roomId);
+        Long occupancyId = activeOccupancyId(roomId);
 
         assertThat(roomOccupancyLifecycleService.expireAll()).isGreaterThanOrEqualTo(1);
-        assertThat(roomOccupancyLifecycleService.expireAll()).isZero();
+        assertThat(occupancyStatus(occupancyId)).isEqualTo("EXPIRED");
+
+        // expireAll은 컨테이너 전체를 대상으로 하므로 다른 테스트 데이터가 반환 건수에
+        // 포함될 수 있다. 두 번째 실행이 이 테스트의 점유를 다시 후보로 잡지 않는지를
+        // 상태와 후보 조회로 직접 검증한다.
+        roomOccupancyLifecycleService.expireAll();
+        assertThat(occupancyRepository.findStale(OffsetDateTime.now()).stream()
+                .map(RoomOccupancyRepository.ExpiredOccupancy::occupancyId)
+                .toList())
+                .doesNotContain(occupancyId);
         assertThat(activeOccupancyRows(roomId)).isZero();
     }
 

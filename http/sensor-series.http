@@ -1,0 +1,179 @@
+# 센서 시계열 조회 API 확인.
+# 앱을 local 프로파일로 띄우고 위에서 아래로 실행합니다. 관리자(ROLE_SYSTEM_ADMIN) JWT가 필요합니다.
+#
+# 주의 1. 센서 수집이 멈춰 있으면 points가 비어 있을 수 있습니다. 오류가 아닙니다.
+# 주의 2. adminAccessToken 에 실제 토큰을 넣은 채로 커밋하지 않습니다.
+
+@baseUrl = http://localhost:8084
+@adminAccessToken = <SYSTEM_ADMIN JWT>
+@deviceEui = 24e124136d151547
+@measurement = temperature
+@location = 실습실
+
+
+### 인증 없이 호출하면 401
+GET {{baseUrl}}/api/v1/sensors/series?deviceEui={{deviceEui}}&measurement={{measurement}}&window=DAY
+Accept: application/json
+
+> {%
+    client.test("인증 필요", function () {
+        client.assert(response.status === 401, "HTTP 상태가 401이어야 합니다.");
+        client.assert(response.body.code === "AUTH_AUTHENTICATION_REQUIRED", "인증 오류 코드여야 합니다.");
+    });
+%}
+
+
+### 없는 기간 값이면 400
+GET {{baseUrl}}/api/v1/sensors/series?deviceEui={{deviceEui}}&measurement={{measurement}}&window=YEAR
+Authorization: Bearer {{adminAccessToken}}
+Accept: application/json
+
+> {%
+    client.test("잘못된 window", function () {
+        client.assert(response.status === 400, "HTTP 상태가 400이어야 합니다.");
+        client.assert(response.body.code === "COMMON_INVALID_REQUEST", "요청값 오류 코드여야 합니다.");
+    });
+%}
+
+
+### 소문자 window도 허용
+GET {{baseUrl}}/api/v1/sensors/series?deviceEui={{deviceEui}}&measurement={{measurement}}&window=week
+Authorization: Bearer {{adminAccessToken}}
+Accept: application/json
+
+> {%
+    client.test("대소문자 무관", function () {
+        client.assert(response.status === 200, "HTTP 상태가 200이어야 합니다.");
+        client.assert(response.body.window === "WEEK", "WEEK으로 해석되어야 합니다.");
+    });
+%}
+
+
+### 기기 단위 — 일
+GET {{baseUrl}}/api/v1/sensors/series?deviceEui={{deviceEui}}&measurement={{measurement}}&window=DAY
+Authorization: Bearer {{adminAccessToken}}
+Accept: application/json
+
+> {%
+    client.test("일 조회 계약", function () {
+        client.assert(response.status === 200, "HTTP 상태가 200이어야 합니다.");
+        client.assert(response.body.interval === "1h", "간격은 1h여야 합니다.");
+        client.assert(response.body.sources.settled === "AVG_1H", "확정 구간은 avg-1h를 읽어야 합니다.");
+        client.assert(response.body.sources.hot === "RAW", "진행 중 구간은 raw를 읽어야 합니다.");
+
+        // 조회 구간에 수집이 하나도 없으면 시간 칸 자체가 만들어지지 않아 0이다
+        var count = response.body.points.length;
+        client.assert(count <= 25, "확정 24칸 + 진행 중 1칸을 넘을 수 없다. 실제: " + count);
+    });
+
+    client.test("기기 표시명이 붙는다", function () {
+        client.assert(response.body.deviceDisplayName === "실습실 온습도 1",
+            "sensor_devices의 표시명이 채워져야 합니다. 실제: " + response.body.deviceDisplayName);
+    });
+
+    client.test("모든 점에 value 키가 있다", function () {
+        response.body.points.forEach(function (p) {
+            client.assert(p.hasOwnProperty("value"), "수집이 없어도 value는 null로 있어야 합니다.");
+        });
+    });
+
+    client.test("partial은 마지막 점에만 붙는다", function () {
+        var points = response.body.points;
+        for (var i = 0; i < points.length - 1; i++) {
+            client.assert(!points[i].hasOwnProperty("partial"), "확정된 점에는 partial이 없어야 합니다.");
+        }
+    });
+%}
+
+
+### 기기 단위 — 주
+GET {{baseUrl}}/api/v1/sensors/series?deviceEui={{deviceEui}}&measurement={{measurement}}&window=WEEK
+Authorization: Bearer {{adminAccessToken}}
+Accept: application/json
+
+> {%
+    client.test("주 조회 계약", function () {
+        client.assert(response.status === 200, "HTTP 상태가 200이어야 합니다.");
+        var count = response.body.points.length;
+        client.assert(count <= 169, "확정 168칸 + 진행 중 1칸을 넘을 수 없다. 실제: " + count);
+    });
+%}
+
+
+### 기기 단위 — 월
+GET {{baseUrl}}/api/v1/sensors/series?deviceEui={{deviceEui}}&measurement={{measurement}}&window=MONTH
+Authorization: Bearer {{adminAccessToken}}
+Accept: application/json
+
+> {%
+    client.test("월 조회 계약", function () {
+        client.assert(response.status === 200, "HTTP 상태가 200이어야 합니다.");
+        client.assert(response.body.interval === "1d", "간격은 1d여야 합니다.");
+        client.assert(response.body.sources.settled === "AVG_1D", "확정 구간은 avg-1d를 읽어야 합니다.");
+
+        var count = response.body.points.length;
+        client.assert(count <= 31, "확정 30칸 + 진행 중 1칸을 넘을 수 없다. 실제: " + count);
+    });
+
+    client.test("월 차트의 하루는 한국 자정 기준이다", function () {
+        var points = response.body.points;
+        // 첫 점은 조회 시작 시각이라 정각이 아닐 수 있어 두 번째부터 본다
+        for (var i = 1; i < points.length - 1; i++) {
+            client.assert(points[i].time.indexOf("T15:00:00Z") > 0,
+                "한국 자정은 15:00Z 여야 합니다. 실제: " + points[i].time);
+        }
+    });
+%}
+
+
+### 공간 집계 — 비활성 기기가 빠지고 표시명이 채워진다
+GET {{baseUrl}}/api/v1/sensors/space-series?location={{location}}&measurement={{measurement}}&window=WEEK
+Authorization: Bearer {{adminAccessToken}}
+Accept: application/json
+
+> {%
+    client.test("공간 집계 계약", function () {
+        client.assert(response.status === 200, "HTTP 상태가 200이어야 합니다.");
+        client.assert(response.body.interval === "1h", "간격은 1h여야 합니다.");
+        client.assert(response.body.sensorCount === response.body.sensors.length,
+            "sensorCount와 명단 길이가 같아야 합니다.");
+    });
+
+    client.test("비활성 기기는 집계에서 빠진다", function () {
+        var points = response.body.sensors.map(function (s) { return s.point; });
+        client.assert(points.indexOf("복도") === -1, "복도 센서는 active=false 라 포함되면 안 됩니다.");
+    });
+
+    client.test("등록된 기기는 표시명이 채워진다", function () {
+        response.body.sensors.forEach(function (s) {
+            client.assert(s.displayName !== null, "표시명이 비어 있습니다: " + s.deviceEui);
+        });
+    });
+
+    client.test("집계 값의 관계가 맞다", function () {
+        var sensorCount = response.body.sensorCount;
+        response.body.points.forEach(function (p) {
+            if (p.count === 0) {
+                client.assert(p.avg === null, "수집이 없으면 avg가 null이어야 합니다: " + p.time);
+                return;
+            }
+            client.assert(p.min <= p.avg && p.avg <= p.max,
+                "최소 <= 평균 <= 최대가 아닙니다: " + p.time);
+            client.assert(p.count <= sensorCount,
+                "count가 센서 수를 넘습니다: " + p.time);
+        });
+    });
+%}
+
+
+### 없는 공간이면 오류가 아니라 빈 결과
+GET {{baseUrl}}/api/v1/sensors/space-series?location=없는공간&measurement={{measurement}}&window=WEEK
+Authorization: Bearer {{adminAccessToken}}
+Accept: application/json
+
+> {%
+    client.test("없는 공간", function () {
+        client.assert(response.status === 200, "오류가 아니라 빈 결과여야 합니다.");
+        client.assert(response.body.sensorCount === 0, "센서가 없어야 합니다.");
+    });
+%}

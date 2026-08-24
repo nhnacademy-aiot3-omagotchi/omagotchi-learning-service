@@ -6,6 +6,8 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
+import site.omagotchi.learningservice.study.application.event.StudyCompletedEvent;
+import site.omagotchi.learningservice.study.application.port.StudyEventPublisher;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.port.TimerRunQueryRepository;
 import site.omagotchi.learningservice.study.application.port.TimerRunRepository;
@@ -35,6 +37,7 @@ public class TimerCommandService {
     private final StudyWriteLock studyWriteLock;
     private final Clock clock;
     private final TimerTimePolicy timerTimePolicy;
+    private final StudyEventPublisher studyEventPublisher;
 
     public TimerStateResult start(
             UUID userId,
@@ -83,6 +86,11 @@ public class TimerCommandService {
 
         if (endReason == TimerEndReason.STOP && timerRun.getMeasuredSeconds() > 0L) {
             createStudyRecords(timerRun).forEach(studyRecordRepository::save);
+            studyEventPublisher.publishCompleted(new StudyCompletedEvent(
+                    userId,
+                    timerRunId,
+                    timerRun.getEndedAt()
+            ));
         }
         timerRunRepository.end(timerRun);
     }

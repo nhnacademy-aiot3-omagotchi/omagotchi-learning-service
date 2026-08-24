@@ -7,7 +7,7 @@ import java.time.Instant;
 public record UpdateSensorDeviceRequest(
         Long spaceId,
         String displayName,
-        String installedPoint,
+        String installationPoint,
         Integer expectedIntervalSeconds,
         Instant installedAt
 ) {
@@ -17,7 +17,7 @@ public record UpdateSensorDeviceRequest(
                 deviceEui,
                 spaceId,
                 displayName,
-                installedPoint,
+                installationPoint,
                 expectedIntervalSeconds,
                 installedAt
         );

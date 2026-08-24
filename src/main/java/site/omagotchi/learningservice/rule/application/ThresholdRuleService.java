@@ -24,6 +24,7 @@ import site.omagotchi.learningservice.rule.domain.ThresholdRule;
 import site.omagotchi.learningservice.rule.domain.ThresholdRuleHistory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -178,6 +179,8 @@ public class ThresholdRuleService {
             throw new BusinessException(RuleErrorCode.SPACE_HAS_NO_DEVICE);
         }
 
+        Map<String, ThresholdRule> rulesByKey = indexRules(devices);
+
         int applied = 0;
         int unchanged = 0;
         int missing = 0;
@@ -185,15 +188,13 @@ public class ThresholdRuleService {
         for (SensorDevice device : devices) {
             for (MetricCondition condition : command.conditions()) {
 
-                Optional<ThresholdRule> found = thresholdRuleRepository.findByDeviceEuiAndMetric(
-                        device.getDeviceEui(), condition.normalizedMetric());
+                ThresholdRule rule = rulesByKey.get(
+                        ruleKey(device.getDeviceEui(), condition.normalizedMetric()));
 
-                if (found.isEmpty()) {
+                if (Objects.isNull(rule)) {
                     missing++;
                     continue;
                 }
-
-                ThresholdRule rule = found.get();
 
                 boolean changed;
                 try {
@@ -227,13 +228,8 @@ public class ThresholdRuleService {
 
     /** 공간 하나의 metric 별 요약. 기기 수만큼 쿼리를 날리지 않는다 */
     private SpaceThresholdResult summarize(Long spaceId, List<SensorDevice> devices) {
-        List<String> deviceEuis = new ArrayList<>();
-        for (SensorDevice device : devices) {
-            deviceEuis.add(device.getDeviceEui());
-        }
-
         Map<String, List<ThresholdRule>> rulesByMetric = new LinkedHashMap<>();
-        for (ThresholdRule rule : thresholdRuleRepository.findByDeviceEuiIn(deviceEuis)) {
+        for (ThresholdRule rule : thresholdRuleRepository.findByDeviceEuiIn(deviceEuisOf(devices))) {
             rulesByMetric
                     .computeIfAbsent(rule.getMetric(), key -> new ArrayList<>())
                     .add(rule);
@@ -247,6 +243,33 @@ public class ThresholdRuleService {
         return new SpaceThresholdResult(spaceId, devices.size(), metrics);
     }
 
+    /**
+     * 공간의 룰을 한 번에 읽어 (deviceEui, metric) 으로 색인한다.
+     *
+     * <p>반복문 안에서 단건 조회하면 기기 수 × 항목 수만큼 쿼리가 나간다 —
+     * 센서 10대에 3항목이면 30회다. rule-service 의 InMemoryRuleCache 와 같은
+     * 키 모양을 쓴다.</p>
+     */
+    private Map<String, ThresholdRule> indexRules(List<SensorDevice> devices) {
+        Map<String, ThresholdRule> rulesByKey = new HashMap<>();
+
+        for (ThresholdRule rule : thresholdRuleRepository.findByDeviceEuiIn(deviceEuisOf(devices))) {
+            rulesByKey.put(ruleKey(rule.getDeviceEui(), rule.getMetric()), rule);
+        }
+
+        return rulesByKey;
+    }
+
+    private static List<String> deviceEuisOf(List<SensorDevice> devices) {
+        List<String> deviceEuis = new ArrayList<>();
+        for (SensorDevice device : devices) {
+            deviceEuis.add(device.getDeviceEui());
+        }
+        return deviceEuis;
+    }
+
+    private static String ruleKey(String deviceEui, String metric) {
+        return deviceEui + ":" + metric;
+    }
+
 }
-
-

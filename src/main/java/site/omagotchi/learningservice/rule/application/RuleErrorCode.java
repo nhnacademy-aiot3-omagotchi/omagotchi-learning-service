@@ -6,7 +6,7 @@ import site.omagotchi.learningservice.global.exception.ErrorType;
 
 @RequiredArgsConstructor
 public enum RuleErrorCode implements ErrorCode {
-
+    //룰
     RULE_INVALID_CONDITION(
             ErrorType.INVALID_INPUT,
             "RULE_INVALID_CONDITION",
@@ -23,7 +23,7 @@ public enum RuleErrorCode implements ErrorCode {
             "RULE_NOT_FOUND",
             "룰을 찾을 수 없습니다."
     ),
-    //
+
 
     //센서
     DEVICE_INVALID_ATTRIBUTE(
@@ -61,6 +61,7 @@ public enum RuleErrorCode implements ErrorCode {
             "RULE_VERSION_CONFLICT",
             "룰이 이미 변경되었습니다. 최신 상태를 다시 조회해 주세요."
     );
+
 
     private final ErrorType type;
     private final String code;

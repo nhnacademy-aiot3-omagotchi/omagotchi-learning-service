@@ -8,7 +8,7 @@ import java.time.Instant;
 public record CreateSensorDeviceRequest(
         @NotBlank
         @Pattern(
-                regexp = "[0-9a-fA-F]+",
+                regexp = "[0-9a-f]+",
                 message = "장치 EUI는 16진수여야 합니다."
         )
         @Size(max = 32)

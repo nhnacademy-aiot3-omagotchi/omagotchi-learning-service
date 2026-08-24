@@ -145,6 +145,9 @@ auth:
     issuer: ${JWT_ISSUER}
     audience: ${JWT_AUDIENCE}
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
+  rule:
+    username: ${RULE_LEARNING_USERNAME}
+    password: ${RULE_LEARNING_PASSWORD}
 
 clients:
   identity:

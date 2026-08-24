@@ -11,6 +11,7 @@ import site.omagotchi.learningservice.cohort.application.CohortMembershipQuerySe
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.space.application.CohortEndedSpaceCleanup;
 import site.omagotchi.learningservice.team.application.TeamMasterService;
+import site.omagotchi.learningservice.team.application.port.TeamRepository;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -42,9 +43,13 @@ class CohortEndedCleanupTest {
 
     private static final Long COHORT_ID = 3L;
     private static final List<Long> MEMBERSHIP_IDS = List.of(10L, 11L);
+    private static final List<Long> TEAM_IDS = List.of(20L, 21L);
 
     @Mock
     private TeamMasterService teamMasterService;
+
+    @Mock
+    private TeamRepository teamRepository;
 
     @Mock
     private CohortMembershipQueryService cohortMembershipQueryService;
@@ -67,6 +72,7 @@ class CohortEndedCleanupTest {
     void setUp() {
         cohortEndedCleanup = new CohortEndedCleanup(
                 teamMasterService,
+                teamRepository,
                 cohortMembershipQueryService,
                 vacancyAlertService,
                 occupancyRepository,
@@ -78,6 +84,12 @@ class CohortEndedCleanupTest {
         org.mockito.Mockito.lenient()
                 .when(cohortMembershipQueryService.findMembershipIds(COHORT_ID))
                 .thenReturn(MEMBERSHIP_IDS);
+        org.mockito.Mockito.lenient()
+                .when(teamRepository.findActiveIdsByCohortId(COHORT_ID))
+                .thenReturn(TEAM_IDS);
+        org.mockito.Mockito.lenient()
+                .when(teamMasterService.disbandOne(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(true);
     }
 
     /**
@@ -93,7 +105,8 @@ class CohortEndedCleanupTest {
 
         InOrder order = inOrder(
                 teamMasterService, vacancyAlertService, occupancyRepository, spaceCleanup);
-        order.verify(teamMasterService).disbandAllByCohort(COHORT_ID);
+        order.verify(teamMasterService).disbandOne(20L);
+        order.verify(teamMasterService).disbandOne(21L);
         order.verify(vacancyAlertService).discardByMemberships(MEMBERSHIP_IDS);
         order.verify(occupancyRepository).findActiveSummariesByOccupierMembershipIds(MEMBERSHIP_IDS);
         order.verify(spaceCleanup).unassignSpaces(COHORT_ID);
@@ -115,15 +128,34 @@ class CohortEndedCleanupTest {
         verify(spaceCleanup).unassignSpaces(COHORT_ID);
     }
 
-    /** CE-01은 독립 단계다 — 팀 정리 실패가 알림·점유·실습실 정리를 막으면 안 된다. */
+    /** CE-01은 독립 단계다 — 팀 조회 실패가 알림·점유·공간 정리를 막으면 안 된다. */
     @Test
-    @DisplayName("팀 정리가 실패해도 나머지 단계는 전부 진행한다.")
-    void teamFailureDoesNotBlockOtherSteps() {
-        willThrow(new IllegalStateException("팀 정리 실패"))
-                .given(teamMasterService).disbandAllByCohort(COHORT_ID);
+    @DisplayName("팀 조회가 실패해도 나머지 단계는 전부 진행한다.")
+    void teamLookupFailureDoesNotBlockOtherSteps() {
+        willThrow(new IllegalStateException("팀 조회 실패"))
+                .given(teamRepository).findActiveIdsByCohortId(COHORT_ID);
 
         assertThatCode(() -> cohortEndedCleanup.cleanUp(COHORT_ID)).doesNotThrowAnyException();
 
+        verify(vacancyAlertService).discardByMemberships(MEMBERSHIP_IDS);
+        verify(spaceCleanup).unassignSpaces(COHORT_ID);
+    }
+
+    /**
+     * <b>이 테스트가 리뷰로 찾은 회귀를 고정한다.</b> 예전에는 {@code disbandAllByCohort}가
+     * 단일 Transaction 안에서 팀을 순회해, 한 팀의 실패가 앞서 처리된 팀까지 롤백시켰다.
+     * 지금은 팀마다 {@code disbandOne}을 건별로 호출해 격리한다 — {@code releaseOccupancies}와
+     * 같은 모양이다.
+     */
+    @Test
+    @DisplayName("한 팀의 해체가 실패해도 나머지 팀과 이후 단계는 계속 진행한다.")
+    void oneTeamFailureDoesNotBlockOthers() {
+        willThrow(new IllegalStateException("해체 실패"))
+                .given(teamMasterService).disbandOne(20L);
+
+        assertThatCode(() -> cohortEndedCleanup.cleanUp(COHORT_ID)).doesNotThrowAnyException();
+
+        verify(teamMasterService).disbandOne(21L);
         verify(vacancyAlertService).discardByMemberships(MEMBERSHIP_IDS);
         verify(spaceCleanup).unassignSpaces(COHORT_ID);
     }

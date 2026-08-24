@@ -103,6 +103,12 @@ management:
 timer:
   max-duration: ${TIMER_MAX_DURATION}
 
+prediction:
+  client:
+    base-url: ${PREDICTION_SERVICE_BASE_URL}
+    connect-timeout: ${PREDICTION_SERVICE_CONNECT_TIMEOUT:2s}
+    read-timeout: ${PREDICTION_SERVICE_READ_TIMEOUT:5s}
+
 telegram:
   bot:
     username: ${TELEGRAM_BOT_USERNAME}
@@ -145,6 +151,9 @@ auth:
     issuer: ${JWT_ISSUER}
     audience: ${JWT_AUDIENCE}
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
+  rule:
+    username: ${RULE_LEARNING_USERNAME}
+    password: ${RULE_LEARNING_PASSWORD}
 
 clients:
   identity:

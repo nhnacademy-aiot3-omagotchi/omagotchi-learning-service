@@ -73,8 +73,11 @@ E2eLearningServiceApplication
 - Gateway
 - View BFF와 Browser 화면
 
-즉 Learning API 자체를 확인할 때는 이 실행기만으로 시작할 수 있지만, 로그인부터 화면까지
-확인하려면 관련 서비스도 함께 실행해야 한다.
+Redis는 실제 기능이 호출될 때 연결될 수 있고, RabbitMQ Listener는 Broker 연결 실패 후 재시도할
+수 있으므로 두 서비스가 실행되지 않았다고 ApplicationContext가 반드시 즉시 실패하는 것은 아니다.
+다만 Redis·RabbitMQ를 사용하는 기능은 해당 서비스가 연결된 환경에서만 정상 동작을 검증할 수
+있다. Identity Service, Gateway, View BFF와 Browser는 로그인부터 화면까지 전체 요청 흐름을
+검증할 때 함께 실행한다.
 
 ## 4. 지금 프로젝트에 적합한 이유
 
@@ -195,8 +198,11 @@ Active profiles 칸에 `--spring.profiles.active=local`을 입력하면 IntelliJ
 - 설정한 Port의 Health 응답
 
 ```text
-GET http://localhost:8084/actuator/health
+GET http://localhost:<SERVER_PORT>/actuator/health
 ```
+
+예를 들어 `.env.local`에 `SERVER_PORT=8084`를 설정했다면
+`http://localhost:8084/actuator/health`로 확인한다.
 
 `Application run failed`가 출력되었다면 Process 종료 코드가 `0`이어도 기동 성공으로 보지 않는다.
 
@@ -255,4 +261,3 @@ IntelliJ의 Annotation Processor가 같은 Q Class를 별도 경로에 다시 �
 > Learning E2E 실행기는 실제 Learning Service를 깨끗한 임시 PostgreSQL과 함께 띄우는 도구이며,
 > Identity·Gateway·View까지 함께 실행했을 때 Browser부터 저장소까지의 전체 E2E 흐름을 검증할
 > 수 있다.
-

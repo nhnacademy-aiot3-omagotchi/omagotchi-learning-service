@@ -20,7 +20,6 @@ import site.omagotchi.learningservice.rule.presentation.response.SpaceThresholdR
 import site.omagotchi.learningservice.rule.presentation.response.ThresholdRuleResponse;
 import site.omagotchi.learningservice.rule.presentation.response.UpdateThresholdRuleResponse;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @RestController
@@ -35,8 +34,8 @@ public class ThresholdRuleController {
     public CreateThresholdRuleResponse create(
             @Valid @RequestBody CreateThresholdRuleRequest request,
             JwtAuthenticationToken authentication,
-            @RequestHeader(value = "X-Request-ID", required = false) String requestId){
-
+            @RequestHeader(value = "X-Request-ID", required = false) String requestId
+    ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         Long ruleId = thresholdRuleService.create(request.toCommand(user.userId(), requestId));
 
@@ -48,8 +47,8 @@ public class ThresholdRuleController {
             @PathVariable("rule-id") Long ruleId,
             @Valid @RequestBody UpdateThresholdRuleRequest request,
             JwtAuthenticationToken authentication,
-            @RequestHeader(value = "X-Request-ID", required = false) String requestId){
-
+            @RequestHeader(value = "X-Request-ID", required = false) String requestId
+    ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
 
         UpdateThresholdRuleResult result = thresholdRuleService.update(
@@ -60,15 +59,10 @@ public class ThresholdRuleController {
     }
 
     @GetMapping
-    public List<ThresholdRuleResponse> findAll(){
-        List<ThresholdRuleResponse> responses = new ArrayList<>();
-        List<ThresholdRule> thresholdRules = thresholdRuleService.readAll();
-
-        for(ThresholdRule  thresholdRule : thresholdRules){
-            responses.add(ThresholdRuleResponse.from(thresholdRule));
-        }
-
-        return responses;
+    public List<ThresholdRuleResponse> findAll() {
+        return thresholdRuleService.readAll().stream()
+                .map(ThresholdRuleResponse::from)
+                .toList();
     }
 
     /** 공간별 현재 임계치. 화면이 이걸로 입력 폼을 그린다 */

@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import site.omagotchi.learningservice.cohort.application.CohortAttendancePolicyService;
 import site.omagotchi.learningservice.cohort.application.CohortManagerService;
 import site.omagotchi.learningservice.cohort.application.result.CohortAttendancePolicyResponse;
-import site.omagotchi.learningservice.cohort.application.result.CohortAdminSummaryResponse;
+import site.omagotchi.learningservice.cohort.application.result.CohortAdminSummaryResult;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipResponse;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
 import site.omagotchi.learningservice.cohort.application.result.CohortResponse;
@@ -58,7 +58,7 @@ public class CohortController {
     }
 
     @GetMapping("/admin-summary")
-    public List<CohortAdminSummaryResponse> getAdminSummaries(
+    public List<CohortAdminSummaryResult> getAdminSummaries(
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);

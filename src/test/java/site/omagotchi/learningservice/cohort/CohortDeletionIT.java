@@ -13,10 +13,12 @@ import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortManagerAssignmentPolicy;
 import site.omagotchi.learningservice.cohort.application.CohortService;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.cohort.infrastructure.JpaCohortMembershipQuery;
+import site.omagotchi.learningservice.cohort.infrastructure.JpaCohortPersistence;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
 import site.omagotchi.learningservice.global.exception.BusinessException;
@@ -31,7 +33,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         TestcontainersConfiguration.class,
         QueryDslConfig.class,
         CohortAccessService.class,
-        CohortService.class
+        CohortService.class,
+        JpaCohortMembershipQuery.class,
+        JpaCohortPersistence.class
 })
 @ActiveProfiles("test")
 @DataJpaTest

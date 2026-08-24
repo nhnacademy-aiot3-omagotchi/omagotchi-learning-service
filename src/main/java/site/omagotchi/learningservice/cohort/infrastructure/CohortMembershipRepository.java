@@ -80,13 +80,13 @@ public interface CohortMembershipRepository extends
             CohortMembershipStatus status
     );
 
-    List<CohortMembership> findByCohortIdAndRoleAndStatusOrderByRequestedAtAsc(
+    List<CohortMembership> findAllByCohortIdAndRoleAndStatusOrderByRequestedAtAsc(
             Long cohortId,
             CohortMembershipRole role,
             CohortMembershipStatus status
     );
 
-    List<CohortMembership> findByCohortIdOrderByRequestedAtAsc(Long cohortId);
+    List<CohortMembership> findAllByCohortIdOrderByRequestedAtAsc(Long cohortId);
 
     @Query("""
             select membership.cohortId as cohortId, count(membership.id) as memberCount
@@ -103,7 +103,7 @@ public interface CohortMembershipRepository extends
               and membership.status = site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus.ACTIVE
             order by membership.cohortId asc, membership.requestedAt asc
             """)
-    List<CohortManagerProjection> findActiveManagersByCohort();
+    List<CohortManagerProjection> findAllActiveManagersByCohort();
 
     boolean existsByCohortIdAndRoleAndStatus(
             Long cohortId,

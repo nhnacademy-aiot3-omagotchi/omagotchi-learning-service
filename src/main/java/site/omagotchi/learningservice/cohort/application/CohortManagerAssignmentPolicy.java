@@ -3,9 +3,8 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.cohort.application.port.CohortManagerAssignmentLock;
+import site.omagotchi.learningservice.cohort.application.port.CohortPersistence;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.LocalDate;
@@ -15,8 +14,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CohortManagerAssignmentPolicy {
 
-    private final CohortRepository cohortRepository;
+    private final CohortPersistence cohortPersistence;
     private final CohortManagerAssignmentLock assignmentLock;
+
+    public void acquireCohort(Long cohortId) {
+        assignmentLock.acquireCohort(cohortId);
+    }
 
     /**
      * 종료일과 다음 시작일이 같은 경계는 겹치지 않는 것으로 본다.
@@ -39,9 +42,10 @@ public class CohortManagerAssignmentPolicy {
             LocalDate targetStartDate,
             LocalDate targetEndDate
     ) {
-        assignmentLock.acquire(userId);
+        assignmentLock.acquireCohort(targetCohortId);
+        assignmentLock.acquireUser(userId);
 
-        if (cohortRepository.existsActiveManagerPeriodConflict(
+        if (cohortPersistence.existsActiveManagerPeriodConflict(
                 userId,
                 targetCohortId,
                 targetStartDate,

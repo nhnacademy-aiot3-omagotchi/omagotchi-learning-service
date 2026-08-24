@@ -1,36 +1,33 @@
 package site.omagotchi.learningservice.cohort.application;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.command.ChangeCohortStatusCommand;
 import site.omagotchi.learningservice.cohort.application.command.CreateCohortCommand;
 import site.omagotchi.learningservice.cohort.application.command.UpdateCohortCommand;
+import site.omagotchi.learningservice.cohort.application.port.CohortMembershipQuery;
+import site.omagotchi.learningservice.cohort.application.port.CohortPersistence;
+import site.omagotchi.learningservice.cohort.application.result.CohortAdminSummaryResult;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipSummaryResult;
 import site.omagotchi.learningservice.cohort.application.result.CohortResponse;
-import site.omagotchi.learningservice.cohort.application.result.CohortAdminSummaryResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class CohortService {
-    private final CohortRepository repository;
-    private final CohortMembershipRepository membershipRepository;
+    private final CohortPersistence cohortPersistence;
+    private final CohortMembershipQuery membershipQuery;
     private final CohortAccessService accessService;
     private final CohortManagerAssignmentPolicy managerAssignmentPolicy;
 
@@ -53,7 +50,7 @@ public class CohortService {
                 command.endDate(),
                 userId
         );
-        Cohort savedCohort = repository.save(cohort);
+        Cohort savedCohort = cohortPersistence.save(cohort);
         return CohortResponse.from(savedCohort);
     }
 
@@ -62,7 +59,7 @@ public class CohortService {
      * 관리자 대시보드의 기수 목록 화면에서 사용한다.
      */
     public List<CohortResponse> getCohorts() {
-        return repository.findAll().stream()
+        return cohortPersistence.findAll().stream()
                 .map(CohortResponse::from)
                 .toList();
     }
@@ -70,25 +67,28 @@ public class CohortService {
     /**
      * System Admin 전체 기수 화면에 필요한 활성 구성원 수와 관리자 ID를 함께 조회한다.
      */
-    public List<CohortAdminSummaryResponse> getAdminSummaries(GlobalRole globalRole) {
+    public List<CohortAdminSummaryResult> getAdminSummaries(GlobalRole globalRole) {
         accessService.requireSystemAdmin(globalRole);
 
-        Map<Long, Long> memberCounts = membershipRepository.countActiveMembershipsByCohort().stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        CohortMembershipRepository.CohortMembershipCountProjection::getCohortId,
-                        CohortMembershipRepository.CohortMembershipCountProjection::getMemberCount
-                ));
-        Map<Long, List<UUID>> managerUserIds = new HashMap<>();
-        membershipRepository.findActiveManagersByCohort().forEach(manager ->
-                managerUserIds.computeIfAbsent(manager.getCohortId(), ignored -> new ArrayList<>())
-                        .add(manager.getUserId()));
+        Map<Long, CohortMembershipSummaryResult> summariesByCohortId =
+                membershipQuery.findAllAdminSummaries().stream()
+                        .collect(Collectors.toMap(
+                                CohortMembershipSummaryResult::cohortId,
+                                Function.identity()
+                        ));
 
-        return repository.findAll().stream()
-                .map(cohort -> CohortAdminSummaryResponse.from(
-                        cohort,
-                        memberCounts.getOrDefault(cohort.getId(), 0L),
-                        managerUserIds.getOrDefault(cohort.getId(), List.of())
-                ))
+        return cohortPersistence.findAll().stream()
+                .map(cohort -> {
+                    CohortMembershipSummaryResult summary = summariesByCohortId.getOrDefault(
+                            cohort.getId(),
+                            new CohortMembershipSummaryResult(cohort.getId(), 0L, List.of())
+                    );
+                    return CohortAdminSummaryResult.from(
+                            cohort,
+                            summary.memberCount(),
+                            summary.managerUserIds()
+                    );
+                })
                 .toList();
     }
 
@@ -109,14 +109,10 @@ public class CohortService {
     public CohortResponse update(Long cohortId, UpdateCohortCommand command, UUID actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
+        managerAssignmentPolicy.acquireCohort(cohortId);
         Cohort cohort = getCohortOrThrow(cohortId);
 
-        membershipRepository.findByCohortIdAndRoleAndStatusOrderByRequestedAtAsc(
-                        cohortId,
-                        CohortMembershipRole.MANAGER,
-                        CohortMembershipStatus.ACTIVE
-                ).stream()
-                .map(membership -> membership.getUserId())
+        membershipQuery.findAllActiveManagerUserIds(cohortId).stream()
                 .sorted()
                 .forEach(managerUserId -> managerAssignmentPolicy.validateNoPeriodConflict(
                         managerUserId,
@@ -152,7 +148,7 @@ public class CohortService {
             if (cohort.getStatus() != CohortStatus.PREPARING) {
                 throw new BusinessException(CohortErrorCode.INVALID_COHORT_STATUS_TRANSITION);
             }
-            if (!membershipRepository.existsActiveManagerByCohortId(cohortId)) {
+            if (!membershipQuery.existsActiveManager(cohortId)) {
                 throw new BusinessException(CohortErrorCode.COHORT_ACTIVE_MANAGER_REQUIRED);
             }
 
@@ -184,16 +180,11 @@ public class CohortService {
             throw new BusinessException(CohortErrorCode.COHORT_DELETE_NOT_ALLOWED);
         }
 
-        try {
-            repository.delete(cohort);
-            repository.flush();
-        } catch (DataIntegrityViolationException exception) {
-            throw new BusinessException(CohortErrorCode.COHORT_DELETE_CONFLICT);
-        }
+        cohortPersistence.delete(cohort);
     }
 
     private Cohort getCohortOrThrow(Long cohortId) {
-        return repository.findById(cohortId)
+        return cohortPersistence.findById(cohortId)
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
     }
 }

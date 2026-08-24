@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.cohort.application;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -25,6 +26,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -66,8 +68,10 @@ class CohortManagerServiceTest {
                 GlobalRole.SYSTEM_ADMIN
         );
 
-        verify(assignmentPolicy).validateNoPeriodConflict(MANAGER_USER_ID, cohort);
-        verify(membershipRepository).save(any(CohortMembership.class));
+        InOrder inOrder = inOrder(assignmentPolicy, membershipRepository);
+        inOrder.verify(assignmentPolicy).acquireCohort(cohortId);
+        inOrder.verify(assignmentPolicy).validateNoPeriodConflict(MANAGER_USER_ID, cohort);
+        inOrder.verify(membershipRepository).save(any(CohortMembership.class));
     }
 
     @Test

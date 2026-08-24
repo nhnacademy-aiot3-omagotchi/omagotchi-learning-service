@@ -8,9 +8,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.port.CohortManagerAssignmentLock;
+import site.omagotchi.learningservice.cohort.application.port.CohortPersistence;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.LocalDate;
@@ -27,7 +26,7 @@ class CohortManagerAssignmentPolicyTest {
     private static final UUID USER_ID = UUID.fromString("019d2a48-80c0-4d6a-9a15-0b16d2dd74f1");
 
     @Mock
-    private CohortRepository cohortRepository;
+    private CohortPersistence cohortPersistence;
 
     @Mock
     private CohortManagerAssignmentLock assignmentLock;
@@ -38,7 +37,7 @@ class CohortManagerAssignmentPolicyTest {
     @Test
     void rejectsOverlappingManagerAssignmentAfterAcquiringUserLock() {
         Cohort target = cohort(2L, LocalDate.of(2027, 1, 1), LocalDate.of(2027, 6, 30));
-        when(cohortRepository.existsActiveManagerPeriodConflict(
+        when(cohortPersistence.existsActiveManagerPeriodConflict(
                 USER_ID,
                 2L,
                 target.getStartDate(),
@@ -50,9 +49,10 @@ class CohortManagerAssignmentPolicyTest {
                         org.assertj.core.api.Assertions.assertThat(exception.getErrorCode())
                                 .isEqualTo(CohortErrorCode.COHORT_MANAGER_PERIOD_CONFLICT));
 
-        InOrder inOrder = inOrder(assignmentLock, cohortRepository);
-        inOrder.verify(assignmentLock).acquire(USER_ID);
-        inOrder.verify(cohortRepository).existsActiveManagerPeriodConflict(
+        InOrder inOrder = inOrder(assignmentLock, cohortPersistence);
+        inOrder.verify(assignmentLock).acquireCohort(2L);
+        inOrder.verify(assignmentLock).acquireUser(USER_ID);
+        inOrder.verify(cohortPersistence).existsActiveManagerPeriodConflict(
                 USER_ID,
                 2L,
                 target.getStartDate(),
@@ -63,7 +63,7 @@ class CohortManagerAssignmentPolicyTest {
     @Test
     void acceptsNonOverlappingManagerAssignment() {
         Cohort target = cohort(2L, LocalDate.of(2027, 1, 1), LocalDate.of(2027, 6, 30));
-        when(cohortRepository.existsActiveManagerPeriodConflict(
+        when(cohortPersistence.existsActiveManagerPeriodConflict(
                 USER_ID,
                 2L,
                 target.getStartDate(),
@@ -78,7 +78,7 @@ class CohortManagerAssignmentPolicyTest {
     void validatesProspectivePeriodWhenCohortPeriodChanges() {
         LocalDate newStartDate = LocalDate.of(2027, 3, 1);
         LocalDate newEndDate = LocalDate.of(2027, 9, 1);
-        when(cohortRepository.existsActiveManagerPeriodConflict(
+        when(cohortPersistence.existsActiveManagerPeriodConflict(
                 USER_ID,
                 2L,
                 newStartDate,
@@ -92,9 +92,10 @@ class CohortManagerAssignmentPolicyTest {
                 newEndDate
         )).doesNotThrowAnyException();
 
-        InOrder inOrder = inOrder(assignmentLock, cohortRepository);
-        inOrder.verify(assignmentLock).acquire(USER_ID);
-        inOrder.verify(cohortRepository).existsActiveManagerPeriodConflict(
+        InOrder inOrder = inOrder(assignmentLock, cohortPersistence);
+        inOrder.verify(assignmentLock).acquireCohort(2L);
+        inOrder.verify(assignmentLock).acquireUser(USER_ID);
+        inOrder.verify(cohortPersistence).existsActiveManagerPeriodConflict(
                 USER_ID,
                 2L,
                 newStartDate,

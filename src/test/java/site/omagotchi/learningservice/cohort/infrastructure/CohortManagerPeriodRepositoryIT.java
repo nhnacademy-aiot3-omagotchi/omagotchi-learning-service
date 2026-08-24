@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
+import site.omagotchi.learningservice.cohort.application.port.CohortPersistence;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
 
 import java.time.LocalDate;
@@ -17,7 +18,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@Import({TestcontainersConfiguration.class, QueryDslConfig.class})
+@Import({TestcontainersConfiguration.class, QueryDslConfig.class, JpaCohortPersistence.class})
 @ActiveProfiles("test")
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -31,7 +32,7 @@ class CohortManagerPeriodRepositoryIT {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
-    private CohortRepository cohortRepository;
+    private CohortPersistence cohortPersistence;
 
     @Test
     @DisplayName("운영 기간이 일부라도 겹치면 충돌")
@@ -40,7 +41,7 @@ class CohortManagerPeriodRepositoryIT {
         Long targetCohortId = insertCohort("대상 기수", "2027-06-29", "2027-12-31", "PREPARING");
         insertManager(assignedCohortId);
 
-        assertThat(cohortRepository.existsActiveManagerPeriodConflict(
+        assertThat(cohortPersistence.existsActiveManagerPeriodConflict(
                 MANAGER_ID,
                 targetCohortId,
                 LocalDate.of(2027, 6, 29),
@@ -55,7 +56,7 @@ class CohortManagerPeriodRepositoryIT {
         Long targetCohortId = insertCohort("다음 기수", "2027-06-30", "2027-12-31", "PREPARING");
         insertManager(assignedCohortId);
 
-        assertThat(cohortRepository.existsActiveManagerPeriodConflict(
+        assertThat(cohortPersistence.existsActiveManagerPeriodConflict(
                 MANAGER_ID,
                 targetCohortId,
                 LocalDate.of(2027, 6, 30),
@@ -70,7 +71,7 @@ class CohortManagerPeriodRepositoryIT {
         Long targetCohortId = insertCohort("대상 기수", "2027-03-01", "2027-12-31", "PREPARING");
         insertManager(closedCohortId);
 
-        assertThat(cohortRepository.existsActiveManagerPeriodConflict(
+        assertThat(cohortPersistence.existsActiveManagerPeriodConflict(
                 MANAGER_ID,
                 targetCohortId,
                 LocalDate.of(2027, 3, 1),

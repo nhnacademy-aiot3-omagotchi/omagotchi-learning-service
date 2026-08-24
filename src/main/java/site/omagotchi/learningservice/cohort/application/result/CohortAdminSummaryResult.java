@@ -8,9 +8,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * System Admin 전체 기수 화면에 필요한 집계 응답.
+ * System Admin 전체 기수 화면에 필요한 집계 결과.
  */
-public record CohortAdminSummaryResponse(
+public record CohortAdminSummaryResult(
         Long id,
         String name,
         String description,
@@ -20,12 +20,12 @@ public record CohortAdminSummaryResponse(
         long memberCount,
         List<UUID> managerUserIds
 ) {
-    public static CohortAdminSummaryResponse from(
+    public static CohortAdminSummaryResult from(
             Cohort cohort,
             long memberCount,
             List<UUID> managerUserIds
     ) {
-        return new CohortAdminSummaryResponse(
+        return new CohortAdminSummaryResult(
                 cohort.getId(),
                 cohort.getName(),
                 cohort.getDescription(),

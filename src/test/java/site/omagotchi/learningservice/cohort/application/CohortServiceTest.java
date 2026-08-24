@@ -9,11 +9,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.command.UpdateCohortCommand;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
-import site.omagotchi.learningservice.cohort.domain.CohortMembership;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.cohort.application.port.CohortMembershipQuery;
+import site.omagotchi.learningservice.cohort.application.port.CohortPersistence;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipSummaryResult;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
@@ -25,7 +23,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,10 +36,10 @@ class CohortServiceTest {
     private static final UUID SECOND_MANAGER_ID = new UUID(0L, 20L);
 
     @Mock
-    private CohortRepository repository;
+    private CohortPersistence cohortPersistence;
 
     @Mock
-    private CohortMembershipRepository membershipRepository;
+    private CohortMembershipQuery membershipQuery;
 
     @Mock
     private CohortAccessService accessService;
@@ -64,14 +61,9 @@ class CohortServiceTest {
         );
         ReflectionTestUtils.setField(cohort, "id", COHORT_ID);
 
-        CohortMembership firstManager = CohortMembership.activeManager(COHORT_ID, FIRST_MANAGER_ID, ACTOR_ID);
-        CohortMembership secondManager = CohortMembership.activeManager(COHORT_ID, SECOND_MANAGER_ID, ACTOR_ID);
-        when(repository.findById(COHORT_ID)).thenReturn(Optional.of(cohort));
-        when(membershipRepository.findByCohortIdAndRoleAndStatusOrderByRequestedAtAsc(
-                COHORT_ID,
-                CohortMembershipRole.MANAGER,
-                CohortMembershipStatus.ACTIVE
-        )).thenReturn(List.of(secondManager, firstManager));
+        when(cohortPersistence.findById(COHORT_ID)).thenReturn(Optional.of(cohort));
+        when(membershipQuery.findAllActiveManagerUserIds(COHORT_ID))
+                .thenReturn(List.of(SECOND_MANAGER_ID, FIRST_MANAGER_ID));
 
         LocalDate newStartDate = LocalDate.of(2027, 2, 1);
         LocalDate newEndDate = LocalDate.of(2027, 8, 31);
@@ -88,7 +80,10 @@ class CohortServiceTest {
         assertThat(response.endDate()).isEqualTo(newEndDate);
         verify(accessService).requireManager(COHORT_ID, ACTOR_ID);
 
-        InOrder inOrder = inOrder(managerAssignmentPolicy);
+        InOrder inOrder = inOrder(managerAssignmentPolicy, cohortPersistence, membershipQuery);
+        inOrder.verify(managerAssignmentPolicy).acquireCohort(COHORT_ID);
+        inOrder.verify(cohortPersistence).findById(COHORT_ID);
+        inOrder.verify(membershipQuery).findAllActiveManagerUserIds(COHORT_ID);
         inOrder.verify(managerAssignmentPolicy).validateNoPeriodConflict(
                 FIRST_MANAGER_ID,
                 COHORT_ID,
@@ -113,17 +108,10 @@ class CohortServiceTest {
                 ACTOR_ID
         );
         ReflectionTestUtils.setField(cohort, "id", COHORT_ID);
-        CohortMembershipRepository.CohortMembershipCountProjection count =
-                mock(CohortMembershipRepository.CohortMembershipCountProjection.class);
-        CohortMembershipRepository.CohortManagerProjection manager =
-                mock(CohortMembershipRepository.CohortManagerProjection.class);
-        when(count.getCohortId()).thenReturn(COHORT_ID);
-        when(count.getMemberCount()).thenReturn(34L);
-        when(manager.getCohortId()).thenReturn(COHORT_ID);
-        when(manager.getUserId()).thenReturn(FIRST_MANAGER_ID);
-        when(membershipRepository.countActiveMembershipsByCohort()).thenReturn(List.of(count));
-        when(membershipRepository.findActiveManagersByCohort()).thenReturn(List.of(manager));
-        when(repository.findAll()).thenReturn(List.of(cohort));
+        when(membershipQuery.findAllAdminSummaries()).thenReturn(List.of(
+                new CohortMembershipSummaryResult(COHORT_ID, 34L, List.of(FIRST_MANAGER_ID))
+        ));
+        when(cohortPersistence.findAll()).thenReturn(List.of(cohort));
 
         var summaries = service.getAdminSummaries(GlobalRole.SYSTEM_ADMIN);
 
@@ -145,12 +133,11 @@ class CohortServiceTest {
                 ACTOR_ID
         );
         ReflectionTestUtils.setField(cohort, "id", COHORT_ID);
-        when(repository.findById(COHORT_ID)).thenReturn(Optional.of(cohort));
+        when(cohortPersistence.findById(COHORT_ID)).thenReturn(Optional.of(cohort));
 
         service.delete(COHORT_ID, GlobalRole.SYSTEM_ADMIN);
 
-        verify(repository).delete(cohort);
-        verify(repository).flush();
+        verify(cohortPersistence).delete(cohort);
     }
 
     @Test
@@ -164,11 +151,11 @@ class CohortServiceTest {
         );
         ReflectionTestUtils.setField(cohort, "id", COHORT_ID);
         cohort.activate(true);
-        when(repository.findById(COHORT_ID)).thenReturn(Optional.of(cohort));
+        when(cohortPersistence.findById(COHORT_ID)).thenReturn(Optional.of(cohort));
 
         assertThatThrownBy(() -> service.delete(COHORT_ID, GlobalRole.SYSTEM_ADMIN))
                 .isInstanceOf(BusinessException.class);
 
-        verify(repository, never()).delete(cohort);
+        verify(cohortPersistence, never()).delete(cohort);
     }
 }

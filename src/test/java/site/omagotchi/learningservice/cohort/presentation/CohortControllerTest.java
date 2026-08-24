@@ -20,7 +20,7 @@ import site.omagotchi.learningservice.cohort.application.JoinCodeService;
 import site.omagotchi.learningservice.cohort.application.command.SaveAttendancePolicyCommand;
 import site.omagotchi.learningservice.cohort.application.command.AssignCohortManagerCommand;
 import site.omagotchi.learningservice.cohort.application.result.CohortAttendancePolicyResponse;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.security.JwtAuthorityConfig;
 import site.omagotchi.learningservice.global.security.JwtConfig;

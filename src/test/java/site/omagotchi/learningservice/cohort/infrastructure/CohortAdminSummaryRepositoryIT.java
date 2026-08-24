@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
+import site.omagotchi.learningservice.cohort.application.port.CohortMembershipQuery;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
 
 import java.time.OffsetDateTime;
@@ -15,7 +16,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@Import({TestcontainersConfiguration.class, QueryDslConfig.class})
+@Import({TestcontainersConfiguration.class, QueryDslConfig.class, JpaCohortMembershipQuery.class})
 @ActiveProfiles("test")
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -29,7 +30,7 @@ class CohortAdminSummaryRepositoryIT {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
-    private CohortMembershipRepository membershipRepository;
+    private CohortMembershipQuery membershipQuery;
 
     @Test
     void aggregatesOnlyActiveMembersAndActiveManagers() {
@@ -43,17 +44,12 @@ class CohortAdminSummaryRepositoryIT {
         insertMembership(cohortId, STUDENT_ID, "STUDENT", "ACTIVE");
         insertMembership(cohortId, new UUID(0L, 30L), "STUDENT", "REJECTED");
 
-        assertThat(membershipRepository.countActiveMembershipsByCohort())
+        assertThat(membershipQuery.findAllAdminSummaries())
                 .singleElement()
-                .satisfies(count -> {
-                    assertThat(count.getCohortId()).isEqualTo(cohortId);
-                    assertThat(count.getMemberCount()).isEqualTo(2L);
-                });
-        assertThat(membershipRepository.findActiveManagersByCohort())
-                .singleElement()
-                .satisfies(manager -> {
-                    assertThat(manager.getCohortId()).isEqualTo(cohortId);
-                    assertThat(manager.getUserId()).isEqualTo(MANAGER_ID);
+                .satisfies(summary -> {
+                    assertThat(summary.cohortId()).isEqualTo(cohortId);
+                    assertThat(summary.memberCount()).isEqualTo(2L);
+                    assertThat(summary.managerUserIds()).containsExactly(MANAGER_ID);
                 });
     }
 

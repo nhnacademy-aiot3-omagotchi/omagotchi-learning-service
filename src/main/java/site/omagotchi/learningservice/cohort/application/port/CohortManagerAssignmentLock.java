@@ -7,5 +7,7 @@ import java.util.UUID;
  */
 public interface CohortManagerAssignmentLock {
 
-    void acquire(UUID userId);
+    void acquireCohort(Long cohortId);
+
+    void acquireUser(UUID userId);
 }

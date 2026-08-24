@@ -7,7 +7,7 @@ import site.omagotchi.learningservice.cohort.application.command.AssignCohortMan
 import site.omagotchi.learningservice.cohort.application.command.ChangeCohortMemberRoleCommand;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
@@ -42,6 +42,7 @@ public class CohortManagerService {
             GlobalRole globalRole
     ) {
         accessService.requireSystemAdmin(globalRole);
+        assignmentPolicy.acquireCohort(cohortId);
         Cohort cohort = requireCohortCanChangeManager(cohortId);
         assignmentPolicy.validateNoPeriodConflict(command.userId(), cohort);
 
@@ -62,6 +63,7 @@ public class CohortManagerService {
             UUID processedByUserId,
             GlobalRole globalRole
     ) {
+        assignmentPolicy.acquireCohort(cohortId);
         Cohort cohort = requireCohortCanChangeManager(cohortId);
 
         CohortMembership membership = membershipRepository.findFirstByCohortIdAndUserIdAndStatusOrderByRequestedAtDesc(

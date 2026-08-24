@@ -8,9 +8,11 @@ import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEve
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
+import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertRepository;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -29,6 +31,11 @@ import java.util.UUID;
  * <p><b>반납과 같은 {@code RELEASED}이고 공실 알림을 발송한다</b> (명세 02 §3). 강제
  * 종료가 공간 회수라 알리지 않는 것과 반대다 — 이쪽은 사람이 빠져서 방이 비는 것이므로
  * 대기자에게 알리는 것이 맞다.</p>
+ *
+ * <p><b>이 사람이 신청해 둔 대기 알림도 함께 지운다</b> (명세 06 §2 8단계). 남겨 두면
+ * 서비스를 떠난 사람에게 나중에 공실 알림이 발송된다 — 계정이 삭제된 경우라면 존재하지
+ * 않는 수신자에게 보내는 셈이다. 지우는 주체가 여기인 이유는 스윕이 이 Method로
+ * 수렴하기 때문이다. 이벤트가 유실돼도 스윕이 같은 정리를 수행한다.</p>
  */
 @Slf4j
 @Service
@@ -37,6 +44,7 @@ public class EndedMembershipOccupancyCleanup {
 
     private final RoomOccupancyRepository occupancyRepository;
     private final OccupancyParticipantRepository participantRepository;
+    private final VacancyAlertRepository alertRepository;
     private final OccupancyEventPublisher eventPublisher;
 
     /**
@@ -47,7 +55,8 @@ public class EndedMembershipOccupancyCleanup {
      * <b>활성 점유가 영구히 잔존한다.</b></p>
      *
      * <p>같은 이벤트가 두 번 도착해도 안전하다. 점유는 활성 조회가 빈 결과가 되고, 참여는
-     * {@code left_at IS NULL} 조건부 UPDATE라 이미 닫힌 행을 덮어쓰지 않는다.</p>
+     * {@code left_at IS NULL} 조건부 UPDATE라 이미 닫힌 행을 덮어쓰지 않으며, 알림은 이미
+     * 지워져 0건이다.</p>
      *
      * @param membershipId 끝난 소속. 점유자 판정의 키다
      * @param userId       그 계정. 참여는 계정 기준으로 배타되므로 이 값이 필요하다
@@ -64,6 +73,17 @@ public class EndedMembershipOccupancyCleanup {
         int closed = participantRepository.closeActiveByUserId(userId, endedAt);
         if (closed > 0) {
             log.info("소속 종료로 참여를 마감했습니다. membershipId={}, 마감={}건", membershipId, closed);
+        }
+
+        // 이 사람이 걸어 둔 대기 알림을 지운다 (명세 06 §2 8단계).
+        //
+        // 위의 점유 반납과 같은 Transaction인 것이 중요하다. 공실 이벤트는 AFTER_COMMIT에
+        // 발송되므로, 커밋 시점에 이 행이 이미 없어야 발송 대상에서 빠진다. 순서를 뒤집거나
+        // Transaction을 나누면 방금 소속이 끝난 사람이 자기 신청의 알림을 받는다.
+        int discarded = alertRepository.deleteWaitingByMembershipIds(List.of(membershipId));
+        if (discarded > 0) {
+            log.info("소속 종료로 대기 알림을 삭제했습니다. membershipId={}, 삭제={}건",
+                    membershipId, discarded);
         }
 
         return released;

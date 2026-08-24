@@ -13,6 +13,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -43,6 +44,7 @@ public class VacancyAlertDispatcher {
     private final CohortMembershipQueryService cohortMembershipQueryService;
     private final SpaceNameQueryService spaceNameQueryService;
     private final VacancyAlertDelivery alertDelivery;
+    private final StaleVacancyAlertDiscarder staleAlertDiscarder;
 
     /**
      * 발송 수단. 비어 있는 것은 정상 상태이며(아직 발송 수단이 없다) 그때는 신청을
@@ -60,12 +62,14 @@ public class VacancyAlertDispatcher {
             CohortMembershipQueryService cohortMembershipQueryService,
             SpaceNameQueryService spaceNameQueryService,
             VacancyAlertDelivery alertDelivery,
+            StaleVacancyAlertDiscarder staleAlertDiscarder,
             List<VacancyAlertSender> senders
     ) {
         this.alertRepository = alertRepository;
         this.cohortMembershipQueryService = cohortMembershipQueryService;
         this.spaceNameQueryService = spaceNameQueryService;
         this.alertDelivery = alertDelivery;
+        this.staleAlertDiscarder = staleAlertDiscarder;
         // 어느 발송의 성공을 완료로 볼지 정할 수 없는 설정이므로, 방이 비는 순간이 아니라
         // 기동 시점에 멈춘다.
         if (senders.size() > 1) {
@@ -80,6 +84,61 @@ public class VacancyAlertDispatcher {
      * @param vacatedAt 비워진 시각. 스케줄러가 늦게 발견했어도 실제로 비워진 것은 이 시각이다
      * @return 실제로 발송·소진된 건수
      */
+    /**
+     * 소속이 더 이상 유효하지 않은 신청을 발송 대상에서 빼고 <b>폐기한다.</b>
+     *
+     * <p><b>순서를 지키는 것만으로는 부족해서 있는 방어다.</b> 정리 훅이 대기 알림을 먼저
+     * 지우도록 되어 있지만(CE-05, 명세 06 §2 8단계), 그 훅이 아예 실행되지 않으면 지킬
+     * 순서 자체가 없다 — 이벤트 유실이나 단계 실패가 그렇다. 그때 남은 신청은 <b>서비스를
+     * 떠난 사람에게 그대로 발송된다.</b> 실제로 재현해 확인한 경로다.</p>
+     *
+     * <p><b>건너뛰지 않고 지우는 이유</b>는 이 잔여를 치울 다른 주체가 없기 때문이다.
+     * 멤버십 정합성 스윕은 <b>열린 참여 행</b>을 커서로 돌기 때문에, 점유도 참여도 없이
+     * 신청만 남은 사람은 방문하지 않는다. 건너뛰기만 하면 그 행은 영원히 남아 공실이
+     * 생길 때마다 다시 평가된다.</p>
+     *
+     * <p>수신자를 못 찾아 건너뛰는 경우와 구분해야 한다. 저쪽은 <b>조회 실패</b>라 신청을
+     * 보존하지만, 이쪽은 소속이 끝났다는 <b>확정된 사실</b>이라 보존할 이유가 없다.</p>
+     *
+     * <p>판정을 한 번에 묻는 것이 계약이다 — 건별로 되물으면 대기자 수만큼 기수 조회가
+     * 반복된다 ({@code findUserIds}와 같은 이유).</p>
+     *
+     * @return 발송 대상으로 남은 신청. 판정 자체가 실패하면 원본을 그대로 돌려준다
+     */
+    private List<VacancyAlertRepository.WaitingAlert> discardStale(
+            List<VacancyAlertRepository.WaitingAlert> candidates) {
+
+        Set<Long> inactive;
+        try {
+            inactive = cohortMembershipQueryService.findInactiveMembershipIds(
+                    candidates.stream()
+                            .map(VacancyAlertRepository.WaitingAlert::cohortMembershipId)
+                            .toList());
+        } catch (Exception exception) {
+            // 판정에 실패했다고 발송을 멈추지는 않는다. 유효한 대기자까지 함께 막히는 것이
+            // 잔여 하나를 잘못 보내는 것보다 나쁘다 — 순서(CE-05)가 여전히 1차 방어다.
+            log.error("공실 알림 수신자의 소속 판정에 실패해 그대로 진행합니다.", exception);
+            return candidates;
+        }
+
+        if (inactive.isEmpty()) {
+            return candidates;
+        }
+
+        try {
+            int discarded = staleAlertDiscarder.discard(inactive);
+            log.warn("소속이 끝난 신청자의 공실 알림 신청을 폐기했습니다. 폐기={}건 — "
+                    + "정리 훅이 누락됐을 수 있습니다.", discarded);
+        } catch (Exception exception) {
+            // 폐기에 실패해도 발송 대상에서는 뺀다. 지우지 못한 행은 다음 공실에 다시 걸린다.
+            log.error("소속이 끝난 공실 알림 신청 폐기에 실패했습니다.", exception);
+        }
+
+        return candidates.stream()
+                .filter(candidate -> !inactive.contains(candidate.cohortMembershipId()))
+                .toList();
+    }
+
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int dispatch(Long spaceId, OffsetDateTime vacatedAt) {
 
@@ -92,6 +151,11 @@ public class VacancyAlertDispatcher {
 
         List<VacancyAlertRepository.WaitingAlert> candidates =
                 alertRepository.findWaitingBySpaceId(spaceId);
+        if (candidates.isEmpty()) {
+            return 0;
+        }
+
+        candidates = discardStale(candidates);
         if (candidates.isEmpty()) {
             return 0;
         }

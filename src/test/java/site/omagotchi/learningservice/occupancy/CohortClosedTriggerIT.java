@@ -214,13 +214,12 @@ class CohortClosedTriggerIT {
         activate(cohortId);
         close(cohortId);
 
-        // 리스너가 AFTER_COMMIT + @Async라 커밋 후 다른 스레드에서 돈다.
-        awaitUntil(() -> "RELEASED".equals(occupancyStatus(occupancyId)),
-                "기수 종료가 점유 정리에 닿지 않았습니다");
+        awaitUntil(() -> spaceCohortId(roomId) == null, "기수 종료가 공간 관리 주체 해제까지 닿지 않았습니다");
 
         assertThat(teamDeletedAt(teamId)).isNotNull();
         assertThat(waitingAlertRows(roomId)).isZero();
         assertThat(openParticipantRows(occupancyId)).isZero();
+        assertThat(occupancyStatus(occupancyId)).isEqualTo("RELEASED");
         assertThat(spaceCohortId(labId)).isNull();
         // 회의실도 유형을 가리지 않고 관리 주체가 해제된다 — 그렇지 않으면 종료 기수를
         // 가리킨 채 동결된다. 인수·삭제 순환은 SpaceManagementLifecycleIT가 다룬다.

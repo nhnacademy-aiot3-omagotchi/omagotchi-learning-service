@@ -14,9 +14,12 @@ import site.omagotchi.learningservice.cohort.application.CohortService;
 import site.omagotchi.learningservice.cohort.application.command.ChangeCohortStatusCommand;
 import site.omagotchi.learningservice.cohort.application.port.CohortEventPublisher;
 import site.omagotchi.learningservice.cohort.application.result.CohortResponse;
+import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.EndedMembershipOccupancySweep;
+import site.omagotchi.learningservice.occupancy.application.OccupancyErrorCode;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
 import site.omagotchi.learningservice.occupancy.application.VacancyAlertService;
@@ -123,7 +126,9 @@ class CohortClosedTriggerIT {
         close(cohortId);
 
         assertThatThrownBy(() -> vacancyAlertService.request(roomId, null, student.userId()))
-                .isInstanceOf(RuntimeException.class);
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isEqualTo(OccupancyErrorCode.ALERT_COHORT_ACCESS_DENIED));
         assertThat(waitingAlertRows(roomId)).isZero();
     }
 
@@ -248,7 +253,10 @@ class CohortClosedTriggerIT {
         fixture.createActiveMember(cohortId);
 
         // PREPARING → CLOSED는 허용되지 않는다.
-        assertThatThrownBy(() -> close(cohortId)).isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(() -> close(cohortId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isEqualTo(CohortErrorCode.INVALID_COHORT_STATUS_TRANSITION));
 
         verify(eventPublisher, never()).publishCohortClosed(any());
         assertThat(membershipRows(cohortId, "ACTIVE")).isEqualTo(1);

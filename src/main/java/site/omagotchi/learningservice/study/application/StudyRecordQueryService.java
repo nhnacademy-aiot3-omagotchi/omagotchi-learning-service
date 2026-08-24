@@ -76,7 +76,9 @@ public class StudyRecordQueryService {
                 totalStudySeconds,
                 records
         );
-        dailyQuestService.handleRoutineReviewed(userId);
+        if (aggregationDate.equals(currentAggregationDate())) {
+            dailyQuestService.handleRoutineReviewed(userId);
+        }
         return result;
     }
 

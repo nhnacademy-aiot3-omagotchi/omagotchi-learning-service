@@ -82,4 +82,13 @@ public interface TeamRepository {
      * 호출부가 비어 있는지 먼저 확인한다.</p>
      */
     List<Team> findByIdInAndDeletedAtIsNull(List<Long> ids);
+
+    /**
+     * 이 기수의 활성 팀 식별자 전부 (CE-01).
+     *
+     * <p>식별자만 돌려주는 이유는 1차 캐시다. 여기서 엔티티로 읽으면 뒤이은
+     * {@link #findByIdForUpdate}가 {@code FOR UPDATE}를 걸어도 잠금 이전 스냅샷을 본다 —
+     * 해체 커밋 직후 도착한 정리가 이미 해체된 팀을 다시 처리하게 된다.</p>
+     */
+    List<Long> findActiveIdsByCohortId(Long cohortId);
 }

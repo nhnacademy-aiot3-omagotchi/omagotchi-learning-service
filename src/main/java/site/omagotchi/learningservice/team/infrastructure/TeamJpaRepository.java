@@ -90,4 +90,13 @@ public interface TeamJpaRepository extends JpaRepository<Team, Long> {
      * 호출부가 비어 있는지 먼저 확인한다.</p>
      */
     List<Team> findByIdInAndDeletedAtIsNull(List<Long> ids);
+
+    /** 기수별 활성 팀 식별자 (CE-01). 식별자만 읽어 1차 캐시를 오염시키지 않는다. */
+    @Query("""
+                SELECT team.id
+                  FROM Team team
+                 WHERE team.cohortId = :cohortId
+                   AND team.deletedAt IS NULL
+                 ORDER BY team.id ASC""")
+    List<Long> findActiveIdsByCohortId(@Param("cohortId") Long cohortId);
 }

@@ -93,6 +93,23 @@ public class RoomOccupancyJpaPersistence implements RoomOccupancyRepository {
      * 통과시키지 않고 명시적으로 막는다 ({@code SpaceAccessNativeQueryReader#lock}과 같은 방어).</p>
      */
     @Override
+    public List<ActiveOccupancy> findActiveSummariesByOccupierMembershipIds(
+            Collection<Long> occupierMembershipIds) {
+        if (occupierMembershipIds == null || occupierMembershipIds.isEmpty()) {
+            return List.of();
+        }
+        return occupancyJpaRepository
+                .findSummariesByOccupierMembershipIdInAndStatus(
+                        occupierMembershipIds, OccupancyStatus.ACTIVE)
+                .stream()
+                .map(projection -> new ActiveOccupancy(
+                        projection.getId(),
+                        projection.getOccupierMembershipId(),
+                        projection.getOccupierUserId()))
+                .toList();
+    }
+
+    @Override
     public Optional<RoomOccupancy> lockById(Long occupancyId) {
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException(

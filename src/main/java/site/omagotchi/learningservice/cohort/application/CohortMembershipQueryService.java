@@ -113,6 +113,23 @@ public class CohortMembershipQueryService {
     }
 
     /**
+     * 이 기수의 <b>전체</b> 멤버십 식별자 — 상태를 가리지 않는다 (CE-02, CE-03).
+     *
+     * <p>기수 종료 연동이 첫 소비처다. 종료 훅이 도는 시점에는 기수 파트가 멤버십을 이미
+     * ENDED로 바꿨을 수 있어, 활성으로 좁히면 <b>대상을 하나도 찾지 못하고 활성 점유와
+     * 대기 신청이 잔존한다</b> — 회원 삭제 훅(GR-16)이 활성 필터를 금지하는 것과 같은
+     * 이유다 (명세 06 §2 2항).</p>
+     */
+    public List<Long> findMembershipIds(Long cohortId) {
+        if (cohortId == null) {
+            return List.of();
+        }
+        return membershipRepository.findByCohortId(cohortId).stream()
+                .map(CohortMembership::getId)
+                .toList();
+    }
+
+    /**
      * 멤버십 식별자를 계정 식별자로 일괄 변환한다.
      *
      * <p>팀원 목록의 표시명 조회 경로(GR-15) 첫 단계다. {@code team_members}는 멤버십

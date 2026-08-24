@@ -24,8 +24,7 @@ public interface CohortEventPublisher {
      * 교육 기수 하나가 종료됐음을 알린다 (CE-05 훅의 진입점).
      *
      * <p>{@link #publishMembershipEnded}와 나란히 두지만 성격이 다르다 — 이쪽은 기수 단위
-     * 단발이고, 수신 측이 정해진 순서로 4단계를 밟는다. 멤버십 단위로 쪼개 발행하면 그
-     * 순서가 깨진다 ({@link CohortClosedEvent} 참고).</p>
+     * 단발이고, 수신 측이 정해진 순서로 4단계를 밟는다 (ADR space-team/0015).</p>
      */
     void publishCohortClosed(CohortClosedEvent event);
 }

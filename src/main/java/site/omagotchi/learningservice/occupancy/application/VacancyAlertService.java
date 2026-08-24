@@ -50,8 +50,6 @@ public class VacancyAlertService {
     /**
      * 공실 알림을 신청한다 (MR-02, MR-15, MR-34).
      *
-     * @param cohortId 신청 주체로 쓸 기수. {@code null}이면 활성 소속이 하나일 때만
-     *                 그것으로 정한다 — 여럿이면 어느 쪽인지 서버가 고를 수 없다
      * <p><b>점유 행을 잠그고 신청까지 한 Transaction에서 끝낸다.</b> 잠그지 않으면 "조회 →
      * 저장" 사이에 반납이 커밋될 수 있고, 그 반납의 {@code AFTER_COMMIT} 발송이 아직
      * 커밋되지 않은 이 신청을 보지 못한다 — 신청은 <b>400도 발송도 아닌 채 대기로 남아</b>
@@ -59,6 +57,8 @@ public class VacancyAlertService {
      * 명세 04 §5가 "먼저 커밋되면 발송 대상, 늦으면 400"이라고 두 갈래로 적은 것은 이
      * 직렬화를 전제한 서술이다.</p>
      *
+     * @param cohortId 신청 주체로 쓸 기수. {@code null}이면 활성 소속이 하나일 때만
+     *                 그것으로 정한다 — 여럿이면 어느 쪽인지 서버가 고를 수 없다
      * @throws BusinessException 빈 방·본인 방·기수 미지정(400), 활성 소속 없음(403),
      *                           중복 신청(409)
      */

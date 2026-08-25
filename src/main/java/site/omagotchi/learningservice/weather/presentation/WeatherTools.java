@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
+import site.omagotchi.learningservice.global.ai.AiToolProvider;
 import site.omagotchi.learningservice.weather.application.WeatherQueryService;
 import site.omagotchi.learningservice.weather.application.result.WeatherQueryResult;
 import site.omagotchi.learningservice.weather.presentation.response.WeatherToolResponse;
@@ -12,7 +13,7 @@ import site.omagotchi.learningservice.weather.presentation.response.WeatherToolR
 @Component
 @Slf4j
 @RequiredArgsConstructor
-public class WeatherTools {
+public class WeatherTools implements AiToolProvider {
 
     private final WeatherQueryService weatherQueryService;
 

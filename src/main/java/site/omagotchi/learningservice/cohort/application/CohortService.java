@@ -107,9 +107,9 @@ public class CohortService {
      */
     @Transactional
     public CohortResponse update(Long cohortId, UpdateCohortCommand command, UUID actorUserId) {
-        accessService.requireManager(cohortId, actorUserId);
 
         managerAssignmentPolicy.acquireCohort(cohortId);
+        accessService.requireManager(cohortId, actorUserId);
         Cohort cohort = getCohortOrThrow(cohortId);
 
         membershipQuery.findAllActiveManagerUserIds(cohortId).stream()

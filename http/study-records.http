@@ -3,7 +3,6 @@
 
 @baseUrl = http://localhost:8084
 @userAccessToken = <USER JWT>
-@studyDate = 2000-01-01
 
 ### 애플리케이션 및 DB 연결 상태 확인
 GET {{baseUrl}}/actuator/health
@@ -17,9 +16,8 @@ Content-Type: application/json
 Accept: application/json
 
 {
-  "date": "{{studyDate}}",
-  "startTime": "09:00",
-  "endTime": "10:00"
+  "startDateTime": "2000-01-01T23:30",
+  "endDateTime": "2000-01-02T00:30"
 }
 
 > {%
@@ -42,9 +40,8 @@ Content-Type: application/json
 Accept: application/json
 
 {
-  "date": "{{studyDate}}",
-  "startTime": "10:00",
-  "endTime": "11:00",
+  "startDateTime": "2000-01-01T22:30",
+  "endDateTime": "2000-01-01T23:30",
   "expectedVersion": {{studyRecordVersion}}
 }
 

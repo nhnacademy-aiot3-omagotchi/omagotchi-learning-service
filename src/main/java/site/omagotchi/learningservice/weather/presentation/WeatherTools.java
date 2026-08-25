@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
-import site.omagotchi.learningservice.global.ai.AiToolProvider;
+import site.omagotchi.learningservice.chat.application.AiToolProvider;
 import site.omagotchi.learningservice.weather.application.WeatherQueryService;
 import site.omagotchi.learningservice.weather.application.result.WeatherQueryResult;
 import site.omagotchi.learningservice.weather.presentation.response.WeatherToolResponse;

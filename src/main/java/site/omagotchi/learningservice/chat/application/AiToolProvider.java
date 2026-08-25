@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.global.ai;
+package site.omagotchi.learningservice.chat.application;
 
 /**
  * AI ChatClient에 등록될 Tool 빈임을 표시하는 마커

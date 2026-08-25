@@ -5,6 +5,11 @@ spring:
   application:
     name: learning-service
 
+  cloud:
+    loadbalancer:
+      cache:
+        enabled: false
+
   http:
     clients:
       connect-timeout: ${IDENTITY_SERVICE_CONNECT_TIMEOUT}
@@ -27,6 +32,8 @@ spring:
 
   data:
     redis:
+      repositories:
+        enabled: false
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
       database: ${REDIS_DATABASE}

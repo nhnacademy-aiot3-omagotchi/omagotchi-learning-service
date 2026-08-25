@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.global.config;
+package site.omagotchi.learningservice.chat.infrastructure;
 
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;

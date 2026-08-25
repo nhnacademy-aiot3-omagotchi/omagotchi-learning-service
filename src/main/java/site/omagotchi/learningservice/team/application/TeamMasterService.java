@@ -5,12 +5,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.team.application.event.TeamDisbandedEvent;
+import site.omagotchi.learningservice.team.application.port.TeamEventPublisher;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.application.port.TeamRepository;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.team.domain.TeamMemberRole;
 
+import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -38,6 +42,8 @@ public class TeamMasterService {
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final TeamAccessSupport accessSupport;
+    private final TeamEventPublisher eventPublisher;
+    private final Clock clock;
 
     /**
      * 마스터를 다른 팀원에게 넘긴다 (GR-14, GR-20).
@@ -98,13 +104,22 @@ public class TeamMasterService {
         TeamMembership membership = accessSupport.requireActiveMembership(team.getCohortId(), userId);
         accessSupport.requireMaster(teamId, membership.id());
 
+        // 통보 대상을 지우기 전에 잡는다 (GR-19).
+        // 해체한 본인은 뺀다 — 자기가 방금 누른 버튼의 결과를 통보로 다시 알릴 이유가 없다.
+        List<Long> recipients = teamMemberRepository.findByTeamIdOrderByJoinedAtAsc(teamId).stream()
+                .map(TeamMember::getCohortMembershipId)
+                .filter(cohortMembershipId -> !cohortMembershipId.equals(membership.id()))
+                .toList();
+
         teamMemberRepository.deleteByTeamId(teamId);
         team.disband();
 
-        // TODO: 커밋 후 (구)팀원 전원에게 해체 통보를 발송한다 (GR-19, 알림 파트).
-        //  점유의 RoomVacatedEvent와 같은 구조 — AFTER_COMMIT + @Async 리스너이며,
-        //  발송 실패가 해체를 롤백시키면 안 된다.
-        log.debug("팀이 해체됐습니다. teamId={}", teamId);
+        // 받을 사람이 없으면 발행하지 않는다: 마스터 혼자였던 팀이 그렇다.
+        if (!recipients.isEmpty()) {
+            eventPublisher.publishTeamDisbanded(new TeamDisbandedEvent(
+                    teamId, team.getName(), recipients, OffsetDateTime.now(clock)));
+        }
+        log.debug("팀이 해체됐습니다. teamId={}, 통보 대상={}건", teamId, recipients.size());
     }
 
     /**

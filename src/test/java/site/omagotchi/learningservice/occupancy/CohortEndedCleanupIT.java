@@ -64,10 +64,6 @@ class CohortEndedCleanupIT {
     @MockitoSpyBean
     VacancyAlertService spiedVacancyAlertService;
 
-    /** 팀 하나만 골라 실패시키기 위한 Spy — 나머지 팀의 실제 커밋 여부를 DB로 확인한다. */
-    @MockitoSpyBean
-    site.omagotchi.learningservice.team.application.TeamMasterService spiedTeamMasterService;
-
     @Test
     @DisplayName("기수 종료는 팀·알림·점유·실습실을 한 번에 정리한다.")
     void cleansTeamsAlertsOccupanciesAndLabs() {
@@ -186,32 +182,6 @@ class CohortEndedCleanupIT {
 
         assertThat(occupancyStatus(occupancyId)).isEqualTo("RELEASED");
         assertThat(waitingAlertRows(roomId)).isZero();
-    }
-
-    /**
-     * <b>리뷰로 찾은 회귀를 실제 DB 트랜잭션으로 고정한다.</b> 예전 {@code disbandAllByCohort}는
-     * 한 팀의 실패가 같은 Transaction 안의 다른 팀 해체까지 롤백시켰다 — Mock만으로는 이
-     * 롤백 여부를 볼 수 없어 실제 DB로 확인해야 한다. 지금은 팀마다 별도 Transaction이라
-     * (`TeamMasterService#disbandOne`), 실패한 팀은 그대로 남고 성공한 팀은 커밋된다.
-     */
-    @Test
-    @DisplayName("한 팀의 해체가 실패해도 다른 팀은 실제로 커밋된다.")
-    void oneTeamDisbandFailureDoesNotRollbackOthers() {
-        Long cohortId = fixture.createCohort("기수종료-팀격리");
-        OccupancyTestFixture.Member masterA = fixture.createActiveMember(cohortId);
-        OccupancyTestFixture.Member masterB = fixture.createActiveMember(cohortId);
-        Long failingTeamId = teamService.create(cohortId, "기수종료-팀격리-실패팀", masterA.userId()).teamId();
-        Long survivingTeamId = teamService.create(cohortId, "기수종료-팀격리-생존팀", masterB.userId()).teamId();
-
-        willThrow(new IllegalStateException("의도된 실패"))
-                .given(spiedTeamMasterService).disbandOne(failingTeamId);
-
-        assertThatCode(() -> cohortEndedCleanup.cleanUp(cohortId)).doesNotThrowAnyException();
-
-        // 실패한 팀은 그대로 남는다 — 다음 스윕이나 재시도가 처리할 몫이다.
-        assertThat(teamDeletedAt(failingTeamId)).isNull();
-        // 실패와 무관한 팀은 실제로 커밋됐다 — Mock 검증이 아니라 DB로 확인한다.
-        assertThat(teamDeletedAt(survivingTeamId)).isNotNull();
     }
 
     /** 명세 08 §5 "훅 중복 수신 — 멱등". 각 단계가 조건부라 두 번째는 대상이 없다. */

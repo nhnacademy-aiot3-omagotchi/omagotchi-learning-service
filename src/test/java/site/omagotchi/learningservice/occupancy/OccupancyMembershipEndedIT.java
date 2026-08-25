@@ -18,6 +18,9 @@ import site.omagotchi.learningservice.occupancy.application.VacancyAlertService;
 import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSender;
 import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 
+import org.mockito.ArgumentCaptor;
+import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSender.VacancyNotice;
+
 import java.time.OffsetDateTime;
 import java.util.function.BooleanSupplier;
 
@@ -25,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -208,18 +212,27 @@ class OccupancyMembershipEndedIT {
     void endedApplicantReceivesNoVacancyAlert() {
         Long cohortId = fixture.createCohort("소속종료-미발송");
         OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
-        OccupancyTestFixture.Member waiter = fixture.createActiveStudent(cohortId);
+        OccupancyTestFixture.Member endedWaiter = fixture.createActiveStudent(cohortId);
+        OccupancyTestFixture.Member survivingWaiter = fixture.createActiveMember(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "소속종료-미발송-1", 8);
 
         roomOccupancyService.start(roomId, occupier.userId());
-        vacancyAlertService.request(roomId, null, waiter.userId());
+        vacancyAlertService.request(roomId, null, endedWaiter.userId());
+        vacancyAlertService.request(roomId, null, survivingWaiter.userId());
 
-        occupancyCleanup.cleanUp(waiter.membershipId(), waiter.userId(), OffsetDateTime.now());
+        occupancyCleanup.cleanUp(endedWaiter.membershipId(), endedWaiter.userId(), OffsetDateTime.now());
         // 신청자가 아니라 점유자가 나가서 방이 빈다 — 공실 발송 경로를 실제로 태운다.
         occupancyCleanup.cleanUp(occupier.membershipId(), occupier.userId(), OffsetDateTime.now());
 
-        awaitUntil(() -> waitingAlertRows(roomId) == 0, "대기 알림이 정리되지 않았습니다");
-        verify(vacancyAlertSender, never()).sendVacancyAlert(any());
+        // 완료 신호는 생존 신청자에게 실제로 발송된 것 — 이것이 관찰되면 발송 경로가
+        // 이 방에 대해 끝까지 돌았다는 뜻이다.
+        ArgumentCaptor<VacancyNotice> captor = ArgumentCaptor.forClass(VacancyNotice.class);
+        verify(vacancyAlertSender, timeout(5_000)).sendVacancyAlert(captor.capture());
+
+        assertThat(captor.getAllValues())
+                .extracting(VacancyNotice::recipientUserId)
+                .containsExactly(survivingWaiter.userId())
+                .doesNotContain(endedWaiter.userId());
     }
 
     @Test

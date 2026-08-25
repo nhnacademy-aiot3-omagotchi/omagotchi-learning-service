@@ -32,9 +32,15 @@ class GamificationReferenceDataBootstrapIT {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    // 테스트 classpath 의 db/seed 시드가 이미 채워 두므로, 부트스트랩 자체가 적재하는지를
+    // 보려면 먼저 비워야 한다. 슬라이스 테스트는 트랜잭션이 롤백되고 참조하는 사용자 행도 없다.
     @Test
-    @DisplayName("캐릭터·퀘스트·레벨 기준 데이터를 적재한다")
+    @DisplayName("빈 테이블에 캐릭터·퀘스트·레벨 기준 데이터를 적재한다")
     void seedsReferenceData() {
+        jdbcTemplate.update("DELETE FROM learning_service.quest_templates");
+        jdbcTemplate.update("DELETE FROM learning_service.game_characters");
+        jdbcTemplate.update("DELETE FROM learning_service.level_policies");
+
         bootstrap.run(null);
 
         assertThat(count("game_characters")).isEqualTo(CHARACTER_COUNT);

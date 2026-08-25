@@ -7,7 +7,7 @@ import site.omagotchi.learningservice.cohort.application.command.IssueJoinCodeCo
 import site.omagotchi.learningservice.cohort.application.result.IssuedJoinCodeResponse;
 import site.omagotchi.learningservice.cohort.application.result.JoinCodeResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortJoinCode;
 import site.omagotchi.learningservice.cohort.domain.CohortJoinCodeStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;

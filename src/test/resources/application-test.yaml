@@ -36,6 +36,11 @@ eureka:
 timer:
   max-duration: PT12H
 
+prediction:
+  client:
+    # Application Context 기동만 검증하는 테스트가 실제 prediction-service에 연결하지 않도록 한다.
+    base-url: http://localhost:8085
+
 telegram:
   bot:
     username: omagotchi_test_bot

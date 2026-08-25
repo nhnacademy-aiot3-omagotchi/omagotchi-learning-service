@@ -7,5 +7,9 @@ import java.util.List;
 
 public interface SensorDeviceJpaRepository extends JpaRepository<SensorDevice, String> {
 
-        List<SensorDevice> findByActiveTrue();
+    List<SensorDevice> findBySpaceId(Long spaceId);
+
+    List<SensorDevice> findBySpaceIdIsNotNullOrderBySpaceIdAsc();
+
+    List<SensorDevice> findByActiveTrue();
 }

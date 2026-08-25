@@ -10,7 +10,7 @@ import site.omagotchi.learningservice.cohort.application.event.CohortMembershipE
 import site.omagotchi.learningservice.cohort.application.port.CohortEventPublisher;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortJoinCode;
 import site.omagotchi.learningservice.cohort.domain.CohortJoinCodeStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
@@ -146,7 +146,7 @@ public class CohortMembershipService {
     public List<CohortMembershipResponse> getMembers(Long cohortId, UUID actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
-        return membershipRepository.findByCohortIdOrderByRequestedAtAsc(cohortId).stream()
+        return membershipRepository.findAllByCohortIdOrderByRequestedAtAsc(cohortId).stream()
                 .map(CohortMembershipResponse::from)
                 .toList();
     }

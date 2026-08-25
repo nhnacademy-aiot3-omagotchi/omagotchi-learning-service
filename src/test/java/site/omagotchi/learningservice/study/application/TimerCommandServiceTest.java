@@ -11,7 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.event.StudyCompletedEvent;

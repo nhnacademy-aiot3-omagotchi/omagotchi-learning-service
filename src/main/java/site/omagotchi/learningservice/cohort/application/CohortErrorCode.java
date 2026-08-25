@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.cohort.domain;
+package site.omagotchi.learningservice.cohort.application;
 
 import lombok.RequiredArgsConstructor;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
@@ -86,6 +86,21 @@ public enum CohortErrorCode implements ErrorCode {
             ErrorType.CONFLICT,
             "COHORT_ACTIVE_MANAGER_REQUIRED",
             "운영 전환을 위해 활성 관리자 소속이 필요합니다."
+    ),
+    COHORT_MANAGER_PERIOD_CONFLICT(
+            ErrorType.CONFLICT,
+            "COHORT_MANAGER_PERIOD_CONFLICT",
+            "동일한 운영 기간에 여러 기수의 관리자로 배치할 수 없습니다."
+    ),
+    COHORT_DELETE_NOT_ALLOWED(
+            ErrorType.CONFLICT,
+            "COHORT_DELETE_NOT_ALLOWED",
+            "준비 상태의 기수만 삭제할 수 있습니다."
+    ),
+    COHORT_DELETE_CONFLICT(
+            ErrorType.CONFLICT,
+            "COHORT_DELETE_CONFLICT",
+            "연결된 운영 데이터가 있어 기수를 삭제할 수 없습니다."
     ),
     COHORT_MEMBERSHIP_DUPLICATED(
             ErrorType.CONFLICT,

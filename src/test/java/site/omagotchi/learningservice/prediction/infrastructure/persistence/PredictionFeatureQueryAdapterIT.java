@@ -11,7 +11,7 @@ import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.attendance.application.AttendanceErrorCode;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.gamification.application.GamificationErrorCode;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
 import site.omagotchi.learningservice.global.exception.BusinessException;

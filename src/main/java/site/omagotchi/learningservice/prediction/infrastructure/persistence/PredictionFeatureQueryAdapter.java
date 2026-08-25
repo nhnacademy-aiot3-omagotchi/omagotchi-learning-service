@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.AttendanceErrorCode;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
 import site.omagotchi.learningservice.attendance.domain.QAttendanceRecord;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.QCohort;
 import site.omagotchi.learningservice.cohort.domain.QCohortAttendancePolicy;
 import site.omagotchi.learningservice.cohort.domain.QCohortMembership;

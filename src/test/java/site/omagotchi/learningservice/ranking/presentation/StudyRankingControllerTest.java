@@ -14,18 +14,22 @@ import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
 import site.omagotchi.learningservice.ranking.application.StudyRankingQueryService;
-import site.omagotchi.learningservice.ranking.application.query.StudyRankingPeriod;
+import site.omagotchi.learningservice.ranking.application.query.StudyRankingPeriodSelection;
 import site.omagotchi.learningservice.ranking.application.query.StudyRankingQuery;
+import site.omagotchi.learningservice.ranking.application.result.HistoricalStudyRankingResult;
 import site.omagotchi.learningservice.ranking.application.result.MemberStudyRankingViewResult;
 import site.omagotchi.learningservice.ranking.application.result.MyStudyRankingResult;
 import site.omagotchi.learningservice.ranking.application.result.StudyRankingBoardResult;
 import site.omagotchi.learningservice.ranking.application.result.StudyRankingEntryResult;
+import site.omagotchi.learningservice.ranking.application.result.TodayStudyRankingResult;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -39,6 +43,8 @@ class StudyRankingControllerTest {
 
     private static final UUID USER_ID = new UUID(0L, 1L);
     private static final Long COHORT_ID = 10L;
+    private static final LocalDate AGGREGATION_DATE = LocalDate.parse("2000-01-13");
+    private static final Instant CALCULATED_AT = Instant.parse("2000-01-12T20:00:00Z");
     private static final Instant TOKEN_ISSUED_AT = Instant.parse("2000-01-01T00:00:00Z");
     private static final Instant TOKEN_EXPIRES_AT = Instant.parse("2000-01-01T00:05:00Z");
 
@@ -48,73 +54,123 @@ class StudyRankingControllerTest {
     @InjectMocks
     private MemberStudyRankingController memberStudyRankingController;
 
-    @InjectMocks
-    private ManagerStudyRankingController managerStudyRankingController;
-
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUpMockMvc() {
-        mockMvc = standaloneSetup(
-                memberStudyRankingController,
-                managerStudyRankingController
-        ).setControllerAdvice(new GlobalExceptionHandler()).build();
+        mockMvc = standaloneSetup(memberStudyRankingController)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
     }
 
     @Nested
-    @DisplayName("회원 랭킹 보드 조회")
+    @DisplayName("수강생 랭킹 보드 조회")
     class GetMemberRanking {
 
         @Test
-        @DisplayName("최소 메타데이터와 내 순위 정상 응답")
-        void returnsCompactBoardAndMyRanking() throws Exception {
-            StudyRankingBoardResult board = new StudyRankingBoardResult(
-                    3L,
-                    List.of(
-                            new StudyRankingEntryResult(1L, "첫째", 7_200L),
-                            new StudyRankingEntryResult(2L, "둘째", 3_600L)
-                    )
+        @DisplayName("오늘 기준 시각과 타이머 상태 정상 응답")
+        void returnsTodayBoardWithTimerState() throws Exception {
+            MemberStudyRankingViewResult view = memberView(
+                    new StudyRankingEntryResult(1L, "첫째", 7_200L, true),
+                    new StudyRankingEntryResult(3L, "나", 1_800L, false)
             );
-            MyStudyRankingResult mine = new MyStudyRankingResult(
-                    3L,
-                    Optional.of(new StudyRankingEntryResult(3L, "나", 1_800L))
-            );
-            given(studyRankingQueryService.getMemberView(
+            given(studyRankingQueryService.getTodayMemberView(
                     USER_ID,
                     COHORT_ID,
-                    new StudyRankingQuery(StudyRankingPeriod.DAILY, 2)
-            )).willReturn(new MemberStudyRankingViewResult(board, mine));
+                    new StudyRankingQuery(2)
+            )).willReturn(new TodayStudyRankingResult<>(
+                    AGGREGATION_DATE,
+                    CALCULATED_AT,
+                    view
+            ));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-rankings",
+                            "/api/v1/cohorts/{cohortId}/study-rankings/today",
                             COHORT_ID
-                    ).queryParam("period", "DAILY")
-                    .queryParam("maxRank", "2")
+                    ).queryParam("maxRank", "2")
                     .principal(authentication()))
                     .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.aggregationDate").value("2000-01-13"))
+                    .andExpect(jsonPath("$.calculatedAt").value(CALCULATED_AT.toString()))
                     .andExpect(jsonPath("$.rankedMemberCount").value(3))
-                    .andExpect(jsonPath("$.returnedEntryCount").value(2))
+                    .andExpect(jsonPath("$.returnedEntryCount").value(1))
                     .andExpect(jsonPath("$.entries[0].rank").value(1))
-                    .andExpect(jsonPath("$.entries[0].displayName").value("첫째"))
-                    .andExpect(jsonPath("$.entries[0].studySeconds").value(7_200L))
-                    .andExpect(jsonPath("$.myRanking.ranked").value(true))
-                    .andExpect(jsonPath("$.myRanking.ranking.rank").value(3))
-                    .andExpect(jsonPath("$.period").doesNotExist())
-                    .andExpect(jsonPath("$.baseDate").doesNotExist())
-                    .andExpect(jsonPath("$.includedThroughDate").doesNotExist())
-                    .andExpect(jsonPath("$.periodStatus").doesNotExist())
-                    .andExpect(jsonPath("$.calculatedAt").doesNotExist())
-                    .andExpect(jsonPath("$.requestedMaxRank").doesNotExist());
+                    .andExpect(jsonPath("$.entries[0].timerRunning").value(true))
+                    .andExpect(jsonPath("$.myRanking.ranking.timerRunning").value(false))
+                    .andExpect(jsonPath("$.startDate").doesNotExist())
+                    .andExpect(jsonPath("$.includedThroughDate").doesNotExist());
         }
 
         @Test
-        @DisplayName("오늘 기간 값 제거 확인")
-        void rejectsRemovedTodayPeriod() throws Exception {
+        @DisplayName("확정 일간 응답에 타이머 필드를 노출하지 않음")
+        void returnsHistoricalDailyBoardWithoutTimerState() throws Exception {
+            LocalDate date = LocalDate.parse("2000-01-12");
+            MemberStudyRankingViewResult view = memberView(
+                    new StudyRankingEntryResult(1L, "첫째", 7_200L),
+                    new StudyRankingEntryResult(3L, "나", 1_800L)
+            );
+            given(studyRankingQueryService.getHistoricalMemberView(
+                    USER_ID,
+                    COHORT_ID,
+                    StudyRankingPeriodSelection.daily(date),
+                    new StudyRankingQuery(null)
+            )).willReturn(new HistoricalStudyRankingResult<>(
+                    date,
+                    Optional.of(date),
+                    view
+            ));
+
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-rankings",
-                            COHORT_ID
-                    ).queryParam("period", "TODAY")
-                    .principal(authentication()))
+                            "/api/v1/cohorts/{cohortId}/study-rankings/daily/{date}",
+                            COHORT_ID,
+                            date
+                    ).principal(authentication()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.startDate").value("2000-01-12"))
+                    .andExpect(jsonPath("$.includedThroughDate").value("2000-01-12"))
+                    .andExpect(jsonPath("$.entries[0].timerRunning").doesNotExist())
+                    .andExpect(jsonPath("$.myRanking.ranking.timerRunning").doesNotExist())
+                    .andExpect(jsonPath("$.calculatedAt").doesNotExist());
+        }
+
+        @Test
+        @DisplayName("확정 기간이 없으면 nullable 종료일 정상 응답")
+        void returnsNullIncludedThroughDate() throws Exception {
+            LocalDate monday = LocalDate.parse("2000-01-10");
+            MemberStudyRankingViewResult emptyView = new MemberStudyRankingViewResult(
+                    new StudyRankingBoardResult(0L, List.of()),
+                    new MyStudyRankingResult(0L, Optional.empty())
+            );
+            given(studyRankingQueryService.getHistoricalMemberView(
+                    USER_ID,
+                    COHORT_ID,
+                    StudyRankingPeriodSelection.weekly(monday),
+                    new StudyRankingQuery(null)
+            )).willReturn(new HistoricalStudyRankingResult<>(
+                    monday,
+                    Optional.empty(),
+                    emptyView
+            ));
+
+            mockMvc.perform(get(
+                            "/api/v1/cohorts/{cohortId}/study-rankings/weekly/{weekStartDate}",
+                            COHORT_ID,
+                            monday
+                    ).principal(authentication()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.includedThroughDate").value(nullValue()))
+                    .andExpect(jsonPath("$.entries").isEmpty())
+                    .andExpect(jsonPath("$.myRanking.ranked").value(false));
+        }
+
+        @Test
+        @DisplayName("일간 날짜 형식 오류 요청 거부")
+        void rejectsInvalidDailyDateFormat() throws Exception {
+            mockMvc.perform(get(
+                            "/api/v1/cohorts/{cohortId}/study-rankings/daily/{date}",
+                            COHORT_ID,
+                            "not-a-date"
+                    ).principal(authentication()))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code")
                             .value(CommonErrorCode.INVALID_REQUEST.code()));
@@ -123,64 +179,14 @@ class StudyRankingControllerTest {
         }
     }
 
-    @Nested
-    @DisplayName("내 랭킹 조회")
-    class GetMyRanking {
-
-        @Test
-        @DisplayName("미랭크 최소 응답")
-        void returnsCompactUnrankedResponse() throws Exception {
-            given(studyRankingQueryService.getMine(
-                    USER_ID,
-                    COHORT_ID,
-                    StudyRankingPeriod.DAILY
-            )).willReturn(new MyStudyRankingResult(
-                    2L,
-                    Optional.empty()
-            ));
-
-            mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-rankings/me",
-                            COHORT_ID
-                    ).queryParam("period", "DAILY")
-                    .principal(authentication()))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.rankedMemberCount").value(2))
-                    .andExpect(jsonPath("$.ranked").value(false))
-                    .andExpect(jsonPath("$.ranking").doesNotExist())
-                    .andExpect(jsonPath("$.entries").doesNotExist())
-                    .andExpect(jsonPath("$.returnedEntryCount").doesNotExist());
-        }
-    }
-
-    @Nested
-    @DisplayName("관리자 랭킹 보드 조회")
-    class GetManagerRanking {
-
-        @Test
-        @DisplayName("내 순위 없는 최소 응답")
-        void returnsCompactBoardWithoutMyRanking() throws Exception {
-            given(studyRankingQueryService.getManagerBoard(
-                    USER_ID,
-                    COHORT_ID,
-                    new StudyRankingQuery(StudyRankingPeriod.WEEKLY, null)
-            )).willReturn(new StudyRankingBoardResult(
-                    1L,
-                    List.of(new StudyRankingEntryResult(1L, "첫째", 3_600L))
-            ));
-
-            mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-rankings/management",
-                            COHORT_ID
-                    ).queryParam("period", "WEEKLY")
-                    .principal(authentication()))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.rankedMemberCount").value(1))
-                    .andExpect(jsonPath("$.returnedEntryCount").value(1))
-                    .andExpect(jsonPath("$.entries[0].rank").value(1))
-                    .andExpect(jsonPath("$.myRanking").doesNotExist())
-                    .andExpect(jsonPath("$.requestedMaxRank").doesNotExist());
-        }
+    private MemberStudyRankingViewResult memberView(
+            StudyRankingEntryResult leader,
+            StudyRankingEntryResult mine
+    ) {
+        return new MemberStudyRankingViewResult(
+                new StudyRankingBoardResult(3L, List.of(leader)),
+                new MyStudyRankingResult(3L, Optional.of(mine))
+        );
     }
 
     private JwtAuthenticationToken authentication() {

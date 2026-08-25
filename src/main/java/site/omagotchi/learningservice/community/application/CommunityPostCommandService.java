@@ -6,7 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
@@ -19,7 +19,7 @@ import site.omagotchi.learningservice.community.application.command.PinCommunity
 import site.omagotchi.learningservice.community.application.command.UpdateCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.query.CommunityAttachmentMetadata;
 import site.omagotchi.learningservice.community.application.query.CommunityPostDetail;
-import site.omagotchi.learningservice.community.domain.CommunityErrorCode;
+import site.omagotchi.learningservice.community.application.CommunityErrorCode;
 import site.omagotchi.learningservice.community.domain.CommunityPost;
 import site.omagotchi.learningservice.community.domain.CommunityPostAttachment;
 import site.omagotchi.learningservice.community.domain.CommunityPostScope;

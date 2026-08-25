@@ -366,15 +366,17 @@ public class Space {
         );
     }
 
+    /**
+     * 이 공간의 관리 주체 기수를 정한다.
+     */
     public Space assignCohort(
             Long cohortId,
             ZonedDateTime updatedAt
     ) {
         ensureNotDeleted();
-        ensureLab();
 
         if (this.cohortId != null) {
-            throw new IllegalStateException("이미 기수에 배정된 실습실입니다.");
+            throw new IllegalStateException("이미 기수에 배정된 공간입니다.");
         }
 
         return new Space(
@@ -391,12 +393,14 @@ public class Space {
         );
     }
 
+    /**
+     * 관리 주체를 비운다. 기수 종료 정리(CE-04)와 자발적 반납이 같은 전이를 쓴다.
+     */
     public Space unassignCohort(ZonedDateTime updatedAt) {
         ensureNotDeleted();
-        ensureLab();
 
         if (cohortId == null) {
-            throw new IllegalStateException("기수에 배정되지 않은 실습실입니다.");
+            throw new IllegalStateException("기수에 배정되지 않은 공간입니다.");
         }
 
         return new Space(
@@ -441,18 +445,6 @@ public class Space {
      */
     public boolean isMeetingRoom() {
         return spaceType == SpaceType.MEETING;
-    }
-
-    public boolean isAssignedLab() {
-        return spaceType == SpaceType.LAB && cohortId != null;
-    }
-
-    private void ensureLab() {
-        if (spaceType != SpaceType.LAB) {
-            throw new IllegalStateException(
-                    "실습실에만 기수를 배정하거나 해제할 수 있습니다."
-            );
-        }
     }
 
     private void ensureNotDeleted() {

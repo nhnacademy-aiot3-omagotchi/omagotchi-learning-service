@@ -8,21 +8,16 @@ import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
 import site.omagotchi.learningservice.attendance.domain.PresenceState;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
 import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
-import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
-import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
-import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
-import site.omagotchi.learningservice.attendance.domain.PresenceState;
-import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
-import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
+import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
+import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceType;
 
-import java.time.Instant;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -132,6 +127,28 @@ public class OccupancyTestFixture {
     }
 
     /**
+     * STUDENT 역할의 ACTIVE 멤버십을 만들고 출근시킨다.
+     *
+     * <p>{@link #createActiveMember}가 MANAGER로 고정돼 있어 "매니저가 아닌 사람"을
+     * 재현할 수 없다. 강제 종료(MR-21)처럼 역할로 갈리는 권한을 검증하려면 둘이 구분돼야
+     * 한다 — 이 Method가 없으면 권한 테스트가 항상 통과해 아무것도 지키지 못한다.</p>
+     */
+    public Member createActiveStudent(Long cohortId) {
+        UUID userId = UUID.randomUUID();
+
+        // CohortMembership에 "ACTIVE 학생"을 만드는 공개 경로가 없다 — 승인 흐름은
+        // CohortMembershipService를 거치며 기수 정책까지 요구한다. 점유 테스트에 필요한
+        // 것은 역할뿐이라 ACTIVE 매니저를 만든 뒤 역할만 바꾼다.
+        CohortMembership membership = CohortMembership.activeManager(
+                cohortId, userId, UUID.randomUUID());
+        ReflectionTestUtils.setField(membership, "role", CohortMembershipRole.STUDENT);
+
+        Long membershipId = membershipRepository.save(membership).getId();
+        checkIn(membershipId);
+        return new Member(membershipId, userId);
+    }
+
+    /**
      * 활성 회의실을 만든다.
      *
      * <p>{@code Space.create}는 비활성으로 만들므로 반드시 {@code activate}를 거친다 —
@@ -147,6 +164,13 @@ public class OccupancyTestFixture {
     public Long createLab(Long cohortId, String name, int capacity) {
         ZonedDateTime now = ZonedDateTime.now(SEOUL);
         Space space = Space.create(name, SpaceType.LAB, capacity, cohortId, now).activate(now);
+        return spaceRepository.save(space).getId();
+    }
+
+    /** 독서실. 점유 대상이 아니며 관리 주체 순환(CE-04) 검증에 쓴다. */
+    public Long createStudyRoom(Long cohortId, String name, int capacity) {
+        ZonedDateTime now = ZonedDateTime.now(SEOUL);
+        Space space = Space.create(name, SpaceType.STUDY, capacity, cohortId, now).activate(now);
         return spaceRepository.save(space).getId();
     }
 

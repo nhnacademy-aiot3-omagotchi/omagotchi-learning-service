@@ -9,6 +9,7 @@ import site.omagotchi.learningservice.rule.application.RuleErrorCode;
 import site.omagotchi.learningservice.rule.application.port.ThresholdRuleRepository;
 import site.omagotchi.learningservice.rule.domain.ThresholdRule;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -55,5 +56,14 @@ public class ThresholdRuleJpaPersistence implements ThresholdRuleRepository {
     @Override
     public Optional<ThresholdRule> findByDeviceEuiAndMetric(String deviceEui, String metric) {
         return thresholdRuleJpaRepository.findByDeviceEuiAndMetric(deviceEui, metric);
+    }
+
+    /**
+     * 정렬을 붙이는 것이 의도다. PostgreSQL 은 순서를 보장하지 않아, 같은 데이터인데도
+     * 호출마다 대표값이 달라질 수 있다 (공간 요약이 최빈값 동률일 때).
+     */
+    @Override
+    public List<ThresholdRule> findByDeviceEuiIn(Collection<String> deviceEuis) {
+        return thresholdRuleJpaRepository.findByDeviceEuiInOrderByDeviceEuiAsc(deviceEuis);
     }
 }

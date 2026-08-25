@@ -108,6 +108,38 @@ public class TeamMasterService {
     }
 
     /**
+     * 팀 하나를 해체한다 (CE-01, 기수 종료 연동). 팀 단위로 격리된 Transaction이다 — 이
+     * 팀의 실패가 다른 팀의 해체를 막으면 안 되므로, 여러 팀에 걸친 반복은 호출자
+     * ({@code CohortEndedCleanup})가 건별로 이 메서드를 불러 나눠 가진다.
+     *
+     * <p>{@link #disband}와 달리 <b>행위자 검증도 통보도 없다.</b> 기수 종료라는 시스템
+     * 사건이 근거이고, 서비스 이용 자체가 끝나므로 해체 통보를 보내지 않는다 (명세 08 §2
+     * 1단계). {@code removeEndedMember}처럼 시스템 경로다.</p>
+     *
+     * <p><b>이 정리가 없으면 GR-18(1인 1팀)이 실질적으로 무너진다.</b> 재수강생은 종료
+     * 기수와 신규 기수의 멤버십을 모두 가지므로, 종료 기수의 팀이 남아 있으면 한 사람이
+     * 두 팀에 속하게 된다 — {@code uq_team_members_membership}은 멤버십 기준이라 이를
+     * 막지 못한다.</p>
+     *
+     * <p>같은 팀에 두 번 호출해도 안전하다. 조회와 잠금 사이에 다른 경로가 이미 해체했으면
+     * 잠금 후 재확인이 건너뛴다.</p>
+     *
+     * @return 이번 호출로 해체했으면 {@code true}, 이미 해체됐거나 없으면 {@code false}
+     */
+    @Transactional
+    public boolean disbandOne(Long teamId) {
+        // 잠근 뒤 활성 여부를 다시 본다 — 조회와 잠금 사이에 마지막 팀원의 탈퇴가
+        // 해체를 먼저 커밋했을 수 있다.
+        Team team = teamRepository.findByIdForUpdate(teamId).orElse(null);
+        if (team == null || team.getDeletedAt() != null) {
+            return false;
+        }
+        teamMemberRepository.deleteByTeamId(teamId);
+        team.disband();
+        return true;
+    }
+
+    /**
      * 종료된 소속을 팀에서 정리한다 (GR-16).
      *
      * <p>계정 삭제·수동 제명으로 멤버십이 끝났을 때 {@code CohortMembershipEndedEvent}를 받아

@@ -5,6 +5,19 @@ spring:
   application:
     name: learning-service
 
+  cloud:
+    loadbalancer:
+      cache:
+        enabled: false
+
+  http:
+    clients:
+      connect-timeout: ${IDENTITY_SERVICE_CONNECT_TIMEOUT}
+      read-timeout: ${IDENTITY_SERVICE_READ_TIMEOUT}
+    serviceclient:
+      identity-service:
+        base-url: ${IDENTITY_SERVICE_BASE_URL}
+
   task:
     execution:
       # AsyncConfig의 eventTaskExecutor와 Boot 기본 실행기를 분리한다 (ADR space-team/0012).
@@ -19,6 +32,8 @@ spring:
 
   data:
     redis:
+      repositories:
+        enabled: false
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
       database: ${REDIS_DATABASE}
@@ -37,6 +52,8 @@ spring:
     create-schemas: true
     clean-disabled: true
     validate-on-migrate: true
+    postgresql:
+      transactional-lock: false
 
   jpa:
     hibernate:
@@ -66,6 +83,8 @@ spring:
 
 eureka:
   client:
+    jersey:
+      enabled: false
     enabled: ${EUREKA_ENABLED}
     register-with-eureka: true
     fetch-registry: true
@@ -90,6 +109,12 @@ management:
 
 timer:
   max-duration: ${TIMER_MAX_DURATION}
+
+prediction:
+  client:
+    base-url: ${PREDICTION_SERVICE_BASE_URL}
+    connect-timeout: ${PREDICTION_SERVICE_CONNECT_TIMEOUT:2s}
+    read-timeout: ${PREDICTION_SERVICE_READ_TIMEOUT:5s}
 
 telegram:
   bot:
@@ -133,6 +158,14 @@ auth:
     issuer: ${JWT_ISSUER}
     audience: ${JWT_AUDIENCE}
     public-key-location: ${JWT_PUBLIC_KEY_LOCATION}
+  rule:
+    username: ${RULE_LEARNING_USERNAME}
+    password: ${RULE_LEARNING_PASSWORD}
+
+clients:
+  identity:
+    username: ${LEARNING_IDENTITY_USERNAME}
+    password: ${LEARNING_IDENTITY_PASSWORD}
 
 sensor:
   series:
@@ -156,6 +189,12 @@ omagotchi:
       fixed-delay: ${OCCUPANCY_EXPIRY_FIXED_DELAY:60000}
       # 기동 직후에는 Flyway·연결 풀 준비와 겹치지 않게 미룬다
       initial-delay: ${OCCUPANCY_EXPIRY_INITIAL_DELAY:30000}
+    membership-sweep:
+      # 소속 종료 정리(MR-26)가 유실됐을 때의 복구 지연 상한 (ADR space-team/0013).
+      # 만료 정리(1분)보다 길게 잡는다 — 이미 실패한 건만 다루는 예외 경로다.
+      fixed-delay: ${OCCUPANCY_MEMBERSHIP_SWEEP_FIXED_DELAY:300000}
+      initial-delay: ${OCCUPANCY_MEMBERSHIP_SWEEP_INITIAL_DELAY:60000}
+      batch-size: ${OCCUPANCY_MEMBERSHIP_SWEEP_BATCH_SIZE:200}
     telegram:
       # 실제 발송 테스트에서만 켠다. false이면 sender Bean 자체를 등록하지 않는다
       enabled: ${OCCUPANCY_TELEGRAM_ENABLED:false}

@@ -86,6 +86,24 @@ public class RoomOccupancyController {
     }
 
     /**
+     * 강제 종료 (MR-21). 점유자가 아니라 <b>점유자 기수의 매니저</b>가 호출한다.
+     *
+     * <p>반납({@code /release})과 경로를 나누는 이유는 권한과 후속 처리가 모두 다르기
+     * 때문이다 — 저쪽은 점유자 본인만 호출할 수 있고 공실 알림이 발송되지만, 이쪽은
+     * 매니저가 공간을 회수하는 것이라 알림을 보내지 않고 대기 신청을 지운다.</p>
+     *
+     * @return 204. 점유자 기수의 매니저가 아니면 403, 활성 점유가 없으면 409
+     */
+    @PostMapping("/force-release")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void forceRelease(
+            @PathVariable("space-id") Long spaceId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        roomOccupancyLifecycleService.forceRelease(spaceId, requesterId(jwt));
+    }
+
+    /**
      * Access JWT의 {@code sub}에서 요청자 계정을 읽는다.
      *
      * <p>{@code null} 검사를 두지 않는 것이 의도다. 이 컨트롤러의 모든 경로가

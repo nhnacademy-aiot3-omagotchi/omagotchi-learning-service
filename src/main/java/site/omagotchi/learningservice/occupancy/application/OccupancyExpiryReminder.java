@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyReminderSender;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
+import site.omagotchi.learningservice.space.application.SpaceNameQueryService;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -29,6 +30,7 @@ import java.time.OffsetDateTime;
 public class OccupancyExpiryReminder {
 
     private final RoomOccupancyRepository occupancyRepository;
+    private final SpaceNameQueryService spaceNameQueryService;
     private final Clock clock;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -47,9 +49,15 @@ public class OccupancyExpiryReminder {
             return false;
         }
 
+        // 조회 실패(예: 공간이 그 사이 삭제됨)가 알림 자체를 막으면 안 되므로 spaceId로
+        // 대체할 뿐 예외를 던지지 않는다 — VacancyAlertDispatcher와 같은 판단이다.
+        String spaceName = spaceNameQueryService.findName(occupancy.getSpaceId())
+                .orElse("공간 " + occupancy.getSpaceId());
+
         sender.sendExpiryReminder(new OccupancyReminderSender.ExpiryReminder(
                 occupancy.getId(),
                 occupancy.getSpaceId(),
+                spaceName,
                 occupancy.getOccupierUserId(),
                 occupancy.getExpiresAt()
         ));

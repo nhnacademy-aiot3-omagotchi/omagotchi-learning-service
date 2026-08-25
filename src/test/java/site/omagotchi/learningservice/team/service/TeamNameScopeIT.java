@@ -14,7 +14,7 @@ import site.omagotchi.learningservice.team.application.result.TeamResult;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.application.port.TeamRepository;
-import site.omagotchi.learningservice.team.infrastructure.TeamJpaRepository;
+import site.omagotchi.learningservice.team.infrastructure.persistence.TeamJpaRepository;
 import site.omagotchi.learningservice.team.support.TeamTestFixture;
 
 import java.util.List;

@@ -3,6 +3,7 @@
 - 기준일: `2026-08-20`
 - 대상 순서: 프로필 캐릭터 계약 → 커뮤니티 첨부 조회 → Presence 계약 → Gamification 내부 이벤트 → 출결 조회 개선 → API 계약 테스트/REST Docs
 - Frontend 전달 문서: `Frontend-Learning-API-Integration-Handoff.md`, `Frontend-Learning-Integration-Task-Brief.md`
+- E2E 정의·실행 방법: [Learning Service E2E 실행·검증 가이드](../../testing/Learning-Service-E2E-Guide.md)
 
 ## 0. 현재 IntelliJ 빌드 오류 해결
 
@@ -28,31 +29,27 @@ checksum 등이 표시되므로 이번 오류와 구분한다.
 
 ## 2. Profile 캐릭터 `type`, `assetKey`
 
-현재 `UserProfileService.toCurrentCharacterResult()`가 `type`, `assetKey`에 명시적으로 `null`을 넣는다.
-반면 `GameCharacter`에는 `code`가 있으므로 최소 변경은 다음과 같다.
+Frontend의 실제 `characterId + colorId` 자산 구조를 기준으로 구현되었다.
 
-1. `gameCharacterRepository.findById(...)` 결과에서 `name`과 `code`를 함께 읽는다.
-2. `CurrentCharacterResult.type`에는 화면 분류가 정말 필요할 때만 별도 enum 값을 넣는다.
-3. 이미지 파일을 code로 결정할 수 있다면 `assetKey=gameCharacter.code`로 확정한다.
-4. 색상/진화 단계마다 이미지가 다르면 `code`를 재사용하지 말고 DB에 `asset_key`를 추가하고
-   Flyway 신규 migration으로 초기값을 넣는다.
-5. Service test와 `GET /api/v1/user-profiles/me/profile` 계약 테스트에서 null이 아닌 값을 검증한다.
+- `game_characters.asset_key`: `study`, `debug`, `sprout`, `server`, `night`, `kid`,
+  `caffeine`, `commit`
+- `user_characters.color_id`: `original`을 포함한 Frontend 8개 색상
+- Profile `type`: Frontend `characterId`
+- Profile `assetKey`: 확장자를 제외한 이미지 상대 키
 
-권장 계약은 `assetKey`를 프런트 이미지 map의 안정적인 키로 쓰고, `type`은 별도 의미가 확정되기
-전까지 제거하거나 nullable로 유지하는 것이다. 같은 값을 두 필드에 중복해서 넣는 것은 피한다.
-
-Frontend는 URL을 Backend에서 조립하지 않고 다음처럼 자신의 정적 asset map으로 변환한다.
+예시:
 
 ```text
-NIGHT_CLASS -> /assets/characters/night-class.png
+type=night, colorId=original, assetKey=night/night
+type=night, colorId=pistachio, assetKey=night/pistachio
 ```
 
-모르는 `assetKey`에는 기본 이미지를 표시한다.
+Frontend는 `/images/characters/${assetKey}.png`로 정적 PNG를 찾는다. 기존 `V6`는 수정하지 않고
+`V9__align_character_assets_with_frontend.sql`에서 캐릭터 8종과 색상 컬럼을 추가한다.
 
 ## 3. Community 첨부파일 다운로드
 
-현재 저장 Port는 `store`, `delete`만 있고 상세 응답은 첨부 메타데이터만 제공한다. 구현 순서는
-다음과 같다.
+구현 완료. 저장 Port의 `load`와 아래 인증 endpoint를 사용한다.
 
 1. `CommunityAttachmentStorage`에 `load(storageKey)` 읽기 Port를 추가한다.
 2. 로컬 구현은 기존 `targetPath()`의 root 이탈 검사를 그대로 거쳐 `Resource` 또는 stream을 반환한다.
@@ -78,15 +75,13 @@ Frontend/BFF는 상세 응답의 `attachmentId`로 위 API를 호출해 byte str
 - 데이터 소유 서비스: 닉네임/캐릭터는 Learning, 실명/이메일은 Identity 중 누가 제공하는지
 - REST 초기 snapshot과 STOMP 실시간 event가 같은 사용자 표시 필드를 갖는지
 
-권장안은 Learning이 자신이 소유한 `nickname`, `characterAssetKey`만 보강하고, 실명/이메일이
-필요하면 Frontend BFF가 Identity 결과와 `userId`로 조합하는 것이다. Presence event마다 Identity를
-동기 호출하지 않는다. 확정 전 현재 계약은 `userId`, `status`만이며 Frontend는 사용자 ID 축약 또는
-별도 캐시된 멤버 map으로 표시한다.
+확정 계약은 `userId`, `status`, `nickname`, `currentCharacter(type, colorId, assetKey)`다.
+대표 캐릭터가 없는 사용자의 닉네임과 캐릭터는 nullable이며 실명·이메일은 포함하지 않는다.
 
 ## 5. Gamification 이벤트 연결
 
-현재 `/gamification/events/**`는 Browser가 직접 호출하면 출결/학습 완료를 임의로 발생시킬 수 있다.
-프런트 공개 API가 아니라 Learning 내부 도메인 이벤트로 바꾸는 것이 목표다.
+구현 완료. `/gamification/events/**` 공개 Controller는 제거했고 출결·학습 성공 트랜잭션에서
+Learning 내부 도메인 이벤트를 발행한다.
 
 권장 흐름:
 
@@ -97,27 +92,27 @@ AttendanceService.checkIn 성공
   -> DailyQuestService.handleAttendance(userId)
 
 Study 완료 처리 성공
-  -> StudyCompletedEvent(userId, studyRecordId, occurredAt)
+  -> StudyCompletedEvent(userId, sourceId, occurredAt)
   -> AFTER_COMMIT listener
   -> DailyQuestService.handleStudyCompleted(userId)
 ```
 
-- Application 계층에는 event와 publisher Port를 두고 Spring publisher는 Infrastructure에서 구현한다.
-- listener는 `@TransactionalEventListener(phase = AFTER_COMMIT)`로 실행한다.
-- 중복 event에 대비해 `(eventType, sourceId)` 또는 quest progress update를 idempotent하게 만든다.
+- Application 계층에는 event와 publisher Port를 두고 Spring publisher는 Infrastructure에서 구현했다.
+- listener는 `AFTER_COMMIT`과 전용 비동기 executor를 사용하고, Processor는 `REQUIRES_NEW`로 실행한다.
+- V10의 `gamification_event_receipts`가 `(event_type, source_id)`를 원자적으로 선점해 중복 진행을 막는다.
+- 수동 학습은 `studyRecordId`, 타이머 학습은 한 사용자 행동을 나타내는 `timerRunId`를 sourceId로 쓴다.
 - `character-checked`가 단순 화면 열기라면 보상 조건으로 사용하지 않는다. 실제 사용자 action API로
   정의하거나 퀘스트 종류에서 제외한다.
 - `llm-quest-completed`는 LLM/검증 서비스가 인증된 내부 호출이나 메시지로 발행하고 Browser가
   완료를 직접 선언하지 않게 한다.
-- 내부 전환 후 `/events/**` Controller는 제거하거나 Gateway에서 외부 접근을 차단한다.
+- `/events/**` Controller는 제거되어 직접 호출 시 `404 Not Found`를 반환한다.
 
 Frontend는 출석 또는 학습 완료 API 성공 후 `/events/**`를 추가 호출하지 않는다. 홈/퀘스트를
 재조회해 갱신된 상태만 표시한다.
 
 ## 6. 출결 날짜 조회와 Pagination
 
-현재 내 출결 조회는 전체 이력을 `List`로 반환하고 관리자 조회만 단일 `date`를 받는다. 다음 계약을
-권장한다.
+구현 완료. 내 출결은 날짜 범위와 페이지를 받고 관리자 일별 조회도 같은 Page 응답을 사용한다.
 
 ```http
 GET /api/v1/cohorts/{cohortId}/attendance-records/me
@@ -136,9 +131,9 @@ GET /api/v1/cohorts/{cohortId}/attendance-records/me
 }
 ```
 
-구현 시 repository는 membership ID와 inclusive `attendanceDate between from and to` 조건에
-`Pageable`을 적용하고 `attendanceDate DESC`를 고정한다. `from <= to`, 최대 조회 기간 366일,
-`size <= 100`을 검증한다. 날짜를 생략할 때의 기본값은 최근 31일로 둔다.
+repository는 membership ID와 inclusive `attendanceDate between from and to` 조건에 `Pageable`을
+적용하고 `attendanceDate DESC`, ID DESC를 고정한다. `from <= to`, 최대 조회 기간 366일,
+`size <= 100`을 검증한다. 날짜를 생략하면 전체 범위에 Pagination만 적용한다.
 
 관리자 일별 조회는 현재 `?date=` 계약을 유지할 수 있다. 기수 규모가 커지면 같은 Page 응답으로
 바꾸되, active membership 전체와 출결 record를 결합해 미입실자도 화면에 나타나야 하는지는 별도

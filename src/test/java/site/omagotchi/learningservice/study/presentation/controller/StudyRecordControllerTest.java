@@ -261,9 +261,8 @@ class StudyRecordControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {
-                                        "date": "2000-01-01",
-                                        "startTime": "10:00",
-                                        "endTime": "11:00"
+                                        "startDateTime": "2000-01-01T23:30",
+                                        "endDateTime": "2000-01-02T00:30"
                                     }
                                     """))
                     .andExpect(status().isCreated())
@@ -272,8 +271,8 @@ class StudyRecordControllerTest {
             ArgumentCaptor<CreateStudyRecordCommand> captor = ArgumentCaptor.forClass(CreateStudyRecordCommand.class);
             verify(studyRecordCommandService).create(eq(USER_ID), eq(COHORT_ID), captor.capture());
             CreateStudyRecordCommand command = captor.getValue();
-            assertEquals(Instant.parse("2000-01-01T01:00:00Z"), command.startTime());
-            assertEquals(Instant.parse("2000-01-01T02:00:00Z"), command.endTime());
+            assertEquals(Instant.parse("2000-01-01T14:30:00Z"), command.startTime());
+            assertEquals(Instant.parse("2000-01-01T15:30:00Z"), command.endTime());
         }
 
         @Test
@@ -287,9 +286,8 @@ class StudyRecordControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {
-                                        "date": "2000-01-01",
-                                        "startTime": "10:00:59",
-                                        "endTime": "11:00:01"
+                                        "startDateTime": "2000-01-01T10:00:59",
+                                        "endDateTime": "2000-01-01T11:00:01"
                                     }
                                     """))
                     .andExpect(status().isBadRequest())
@@ -324,9 +322,8 @@ class StudyRecordControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {
-                                        "date": "2000-01-01",
-                                        "startTime": "10:00",
-                                        "endTime": "11:00",
+                                        "startDateTime": "2000-01-01T23:40",
+                                        "endDateTime": "2000-01-02T00:40",
                                         "expectedVersion": 1
                                     }
                                     """))
@@ -341,8 +338,8 @@ class StudyRecordControllerTest {
                     captor.capture()
             );
             UpdateStudyRecordCommand command = captor.getValue();
-            assertEquals(Instant.parse("2000-01-01T01:00:00Z"), command.startTime());
-            assertEquals(Instant.parse("2000-01-01T02:00:00Z"), command.endTime());
+            assertEquals(Instant.parse("2000-01-01T14:40:00Z"), command.startTime());
+            assertEquals(Instant.parse("2000-01-01T15:40:00Z"), command.endTime());
             assertEquals(EXPECTED_VERSION, command.expectedVersion());
         }
 
@@ -358,9 +355,8 @@ class StudyRecordControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {
-                                        "date": "2000-01-01",
-                                        "startTime": "10:00:00.999",
-                                        "endTime": "11:00:00.001",
+                                        "startDateTime": "2000-01-01T10:00:00.999",
+                                        "endDateTime": "2000-01-01T11:00:00.001",
                                         "expectedVersion": 1
                                     }
                                     """))

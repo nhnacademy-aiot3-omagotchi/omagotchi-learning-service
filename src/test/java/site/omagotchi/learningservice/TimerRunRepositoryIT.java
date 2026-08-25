@@ -26,6 +26,7 @@ import site.omagotchi.learningservice.study.infrastructure.persistence.repositor
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -64,7 +65,8 @@ class TimerRunRepositoryIT {
         CohortMembershipTestFixture.ensureActiveMemberships(
                 jdbcTemplate,
                 COHORT_MEMBERSHIP_ID,
-                102L
+                102L,
+                104L
         );
     }
 
@@ -111,6 +113,37 @@ class TimerRunRepositoryIT {
                     () -> assertEquals(active.getCreatedAt(), ended.getCreatedAt())
             );
         }
+
+        @Test
+        @DisplayName("같은 기수의 여러 학생 멤버십에서 열린 타이머만 일괄 조회")
+        void findsOpenRunsForStudentMembershipsOfSameCohort() {
+            TimerRun firstActive = timerRunRepository.create(
+                    TimerRun.start(COHORT_MEMBERSHIP_ID, STARTED_AT)
+            );
+            TimerRun secondActive = timerRunRepository.create(
+                    TimerRun.start(102L, STARTED_AT.plusSeconds(1L))
+            );
+            TimerRun ended = timerRunRepository.create(
+                    TimerRun.start(104L, STARTED_AT.plusSeconds(2L))
+            );
+            ended.stopOrExpire(ENDED_AT, TIME_POLICY);
+            timerRunRepository.end(ended);
+
+            List<TimerRun> results = timerRunQueryRepository
+                    .findActiveByCohortMembershipIds(List.of(
+                            104L,
+                            102L,
+                            COHORT_MEMBERSHIP_ID
+                    ));
+
+            assertAll(
+                    () -> assertEquals(
+                            List.of(firstActive.getId(), secondActive.getId()),
+                            results.stream().map(TimerRun::getId).toList()
+                    ),
+                    () -> assertTrue(results.stream().allMatch(TimerRun::isRunning))
+            );
+        }
     }
 
     @Nested
@@ -120,19 +153,19 @@ class TimerRunRepositoryIT {
         @Test
         @DisplayName("초 미만 정밀도 저장 거절")
         void rejectsSubSecondPrecision() {
+            String sql = """
+                    INSERT INTO learning_service.timer_runs (
+                        id,
+                        cohort_membership_id,
+                        started_at
+                    ) VALUES (?, ?, ?)
+                    """;
+            UUID timerRunId = UUID.fromString("00000000-0000-0000-0000-000000000102");
+            OffsetDateTime startedAt = OffsetDateTime.parse("2000-01-01T00:00:00.001Z");
+
             assertThrows(
                     DataIntegrityViolationException.class,
-                    () -> jdbcTemplate.update("""
-                                    INSERT INTO learning_service.timer_runs (
-                                        id,
-                                        cohort_membership_id,
-                                        started_at
-                                    ) VALUES (?, ?, ?)
-                                    """,
-                            UUID.fromString("00000000-0000-0000-0000-000000000102"),
-                            102L,
-                            OffsetDateTime.parse("2000-01-01T00:00:00.001Z")
-                    )
+                    () -> jdbcTemplate.update(sql, timerRunId, 102L, startedAt)
             );
         }
     }
@@ -144,19 +177,19 @@ class TimerRunRepositoryIT {
         @Test
         @DisplayName("존재하지 않는 소속의 실행 저장 거절")
         void rejectsUnknownMembership() {
+            String sql = """
+                    INSERT INTO learning_service.timer_runs (
+                        id,
+                        cohort_membership_id,
+                        started_at
+                    ) VALUES (?, ?, ?)
+                    """;
+            UUID timerRunId = UUID.fromString("00000000-0000-0000-0000-000000000103");
+            OffsetDateTime startedAt = OffsetDateTime.parse("2000-01-01T00:00:00Z");
+
             assertThrows(
                     DataIntegrityViolationException.class,
-                    () -> jdbcTemplate.update("""
-                                    INSERT INTO learning_service.timer_runs (
-                                        id,
-                                        cohort_membership_id,
-                                        started_at
-                                    ) VALUES (?, ?, ?)
-                                    """,
-                            UUID.fromString("00000000-0000-0000-0000-000000000103"),
-                            103L,
-                            OffsetDateTime.parse("2000-01-01T00:00:00Z")
-                    )
+                    () -> jdbcTemplate.update(sql, timerRunId, 103L, startedAt)
             );
         }
     }
@@ -210,19 +243,24 @@ class TimerRunRepositoryIT {
         @ValueSource(strings = {"STOP", "DISCARD", "EXPIRED"})
         @DisplayName("종료 시각 없는 종료 사유 저장 거절")
         void rejectsEndReasonWithoutEndTime(String endReason) {
+            String sql = """
+                    INSERT INTO learning_service.timer_runs (
+                        id,
+                        cohort_membership_id,
+                        started_at,
+                        end_reason
+                    ) VALUES (?, ?, ?, ?)
+                    """;
+            UUID timerRunId = UUID.randomUUID();
+            OffsetDateTime startedAt = OffsetDateTime.parse("2000-01-01T00:00:00Z");
+
             assertThrows(
                     DataIntegrityViolationException.class,
-                    () -> jdbcTemplate.update("""
-                                    INSERT INTO learning_service.timer_runs (
-                                        id,
-                                        cohort_membership_id,
-                                        started_at,
-                                        end_reason
-                                    ) VALUES (?, ?, ?, ?)
-                                    """,
-                            UUID.randomUUID(),
+                    () -> jdbcTemplate.update(
+                            sql,
+                            timerRunId,
                             COHORT_MEMBERSHIP_ID,
-                            OffsetDateTime.parse("2000-01-01T00:00:00Z"),
+                            startedAt,
                             endReason
                     )
             );
@@ -231,21 +269,27 @@ class TimerRunRepositoryIT {
         @Test
         @DisplayName("계약에 없는 종료 사유 저장 거절")
         void rejectsUnknownEndReason() {
+            String sql = """
+                    INSERT INTO learning_service.timer_runs (
+                        id,
+                        cohort_membership_id,
+                        started_at,
+                        ended_at,
+                        end_reason
+                    ) VALUES (?, ?, ?, ?, 'UNKNOWN')
+                    """;
+            UUID timerRunId = UUID.fromString("00000000-0000-0000-0000-000000000104");
+            OffsetDateTime startedAt = OffsetDateTime.parse("2000-01-01T00:00:00Z");
+            OffsetDateTime endedAt = OffsetDateTime.parse("2000-01-01T01:00:00Z");
+
             assertThrows(
                     DataIntegrityViolationException.class,
-                    () -> jdbcTemplate.update("""
-                                    INSERT INTO learning_service.timer_runs (
-                                        id,
-                                        cohort_membership_id,
-                                        started_at,
-                                        ended_at,
-                                        end_reason
-                                    ) VALUES (?, ?, ?, ?, 'UNKNOWN')
-                                    """,
-                            UUID.fromString("00000000-0000-0000-0000-000000000104"),
+                    () -> jdbcTemplate.update(
+                            sql,
+                            timerRunId,
                             COHORT_MEMBERSHIP_ID,
-                            OffsetDateTime.parse("2000-01-01T00:00:00Z"),
-                            OffsetDateTime.parse("2000-01-01T01:00:00Z")
+                            startedAt,
+                            endedAt
                     )
             );
         }
@@ -253,20 +297,26 @@ class TimerRunRepositoryIT {
         @Test
         @DisplayName("종료 사유 없는 종료 실행 저장 거절")
         void rejectsEndTimeWithoutEndReason() {
+            String sql = """
+                    INSERT INTO learning_service.timer_runs (
+                        id,
+                        cohort_membership_id,
+                        started_at,
+                        ended_at
+                    ) VALUES (?, ?, ?, ?)
+                    """;
+            UUID timerRunId = UUID.fromString("00000000-0000-0000-0000-000000000105");
+            OffsetDateTime startedAt = OffsetDateTime.parse("2000-01-01T00:00:00Z");
+            OffsetDateTime endedAt = OffsetDateTime.parse("2000-01-01T01:00:00Z");
+
             assertThrows(
                     DataIntegrityViolationException.class,
-                    () -> jdbcTemplate.update("""
-                                    INSERT INTO learning_service.timer_runs (
-                                        id,
-                                        cohort_membership_id,
-                                        started_at,
-                                        ended_at
-                                    ) VALUES (?, ?, ?, ?)
-                                    """,
-                            UUID.fromString("00000000-0000-0000-0000-000000000105"),
+                    () -> jdbcTemplate.update(
+                            sql,
+                            timerRunId,
                             COHORT_MEMBERSHIP_ID,
-                            OffsetDateTime.parse("2000-01-01T00:00:00Z"),
-                            OffsetDateTime.parse("2000-01-01T01:00:00Z")
+                            startedAt,
+                            endedAt
                     )
             );
         }
@@ -274,21 +324,27 @@ class TimerRunRepositoryIT {
         @Test
         @DisplayName("측정 시간 없는 정지 상태 저장 거절")
         void rejectsStoppedStateWithoutMeasuredSeconds() {
+            String sql = """
+                    INSERT INTO learning_service.timer_runs (
+                        id,
+                        cohort_membership_id,
+                        started_at,
+                        ended_at,
+                        end_reason
+                    ) VALUES (?, ?, ?, ?, 'STOP')
+                    """;
+            UUID timerRunId = UUID.fromString("00000000-0000-0000-0000-000000000106");
+            OffsetDateTime startedAt = OffsetDateTime.parse("2000-01-01T00:00:00Z");
+            OffsetDateTime endedAt = OffsetDateTime.parse("2000-01-01T01:00:00Z");
+
             assertThrows(
                     DataIntegrityViolationException.class,
-                    () -> jdbcTemplate.update("""
-                                    INSERT INTO learning_service.timer_runs (
-                                        id,
-                                        cohort_membership_id,
-                                        started_at,
-                                        ended_at,
-                                        end_reason
-                                    ) VALUES (?, ?, ?, ?, 'STOP')
-                                    """,
-                            UUID.fromString("00000000-0000-0000-0000-000000000106"),
+                    () -> jdbcTemplate.update(
+                            sql,
+                            timerRunId,
                             COHORT_MEMBERSHIP_ID,
-                            OffsetDateTime.parse("2000-01-01T00:00:00Z"),
-                            OffsetDateTime.parse("2000-01-01T01:00:00Z")
+                            startedAt,
+                            endedAt
                     )
             );
         }
@@ -296,22 +352,28 @@ class TimerRunRepositoryIT {
         @Test
         @DisplayName("경과 시간을 초과한 정지 측정 시간 저장 거절")
         void rejectsStoppedStateWhenMeasuredSecondsExceedsElapsedTime() {
+            String sql = """
+                    INSERT INTO learning_service.timer_runs (
+                        id,
+                        cohort_membership_id,
+                        started_at,
+                        ended_at,
+                        measured_seconds,
+                        end_reason
+                    ) VALUES (?, ?, ?, ?, 3600, 'STOP')
+                    """;
+            UUID timerRunId = UUID.fromString("00000000-0000-0000-0000-000000000107");
+            OffsetDateTime startedAt = OffsetDateTime.parse("2000-01-01T00:00:00Z");
+            OffsetDateTime endedAt = OffsetDateTime.parse("2000-01-01T00:01:00Z");
+
             assertThrows(
                     DataIntegrityViolationException.class,
-                    () -> jdbcTemplate.update("""
-                                    INSERT INTO learning_service.timer_runs (
-                                        id,
-                                        cohort_membership_id,
-                                        started_at,
-                                        ended_at,
-                                        measured_seconds,
-                                        end_reason
-                                    ) VALUES (?, ?, ?, ?, 3600, 'STOP')
-                                    """,
-                            UUID.fromString("00000000-0000-0000-0000-000000000107"),
+                    () -> jdbcTemplate.update(
+                            sql,
+                            timerRunId,
                             COHORT_MEMBERSHIP_ID,
-                            OffsetDateTime.parse("2000-01-01T00:00:00Z"),
-                            OffsetDateTime.parse("2000-01-01T00:01:00Z")
+                            startedAt,
+                            endedAt
                     )
             );
         }
@@ -320,22 +382,28 @@ class TimerRunRepositoryIT {
         @ValueSource(strings = {"DISCARD", "EXPIRED"})
         @DisplayName("측정 시간 있는 미기록 종료 상태 저장 거절")
         void rejectsUnrecordedEndStateWithMeasuredSeconds(String endReason) {
+            String sql = """
+                    INSERT INTO learning_service.timer_runs (
+                        id,
+                        cohort_membership_id,
+                        started_at,
+                        ended_at,
+                        measured_seconds,
+                        end_reason
+                    ) VALUES (?, ?, ?, ?, 3600, ?)
+                    """;
+            UUID timerRunId = UUID.randomUUID();
+            OffsetDateTime startedAt = OffsetDateTime.parse("2000-01-01T00:00:00Z");
+            OffsetDateTime endedAt = OffsetDateTime.parse("2000-01-01T01:00:00Z");
+
             assertThrows(
                     DataIntegrityViolationException.class,
-                    () -> jdbcTemplate.update("""
-                                    INSERT INTO learning_service.timer_runs (
-                                        id,
-                                        cohort_membership_id,
-                                        started_at,
-                                        ended_at,
-                                        measured_seconds,
-                                        end_reason
-                                    ) VALUES (?, ?, ?, ?, 3600, ?)
-                                    """,
-                            UUID.randomUUID(),
+                    () -> jdbcTemplate.update(
+                            sql,
+                            timerRunId,
                             COHORT_MEMBERSHIP_ID,
-                            OffsetDateTime.parse("2000-01-01T00:00:00Z"),
-                            OffsetDateTime.parse("2000-01-01T01:00:00Z"),
+                            startedAt,
+                            endedAt,
                             endReason
                     )
             );

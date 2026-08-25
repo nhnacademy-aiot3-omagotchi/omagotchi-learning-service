@@ -32,11 +32,6 @@ public enum SpaceErrorCode implements ErrorCode {
             "SPACE_COHORT_ID_REQUIRED",
             "관리하는 활성 기수가 여러 개이면 기수 ID를 지정해야 합니다."
     ),
-    LAB_ONLY_COHORT_ASSIGNMENT(
-            ErrorType.INVALID_INPUT,
-            "SPACE_LAB_ONLY_COHORT_ASSIGNMENT",
-            "실습실에만 기수를 배정하거나 해제할 수 있습니다."
-    ),
     DUPLICATE_NAME(
             ErrorType.CONFLICT,
             "SPACE_DUPLICATE_NAME",
@@ -99,15 +94,15 @@ public enum SpaceErrorCode implements ErrorCode {
             "SPACE_UNMANAGED_DELETE_NOT_ALLOWED",
             "관리 주체가 없는 공간은 삭제할 수 없습니다. 비활성화를 이용하세요."
     ),
-    LAB_ALREADY_ASSIGNED(
+    SPACE_ALREADY_ASSIGNED(
             ErrorType.CONFLICT,
-            "SPACE_LAB_ALREADY_ASSIGNED",
-            "이미 기수에 배정된 실습실입니다."
+            "SPACE_ALREADY_ASSIGNED",
+            "이미 기수에 배정된 공간입니다."
     ),
-    LAB_NOT_ASSIGNED(
+    SPACE_NOT_ASSIGNED(
             ErrorType.CONFLICT,
-            "SPACE_LAB_NOT_ASSIGNED",
-            "기수에 배정되지 않은 실습실입니다."
+            "SPACE_NOT_ASSIGNED",
+            "기수에 배정되지 않은 공간입니다."
     ),
     ACTIVE_COHORT_NOT_FOUND(
             ErrorType.NOT_FOUND,

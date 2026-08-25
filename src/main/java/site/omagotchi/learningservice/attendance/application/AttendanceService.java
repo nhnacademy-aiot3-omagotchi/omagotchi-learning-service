@@ -4,11 +4,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.command.ChangeAttendanceStatusCommand;
+import site.omagotchi.learningservice.attendance.application.event.AttendanceCheckedInEvent;
+import site.omagotchi.learningservice.attendance.application.port.AttendanceEventPublisher;
+import site.omagotchi.learningservice.attendance.application.port.AttendanceRecordQueryRepository;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordResult;
+import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordPageResult;
+import site.omagotchi.learningservice.attendance.application.query.AttendancePageQuery;
 import site.omagotchi.learningservice.attendance.domain.AttendanceChangeLog;
 import site.omagotchi.learningservice.attendance.domain.AttendanceDecision;
 import site.omagotchi.learningservice.attendance.domain.AttendanceDecisionPolicy;
-import site.omagotchi.learningservice.attendance.domain.AttendanceErrorCode;
+import site.omagotchi.learningservice.attendance.application.AttendanceErrorCode;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
 import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
@@ -18,7 +23,7 @@ import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecord
 import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
@@ -44,8 +49,10 @@ public class AttendanceService {
     private final CohortMembershipRepository membershipRepository;
     private final CohortAttendancePolicyRepository attendancePolicyRepository;
     private final AttendanceRecordRepository attendanceRecordRepository;
+    private final AttendanceRecordQueryRepository attendanceRecordQueryRepository;
     private final AttendanceChangeLogRepository attendanceChangeLogRepository;
     private final PresenceIntervalRepository presenceIntervalRepository;
+    private final AttendanceEventPublisher attendanceEventPublisher;
     private final Clock clock;
 
     // 출석 기록 결과 -> 출석(기수 Id, 유저 Id)
@@ -72,6 +79,12 @@ public class AttendanceService {
                 savedRecord.getId(),
                 PresenceState.PRESENT,
                 null,
+                now
+        ));
+        attendanceEventPublisher.publishCheckedIn(new AttendanceCheckedInEvent(
+                userId,
+                cohortId,
+                savedRecord.getId(),
                 now
         ));
 
@@ -112,15 +125,27 @@ public class AttendanceService {
         return AttendanceRecordResult.from(attendanceRecordRepository.save(record));
     }
 
-    public List<AttendanceRecordResult> getMyRecords(Long cohortId, UUID userId) {
+    public AttendanceRecordPageResult getMyRecords(
+            Long cohortId,
+            UUID userId,
+            AttendancePageQuery query
+    ) {
         Long membershipId = cohortAccessService.requireActiveMembershipId(cohortId, userId);
-
-        return attendanceRecordRepository.findByCohortMembershipIdOrderByAttendanceDateDesc(membershipId).stream()
-                .map(AttendanceRecordResult::from)
-                .toList();
+        return pageResult(attendanceRecordQueryRepository.findMemberRecords(
+                membershipId,
+                query.from(),
+                query.to(),
+                query.page(),
+                query.size()
+        ));
     }
 
-    public List<AttendanceRecordResult> getDailyRecords(Long cohortId, UUID managerUserId, java.time.LocalDate date) {
+    public AttendanceRecordPageResult getDailyRecords(
+            Long cohortId,
+            UUID managerUserId,
+            LocalDate date,
+            AttendancePageQuery query
+    ) {
         cohortAccessService.requireManager(cohortId, managerUserId);
 
         List<Long> membershipIds = membershipRepository
@@ -129,15 +154,24 @@ public class AttendanceService {
                 .map(CohortMembership::getId)
                 .toList();
 
-        if (membershipIds.isEmpty()) {
-            return List.of();
-        }
+        return pageResult(attendanceRecordQueryRepository.findDailyRecords(
+                date,
+                membershipIds,
+                query.page(),
+                query.size()
+        ));
+    }
 
-        return attendanceRecordRepository
-                .findByAttendanceDateAndCohortMembershipIdInOrderByCohortMembershipIdAsc(date, membershipIds)
-                .stream()
-                .map(AttendanceRecordResult::from)
-                .toList();
+    private AttendanceRecordPageResult pageResult(
+            AttendanceRecordQueryRepository.AttendanceRecordPage records
+    ) {
+        return new AttendanceRecordPageResult(
+                records.items().stream().map(AttendanceRecordResult::from).toList(),
+                records.page(),
+                records.size(),
+                records.totalElements(),
+                records.totalPages()
+        );
     }
 
     @Transactional

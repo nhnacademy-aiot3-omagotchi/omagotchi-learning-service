@@ -2,12 +2,17 @@ package site.omagotchi.learningservice.global.exception;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 import static org.assertj.core.api.BDDAssertions.then;
+import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
+@ExtendWith(OutputCaptureExtension.class)
 class GlobalExceptionHandlerTest {
 
     private static final String REQUEST_URI = "/test";
@@ -18,7 +23,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     @DisplayName("호출 계약 위반을 내부 오류로 숨김")
-    void hidesIllegalArgumentException() {
+    void hidesIllegalArgumentException(CapturedOutput output) {
         // Given
         MockHttpServletRequest request = requestForTest();
         IllegalArgumentException exception =
@@ -30,11 +35,12 @@ class GlobalExceptionHandlerTest {
 
         // Then
         thenUnexpectedExceptionIsHidden(response);
+        then(output).contains("외부에 노출하면 안 되는 인자 정보");
     }
 
     @Test
     @DisplayName("내부 상태 위반을 내부 오류로 숨김")
-    void hidesIllegalStateException() {
+    void hidesIllegalStateException(CapturedOutput output) {
         // Given
         MockHttpServletRequest request = requestForTest();
         IllegalStateException exception =
@@ -46,6 +52,7 @@ class GlobalExceptionHandlerTest {
 
         // Then
         thenUnexpectedExceptionIsHidden(response);
+        then(output).contains("외부에 노출하면 안 되는 상태 정보");
     }
 
     @Test
@@ -65,6 +72,29 @@ class GlobalExceptionHandlerTest {
         // Then
         then(response.getBody().message())
                 .isEqualTo(CommonErrorCode.INVALID_REQUEST.message());
+    }
+
+    @Test
+    @DisplayName("호출 대상 서비스 장애 기록")
+    void logsServerSideBusinessFailure(CapturedOutput output) {
+        // Given: 원본 예외를 포함한 호출 대상 서비스 장애
+        MockHttpServletRequest request = requestForTest();
+        IllegalStateException cause =
+                new IllegalStateException("test service connection failure");
+
+        // When: 공개 ErrorCode가 확정된 5xx 오류의 공통 응답 변환
+        ResponseEntity<ApiErrorResponse> response = handler.handleBusinessException(
+                new BusinessException(CommonErrorCode.SERVICE_UNAVAILABLE, cause),
+                request
+        );
+
+        // Then: 공개 상태와 원본 예외 기록
+        assertSoftly(softly -> {
+            softly.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+            softly.assertThat(output)
+                    .contains("code=COMMON_SERVICE_UNAVAILABLE")
+                    .contains("test service connection failure");
+        });
     }
 
     private MockHttpServletRequest requestForTest() {

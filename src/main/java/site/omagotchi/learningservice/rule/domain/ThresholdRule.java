@@ -5,7 +5,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -56,11 +56,11 @@ public class ThresholdRule {
 
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private OffsetDateTime createdAt;
+    private Instant createdAt;
 
 
     @Column(name = "updated_at", nullable = false)
-    private OffsetDateTime updatedAt;
+    private Instant updatedAt;
 
     /**
      * 낙관적 락 버전.
@@ -77,14 +77,14 @@ public class ThresholdRule {
 
     @PrePersist
     void onPersist() {
-        OffsetDateTime now = OffsetDateTime.now();
+        Instant now = Instant.now();
         this.createdAt = now;
         this.updatedAt = now;
     }
 
     @PreUpdate
     void onUpdate() {
-        this.updatedAt = OffsetDateTime.now();
+        this.updatedAt = Instant.now();
     }
 
     public static ThresholdRule create(

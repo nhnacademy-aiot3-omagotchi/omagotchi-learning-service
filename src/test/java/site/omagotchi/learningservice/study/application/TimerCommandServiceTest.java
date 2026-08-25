@@ -11,9 +11,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
+import site.omagotchi.learningservice.study.application.event.StudyCompletedEvent;
+import site.omagotchi.learningservice.study.application.port.StudyEventPublisher;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.port.TimerRunQueryRepository;
 import site.omagotchi.learningservice.study.application.port.TimerRunRepository;
@@ -71,6 +73,9 @@ class TimerCommandServiceTest {
     private StudyWriteLock studyWriteLock;
 
     @Mock
+    private StudyEventPublisher studyEventPublisher;
+
+    @Mock
     private Clock clock;
 
     private TimerCommandService timerCommandService;
@@ -84,7 +89,8 @@ class TimerCommandServiceTest {
                 studyRecordRepository,
                 studyWriteLock,
                 clock,
-                TIME_POLICY
+                TIME_POLICY,
+                studyEventPublisher
         );
     }
 
@@ -273,6 +279,11 @@ class TimerCommandServiceTest {
             InOrder order = inOrder(studyRecordRepository, timerRunRepository);
             order.verify(studyRecordRepository).save(saved);
             order.verify(timerRunRepository).end(timerRun);
+            verify(studyEventPublisher).publishCompleted(new StudyCompletedEvent(
+                    USER_ID,
+                    TIMER_RUN_ID,
+                    endedAt
+            ));
         }
 
         @Test
@@ -570,7 +581,8 @@ class TimerCommandServiceTest {
                 studyRecordRepository,
                 studyWriteLock,
                 configuredClock,
-                TIME_POLICY
+                TIME_POLICY,
+                studyEventPublisher
         );
     }
 

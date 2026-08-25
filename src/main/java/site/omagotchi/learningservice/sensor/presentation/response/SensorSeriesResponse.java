@@ -1,7 +1,7 @@
 package site.omagotchi.learningservice.sensor.presentation.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import site.omagotchi.learningservice.sensor.domain.SensorSeries;
+import site.omagotchi.learningservice.sensor.application.result.SensorSeries;
 import site.omagotchi.learningservice.sensor.domain.SeriesWindow;
 
 import java.time.Instant;

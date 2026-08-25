@@ -13,13 +13,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import site.omagotchi.learningservice.attendance.application.query.AttendancePageQuery;
 import site.omagotchi.learningservice.attendance.application.AttendanceService;
 import site.omagotchi.learningservice.attendance.presentation.request.ChangeAttendanceStatusRequest;
+import site.omagotchi.learningservice.attendance.presentation.response.AttendanceRecordPageResponse;
 import site.omagotchi.learningservice.attendance.presentation.response.AttendanceRecordResponse;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 
 import java.time.LocalDate;
-import java.util.List;
 
 /**
  * Request API 규격에 맞춤
@@ -50,26 +51,37 @@ public class AttendanceController {
     }
     // 나
     @GetMapping("/me")
-    public List<AttendanceRecordResponse> getMyRecords(
+    public AttendanceRecordPageResponse getMyRecords(
             @PathVariable Long cohortId,
-            JwtAuthenticationToken authentication
+            JwtAuthenticationToken authentication,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return attendanceService.getMyRecords(cohortId, user.userId()).stream()
-                .map(AttendanceRecordResponse::from)
-                .toList();
+        return AttendanceRecordPageResponse.from(attendanceService.getMyRecords(
+                cohortId,
+                user.userId(),
+                AttendancePageQuery.of(from, to, page, size)
+        ));
     }
     // 기수 Id
     @GetMapping
-    public List<AttendanceRecordResponse> getDailyRecords(
+    public AttendanceRecordPageResponse getDailyRecords(
             @PathVariable Long cohortId,
             JwtAuthenticationToken authentication,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return attendanceService.getDailyRecords(cohortId, user.userId(), date).stream()
-                .map(AttendanceRecordResponse::from)
-                .toList();
+        return AttendanceRecordPageResponse.from(attendanceService.getDailyRecords(
+                cohortId,
+                user.userId(),
+                date,
+                AttendancePageQuery.of(date, date, page, size)
+        ));
     }
     // 변경된 최종 상태
     @PatchMapping("/{attendance-id}/status")

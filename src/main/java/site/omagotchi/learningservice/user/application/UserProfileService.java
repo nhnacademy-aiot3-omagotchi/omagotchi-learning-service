@@ -9,8 +9,10 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+import site.omagotchi.learningservice.gamification.application.DailyQuestService;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
-import site.omagotchi.learningservice.gamification.domain.GamificationErrorCode;
+import site.omagotchi.learningservice.gamification.domain.CharacterAppearance;
+import site.omagotchi.learningservice.gamification.application.GamificationErrorCode;
 import site.omagotchi.learningservice.gamification.domain.LevelPolicy;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
 import site.omagotchi.learningservice.gamification.infrastructure.GameCharacterRepository;
@@ -41,9 +43,6 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class UserProfileService {
 
-    private static final int MIN_NICKNAME_LENGTH = 2;
-    private static final int MAX_NICKNAME_LENGTH = 12;
-
     private final CohortMembershipRepository cohortMembershipRepository;
     private final CohortRepository cohortRepository;
     private final StudyRecordQueryRepository studyRecordQueryRepository;
@@ -52,11 +51,13 @@ public class UserProfileService {
     private final GameCharacterRepository gameCharacterRepository;
     private final LevelPolicyRepository levelPolicyRepository;
     private final CharacterGrowthService characterGrowthService;
+    private final DailyQuestService dailyQuestService;
     private final DateTimeProvider dateTimeProvider;
 
     /**
      * 현재 사용자 프로필에 필요한 데이터를 기존 도메인에서 모아 DTO 결과로 반환한다.
      */
+    @Transactional
     public UserProfileResult getMyProfile(UUID userId) {
         Optional<CohortMembership> approvedMembership = findApprovedMembership(userId);
         StudyProfileSummaryResult studySummary = approvedMembership
@@ -77,7 +78,7 @@ public class UserProfileService {
                 .map(UserCharacter::getNickname)
                 .orElse(null);
 
-        return new UserProfileResult(
+        UserProfileResult result = new UserProfileResult(
                 nickname,
                 studySummary.totalStudySeconds(),
                 studySummary.completedSessionCount(),
@@ -85,17 +86,24 @@ public class UserProfileService {
                 approvedMembership.flatMap(this::toApprovedCohortResult).orElse(null),
                 currentCharacter
         );
+        if (currentCharacter != null) {
+            dailyQuestService.handleCharacterChecked(userId);
+        }
+        return result;
     }
 
     /**
      * 닉네임은 별도 설정 테이블 없이 대표 UserCharacter.nickname에 저장한다.
      */
-    @Transactional
+    /**
+     * 닉네임은 Gamification의 UserCharacter가 소유한다.
+     * 중복 확인, 상태 변경, 유니크 위반 변환은 소유 Feature의 트랜잭션 경계에서 처리하고
+     * 이 Feature는 결과만 자기 응답 계약으로 감싼다.
+     */
     public UserNicknameResult updateNickname(UUID userId, String nickname) {
-        String normalizedNickname = normalizeNickname(nickname);
-        UserCharacter character = characterGrowthService.requireRepresentativeCharacter(userId);
-        character.updateNickname(normalizedNickname);
-        return new UserNicknameResult(character.getNickname());
+        return new UserNicknameResult(
+                characterGrowthService.changeRepresentativeNickname(userId, nickname)
+        );
     }
 
     private Optional<CohortMembership> findApprovedMembership(UUID userId) {
@@ -117,18 +125,18 @@ public class UserProfileService {
         }
 
         var levelState = character.levelState(policies);
-        String characterName = gameCharacterRepository.findById(character.getGameCharacterId())
-                .map(GameCharacter::getName)
-                .orElse(null);
+        GameCharacter gameCharacter = gameCharacterRepository.findById(character.getGameCharacterId())
+                .orElseThrow(() -> new BusinessException(GamificationErrorCode.GAME_CHARACTER_NOT_FOUND));
 
         return new CurrentCharacterResult(
                 character.getNickname(),
                 levelState.level(),
                 levelState.currentLevelXp(),
                 levelState.nextLevelRequiredXp(),
-                characterName,
-                null,
-                null
+                gameCharacter.getName(),
+                gameCharacter.getAssetKey(),
+                character.getColorId(),
+                CharacterAppearance.assetKey(gameCharacter.getAssetKey(), character.getColorId())
         );
     }
 
@@ -150,17 +158,5 @@ public class UserProfileService {
             cursor = cursor.minusDays(1);
         }
         return streakDays;
-    }
-
-    private String normalizeNickname(String nickname) {
-        if (nickname == null) {
-            throw new BusinessException(UserProfileErrorCode.INVALID_NICKNAME);
-        }
-        String normalizedNickname = nickname.trim();
-        if (normalizedNickname.length() < MIN_NICKNAME_LENGTH
-                || normalizedNickname.length() > MAX_NICKNAME_LENGTH) {
-            throw new BusinessException(UserProfileErrorCode.INVALID_NICKNAME);
-        }
-        return normalizedNickname;
     }
 }

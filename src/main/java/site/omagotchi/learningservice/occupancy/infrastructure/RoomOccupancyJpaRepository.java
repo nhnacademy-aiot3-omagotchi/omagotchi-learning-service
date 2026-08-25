@@ -53,6 +53,14 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
     Optional<ActiveOccupancyProjection> findSummaryBySpaceIdAndStatus(
             Long spaceId, OccupancyStatus status);
 
+    /** 점유자 멤버십 기준 활성 점유 (MR-26). 멤버십 상태는 보지 않는다 — 이미 ENDED다. */
+    Optional<ActiveOccupancyProjection> findSummaryByOccupierMembershipIdAndStatus(
+            Long occupierMembershipId, OccupancyStatus status);
+
+    /** 멤버십 목록 기준 활성 점유 전부 (CE-03). 결과는 회의실 수로 유계다. */
+    List<ActiveOccupancyProjection> findSummariesByOccupierMembershipIdInAndStatus(
+            Collection<Long> occupierMembershipIds, OccupancyStatus status);
+
     /**
      * 점유 행 배타 락.
      *

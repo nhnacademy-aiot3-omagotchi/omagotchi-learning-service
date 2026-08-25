@@ -2,6 +2,7 @@ package site.omagotchi.learningservice.global.time;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 
@@ -18,6 +19,10 @@ public final class AggregationDateTime {
 
     public static Instant toInstant(LocalDate date, LocalTime time) {
         return date.atTime(time).atZone(ZONE_ID).toInstant();
+    }
+
+    public static Instant toInstant(LocalDateTime dateTime) {
+        return dateTime.atZone(ZONE_ID).toInstant();
     }
 
     public static LocalDate aggregationDate(Instant instant) {

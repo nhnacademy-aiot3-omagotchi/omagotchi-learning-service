@@ -5,7 +5,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.gamification.application.result.DailyQuestResult;
 import site.omagotchi.learningservice.gamification.application.result.HomeResult;
-import site.omagotchi.learningservice.gamification.domain.GamificationErrorCode;
 import site.omagotchi.learningservice.gamification.domain.QuestStatus;
 import site.omagotchi.learningservice.gamification.domain.QuestTemplate;
 import site.omagotchi.learningservice.gamification.domain.QuestType;
@@ -68,6 +67,11 @@ public class DailyQuestService {
     @Transactional
     public DailyQuestResult handleCharacterChecked(UUID userId) {
         return progressToday(userId, CHARACTER_CHECKED_CODE);
+    }
+
+    @Transactional
+    public DailyQuestResult handleRoutineReviewed(UUID userId) {
+        return progressToday(userId, ROUTINE_REVIEW_CODE);
     }
 
     @Transactional

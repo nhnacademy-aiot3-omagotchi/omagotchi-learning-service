@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.gamification.application.result;
 
 import site.omagotchi.learningservice.gamification.domain.AdvancementStage;
+import site.omagotchi.learningservice.gamification.domain.CharacterAppearance;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
 
@@ -8,6 +9,9 @@ public record UserCharacterResult(
         Long userCharacterId,
         Long gameCharacterId,
         String gameCharacterCode,
+        String type,
+        String colorId,
+        String assetKey,
         String gameCharacterName,
         String nickname,
         String displayName,
@@ -22,6 +26,9 @@ public record UserCharacterResult(
                 userCharacter.getId(),
                 userCharacter.getGameCharacterId(),
                 gameCharacter.getCode(),
+                gameCharacter.getAssetKey(),
+                userCharacter.getColorId(),
+                CharacterAppearance.assetKey(gameCharacter.getAssetKey(), userCharacter.getColorId()),
                 gameCharacter.getName(),
                 userCharacter.getNickname(),
                 userCharacter.displayName(),

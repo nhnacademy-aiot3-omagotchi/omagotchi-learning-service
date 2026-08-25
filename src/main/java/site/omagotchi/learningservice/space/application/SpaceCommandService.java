@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
+import site.omagotchi.learningservice.occupancy.application.VacancyAlertService;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
@@ -29,6 +30,7 @@ public class SpaceCommandService {
 
     private final SpaceRepository spaceRepository;
     private final OccupancyQueryService occupancyQueryService;
+    private final VacancyAlertService vacancyAlertService;
     private final CohortAccessService cohortAccessService;
     private final Clock clock;
 
@@ -171,8 +173,15 @@ public class SpaceCommandService {
         ensureNoActiveOccupancy(spaceId, now);
 
         Space deactivatedSpace = existingSpace.deactivate(reason, now);
+        Space saved = spaceRepository.save(deactivatedSpace);
 
-        return spaceRepository.save(deactivatedSpace);
+        // 대기 신청 정리를 같은 Transaction에 두는 것이 명세 04 §2가 정한 것이다. 나누면
+        // 비활성 공간에 신청이 남아, 다시 활성화될 때까지 아무 일도 일어나지 않는 신청이
+        // 된다. 대기 중 알림은 비활성화를 막지 않는다 (RM-12) — 클릭 한 번의 의사표시가
+        // 관리 행위를 무력화하지 않도록 정리 대상으로만 취급한다.
+        vacancyAlertService.discardBySpace(spaceId);
+
+        return saved;
     }
 
     public Space assignCohort(
@@ -182,19 +191,17 @@ public class SpaceCommandService {
     ) {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
-        // 검증 순서는 명세 07 §2를 그대로 따른다:
-        // 대상 기수 권한(2·3) → 실습실 여부(4) → 배정 여부(6).
+        // 유형은 검증하지 않는다 — 배정 대상은 전 유형이다 (ADR 0016).
         //
-        // 기존 배정 기수의 매니저인지는 묻지 않는다. 미배정 실습실은 기수 매니저 누구나
-        // 배정할 수 있고(RM-16), 이미 배정된 실습실이면 대상 기수 매니저인 요청자는 결과가
+        // 기존 배정 기수의 매니저인지는 묻지 않는다. 미배정 공간은 기수 매니저 누구나
+        // 배정할 수 있고(RM-16), 이미 배정된 공간이면 대상 기수 매니저인 요청자는 결과가
         // 같다 — "이미 다른 기수에 배정됨"(409)이다. 소유 기수 권한을 먼저 보면 같은 상황이
         // 요청자에 따라 403과 409로 갈려, 클라이언트가 배정 가능 여부를 오해한다.
         requireExistingCohort(cohortId);
         requireCohortManager(cohortId, actorUserId);
-        ensureLab(existingSpace);
 
         if (existingSpace.getCohortId() != null) {
-            throw new BusinessException(SpaceErrorCode.LAB_ALREADY_ASSIGNED);
+            throw new BusinessException(SpaceErrorCode.SPACE_ALREADY_ASSIGNED);
         }
 
         return spaceRepository.save(existingSpace.assignCohort(
@@ -210,10 +217,8 @@ public class SpaceCommandService {
         Space existingSpace = findSpaceForUpdate(spaceId);
         ensureNotDeleted(existingSpace);
 
-        ensureLab(existingSpace);
-
         if (existingSpace.getCohortId() == null) {
-            throw new BusinessException(SpaceErrorCode.LAB_NOT_ASSIGNED);
+            throw new BusinessException(SpaceErrorCode.SPACE_NOT_ASSIGNED);
         }
 
         requireCohortManager(existingSpace.getCohortId(), actorUserId);
@@ -311,7 +316,7 @@ public class SpaceCommandService {
     }
 
     /**
-     * 관리 주체 기수가 없는 공간(시드·미배정 실습실)의 관리 권한.
+     * 관리 주체 기수가 없는 공간(시드·미배정, 유형 무관)의 관리 권한.
      *
      * <p>소유 기수가 없어 권한을 좁힐 수단이 없으므로 기수 매니저 누구나 수정·활성화·비활성화할
      * 수 있다 (RM-16). 되돌릴 수 없는 삭제만 소유 기반으로 막는다 (RM-25) — 호출부가
@@ -333,14 +338,6 @@ public class SpaceCommandService {
 
         if (!cohortAccessService.exists(cohortId)) {
             throw new BusinessException(SpaceErrorCode.COHORT_NOT_FOUND);
-        }
-    }
-
-    private void ensureLab(Space space) {
-        if (space.getSpaceType() != SpaceType.LAB) {
-            throw new BusinessException(
-                    SpaceErrorCode.LAB_ONLY_COHORT_ASSIGNMENT
-            );
         }
     }
 

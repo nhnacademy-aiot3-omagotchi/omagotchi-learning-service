@@ -64,6 +64,11 @@ public class SpaceJpaPersistence
     }
 
     @Override
+    public int unassignByCohort(Long cohortId) {
+        return springDataSpaceRepository.unassignByCohort(cohortId);
+    }
+
+    @Override
     public Space save(Space space) {
         SpaceJpaEntity entity =
                 spacePersistenceMapper.toEntity(space);

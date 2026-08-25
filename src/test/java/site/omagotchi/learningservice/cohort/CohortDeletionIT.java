@@ -12,6 +12,7 @@ import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortManagerAssignmentPolicy;
 import site.omagotchi.learningservice.cohort.application.CohortService;
+import site.omagotchi.learningservice.cohort.application.port.CohortEventPublisher;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
@@ -59,6 +60,9 @@ class CohortDeletionIT {
 
     @MockitoBean
     private CohortManagerAssignmentPolicy managerAssignmentPolicy;
+
+    @MockitoBean
+    private CohortEventPublisher eventPublisher;
 
     @Test
     void deletesPreparingCohortAndCascadesItsMemberships() {

@@ -719,10 +719,11 @@ class VacancyAlertIT {
         return count == null ? 0 : count;
     }
 
+
     private void markAllNotified(Long spaceId) {
         jdbcTemplate.update("""
                 UPDATE learning_service.vacancy_alerts
-                   SET notified_at = now()
+                   SET notified_at = created_at
                  WHERE space_id = ? AND notified_at IS NULL
                 """, spaceId);
     }

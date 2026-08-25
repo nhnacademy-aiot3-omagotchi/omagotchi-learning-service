@@ -2,6 +2,10 @@ server:
   port: ${SERVER_PORT}
 
 spring:
+  ai:
+    google:
+      genai:
+        api-key: ${GEMINI_API_KEY}
   application:
     name: learning-service
 

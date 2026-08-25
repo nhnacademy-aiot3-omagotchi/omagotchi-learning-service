@@ -1,11 +1,12 @@
 package site.omagotchi.learningservice.team.service;
 
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -15,13 +16,18 @@ import site.omagotchi.learningservice.team.application.TeamAccessSupport;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.application.TeamMasterService;
 import site.omagotchi.learningservice.team.application.TeamMembership;
+import site.omagotchi.learningservice.team.application.event.TeamDisbandedEvent;
+import site.omagotchi.learningservice.team.application.port.TeamEventPublisher;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.application.port.TeamRepository;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.team.domain.TeamMemberRole;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,6 +40,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * 마스터 위임·해체·자동 위임 (GR-12, GR-14, GR-16, GR-19, GR-20).
@@ -51,6 +58,7 @@ class TeamMasterServiceTest {
     private static final Long MASTER_MEMBERSHIP_ID = 10L;
     private static final Long TARGET_MEMBERSHIP_ID = 20L;
     private static final UUID USER_ID = UUID.randomUUID();
+    private static final Instant NOW = Instant.parse("2026-07-24T01:00:00Z");
 
     @Mock
     private TeamRepository teamRepository;
@@ -61,8 +69,18 @@ class TeamMasterServiceTest {
     @Mock
     private TeamAccessSupport accessSupport;
 
-    @InjectMocks
+    @Mock
+    private TeamEventPublisher eventPublisher;
+
+    private Clock clock;
     private TeamMasterService teamMasterService;
+
+    @BeforeEach
+    void setUp() {
+        clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        teamMasterService = new TeamMasterService(
+                teamRepository, teamMemberRepository, accessSupport, eventPublisher, clock);
+    }
 
     // ────────────────────────────── 위임 ──────────────────────────────
 
@@ -199,6 +217,51 @@ class TeamMasterServiceTest {
 
         verify(teamMemberRepository).deleteByTeamId(TEAM_ID);
         assertThat(team.isDisbanded()).isTrue();
+    }
+
+    /**
+     * 해체한 마스터 본인은 통보 대상에서 빠져야 한다 — 자기가 방금 누른 버튼의 결과를
+     * 통보로 다시 알릴 이유가 없다.
+     */
+    @Test
+    @DisplayName("해체하면 마스터를 제외한 (구)팀원 전원에게 통보 이벤트를 발행한다.")
+    void disbandPublishesEventExcludingMaster() {
+        Team team = team();
+        TeamMember master = member(MASTER_MEMBER_ID, MASTER_MEMBERSHIP_ID, true);
+        TeamMember other = member(TARGET_MEMBER_ID, TARGET_MEMBERSHIP_ID, false);
+        given(accessSupport.lockActiveTeam(TEAM_ID)).willReturn(team);
+        given(accessSupport.requireActiveMembership(COHORT_ID, USER_ID))
+                .willReturn(new TeamMembership(MASTER_MEMBERSHIP_ID, COHORT_ID, USER_ID));
+        given(teamMemberRepository.findByTeamIdOrderByJoinedAtAsc(TEAM_ID))
+                .willReturn(List.of(master, other));
+
+        teamMasterService.disband(TEAM_ID, USER_ID);
+
+        ArgumentCaptor<TeamDisbandedEvent> captor = ArgumentCaptor.forClass(TeamDisbandedEvent.class);
+        verify(eventPublisher).publishTeamDisbanded(captor.capture());
+
+        TeamDisbandedEvent event = captor.getValue();
+        assertThat(event.teamId()).isEqualTo(TEAM_ID);
+        assertThat(event.teamName()).isEqualTo(team.getName());
+        assertThat(event.cohortMembershipIds()).containsExactly(TARGET_MEMBERSHIP_ID);
+        assertThat(event.disbandedAt()).isEqualTo(OffsetDateTime.now(clock));
+    }
+
+    /** 마스터 혼자였던 팀은 통보 대상이 없다 — 이벤트를 내지 않는다. */
+    @Test
+    @DisplayName("마스터 혼자인 팀을 해체하면 통보 이벤트를 발행하지 않는다.")
+    void disbandDoesNotPublishEventWhenMasterWasSoleMember() {
+        Team team = team();
+        TeamMember master = member(MASTER_MEMBER_ID, MASTER_MEMBERSHIP_ID, true);
+        given(accessSupport.lockActiveTeam(TEAM_ID)).willReturn(team);
+        given(accessSupport.requireActiveMembership(COHORT_ID, USER_ID))
+                .willReturn(new TeamMembership(MASTER_MEMBERSHIP_ID, COHORT_ID, USER_ID));
+        given(teamMemberRepository.findByTeamIdOrderByJoinedAtAsc(TEAM_ID))
+                .willReturn(List.of(master));
+
+        teamMasterService.disband(TEAM_ID, USER_ID);
+
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test

@@ -1,0 +1,15 @@
+# KMA 단기예보(getVilageFcst) 원본 API 확인용
+# 서비스키는 실제 값을 넣어서 로컬에서만 테스트하고, 커밋 전에 반드시 지웁니다
+# base_date/base_time은 KmaBaseTimeCalculator 로직대로 직접 채워야 합니다
+# (02, 05, 08, 11, 14, 17, 20, 23시 중 지금 시각+10분 이전인 가장 늦은 시각)
+
+@host = http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0
+@serviceKey = <서비스 키>
+@baseDate = 20260824
+@baseTime = 1400
+@nx = 60
+@ny = 74
+
+### 광주 동구 기준 단기예보 조회
+GET {{host}}/getVilageFcst?serviceKey={{serviceKey}}&dataType=JSON&numOfRows=1000&pageNo=1&base_date={{baseDate}}&base_time={{baseTime}}&nx={{nx}}&ny={{ny}}
+Accept: application/json

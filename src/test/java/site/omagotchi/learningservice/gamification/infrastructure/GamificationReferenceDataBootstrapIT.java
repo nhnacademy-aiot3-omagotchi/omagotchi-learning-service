@@ -9,11 +9,15 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
+import site.omagotchi.learningservice.global.config.QueryDslConfig;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+// @DataJpaTest 슬라이스는 @Configuration을 스캔하지 않으므로, 리포지토리 구현이 의존하는
+// JPAQueryFactory 빈(QueryDslConfig)을 직접 가져와야 컨텍스트가 뜬다.
 @Import({
         TestcontainersConfiguration.class,
+        QueryDslConfig.class,
         GamificationReferenceDataBootstrap.class
 })
 @ActiveProfiles("test")

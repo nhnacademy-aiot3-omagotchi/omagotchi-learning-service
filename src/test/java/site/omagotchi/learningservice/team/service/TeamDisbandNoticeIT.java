@@ -18,7 +18,7 @@ import site.omagotchi.learningservice.team.support.TeamTestFixture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
@@ -90,6 +90,10 @@ class TeamDisbandNoticeIT {
     /**
      * 마스터 혼자였던 팀은 받을 사람이 없다 — GR-16의 자동 해체가 통보하지 않는 것과 같은
      * 상황이며, 이벤트 자체를 발행하지 않는다.
+     *
+     * <p>{@code AFTER_COMMIT} + {@code @Async}라 통보가 별도 Thread에서 돈다 — 트랜잭션이
+     * 끝나자마자 {@code never()}로 검증하면 그 시점에 아직 실행되지 않았을 뿐인 지연 호출을
+     * "없음"으로 오판할 수 있다. {@code after}로 SLA(3초)만큼 기다렸다가 확인해야 한다.</p>
      */
     @Test
     @DisplayName("마스터 혼자인 팀을 해체하면 통보하지 않는다.")
@@ -100,6 +104,6 @@ class TeamDisbandNoticeIT {
 
         teamMasterService.disband(teamId, master.userId());
 
-        verify(sender, never()).sendDisbandNotice(any());
+        verify(sender, after(3_000).never()).sendDisbandNotice(any());
     }
 }

@@ -15,6 +15,7 @@ import site.omagotchi.learningservice.cohort.application.result.CohortMembership
 import site.omagotchi.learningservice.cohort.application.result.CohortResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
+import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
@@ -34,6 +35,7 @@ public class CohortService {
     private final CohortAccessService accessService;
     private final CohortEventPublisher eventPublisher;
     private final CohortManagerAssignmentPolicy managerAssignmentPolicy;
+    private final CohortMembershipRepository membershipRepository;
 
     /**
      * 새 기수를 PREPARING 상태로 생성한다.

@@ -206,3 +206,8 @@ omagotchi:
       # 한 배치에서 훑을 소속 행 수. team_members는 물리 삭제라 전체가 유계지만
       # 한 번에 전건을 들고 오지 않는다
       batch-size: ${TEAM_SWEEP_BATCH_SIZE:200}
+
+kma:
+  base-url: http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0
+  service-key: ${KMA_SERVICE_KEY}
+  request-timeout: 3s

@@ -5,27 +5,22 @@ import jakarta.validation.constraints.NotNull;
 import site.omagotchi.learningservice.global.time.AggregationDateTime;
 import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
 
-import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 
 public record CreateStudyRecordRequest(
         @NotNull
-        @JsonFormat(pattern = "yyyy-MM-dd")
-        LocalDate date,
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm")
+        LocalDateTime startDateTime,
 
         @NotNull
-        @JsonFormat(pattern = "HH:mm")
-        LocalTime startTime,
-
-        @NotNull
-        @JsonFormat(pattern = "HH:mm")
-        LocalTime endTime
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm")
+        LocalDateTime endDateTime
 ) {
 
     public CreateStudyRecordCommand toCommand() {
         return new CreateStudyRecordCommand(
-                AggregationDateTime.toInstant(date, startTime),
-                AggregationDateTime.toInstant(date, endTime)
+                AggregationDateTime.toInstant(startDateTime),
+                AggregationDateTime.toInstant(endDateTime)
         );
     }
 }

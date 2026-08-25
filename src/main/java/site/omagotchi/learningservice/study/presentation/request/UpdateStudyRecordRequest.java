@@ -6,21 +6,16 @@ import jakarta.validation.constraints.PositiveOrZero;
 import site.omagotchi.learningservice.global.time.AggregationDateTime;
 import site.omagotchi.learningservice.study.application.command.UpdateStudyRecordCommand;
 
-import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 
 public record UpdateStudyRecordRequest(
         @NotNull
-        @JsonFormat(pattern = "yyyy-MM-dd")
-        LocalDate date,
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm")
+        LocalDateTime startDateTime,
 
         @NotNull
-        @JsonFormat(pattern = "HH:mm")
-        LocalTime startTime,
-
-        @NotNull
-        @JsonFormat(pattern = "HH:mm")
-        LocalTime endTime,
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm")
+        LocalDateTime endDateTime,
 
         @NotNull @PositiveOrZero
         Long expectedVersion
@@ -28,8 +23,8 @@ public record UpdateStudyRecordRequest(
 
     public UpdateStudyRecordCommand toCommand() {
         return new UpdateStudyRecordCommand(
-                AggregationDateTime.toInstant(date, startTime),
-                AggregationDateTime.toInstant(date, endTime),
+                AggregationDateTime.toInstant(startDateTime),
+                AggregationDateTime.toInstant(endDateTime),
                 expectedVersion
         );
     }

@@ -3,6 +3,15 @@ package site.omagotchi.learningservice.chat.infrastructure;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.google.genai.autoconfigure.chat.GoogleGenAiChatAutoConfiguration;
 import org.springframework.ai.model.ollama.autoconfigure.OllamaApiAutoConfiguration;
 import org.springframework.ai.model.ollama.autoconfigure.OllamaChatAutoConfiguration;
@@ -10,6 +19,9 @@ import org.springframework.ai.model.tool.autoconfigure.ToolCallingAutoConfigurat
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -64,5 +76,33 @@ class ChatClientConfigTest {
         this.contextRunner
                 .withPropertyValues("spring.ai.ollama.base-url=")
                 .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    @DisplayName("ChatClient가 모델에 시스템 메시지를 함께 보낸다")
+    void sendsSystemMessageToModel() {
+        AtomicReference<Prompt> capturedPrompt = new AtomicReference<>();
+
+        // ChatModel은 call(Prompt) 하나만 추상 메서드라 람다로 스텁할 수 있다
+        ChatModel stubChatModel = prompt -> {
+            capturedPrompt.set(prompt);
+            return new ChatResponse(List.of(new Generation(new AssistantMessage("테스트 응답"))));
+        };
+
+        ChatMemory chatMemory = MessageWindowChatMemory.builder()
+                .maxMessages(10)
+                .build();
+
+        ChatClient chatClient = new ChatClientConfig().geminiChatClient(stubChatModel, List.of(), chatMemory);
+
+        chatClient.prompt()
+                .user("안녕")
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, "test-conversation"))
+                .call()
+                .content();
+
+        List<Message> instructions = capturedPrompt.get().getInstructions();
+
+        assertThat(instructions).hasAtLeastOneElementOfType(SystemMessage.class);
     }
 }

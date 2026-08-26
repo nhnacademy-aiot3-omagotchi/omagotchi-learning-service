@@ -35,7 +35,8 @@ public class ChatController {
         String conversationId = user.userId().toString();
 
         // TODO 사용자 question을 로깅하는 게 문제가 될지는 차후 파악이 필요함 (자유 텍스트이므로) (로그 보존 또한) (예: "우리 KDT 과정에 재민이 걔 정말 별로지 않아?")
-        log.info("[ChatController] userId = {}, model = {}, 질문 = {}", user.userId(), model, question);
+        log.info("[ChatController] userId = {}, model = {}", user.userId(), model);
+        log.debug("[ChatController] 질문 = {}", question);
 
         return this.resolveChatClient(model).prompt()
                 .user(question)

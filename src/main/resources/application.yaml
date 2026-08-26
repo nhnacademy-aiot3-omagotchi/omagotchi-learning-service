@@ -129,7 +129,8 @@ telegram:
   link-token:
     ttl: ${TELEGRAM_LINK_TOKEN_TTL}
   notification:
-    enabled: ${ACTION_TELEGRAM_ENABLED:false}
+    action:
+      enabled: ${ACTION_TELEGRAM_ENABLED:false}
 
 community:
   attachments:

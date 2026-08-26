@@ -11,5 +11,16 @@
 @ny = 74
 
 ### 광주 동구 기준 단기예보 조회
-GET {{host}}/getVilageFcst?serviceKey={{serviceKey}}&dataType=JSON&numOfRows=1000&pageNo=1&base_date={{baseDate}}&base_time={{baseTime}}&nx={{nx}}&ny={{ny}}
+GET {{host}}/getVilageFcst?serviceKey={{serviceKey}}&dataType=JSON&numOfRows=1000&pageNo=1&base_date={{baseDate}}&
+    base_time={{baseTime}}&nx={{nx}}&ny={{ny}}
+Accept: application/json
+
+### 존재하지 않는 격자
+GET {{host}}/getVilageFcst?serviceKey={{serviceKey}}&dataType=JSON&numOfRows=1000&pageNo=1&base_date={{baseDate}}&
+    base_time={{baseTime}}&nx=9999&ny=9999
+Accept: application/json
+
+### 과거 날짜 조회 (NODATA_ERROR 확인용)
+GET {{host}}/getVilageFcst?serviceKey={{serviceKey}}&dataType=JSON&numOfRows=1000&pageNo=1&base_date=20200101&
+    base_time=1400&nx=60&ny=74
 Accept: application/json

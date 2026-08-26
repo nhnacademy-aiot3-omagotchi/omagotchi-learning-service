@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.space.infrastructure.persistence.reposito
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import site.omagotchi.learningservice.space.infrastructure.persistence.entity.SpaceJpaEntity;
@@ -62,4 +63,12 @@ public interface SpringDataSpaceRepository
     Optional<String> findNameById(
             @Param("spaceId") Long spaceId
     );
+
+    /** 관리 주체 일괄 해제 (CE-04). 유형을 가리지 않는다 — Port javadoc 참고. */
+    @Modifying
+    @Query("""
+                UPDATE SpaceJpaEntity space
+                   SET space.cohortId = NULL
+                 WHERE space.cohortId = :cohortId""")
+    int unassignByCohort(@Param("cohortId") Long cohortId);
 }

@@ -12,11 +12,8 @@ import java.util.UUID;
  * 진입점을 통일하지 않으면 같은 정리 로직이 사건 종류만큼 복제된다
  * (master-checklist "회원 삭제 훅 트리거 계약을 점유 훅과 통일").</p>
  *
- * <p><b>기수 종료(CE)는 이 이벤트로 대체하지 않는다.</b> CE-05가 팀 정리 → 대기 알림 삭제
- * → 점유 종료 → 실습실 해제의 순서를 강제하는데, 멤버십 단위로 팬아웃하면 비동기라
- * 순서를 보장할 수 없다. 게다가 CE-04({@code spaces.cohort_id} 해제)는 기수 단위라
- * 멤버십 이벤트로 표현되지 않고, CE-01은 팀을 통째로 해체해 자동 위임을 하지 않는다는
- * 점에서 계정 삭제와 의미가 다르다.</p>
+ * <p><b>기수 종료(CE)는 이 이벤트로 대체하지 않는다</b> — 순서 보장이 필요해 전용 이벤트
+ * ({@code CohortClosedEvent})를 쓴다. 근거는 ADR space-team/0015.</p>
  *
  * <p>수신 측이 지켜야 할 것은 {@code OccupancyEventPublisher}의 javadoc과 같다
  * (ADR space-team/0006) — {@code AFTER_COMMIT} + {@code @Async} +

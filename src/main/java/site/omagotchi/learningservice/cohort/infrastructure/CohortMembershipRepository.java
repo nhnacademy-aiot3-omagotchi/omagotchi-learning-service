@@ -20,6 +20,18 @@ public interface CohortMembershipRepository extends
         JpaRepository<CohortMembership, Long>,
         CohortMembershipRepositoryCustom {
 
+    interface CohortMembershipCountProjection {
+        Long getCohortId();
+
+        long getMemberCount();
+    }
+
+    interface CohortManagerProjection {
+        Long getCohortId();
+
+        UUID getUserId();
+    }
+
     boolean existsByCohortIdAndUserIdAndStatusIn(
             Long cohortId,
             UUID userId,
@@ -58,6 +70,8 @@ public interface CohortMembershipRepository extends
 
     List<CohortMembership> findByUserIdOrderByRequestedAtDesc(UUID userId);
 
+    List<CohortMembership> findByCohortId(Long cohortId);
+
     Optional<CohortMembership> findFirstByUserIdAndStatusAndEndedAtIsNullOrderByRequestedAtDesc(
             UUID userId,
             CohortMembershipStatus status
@@ -68,7 +82,30 @@ public interface CohortMembershipRepository extends
             CohortMembershipStatus status
     );
 
-    List<CohortMembership> findByCohortIdOrderByRequestedAtAsc(Long cohortId);
+    List<CohortMembership> findAllByCohortIdAndRoleAndStatusOrderByRequestedAtAsc(
+            Long cohortId,
+            CohortMembershipRole role,
+            CohortMembershipStatus status
+    );
+
+    List<CohortMembership> findAllByCohortIdOrderByRequestedAtAsc(Long cohortId);
+
+    @Query("""
+            select membership.cohortId as cohortId, count(membership.id) as memberCount
+            from CohortMembership membership
+            where membership.status = site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus.ACTIVE
+            group by membership.cohortId
+            """)
+    List<CohortMembershipCountProjection> countActiveMembershipsByCohort();
+
+    @Query("""
+            select membership.cohortId as cohortId, membership.userId as userId
+            from CohortMembership membership
+            where membership.role = site.omagotchi.learningservice.cohort.domain.CohortMembershipRole.MANAGER
+              and membership.status = site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus.ACTIVE
+            order by membership.cohortId asc, membership.requestedAt asc
+            """)
+    List<CohortManagerProjection> findAllActiveManagersByCohort();
 
     boolean existsByCohortIdAndRoleAndStatus(
             Long cohortId,
@@ -191,6 +228,33 @@ public interface CohortMembershipRepository extends
             """)
     int endActive(
             @Param("membershipId") Long membershipId,
+            @Param("endedAt") OffsetDateTime endedAt
+    );
+
+    /**
+     * 이 기수의 ACTIVE 소속을 전부 종료한다 (기수 종료, 명세 08).
+     *
+     * <p>{@link #endActive}의 기수 단위 판이다. 건별로 돌지 않는 이유는 <b>원자성</b>이다 —
+     * 기수 상태 전이와 같은 트랜잭션에서 한 번에 끝나야, 커밋 직후부터 그 기수 누구도 새
+     * 점유·팀·신청을 시작할 수 없다. 나눠 돌면 그 틈에 시작된 것이 정리 대상에서 빠진다.</p>
+     *
+     * <p><b>이 전이는 멤버십 종료 이벤트를 내지 않는다</b> — 근거는 ADR space-team/0015.</p>
+     *
+     * <p>조건부 UPDATE라 멱등하다. 두 번째 호출은 0행이며 이미 기록된 {@code ended_at}을
+     * 덮어쓰지 않는다.</p>
+     *
+     * @return 이번 호출로 종료된 소속 수
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update CohortMembership membership
+               set membership.status = site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus.ENDED,
+                   membership.endedAt = :endedAt
+             where membership.cohortId = :cohortId
+               and membership.status = site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus.ACTIVE
+            """)
+    int endActiveByCohortId(
+            @Param("cohortId") Long cohortId,
             @Param("endedAt") OffsetDateTime endedAt
     );
 

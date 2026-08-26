@@ -17,6 +17,7 @@ import site.omagotchi.learningservice.occupancy.domain.VacancyAlert;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,8 +50,6 @@ public class VacancyAlertService {
     /**
      * 공실 알림을 신청한다 (MR-02, MR-15, MR-34).
      *
-     * @param cohortId 신청 주체로 쓸 기수. {@code null}이면 활성 소속이 하나일 때만
-     *                 그것으로 정한다 — 여럿이면 어느 쪽인지 서버가 고를 수 없다
      * <p><b>점유 행을 잠그고 신청까지 한 Transaction에서 끝낸다.</b> 잠그지 않으면 "조회 →
      * 저장" 사이에 반납이 커밋될 수 있고, 그 반납의 {@code AFTER_COMMIT} 발송이 아직
      * 커밋되지 않은 이 신청을 보지 못한다 — 신청은 <b>400도 발송도 아닌 채 대기로 남아</b>
@@ -58,6 +57,8 @@ public class VacancyAlertService {
      * 명세 04 §5가 "먼저 커밋되면 발송 대상, 늦으면 400"이라고 두 갈래로 적은 것은 이
      * 직렬화를 전제한 서술이다.</p>
      *
+     * @param cohortId 신청 주체로 쓸 기수. {@code null}이면 활성 소속이 하나일 때만
+     *                 그것으로 정한다 — 여럿이면 어느 쪽인지 서버가 고를 수 없다
      * @throws BusinessException 빈 방·본인 방·기수 미지정(400), 활성 소속 없음(403),
      *                           중복 신청(409)
      */
@@ -160,6 +161,27 @@ public class VacancyAlertService {
         log.info("공간 비활성화로 대기 신청을 삭제했습니다. spaceId={}, 삭제={}건",
                 spaceId, membershipIds.size());
         return membershipIds.size();
+    }
+
+    /**
+     * 이 멤버십들의 대기 중 신청을 전부 지운다 (CE-02, 기수 종료 연동).
+     *
+     * <p>{@link #discardBySpace}와 달리 <b>통보하지 않는다</b> — 서비스 이용 자체가 끝나는
+     * 사람들이라 안내 실익이 없다 (명세 04 §3). 그래서 수신자 확보(RETURNING)도 이벤트도
+     * 없다.</p>
+     *
+     * <p><b>점유 종료(CE-03)보다 먼저 호출돼야 한다.</b> 뒤집히면 CE-03의 공실 발송이 방금
+     * 종료된 기수의 신청을 대기 중으로 보고 <b>그 학생들에게 알림을 보낸다</b> (CE-05).</p>
+     *
+     * @return 지운 건수
+     */
+    @Transactional
+    public int discardByMemberships(Collection<Long> cohortMembershipIds) {
+        int discarded = alertRepository.deleteWaitingByMembershipIds(cohortMembershipIds);
+        if (discarded > 0) {
+            log.info("기수 종료로 대기 신청을 삭제했습니다. 삭제={}건", discarded);
+        }
+        return discarded;
     }
 
     /**

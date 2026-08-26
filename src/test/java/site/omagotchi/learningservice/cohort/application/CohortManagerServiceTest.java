@@ -3,10 +3,12 @@ package site.omagotchi.learningservice.cohort.application;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.command.ChangeCohortMemberRoleCommand;
+import site.omagotchi.learningservice.cohort.application.command.AssignCohortManagerCommand;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
@@ -24,6 +26,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,8 +45,34 @@ class CohortManagerServiceTest {
     @Mock
     private CohortAccessService accessService;
 
+    @Mock
+    private CohortManagerAssignmentPolicy assignmentPolicy;
+
     @InjectMocks
     private CohortManagerService managerService;
+
+    @Test
+    void validatesManagerPeriodBeforeCreatingMembership() {
+        Long cohortId = 1L;
+        Cohort cohort = preparingCohort(cohortId);
+        when(cohortRepository.findById(cohortId)).thenReturn(Optional.of(cohort));
+        when(membershipRepository.findByCohortIdAndUserId(cohortId, MANAGER_USER_ID))
+                .thenReturn(Optional.empty());
+        when(membershipRepository.save(any(CohortMembership.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        managerService.assignManager(
+                cohortId,
+                new AssignCohortManagerCommand(MANAGER_USER_ID),
+                PROCESSOR_USER_ID,
+                GlobalRole.SYSTEM_ADMIN
+        );
+
+        InOrder inOrder = inOrder(assignmentPolicy, membershipRepository);
+        inOrder.verify(assignmentPolicy).acquireCohort(cohortId);
+        inOrder.verify(assignmentPolicy).validateNoPeriodConflict(MANAGER_USER_ID, cohort);
+        inOrder.verify(membershipRepository).save(any(CohortMembership.class));
+    }
 
     @Test
     void cannotChangeLastActiveManagerToMentor() {

@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
+import site.omagotchi.learningservice.cohort.application.event.CohortClosedEvent;
 import site.omagotchi.learningservice.cohort.application.event.CohortMembershipEndedEvent;
 import site.omagotchi.learningservice.cohort.application.port.CohortEventPublisher;
 
@@ -26,6 +27,12 @@ public class SpringCohortEventPublisher implements CohortEventPublisher {
     public void publishMembershipEnded(CohortMembershipEndedEvent event) {
         log.debug("멤버십 종료 이벤트 발행. membershipId={}, cohortId={}",
                 event.membershipId(), event.cohortId());
+        applicationEventPublisher.publishEvent(event);
+    }
+
+    @Override
+    public void publishCohortClosed(CohortClosedEvent event) {
+        log.debug("기수 종료 이벤트 발행. cohortId={}", event.cohortId());
         applicationEventPublisher.publishEvent(event);
     }
 }

@@ -6,7 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.command.SaveAttendancePolicyCommand;
 import site.omagotchi.learningservice.cohort.application.result.CohortAttendancePolicyResponse;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;

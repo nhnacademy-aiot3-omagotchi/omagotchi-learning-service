@@ -5,6 +5,11 @@ spring:
   application:
     name: learning-service
 
+  cloud:
+    loadbalancer:
+      cache:
+        enabled: false
+
   http:
     clients:
       connect-timeout: ${IDENTITY_SERVICE_CONNECT_TIMEOUT}
@@ -27,6 +32,8 @@ spring:
 
   data:
     redis:
+      repositories:
+        enabled: false
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
       database: ${REDIS_DATABASE}
@@ -102,6 +109,12 @@ management:
 
 timer:
   max-duration: ${TIMER_MAX_DURATION}
+
+prediction:
+  client:
+    base-url: ${PREDICTION_SERVICE_BASE_URL}
+    connect-timeout: ${PREDICTION_SERVICE_CONNECT_TIMEOUT:2s}
+    read-timeout: ${PREDICTION_SERVICE_READ_TIMEOUT:5s}
 
 telegram:
   bot:
@@ -188,6 +201,11 @@ omagotchi:
       bot-token: ${TELEGRAM_BOT_TOKEN:}
       chat-id: ${TELEGRAM_CHAT_ID:}
   team:
+    telegram:
+      # 실제 발송 테스트에서만 켠다. false이면 sender Bean 자체를 등록하지 않는다
+      enabled: ${TEAM_TELEGRAM_ENABLED:false}
+      bot-token: ${TELEGRAM_BOT_TOKEN:}
+      chat-id: ${TELEGRAM_CHAT_ID:}
     sweep:
       # 고아 팀원 정합성 스윕 주기 = 복구 지연의 상한 (ADR space-team/0013).
       # 이미 실패한 건만 다루는 예외 경로라 만료 정리보다 길게 잡는다

@@ -7,7 +7,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.gamification.infrastructure.StudyProgressionRepository;
 import site.omagotchi.learningservice.gamification.infrastructure.UserDailyQuestRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;

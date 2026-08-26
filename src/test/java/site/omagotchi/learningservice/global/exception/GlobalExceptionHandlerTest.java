@@ -23,7 +23,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     @DisplayName("호출 계약 위반을 내부 오류로 숨김")
-    void hidesIllegalArgumentException() {
+    void hidesIllegalArgumentException(CapturedOutput output) {
         // Given
         MockHttpServletRequest request = requestForTest();
         IllegalArgumentException exception =
@@ -35,11 +35,12 @@ class GlobalExceptionHandlerTest {
 
         // Then
         thenUnexpectedExceptionIsHidden(response);
+        then(output).contains("외부에 노출하면 안 되는 인자 정보");
     }
 
     @Test
     @DisplayName("내부 상태 위반을 내부 오류로 숨김")
-    void hidesIllegalStateException() {
+    void hidesIllegalStateException(CapturedOutput output) {
         // Given
         MockHttpServletRequest request = requestForTest();
         IllegalStateException exception =
@@ -51,6 +52,7 @@ class GlobalExceptionHandlerTest {
 
         // Then
         thenUnexpectedExceptionIsHidden(response);
+        then(output).contains("외부에 노출하면 안 되는 상태 정보");
     }
 
     @Test

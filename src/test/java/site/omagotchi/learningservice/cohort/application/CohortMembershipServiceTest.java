@@ -11,7 +11,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.command.ApproveMembershipCommand;
 import site.omagotchi.learningservice.cohort.application.event.CohortMembershipEndedEvent;
 import site.omagotchi.learningservice.cohort.application.port.CohortEventPublisher;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;

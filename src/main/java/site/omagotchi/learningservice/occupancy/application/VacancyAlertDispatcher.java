@@ -13,6 +13,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -43,6 +44,7 @@ public class VacancyAlertDispatcher {
     private final CohortMembershipQueryService cohortMembershipQueryService;
     private final SpaceNameQueryService spaceNameQueryService;
     private final VacancyAlertDelivery alertDelivery;
+    private final StaleVacancyAlertDiscarder staleAlertDiscarder;
 
     /**
      * 발송 수단. 비어 있는 것은 정상 상태이며(아직 발송 수단이 없다) 그때는 신청을
@@ -60,18 +62,64 @@ public class VacancyAlertDispatcher {
             CohortMembershipQueryService cohortMembershipQueryService,
             SpaceNameQueryService spaceNameQueryService,
             VacancyAlertDelivery alertDelivery,
+            StaleVacancyAlertDiscarder staleAlertDiscarder,
             List<VacancyAlertSender> senders
     ) {
         this.alertRepository = alertRepository;
         this.cohortMembershipQueryService = cohortMembershipQueryService;
         this.spaceNameQueryService = spaceNameQueryService;
         this.alertDelivery = alertDelivery;
+        this.staleAlertDiscarder = staleAlertDiscarder;
         // 어느 발송의 성공을 완료로 볼지 정할 수 없는 설정이므로, 방이 비는 순간이 아니라
         // 기동 시점에 멈춘다.
         if (senders.size() > 1) {
             throw new IllegalStateException("공실 알림 sender는 하나만 등록할 수 있습니다: " + senders);
         }
         this.sender = senders.stream().findFirst();
+    }
+
+    /**
+     * 소속이 더 이상 유효하지 않은 신청을 발송 대상에서 빼고 <b>폐기한다.</b> 정리 훅(명세 06
+     * §2 8단계)이 비켜간 잔여를 잡는 2차 방어다 — 근거와 실패 시나리오는 ADR space-team/0017.
+     *
+     * <p><b>건너뛰지 않고 지우는 이유</b>만 남긴다: 이 잔여를 나중에 치울 다른 주체가 없다
+     * (멤버십 스윕은 열린 참여 행만 커서로 돌아 이 경우를 보지 못한다). 수신자를 못 찾는
+     * 것과 다르다 — 그건 조회 실패라 보존하지만, 이건 소속 종료라는 확정된 사실이다.</p>
+     *
+     * @return 발송 대상으로 남은 신청. 판정 자체가 실패하면 원본을 그대로 돌려준다
+     */
+    private List<VacancyAlertRepository.WaitingAlert> discardStale(
+            List<VacancyAlertRepository.WaitingAlert> candidates) {
+
+        Set<Long> inactive;
+        try {
+            inactive = cohortMembershipQueryService.findInactiveMembershipIds(
+                    candidates.stream()
+                            .map(VacancyAlertRepository.WaitingAlert::cohortMembershipId)
+                            .toList());
+        } catch (Exception exception) {
+            // 판정에 실패했다고 발송을 멈추지는 않는다. 유효한 대기자까지 함께 막히는 것이
+            // 잔여 하나를 잘못 보내는 것보다 나쁘다 — 순서(CE-05)가 여전히 1차 방어다.
+            log.error("공실 알림 수신자의 소속 판정에 실패해 그대로 진행합니다.", exception);
+            return candidates;
+        }
+
+        if (inactive.isEmpty()) {
+            return candidates;
+        }
+
+        try {
+            int discarded = staleAlertDiscarder.discard(inactive);
+            log.warn("소속이 끝난 신청자의 공실 알림 신청을 폐기했습니다. 폐기={}건 — "
+                    + "정리 훅이 누락됐을 수 있습니다.", discarded);
+        } catch (Exception exception) {
+            // 폐기에 실패해도 발송 대상에서는 뺀다. 지우지 못한 행은 다음 공실에 다시 걸린다.
+            log.error("소속이 끝난 공실 알림 신청 폐기에 실패했습니다.", exception);
+        }
+
+        return candidates.stream()
+                .filter(candidate -> !inactive.contains(candidate.cohortMembershipId()))
+                .toList();
     }
 
     /**
@@ -92,6 +140,11 @@ public class VacancyAlertDispatcher {
 
         List<VacancyAlertRepository.WaitingAlert> candidates =
                 alertRepository.findWaitingBySpaceId(spaceId);
+        if (candidates.isEmpty()) {
+            return 0;
+        }
+
+        candidates = discardStale(candidates);
         if (candidates.isEmpty()) {
             return 0;
         }

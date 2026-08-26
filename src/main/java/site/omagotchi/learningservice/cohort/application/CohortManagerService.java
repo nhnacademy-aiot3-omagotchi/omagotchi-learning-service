@@ -7,7 +7,7 @@ import site.omagotchi.learningservice.cohort.application.command.AssignCohortMan
 import site.omagotchi.learningservice.cohort.application.command.ChangeCohortMemberRoleCommand;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
@@ -28,6 +28,7 @@ public class CohortManagerService {
     private final CohortRepository cohortRepository;
     private final CohortMembershipRepository membershipRepository;
     private final CohortAccessService accessService;
+    private final CohortManagerAssignmentPolicy assignmentPolicy;
 
     /**
      * 전역 어드민이 기수 관리자를 명시적으로 지정한다.
@@ -41,7 +42,9 @@ public class CohortManagerService {
             GlobalRole globalRole
     ) {
         accessService.requireSystemAdmin(globalRole);
-        validateCohortCanChangeManager(cohortId);
+        assignmentPolicy.acquireCohort(cohortId);
+        Cohort cohort = requireCohortCanChangeManager(cohortId);
+        assignmentPolicy.validateNoPeriodConflict(command.userId(), cohort);
 
         return membershipRepository.findByCohortIdAndUserId(cohortId, command.userId())
                 .map(membership -> assignExistingMembershipAsManager(membership, processedByUserId))
@@ -60,7 +63,8 @@ public class CohortManagerService {
             UUID processedByUserId,
             GlobalRole globalRole
     ) {
-        validateCohortCanChangeManager(cohortId);
+        assignmentPolicy.acquireCohort(cohortId);
+        Cohort cohort = requireCohortCanChangeManager(cohortId);
 
         CohortMembership membership = membershipRepository.findFirstByCohortIdAndUserIdAndStatusOrderByRequestedAtDesc(
                 cohortId,
@@ -72,6 +76,9 @@ public class CohortManagerService {
             accessService.requireSystemAdmin(globalRole);
         } else {
             accessService.requireManager(cohortId, processedByUserId);
+        }
+        if (command.role() == CohortMembershipRole.MANAGER) {
+            assignmentPolicy.validateNoPeriodConflict(userId, cohort);
         }
         // 매니저가 1명 이상이어야 함 (매니저 < 1) 방지
         if (membership.getRole() == CohortMembershipRole.MANAGER
@@ -147,12 +154,13 @@ public class CohortManagerService {
      * 관리자 지정/역할 변경이 가능한 기수인지 확인한다.
      * 종료된 기수는 소속 역할을 변경하지 않는다.
      */
-    private void validateCohortCanChangeManager(Long cohortId) {
+    private Cohort requireCohortCanChangeManager(Long cohortId) {
         Cohort cohort = cohortRepository.findById(cohortId)
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
         if (cohort.getStatus() == CohortStatus.CLOSED) {
             throw new BusinessException(CohortErrorCode.COHORT_ALREADY_CLOSED);
         }
+        return cohort;
     }
 
     /**

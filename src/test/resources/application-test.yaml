@@ -2,6 +2,10 @@ server:
   port: 0
 
 spring:
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
   http:
     clients:
       connect-timeout: 1s
@@ -9,6 +13,12 @@ spring:
     serviceclient:
       identity-service:
         base-url: http://localhost:8083
+  flyway:
+    # 기준 데이터(캐릭터·퀘스트·레벨)는 운영에서 GamificationReferenceDataBootstrap이 적재한다.
+    # @DataJpaTest 같은 슬라이스는 @Component를 스캔하지 않아 ApplicationRunner가 실행되지 않으므로
+    # 테스트에서는 db/seed 의 R__test_reference_data.sql 로 같은 데이터를 채운다.
+    # db/seed 는 src/test/resources 에만 있으므로 운영 classpath 에는 포함되지 않는다.
+    locations: classpath:db/migration,classpath:db/seed
   datasource:
     # 통합 테스트에서는 @ServiceConnection이 이 값을 Testcontainers PostgreSQL로 덮어씀
     url: jdbc:postgresql://localhost:5432/unused_learning_test
@@ -35,6 +45,11 @@ eureka:
 
 timer:
   max-duration: PT12H
+
+prediction:
+  client:
+    # Application Context 기동만 검증하는 테스트가 실제 prediction-service에 연결하지 않도록 한다.
+    base-url: http://localhost:8085
 
 telegram:
   bot:

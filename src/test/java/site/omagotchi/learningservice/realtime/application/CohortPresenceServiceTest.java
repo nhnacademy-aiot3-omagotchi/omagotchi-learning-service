@@ -12,12 +12,14 @@ import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.BDDAssertions.then;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
@@ -31,6 +33,7 @@ class CohortPresenceServiceTest {
     private static final UUID USER_ID = UUID.fromString("019d2a48-80c0-4d6a-9a15-0b16d2dd74f1");
     private static final UUID ADMIN_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final Long COHORT_ID = 7L;
+    private static final UUID OTHER_USER_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final String SESSION_ID = "session-1";
 
     private final StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
@@ -181,8 +184,48 @@ class CohortPresenceServiceTest {
         ));
     }
 
+    @Test
+    @DisplayName("다른 사용자의 session id로 heartbeat를 보내면 거부한다")
+    void rejectsHeartbeatFromAnotherUser() {
+        // Given
+        given(hashOperations.get("realtime:session:" + SESSION_ID, "userId")).willReturn(USER_ID.toString());
+        given(hashOperations.get("realtime:session:" + SESSION_ID, "cohortId")).willReturn(COHORT_ID.toString());
+
+        // When
+        Throwable thrown = catchThrowable(() -> service.heartbeat(SESSION_ID, otherUser()));
+
+        // Then
+        then(thrown).isInstanceOf(BusinessException.class);
+        then(((BusinessException) thrown).getErrorCode())
+                .isEqualTo(PresenceErrorCode.SESSION_ACCESS_DENIED);
+        verify(redisTemplate, never()).expire(anyString(), any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("다른 사용자의 session id로 종료를 요청하면 거부한다")
+    void rejectsDisconnectFromAnotherUser() {
+        // Given
+        // REST 경로에서는 요청자가 sessionId를 실어 보내므로 소유자 대조가 없으면
+        // 남의 재실 세션을 강제로 종료시킬 수 있다.
+        given(hashOperations.get("realtime:session:" + SESSION_ID, "userId")).willReturn(USER_ID.toString());
+        given(hashOperations.get("realtime:session:" + SESSION_ID, "cohortId")).willReturn(COHORT_ID.toString());
+
+        // When
+        Throwable thrown = catchThrowable(() -> service.disconnectSession(SESSION_ID, OTHER_USER_ID));
+
+        // Then
+        then(thrown).isInstanceOf(BusinessException.class);
+        then(((BusinessException) thrown).getErrorCode())
+                .isEqualTo(PresenceErrorCode.SESSION_ACCESS_DENIED);
+        verify(redisTemplate, never()).delete("realtime:session:" + SESSION_ID);
+    }
+
     private AuthenticatedUser user() {
         return new AuthenticatedUser(USER_ID, GlobalRole.USER);
+    }
+
+    private AuthenticatedUser otherUser() {
+        return new AuthenticatedUser(OTHER_USER_ID, GlobalRole.USER);
     }
 
     private CohortMembership activeMembership() {

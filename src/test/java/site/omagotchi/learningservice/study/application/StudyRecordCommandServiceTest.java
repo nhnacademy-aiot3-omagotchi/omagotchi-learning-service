@@ -11,7 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
-import site.omagotchi.learningservice.cohort.domain.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
@@ -179,6 +179,34 @@ class StudyRecordCommandServiceTest {
         }
 
         @Test
+        @DisplayName("자정을 넘는 동일 집계일 기록 저장")
+        void savesMidnightCrossingWithinSameAggregationDate() {
+            givenActiveMembership();
+            Instant startTime = Instant.parse("2000-01-01T14:30:00Z");
+            Instant endTime = Instant.parse("2000-01-01T15:30:00Z");
+            CreateStudyRecordCommand command = new CreateStudyRecordCommand(
+                    startTime,
+                    endTime
+            );
+            given(clock.instant()).willReturn(CURRENT_TIME);
+            given(studyRecordRepository.save(any(StudyRecord.class)))
+                    .willAnswer(invocation -> savedStudyRecord(invocation.getArgument(0)));
+
+            StudyRecordResult result = studyRecordCommandService.create(
+                    USER_ID,
+                    COHORT_ID,
+                    command
+            );
+
+            assertAll(
+                    () -> assertEquals(BASE_DATE, result.aggregationDate()),
+                    () -> assertEquals(startTime, result.startTime()),
+                    () -> assertEquals(endTime, result.endTime()),
+                    () -> assertEquals(3_600L, result.studySeconds())
+            );
+        }
+
+        @Test
         @DisplayName("기존 기록 겹침 예외")
         void throwsOverlapWhenCreatingOverlappingRecord() {
             givenActiveMembership();
@@ -337,6 +365,40 @@ class StudyRecordCommandServiceTest {
                     () -> assertEquals(7_200L, entity.getStudySeconds()),
                     () -> assertEquals(BASE_DATE, entity.getAggregationDate()),
                     () -> assertEquals(entity.getStudySeconds(), result.studySeconds())
+            );
+        }
+
+        @Test
+        @DisplayName("자정을 넘는 동일 집계일 기록 수정")
+        void updatesMidnightCrossingWithinSameAggregationDate() {
+            givenActiveMembership();
+            StudyRecord entity = createEntity(START_TIME, END_TIME);
+            Instant startTime = Instant.parse("2000-01-01T14:40:00Z");
+            Instant endTime = Instant.parse("2000-01-01T15:40:00Z");
+            UpdateStudyRecordCommand command = new UpdateStudyRecordCommand(
+                    startTime,
+                    endTime,
+                    0L
+            );
+            given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
+                    STUDY_RECORD_ID,
+                    COHORT_MEMBERSHIP_ID
+            )).willReturn(Optional.of(entity));
+            given(clock.instant()).willReturn(CURRENT_TIME);
+            given(studyRecordRepository.saveWithVersionCheck(entity)).willReturn(entity);
+
+            StudyRecordResult result = studyRecordCommandService.update(
+                    USER_ID,
+                    COHORT_ID,
+                    STUDY_RECORD_ID,
+                    command
+            );
+
+            assertAll(
+                    () -> assertEquals(BASE_DATE, result.aggregationDate()),
+                    () -> assertEquals(startTime, result.startTime()),
+                    () -> assertEquals(endTime, result.endTime()),
+                    () -> assertEquals(3_600L, result.studySeconds())
             );
         }
 

@@ -761,24 +761,33 @@ class SpaceCommandServiceTest {
                 .thenReturn(Optional.of(lab(42L, null)));
 
         assertBusinessError(
-                SpaceErrorCode.LAB_ALREADY_ASSIGNED,
+                SpaceErrorCode.SPACE_ALREADY_ASSIGNED,
                 () -> spaceCommandService.assignCohort(1L, 42L)
         );
         assertBusinessError(
-                SpaceErrorCode.LAB_ALREADY_ASSIGNED,
+                SpaceErrorCode.SPACE_ALREADY_ASSIGNED,
                 () -> spaceCommandService.assignCohort(1L, 84L)
         );
     }
 
+    /**
+     * <p>이 인수 경로가 없으면 <b>기수 종료로 주체가 풀린 회의실·독서실을 영구히 삭제할 수
+     * 없다</b> — 관리 주체 없는 공간은 삭제가 막히므로(RM-25) 누군가 책임을 선언해야 한다.</p>
+     */
     @Test
-    void rejectsCohortAssignmentToNonLab() {
+    @DisplayName("회의실도 기수가 인수할 수 있다")
+    void allowsCohortAssignmentToNonLab() {
+        // 주체 없는 회의실이어야 한다 — existingSpace()는 이미 42기에 배정돼 있다.
         when(spaceRepository.findByIdForUpdate(1L))
-                .thenReturn(Optional.of(existingSpace()));
+                .thenReturn(Optional.of(unmanagedInactiveSpace()));
+        when(cohortAccessService.exists(42L)).thenReturn(true);
+        when(cohortAccessService.isManager(42L, ACTOR_USER_ID)).thenReturn(true);
+        when(spaceRepository.save(any(Space.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertBusinessError(
-                SpaceErrorCode.LAB_ONLY_COHORT_ASSIGNMENT,
-                () -> spaceCommandService.assignCohort(1L, 42L)
-        );
+        Space assigned = spaceCommandService.assignCohort(1L, 42L);
+
+        assertThat(assigned.getCohortId()).isEqualTo(42L);
     }
 
     @Test
@@ -811,7 +820,7 @@ class SpaceCommandServiceTest {
                 .thenReturn(true);
 
         assertBusinessError(
-                SpaceErrorCode.LAB_ALREADY_ASSIGNED,
+                SpaceErrorCode.SPACE_ALREADY_ASSIGNED,
                 () -> spaceCommandService.assignCohort(1L, 84L)
         );
 

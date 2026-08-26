@@ -34,8 +34,6 @@ public record TelegramProperties(
      * @param timeout 요청 타임아웃
      */
     public record Bot(
-            boolean enabled,
-
             @NotBlank(message = "telegram.bot.username은 비어 있을 수 없습니다.")
             String username,
 
@@ -45,9 +43,22 @@ public record TelegramProperties(
 
             Timeout timeout
     ) {
+        private static final int DEFAULT_MAX_THREADS = 4;
         private static final int CONNECTION_REQUEST_DURATION  = 5;
         private static final int CONNECTION_DURATION = 5;
         private static final int READ_DURATION = 10;
+
+        //컴팩트 생성자 검증
+        public Bot {
+            if (maxThreads <= 0) {
+                maxThreads = DEFAULT_MAX_THREADS;
+            }
+
+            // Timeout 의 컴팩트 생성자가 3종 기본값을 채운다
+            if (Objects.isNull(timeout)) {
+                timeout = new Timeout(null, null, null);
+            }
+        }
 
         /**
          * 전체적인 타임아웃

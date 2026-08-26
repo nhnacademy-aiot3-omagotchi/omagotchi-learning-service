@@ -8,7 +8,6 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -20,7 +19,6 @@ import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 @RestController
 @RequestMapping("/api/v1/chat")
 @RequiredArgsConstructor
-@Validated
 public class ChatController {
 
     private final ChatClient geminiChatClient;

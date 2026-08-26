@@ -7,6 +7,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import site.omagotchi.learningservice.chat.application.AiToolProvider;
+import site.omagotchi.learningservice.chat.application.ChatSystemPrompt;
 
 import java.util.List;
 
@@ -41,6 +42,7 @@ public class ChatClientConfig {
             ChatMemory chatMemory
     ) {
         return ChatClient.builder(chatModel)
+                .defaultSystem(ChatSystemPrompt.DEFAULT)
                 .defaultTools(toolProviders.toArray())
                 // .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))로 대화방 ID 넘겨줘야 대화방별로 기억이 구분됨
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())

@@ -75,12 +75,19 @@ public class KmaWeatherApiClient implements WeatherApiClient {
     }
 
     private void validate(KmaForecastResponse response) {
-        if (Objects.isNull(response)) {
+        if (Objects.isNull(response) || Objects.isNull(response.response())) {
             log.warn("[KmaWeatherApiClient] KMA 응답이 비어있음");
             throw new BusinessException(CommonErrorCode.DOWNSTREAM_INVALID_RESPONSE, "KMA 응답이 비어있습니다.");
         }
 
         KmaForecastResponse.Header header = response.response().header();
+        if (Objects.isNull(header)) {
+            log.warn("[KmaWeatherApiClient] KMA 응답에 header가 없음");
+            throw new BusinessException(CommonErrorCode.DOWNSTREAM_INVALID_RESPONSE, "KMA 응답에 header가 없습니다.");
+        }
+
+        // resultCode 검사는 반드시 body 검사보다 먼저 해야 함
+        // KMA는 오류 응답(예: resultCode 10)에서 body를 통쨰로 내려주지 않기 때문에, 순서가 바뀌면 정상적인 오류 상황에서 NPE가 남
         if (!NORMAL_SERVICE_CODE.equals(header.resultCode())) {
             log.warn("[KmaWeatherApiClient] KMA 비정상 응답 - resultCode = {}, resultMsg = {}", header.resultCode(), header.resultMsg());
             throw new BusinessException(
@@ -88,6 +95,24 @@ public class KmaWeatherApiClient implements WeatherApiClient {
                     "KMA resultCode = %s (%s)".formatted(header.resultCode(), header.resultMsg())
             );
         }
+
+        // 정상 응답인데 예보 항목이 없으면 응답이 깨진 것으로 봄
+        // 데이터가 없거나 요청이 잘못된 경우엔 KMA가 resultCode(03, 10 등)로 알려주기 때문
+        if (this.hasNoItems(response)) {
+            log.warn("[KmaWeatherApiClient] KMA 정상 응답인데 예보 항목이 없음");
+            throw new BusinessException(
+                    CommonErrorCode.DOWNSTREAM_INVALID_RESPONSE,
+                    "KMA 정상 응답에 예보 항목이 없습니다."
+            );
+        }
     }
 
+    private boolean hasNoItems(KmaForecastResponse response) {
+        KmaForecastResponse.Body body = response.response().body();
+
+        return Objects.isNull(body)
+                || Objects.isNull(body.items())
+                || Objects.isNull(body.items().item())
+                || body.items().item().isEmpty();
+    }
 }

@@ -40,7 +40,7 @@ public final class KmaForecastPivoter {
     private static final DateTimeFormatter FCST_TIME_FORMATTER = DateTimeFormatter.ofPattern("HHmm");
 
     public static List<WeatherForecast> pivot(KmaForecastResponse response) {
-        List<KmaForecastResponse.Item> items = response.response().body().items().item();
+        List<KmaForecastResponse.Item> items = extractItems(response);
 
         if (items.isEmpty()) {
             log.warn("[KmaForecastPivoter] KMA 응답에 예보 항목이 없음(nx/ny 조합에 데이터 없을 수 있음)");
@@ -67,6 +67,18 @@ public final class KmaForecastPivoter {
                 .thenComparing(WeatherForecast::forecastTime));
 
         return forecasts;
+    }
+
+    /**
+     * item이 없으면 '예보 항목 없음'으로 봄
+     * body/items 같은 상위 구조 누락은 계약 위반이라 KmaWeatherApiClient.validate()가 먼저 걸러냄
+     */
+    private static List<KmaForecastResponse.Item> extractItems(KmaForecastResponse response) {
+        List<KmaForecastResponse.Item> items = response.response().body().items().item();
+
+        return Objects.isNull(items)
+                ? List.of()
+                : items;
     }
 
     // 묶인 한 그룹을 카테고리별로 풀어서 필드에 꽂기

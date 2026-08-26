@@ -34,7 +34,9 @@ public class ChatController {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         String conversationId = user.userId().toString();
 
-        // TODO 사용자 question을 로깅하는 게 문제가 될지는 차후 파악이 필요함 (자유 텍스트이므로) (로그 보존 또한) (예: "우리 KDT 과정에 재민이 걔 정말 별로지 않아?")
+        // 질문은 자유 텍스트라 개인정보가 섞일 수 있어 INFO에 남기지 않는다
+        // Tool 호출 판단을 봐야 하는 로컬에서만 DEBUG로 확인한다 (application-local.yaml)
+        // 이 스택에는 엑세스 로그, 프록시가 없어 질문이 기록되는 지점은 아래 debug 한 줄 뿐임
         log.info("[ChatController] userId = {}, model = {}", user.userId(), model);
         log.debug("[ChatController] 질문 = {}", question);
 

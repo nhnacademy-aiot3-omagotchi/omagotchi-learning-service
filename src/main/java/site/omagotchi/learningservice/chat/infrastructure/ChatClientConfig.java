@@ -4,7 +4,6 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import site.omagotchi.learningservice.chat.application.AiToolProvider;
@@ -16,7 +15,28 @@ public class ChatClientConfig {
 
     @Bean
     public ChatClient geminiChatClient(
-            @Qualifier("googleGenAiChatModel") ChatModel chatModel,
+            ChatModel googleGenAiChatModel,
+            List<AiToolProvider> toolProviders,
+            ChatMemory chatMemory
+    ) {
+        return this.buildChatClient(googleGenAiChatModel, toolProviders, chatMemory);
+    }
+
+    @Bean
+    public ChatClient ollamaChatClient(
+            ChatModel ollamaChatModel,
+            List<AiToolProvider> toolProviders,
+            ChatMemory chatMemory
+    ) {
+        return this.buildChatClient(ollamaChatModel, toolProviders, chatMemory);
+    }
+
+    /**
+     * 모델만 다르고 Tool과 대화기록은 동일하게 구성한다
+     * 같은 ChatMemory를 공유하므로 사용자가 대화 중 모델을 바꿔도 앞의 맥락이 이어진다
+     */
+    private ChatClient buildChatClient(
+            ChatModel chatModel,
             List<AiToolProvider> toolProviders,
             ChatMemory chatMemory
     ) {

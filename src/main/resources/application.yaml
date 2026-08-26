@@ -118,9 +118,18 @@ prediction:
 
 telegram:
   bot:
+    enabled: ${TELEGRAM_BOT_ENABLED:false}
     username: ${TELEGRAM_BOT_USERNAME}
+    token: ${TELEGRAM_BOT_TOKEN:}
+    max-threads: ${TELEGRAM_BOT_MAX_THREADS:4}
+    timeout:
+      connection-request: ${TELEGRAM_CONNECTION_REQUEST_TIMEOUT:PT5S}
+      connect: ${TELEGRAM_CONNECT_TIMEOUT:PT5S}
+      read: ${TELEGRAM_READ_TIMEOUT:PT10S}
   link-token:
     ttl: ${TELEGRAM_LINK_TOKEN_TTL}
+  notification:
+    enabled: ${ACTION_TELEGRAM_ENABLED:false}
 
 community:
   attachments:

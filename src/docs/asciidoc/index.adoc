@@ -56,3 +56,19 @@ include::{snippets}/gamification/create-representative-character/http-response.a
 
 include::{snippets}/presence/get-my-cohort-snapshot/http-request.adoc[]
 include::{snippets}/presence/get-my-cohort-snapshot/http-response.adoc[]
+
+=== Presence heartbeat
+
+주기적으로 호출한다. 최초 호출은 세션 등록, 이후 호출은 TTL 연장으로 동작하며
+응답에 현재 snapshot을 함께 반환한다.
+`X-Presence-Session`은 View(BFF)가 생성해 전달하는 세션 식별자이며 Browser에 노출하지 않는다.
+
+include::{snippets}/presence/heartbeat/http-request.adoc[]
+include::{snippets}/presence/heartbeat/http-response.adoc[]
+
+=== Presence 이탈 통지
+
+TTL 만료를 기다리지 않고 즉시 제거한다. 호출이 실패해도 heartbeat가 멈추면 TTL로 정리된다.
+
+include::{snippets}/presence/leave/http-request.adoc[]
+include::{snippets}/presence/leave/http-response.adoc[]

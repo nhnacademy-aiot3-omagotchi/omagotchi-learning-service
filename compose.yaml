@@ -15,5 +15,20 @@ services:
     volumes:
       - learning-service-postgres-data:/var/lib/postgresql
 
+  # 센서 이벤트 저장(RedisSensorEventStore)과 액션 쿨다운(RedisActionCooldownStore)이 사용한다.
+  # E2eLearningServiceApplication은 PostgreSQL만 Testcontainers로 준비하므로 Redis는 여기서 띄운다.
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - learning-service-redis-data:/data
+
 volumes:
   learning-service-postgres-data:
+  learning-service-redis-data:

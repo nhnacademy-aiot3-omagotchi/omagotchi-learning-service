@@ -177,23 +177,6 @@ CREATE TABLE learning_service.advancement_histories (
 CREATE INDEX ix_advancement_histories_xp_transaction
     ON learning_service.advancement_histories (xp_transaction_id);
 
-INSERT INTO learning_service.level_policies (level, min_total_xp)
-SELECT level, (level - 1) * (level - 1) * 100
-FROM generate_series(1, 30) AS level;
-
-INSERT INTO learning_service.game_characters (name, code, description) VALUES
-    ('야간반', 'NIGHT_CLASS', NULL);
-
-INSERT INTO learning_service.quest_templates (
-    type,
-    code,
-    title,
-    target_count,
-    reward_xp,
-    display_order
-) VALUES
-    ('ROUTINE', 'ATTENDANCE', '출석하기', 1, 20, 1),
-    ('ROUTINE', 'STUDY_COMPLETED', '학습 완료하기', 1, 30, 2),
-    ('ROUTINE', 'CHARACTER_CHECKED', '캐릭터 확인하기', 1, 10, 3),
-    ('ROUTINE', 'ROUTINE_REVIEW', '오늘 학습 돌아보기', 1, 20, 4),
-    ('LLM', 'LLM_QUEST', 'AI 추천 퀘스트', 1, 40, 5);
+-- 기준 데이터(레벨 구간·캐릭터·퀘스트 템플릿)는 이 파일에서 관리하지 않는다.
+-- GamificationReferenceDataBootstrap 이 애플리케이션 기동 시 적재한다.
+-- 스키마와 데이터를 분리해 값 수정에 새 마이그레이션 번호가 필요하지 않게 한다.

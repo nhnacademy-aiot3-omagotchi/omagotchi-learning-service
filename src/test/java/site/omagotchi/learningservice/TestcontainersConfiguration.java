@@ -6,7 +6,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.rabbitmq.RabbitMQContainer;
 import org.testcontainers.utility.DockerImageName;
 import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
@@ -25,14 +24,6 @@ public class TestcontainersConfiguration {
     @ServiceConnection
     PostgreSQLContainer postgresContainer() {
         return new PostgreSQLContainer(DockerImageName.parse("postgres:18.1"));
-    }
-
-    // RabbitMQ 리스너가 로컬 브로커·환경변수(RABBITMQ_USERNAME 등)에 의존하지 않도록
-    // 테스트 전용 브로커를 컨테이너로 띄운다. @ServiceConnection이 접속 정보를 주입한다.
-    @Bean
-    @ServiceConnection
-    RabbitMQContainer rabbitContainer() {
-        return new RabbitMQContainer(DockerImageName.parse("rabbitmq:4"));
     }
 
     // 전체 통합 테스트가 별도 Identity 프로세스에 의존하지 않도록 하는 테스트 경계

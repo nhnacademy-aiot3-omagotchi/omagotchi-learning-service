@@ -6,6 +6,16 @@ spring:
     google:
       genai:
         api-key: ${GEMINI_API_KEY}
+        chat:
+          model: gemini-2.5-flash # 변경 가능
+          temperature: 0.7
+    ollama:
+      base-url: ${OLLAMA_BASE_URL}
+      chat:
+        model: qwen2.5:latest # 변경 가능
+        temperature: 0.3
+        top-p: 0.9
+        top-k: 40
   application:
     name: learning-service
 

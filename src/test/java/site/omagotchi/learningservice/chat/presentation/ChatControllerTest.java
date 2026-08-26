@@ -41,8 +41,11 @@ class ChatControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockitoBean
+    @MockitoBean(name = "geminiChatClient")
     private ChatClient geminiChatClient;
+
+    @MockitoBean(name = "ollamaChatClient")
+    private ChatClient ollamaChatClient;
 
     @Test
     @DisplayName("인증 없이 호출하면 401을 반환한다")
@@ -50,7 +53,7 @@ class ChatControllerTest {
         this.mockMvc.perform(get("/api/v1/chat").param("question", "서울 날씨 알려줘"))
                 .andExpect(status().isUnauthorized());
 
-        verifyNoInteractions(this.geminiChatClient);
+        verifyNoInteractions(this.geminiChatClient, this.ollamaChatClient);
     }
 
     @Test
@@ -60,7 +63,7 @@ class ChatControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, bearerToken()))
                 .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(this.geminiChatClient);
+        verifyNoInteractions(this.geminiChatClient, this.ollamaChatClient);
     }
 
     @Test
@@ -71,7 +74,7 @@ class ChatControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, bearerToken()))
                 .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(this.geminiChatClient);
+        verifyNoInteractions(this.geminiChatClient, this.ollamaChatClient);
     }
 
     @Test
@@ -84,13 +87,13 @@ class ChatControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, bearerToken()))
                 .andExpect(status().isBadRequest());
 
-        verifyNoInteractions(this.geminiChatClient);
+        verifyNoInteractions(this.geminiChatClient, this.ollamaChatClient);
     }
 
     @Test
     @DisplayName("질문을 그대로 ChatClient에 전달한다")
     void passesQuestionToChatClient() throws Exception {
-        ChatClient.ChatClientRequestSpec requestSpec = stubChatClientChain();
+        ChatClient.ChatClientRequestSpec requestSpec = stubChatClientChain(this.geminiChatClient);
 
         this.mockMvc.perform(get("/api/v1/chat")
                         .param("question", "광주 동구 날씨 알려줘")
@@ -103,7 +106,7 @@ class ChatControllerTest {
     @Test
     @DisplayName("대화 ID를 JWT의 사용자 ID로 설정한다")
     void usesAuthenticatedUserIdAsConversationId() throws Exception {
-        ChatClient.ChatClientRequestSpec requestSpec = stubChatClientChain();
+        ChatClient.ChatClientRequestSpec requestSpec = stubChatClientChain(this.geminiChatClient);
 
         this.mockMvc.perform(get("/api/v1/chat")
                         .param("question", "서울 날씨 알려줘")
@@ -123,17 +126,74 @@ class ChatControllerTest {
         verify(advisorSpec).param(ChatMemory.CONVERSATION_ID, TestJwtKeyConfig.USER_ID);
     }
 
-    private ChatClient.ChatClientRequestSpec stubChatClientChain() {
+    // 어느 클라이언트든 받도록
+    private ChatClient.ChatClientRequestSpec stubChatClientChain(ChatClient chatClient) {
         ChatClient.ChatClientRequestSpec requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
         ChatClient.StreamResponseSpec streamResponseSpec = mock(ChatClient.StreamResponseSpec.class);
 
-        given(this.geminiChatClient.prompt()).willReturn(requestSpec);
+        given(chatClient.prompt()).willReturn(requestSpec);
         given(requestSpec.user(anyString())).willReturn(requestSpec);
         given(requestSpec.advisors(any(Consumer.class))).willReturn(requestSpec);
         given(requestSpec.stream()).willReturn(streamResponseSpec);
         given(streamResponseSpec.content()).willReturn(Flux.just("흐리고 33도입니다."));
 
         return requestSpec;
+    }
+
+    @Test
+    @DisplayName("model을 생략하면 Gemini를 사용한다")
+    void useGeminiByDefault() throws Exception {
+        stubChatClientChain(this.geminiChatClient);
+
+        this.mockMvc.perform(get("/api/v1/chat")
+                        .param("question", "서울 날씨 알려줘")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andReturn();
+
+        verify(this.geminiChatClient).prompt();
+        verifyNoInteractions(this.ollamaChatClient);
+    }
+
+    @Test
+    @DisplayName("model=OLLAMA면 Ollama를 사용한다")
+    void useOllamaWhenRequested() throws Exception {
+        stubChatClientChain(this.ollamaChatClient);
+
+        this.mockMvc.perform(get("/api/v1/chat")
+                        .param("question", "서울 날씨 알려줘")
+                        .param("model", "OLLAMA")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andReturn();
+
+        verify(this.ollamaChatClient).prompt();
+        verifyNoInteractions(this.geminiChatClient);
+    }
+
+    @Test
+    @DisplayName("model=GEMINI면 Gemini를 사용한다")
+    void usesGeminiWhenRequested() throws Exception {
+        stubChatClientChain(this.geminiChatClient);
+
+        this.mockMvc.perform(get("/api/v1/chat")
+                        .param("question", "서울 날씨 알려줘")
+                        .param("model", "GEMINI")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andReturn();
+
+        verify(this.geminiChatClient).prompt();
+        verifyNoInteractions(this.ollamaChatClient);
+    }
+
+    @Test
+    @DisplayName("없는 모델명을 보내면 400을 반환하고 어떤 모델도 호출하지 않는다")
+    void rejectsUnknownModel() throws Exception {
+        this.mockMvc.perform(get("/api/v1/chat")
+                        .param("question", "서울 날씨 알려줘")
+                        .param("model", "genimai")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(this.geminiChatClient, this.ollamaChatClient);
     }
 
     private static String bearerToken() {

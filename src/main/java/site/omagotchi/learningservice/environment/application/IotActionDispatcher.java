@@ -8,6 +8,7 @@ import site.omagotchi.learningservice.environment.application.port.IotActionExec
 import site.omagotchi.learningservice.environment.application.result.IotActionResult;
 import site.omagotchi.learningservice.environment.domain.*;
 
+import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -21,6 +22,7 @@ public class IotActionDispatcher {
     private final ActionCoolDownStore coolDownStore;
     private final IotActionExecutor executor;
     private final EnvironmentProperties properties;
+    private final ActionNotifier notifier;
 
     /** 룰 히트검사 -> 조치 결정 -> 장소 쿨 다운 추가 -> IOT 제어기기 명령 -> 결과 확인*/
     public ActionOutcome dispatch(SensorEvent event){
@@ -52,9 +54,19 @@ public class IotActionDispatcher {
             return ActionOutcome.failed(action, failureReason(result), result.simulated()); //2-3 iot 통신 실패 혹은 통신은 성공했되 제어기 동작 실패 failed()
         }
 
-        return ActionOutcome.confirm(action, result.at(), result.simulated(), null); //2-4 성공. notifiedAt은 아직 텔레그램 미구현으로 null
+        Instant notified = notify(action, detection, result);
+
+        return ActionOutcome.confirm(action, result.at(), result.simulated(), notified); //2-4 성공.
     }
 
+    private Instant notify(IotAction action, SensorDetection detection, IotActionResult result){
+        try{
+            return notifier.notifyConfirmed(detection, action, result);
+        }catch (RuntimeException e){
+            log.warn("조치 알림 처리 실패. location={}, action={}", detection.location(), action, e);
+            return null;
+        }
+    }
     private String cooldownKey(String location, IotAction action){
         return COOLDOWN_KEY_PREFIX + location + ":" + action.name();
     }

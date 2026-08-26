@@ -2,6 +2,7 @@ package site.omagotchi.learningservice.chat.infrastructure;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Ticker;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.messages.Message;
 
@@ -14,13 +15,26 @@ import java.util.Objects;
  */
 public class CaffeineChatMemoryRepository implements ChatMemoryRepository {
 
+    private static final Duration DEFAULT_TIME_TO_LIVE = Duration.ofHours(1);
+
     // Key는 conversationId (우리에게는 userId)
     // Value는 그 유저의 대화 메시지 목록
-    private final Cache<String, List<Message>> cache = Caffeine.newBuilder()
-            // 마지막으로 이 Key를 읽거나 쓴 시점부터 1시간이 지나면 자동으로 삭제
-            // expireAfterWrite(쓴 시점 기준)와 다르게, 계속 대화를 하는 유저는 매번 접근이 갱신돼서 안 지워짐 (1시간동안 조용한 유저만 지워짐)
-            .expireAfterAccess(Duration.ofHours(1))
-            .build();
+    private final Cache<String, List<Message>> cache;
+
+    public CaffeineChatMemoryRepository() {
+        this(DEFAULT_TIME_TO_LIVE, Ticker.systemTicker());
+    }
+
+    // 만료 동작을 검증하려면 시간을 흘려보낼 수 있어야 해서 Ticker를 받는 생성자를 둠 (운영에서는 기본생성자만 씀)
+    // Ticker는 카페인 버전의 Clock임
+    CaffeineChatMemoryRepository(Duration timeToLive, Ticker ticker) {
+        this.cache = Caffeine.newBuilder()
+                // 마지막으로 이 Key를 읽거나 쓴 시점부터 1시간이 지나면 자동으로 삭제
+                // expireAfterWrite(쓴 시점 기준)와 다르게, 계속 대화를 하는 유저는 매번 접근이 갱신돼서 안 지워짐 (1시간동안 조용한 유저만 지워짐)
+                .expireAfterAccess(timeToLive)
+                .ticker(ticker)
+                .build();
+    }
 
     // 캐시 안에 지금 살아있는 모든 유저 ID 목록 반환
     // cache.asMap()은 캐시 내용을 일반 Map처럼 보여주는 뷰 -> 거기서 keySet()을 뽑아 리스트로 복사

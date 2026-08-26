@@ -29,7 +29,7 @@ public class TelegramUserLinkService {
 
     private final TelegramUserLinkRepository userLinkRepository;
     private final TelegramLinkTokenRepository linkTokenRepository;
-    private final TelegramLinkProperties telegramLinkProperties;
+    private final TelegramProperties telegramProperties;
     private final SecureRandom secureRandom = new SecureRandom();
 
     /**
@@ -38,7 +38,7 @@ public class TelegramUserLinkService {
     @Transactional
     public TelegramLinkTokenResponse issueLinkToken(UUID userId) {
         String rawToken = generateRawToken();
-        OffsetDateTime expiresAt = OffsetDateTime.now().plus(telegramLinkProperties.linkToken().ttl());
+        OffsetDateTime expiresAt = OffsetDateTime.now().plus(telegramProperties.linkToken().ttl());
 
         TelegramLinkToken token = TelegramLinkToken.issue(
                 userId,
@@ -48,7 +48,7 @@ public class TelegramUserLinkService {
         linkTokenRepository.save(token);
 
         return new TelegramLinkTokenResponse(
-                "https://t.me/" + telegramLinkProperties.bot().username() + "?start=" + rawToken,
+                "https://t.me/" + telegramProperties.bot().username() + "?start=" + rawToken,
                 expiresAt
         );
     }

@@ -275,4 +275,7 @@ public interface CohortMembershipRepository extends
             @Param("membershipId") Long membershipId,
             @Param("requestedAt") OffsetDateTime requestedAt
     );
+
+    /** 소속된 매니저를 찾음 */
+    List<CohortMembership> findByRoleAndStatusAndEndedAtIsNull(CohortMembershipRole role, CohortMembershipStatus status);
 }

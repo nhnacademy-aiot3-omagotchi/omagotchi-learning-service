@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
+import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 
@@ -206,4 +207,13 @@ public class CohortMembershipQueryService {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
+    /** 모든 기수의 매니저 UUID를 반환 */
+    public List<UUID> findActiveManagerUserIds(){
+        return membershipRepository.findByRoleAndStatusAndEndedAtIsNull(
+                CohortMembershipRole.MANAGER, CohortMembershipStatus.ACTIVE)
+                .stream()
+                .map(CohortMembership::getUserId)
+                .distinct()
+                .toList();
+    }
 }

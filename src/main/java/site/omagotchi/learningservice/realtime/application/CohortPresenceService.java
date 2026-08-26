@@ -3,7 +3,6 @@ package site.omagotchi.learningservice.realtime.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
@@ -72,7 +71,9 @@ public class CohortPresenceService {
         if (sessionPresence.isPresent()) {
             SessionPresence session = sessionPresence.get();
             if (!session.userId().equals(user.userId())) {
-                throw new AccessDeniedException("WebSocket session does not belong to the authenticated user");
+                // REST heartbeat로도 호출되므로 AccessDeniedException 대신 BusinessException을 던진다.
+                // GlobalExceptionHandler의 catch-all이 AccessDeniedException을 500으로 바꾸기 때문이다.
+                throw new BusinessException(PresenceErrorCode.SESSION_ACCESS_DENIED);
             }
             // client payload 없이 Redis에 저장된 cohort와 JWT 사용자를 다시 검증한 뒤 TTL만 연장한다.
             cohortAccessService.requireActiveMembershipId(session.cohortId(), user.userId());
@@ -86,7 +87,11 @@ public class CohortPresenceService {
         registerSession(sessionId, user);
     }
 
-    public void disconnectSession(String sessionId, UUID fallbackUserId) {
+    /**
+     * 세션 종료. requesterId는 요청자 본인의 userId이며, session hash가 이미 만료된 경우의
+     * fallback 정리 대상으로도 쓰인다. Principal이 없는 STOMP disconnect에서는 null이 들어온다.
+     */
+    public void disconnectSession(String sessionId, UUID requesterId) {
         if (sessionId == null || sessionId.isBlank()) {
             return;
         }
@@ -94,12 +99,18 @@ public class CohortPresenceService {
         Optional<SessionPresence> sessionPresence = findSession(sessionId);
         if (sessionPresence.isPresent()) {
             SessionPresence session = sessionPresence.get();
+            // REST 경로에서는 요청자가 sessionId를 실어 보내므로 소유자 대조가 없으면
+            // 남의 재실 세션을 강제로 종료시킬 수 있다. heartbeat()와 같은 규칙을 적용한다.
+            // WebSocketPresenceEventListener는 Principal이 없을 때 null을 넘기므로 기존 동작은 유지된다.
+            if (requesterId != null && !session.userId().equals(requesterId)) {
+                throw new BusinessException(PresenceErrorCode.SESSION_ACCESS_DENIED);
+            }
             removeSession(sessionId, session.userId(), session.cohortId());
             return;
         }
 
-        if (fallbackUserId != null) {
-            removeFallbackSession(sessionId, fallbackUserId);
+        if (requesterId != null) {
+            removeFallbackSession(sessionId, requesterId);
         }
     }
 

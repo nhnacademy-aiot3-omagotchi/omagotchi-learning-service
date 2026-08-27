@@ -13,7 +13,7 @@ import site.omagotchi.learningservice.telegram.infrastructure.TelegramUserLinkRe
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -53,32 +53,38 @@ class TelegramNotificationServiceTest {
     void sendsToLinkedUsersOwnChat() {
         given(userLinkRepository.findByUserId(RECIPIENT)).willReturn(Optional.of(linkedUser()));
 
-        service.send(RECIPIENT, TEXT);
+        boolean sent = service.send(RECIPIENT, TEXT);
 
+        assertThat(sent).isTrue();
         verify(messageSender).send(CHAT_ID, TEXT);
     }
 
-    /** 미연동은 오류가 아니다 — 아직 연동하지 않았을 뿐이다. */
+    /**
+     * 미연동은 오류가 아니다 — 아직 연동하지 않았을 뿐이다. {@code false}는 호출부가
+     * "건너뜀"으로 읽어 소진 기록을 남기지 않게 하는 신호다.
+     */
     @Test
-    @DisplayName("미연동 사용자에게는 발송하지 않고 조용히 끝낸다.")
+    @DisplayName("미연동 사용자에게는 발송하지 않고 false를 반환한다.")
     void skipsUnlinkedUser() {
         given(userLinkRepository.findByUserId(RECIPIENT)).willReturn(Optional.empty());
 
-        assertThatCode(() -> service.send(RECIPIENT, TEXT)).doesNotThrowAnyException();
+        boolean sent = service.send(RECIPIENT, TEXT);
 
+        assertThat(sent).isFalse();
         verify(messageSender, never()).send(anyLong(), anyString());
     }
 
     /** 사용자가 직접 끈 것이므로 존중한다. */
     @Test
-    @DisplayName("알림을 끈 사용자에게는 발송하지 않는다.")
+    @DisplayName("알림을 끈 사용자에게는 발송하지 않고 false를 반환한다.")
     void skipsUserWithNotificationDisabled() {
         TelegramUserLink link = linkedUser();
         link.changeNotificationEnabled(false);
         given(userLinkRepository.findByUserId(RECIPIENT)).willReturn(Optional.of(link));
 
-        assertThatCode(() -> service.send(RECIPIENT, TEXT)).doesNotThrowAnyException();
+        boolean sent = service.send(RECIPIENT, TEXT);
 
+        assertThat(sent).isFalse();
         verify(messageSender, never()).send(anyLong(), anyString());
     }
 
@@ -87,14 +93,15 @@ class TelegramNotificationServiceTest {
      * 한 판정에 묶여 있으면 둘 중 하나만 확인하는 실수가 생긴다.
      */
     @Test
-    @DisplayName("연동을 해제한 사용자에게는 발송하지 않는다.")
+    @DisplayName("연동을 해제한 사용자에게는 발송하지 않고 false를 반환한다.")
     void skipsDisconnectedUser() {
         TelegramUserLink link = linkedUser();
         link.disconnect();
         given(userLinkRepository.findByUserId(RECIPIENT)).willReturn(Optional.of(link));
 
-        assertThatCode(() -> service.send(RECIPIENT, TEXT)).doesNotThrowAnyException();
+        boolean sent = service.send(RECIPIENT, TEXT);
 
+        assertThat(sent).isFalse();
         verify(messageSender, never()).send(anyLong(), anyString());
     }
 

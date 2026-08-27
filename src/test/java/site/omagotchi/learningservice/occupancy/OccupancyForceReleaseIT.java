@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.occupancy;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -58,6 +61,15 @@ class OccupancyForceReleaseIT {
 
     @MockitoBean
     VacancyAlertSender vacancyAlertSender;
+
+    @BeforeEach
+    void stubSuccessfulSendByDefault() {
+        // sendVacancyAlert는 boolean을 반환하고 Mock 기본값은 false(건너뜀)이므로,
+        // 명시적으로 true(발송 성공)를 스텁한다 — 강제 반납도 정상 반납과 같은 규약이라
+        // 대기자에게 실제로 알림이 가야 waitingAlertRows가 0이 되길 기다리는 awaitUntil이
+        // 타임아웃하지 않는다.
+        given(vacancyAlertSender.sendVacancyAlert(any())).willReturn(true);
+    }
 
     /**
      * 마지막 단계를 실패시키려고 감싼다. Mock이 아니라 Spy인 것이 중요하다 — 다른

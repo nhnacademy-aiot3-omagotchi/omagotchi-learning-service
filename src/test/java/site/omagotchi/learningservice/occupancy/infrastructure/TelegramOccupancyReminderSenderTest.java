@@ -15,7 +15,9 @@ import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -44,6 +46,31 @@ class TelegramOccupancyReminderSenderTest {
         verify(notificationService).send(eq(OCCUPIER_USER_ID), text.capture());
         assertThat(text.getValue()).contains("공간: 테스트 회의실")
                 .contains("2026-08-13 18:30:00 (KST)");
+    }
+
+    /**
+     * 건너뜀 여부는 {@code TelegramNotificationService}가 판정한다. 이 Class는 그 결과를
+     * 그대로 전달할 뿐이다 — 호출부({@code OccupancyExpiryReminder})가 이 값으로
+     * {@code reminder_sent_at} 기록 여부를 정한다.
+     */
+    @Test
+    @DisplayName("수신자가 건너뛰어졌으면 false를 그대로 돌려준다.")
+    void propagatesSkipFromNotificationService() {
+        given(notificationService.send(any(), any())).willReturn(false);
+
+        boolean sent = sender.sendExpiryReminder(reminder());
+
+        assertThat(sent).isFalse();
+    }
+
+    @Test
+    @DisplayName("실제로 발송됐으면 true를 그대로 돌려준다.")
+    void propagatesSuccessFromNotificationService() {
+        given(notificationService.send(any(), any())).willReturn(true);
+
+        boolean sent = sender.sendExpiryReminder(reminder());
+
+        assertThat(sent).isTrue();
     }
 
     private OccupancyReminderSender.ExpiryReminder reminder() {

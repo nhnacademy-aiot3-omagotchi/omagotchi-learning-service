@@ -17,6 +17,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -78,6 +79,31 @@ class TelegramVacancyAlertSenderTest {
 
         assertThat(capturedText()).contains("비활성화")
                 .contains("공간: 테스트 회의실");
+    }
+
+    /**
+     * 건너뜀 여부는 {@code TelegramNotificationService}가 판정한다. 이 Class는 그 결과를
+     * 그대로 전달할 뿐이다 — 호출부({@code VacancyAlertDelivery})가 이 값으로 신청 소진
+     * 여부를 정한다.
+     */
+    @Test
+    @DisplayName("수신자가 건너뛰어졌으면 false를 그대로 돌려준다.")
+    void propagatesSkipFromNotificationService() {
+        given(notificationService.send(any(), any())).willReturn(false);
+
+        boolean sent = sender.sendVacancyAlert(notice());
+
+        assertThat(sent).isFalse();
+    }
+
+    @Test
+    @DisplayName("실제로 발송됐으면 true를 그대로 돌려준다.")
+    void propagatesSuccessFromNotificationService() {
+        given(notificationService.send(any(), any())).willReturn(true);
+
+        boolean sent = sender.sendVacancyAlert(notice());
+
+        assertThat(sent).isTrue();
     }
 
     private String capturedText() {

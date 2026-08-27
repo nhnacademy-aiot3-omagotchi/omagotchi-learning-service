@@ -33,6 +33,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -82,6 +83,11 @@ class OccupancyReminderFlowIT {
         currentInstant = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         when(clock.instant()).thenAnswer(invocation -> currentInstant);
         when(clock.getZone()).thenReturn(ZoneOffset.UTC);
+
+        // sendExpiryReminder는 boolean을 반환하고 Mock 기본값은 false(건너뜀)이므로,
+        // 명시적으로 true(발송 성공)를 스텁한다 — 아니면 이 파일의 모든 발송이 건너뛴
+        // 것으로 처리돼 reminderSentAt이 기록되지 않는다.
+        when(reminderSender.sendExpiryReminder(any())).thenReturn(true);
     }
 
     @Test

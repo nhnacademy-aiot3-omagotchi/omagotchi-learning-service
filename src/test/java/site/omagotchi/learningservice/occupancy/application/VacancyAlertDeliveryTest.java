@@ -61,12 +61,31 @@ class VacancyAlertDeliveryTest {
     @DisplayName("발송에 성공하면 신청을 소진 처리한다.")
     void marksNotifiedAfterSuccessfulSend() {
         VacancyAlert alert = givenWaitingAlert();
+        given(sender.sendVacancyAlert(any())).willReturn(true);
 
         boolean sent = alertDelivery.send(ALERT_ID, SPACE_ID, SPACE_NAME, RECIPIENT_USER_ID, VACATED_AT, sender);
 
         assertThat(sent).isTrue();
         assertThat(alert.isWaiting()).isFalse();
         assertThat(alert.getNotifiedAt()).isEqualTo(OffsetDateTime.now(clock));
+    }
+
+    /**
+     * 수신자가 미연동이거나 알림을 꺼서 sender가 {@code false}를 돌려준 경우다. 여기서
+     * 소진시키면 나중에 연동해도 이미 사라진 신청이라 못 받는다 — 대기 상태를 그대로
+     * 둬야 다음 공실에 다시 평가된다.
+     */
+    @Test
+    @DisplayName("수신자가 건너뛰어졌으면 소진 기록을 남기지 않고 대기 상태를 유지한다.")
+    void doesNotConsumeAlertWhenRecipientSkipped() {
+        VacancyAlert alert = givenWaitingAlert();
+        given(sender.sendVacancyAlert(any())).willReturn(false);
+
+        boolean sent = alertDelivery.send(ALERT_ID, SPACE_ID, SPACE_NAME, RECIPIENT_USER_ID, VACATED_AT, sender);
+
+        assertThat(sent).isFalse();
+        assertThat(alert.isWaiting()).isTrue();
+        assertThat(alert.getNotifiedAt()).isNull();
     }
 
     @Test

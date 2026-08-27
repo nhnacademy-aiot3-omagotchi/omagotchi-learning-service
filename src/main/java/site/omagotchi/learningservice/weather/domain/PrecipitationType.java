@@ -11,22 +11,4 @@ public enum PrecipitationType {
     RAIN_SNOW, // 2: 비/눈
     SNOW, // 3: 눈
     SHOWER; // 4: 소나기 (단기예보 기준)
-
-    /**
-     * KMA 응답의 PTY 코드 문자열을 PrecipitationType으로 변환
-     *
-     * @param code KMA가 내려준 PTY 코드 (0 ~ 4 중 하나)
-     * @return 매핑된 강수형태
-     * @throws IllegalArgumentException 알려지지 않은 코드가 들어온 경우
-     */
-    public static PrecipitationType fromCode(String code) {
-        return switch (code) {
-            case "0" -> NONE;
-            case "1" -> RAIN;
-            case "2" -> RAIN_SNOW;
-            case "3" -> SNOW;
-            case "4" -> SHOWER;
-            default -> throw new IllegalArgumentException("알 수 없는 강수형태 코드: " + code);
-        };
-    }
 }

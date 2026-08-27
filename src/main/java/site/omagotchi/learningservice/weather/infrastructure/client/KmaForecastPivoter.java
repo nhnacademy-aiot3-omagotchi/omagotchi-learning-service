@@ -3,21 +3,20 @@ package site.omagotchi.learningservice.weather.infrastructure.client;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import site.omagotchi.learningservice.weather.infrastructure.KmaForecastResponse;
 import site.omagotchi.learningservice.weather.domain.PrecipitationType;
 import site.omagotchi.learningservice.weather.domain.SkyCondition;
 import site.omagotchi.learningservice.weather.domain.WeatherForecast;
+import site.omagotchi.learningservice.weather.infrastructure.KmaForecastResponse;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
+
+import static site.omagotchi.learningservice.weather.domain.PrecipitationType.*;
+import static site.omagotchi.learningservice.weather.domain.SkyCondition.*;
 
 /**
  * KMA한테서 이런 식으로 응답 옴(같은 시간대인데 카테고리별로 로우가 따로따로):
@@ -133,30 +132,38 @@ public final class KmaForecastPivoter {
         }
     }
 
+    // KMA 응답의 SKY 코드 문자열을 SkyCondition으로 변환
+    // value: KMA가 내려준 SKY 코드(1, 3, 4 중 하나)
+    // 매핑된 하늘 상태 리턴
     private static SkyCondition parseSky(String value) {
-        if (Objects.isNull(value)) {
-            return null;
-        }
-
-        try {
-            return SkyCondition.fromCode(value);
-        } catch (IllegalArgumentException e) {
-            log.warn("[KmaForecastPivoter] 알 수 없는 SKY 코드: {}", value);
-            return null;
-        }
+        return switch (value) {
+            case null -> null;
+            case "1" -> CLEAR;
+            case "3" -> MOSTLY_CLOUDY;
+            case "4" -> CLOUDY;
+            default -> {
+                log.warn("[KmaForecastPivoter] 알 수 없는 SKY 코드: {}", value);
+                yield null; // 이 디폴트 블락의 결과는 null이다 라고 명시적으로 표시하는 것
+            }
+        };
     }
 
+    // KMA 응답의 PTY 코드 문자열을 PrecipitationType으로 변환
+    // value: KMA가 내려준 PTY 코드(0~4 중 하나)
+    // 매핑된 강수형태 리턴
     private static PrecipitationType parsePty(String value) {
-        if (Objects.isNull(value)) {
-            return null;
-        }
-
-        try {
-            return PrecipitationType.fromCode(value);
-        } catch (IllegalArgumentException e) {
-            log.warn("[KmaForecastPivoter] 알 수 없는 PTY 코드: {}", value);
-            return null;
-        }
+        return switch (value) {
+            case null -> null;
+            case "0" -> NONE;
+            case "1" -> RAIN;
+            case "2" -> RAIN_SNOW;
+            case "3" -> SNOW;
+            case "4" -> SHOWER;
+            default -> {
+                log.warn("[KmaForecastPivoter] 알 수 없는 PTY 코드: {}", value);
+                yield null;
+            }
+        };
     }
 
     // 이 클래스 밖에서 쓸 일 없는 순수 내부 그룹핑용 key라서 별도 파일로 빼지 않음

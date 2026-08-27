@@ -226,16 +226,17 @@ class TimerCommandServiceIT {
         // firstEndedAt = secondStartedAt
         Instant secondStartedAt = Instant.parse("2000-01-01T00:02:10Z");
         Instant secondEndedAt = Instant.parse("2000-01-01T00:04:00Z");
-        given(clock.instant()).willReturn(
-                firstStartedAt,
-                firstEndedAt,
-                secondStartedAt,
-                secondEndedAt
-        );
 
+        given(clock.instant()).willReturn(firstStartedAt);
         TimerStateResult firstTimer = timerCommandService.start(USER_ID, COHORT_ID);
+
+        given(clock.instant()).willReturn(firstEndedAt);
         timerCommandService.stop(USER_ID, COHORT_ID, firstTimer.timerRunId());
+
+        given(clock.instant()).willReturn(secondStartedAt);
         TimerStateResult secondTimer = timerCommandService.start(USER_ID, COHORT_ID);
+
+        given(clock.instant()).willReturn(secondEndedAt);
         timerCommandService.stop(USER_ID, COHORT_ID, secondTimer.timerRunId());
 
         List<StudyRecord> records = studyRecordJpaRepository.findAll().stream()

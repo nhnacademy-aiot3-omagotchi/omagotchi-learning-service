@@ -7,7 +7,6 @@ import site.omagotchi.learningservice.cohort.application.result.CohortMembership
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
-import site.omagotchi.learningservice.team.domain.TeamMemberRole;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.application.port.TeamRepository;
 
@@ -15,7 +14,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 세 서비스가 공유하는 조회·검증 헬퍼.
+ * 팀 Application Service들이 공유하는 조회·검증 헬퍼.
  * 락을 잡는 코드를 한곳에 모아 순서를 눈으로 확인할 수 있게 한다 — 항상 teams 먼저.
  */
 @Component
@@ -90,10 +89,10 @@ public class TeamAccessSupport {
     /**
      * 락을 잡기 전에 팀의 기수만 확인한다.
      *
-     * 팀원 추가처럼 "검증은 락 밖, 카운트·INSERT만 락 안"인 흐름에서 쓴다.
-     * 검증에 필요한 건 cohort_id 하나뿐인데 loadActiveTeam으로 엔티티를 읽으면
-     * 그 인스턴스가 1차 캐시에 남아 뒤따르는 lockActiveTeam의 deleted_at 재확인을
-     * 락 이전 스냅샷으로 만들어버린다. 락 전에는 Team을 엔티티로 만들지 않는다.
+     * 팀원 추가의 Identity 조회 전 접근 제어에서 요청자의 기수를 확인할 때 쓴다.
+     * 이 값은 빠른 실패와 접근 제어에만 사용하며 정합성 판단의
+     * 근거로 넘기지 않는다. 뒤따르는 {@link TeamMemberAddition}이 새 트랜잭션에서 팀 행을 잠그고
+     * 현재 기수·권한·정원을 다시 확인한다.
      */
     public Long requireActiveTeamCohortId(Long teamId) {
         return teamRepository.findActiveCohortId(teamId)
@@ -133,8 +132,9 @@ public class TeamAccessSupport {
     /**
      * 팀 관리 권한 검증. 팀원 추가·제외·위임·해체의 공통 관문이다.
      *
-     * <p>반드시 {@code teams} 행 락을 잡은 뒤에 호출해야 의미가 있다. 락 밖에서 통과시키면
-     * 그 사이 위임이 커밋되어 이미 MEMBER가 된 사람이 관리 작업을 이어갈 수 있다.</p>
+     * <p>상태 변경의 권위 있는 검사로 사용할 때는 반드시 {@code teams} 행 락을 잡은 뒤
+     * 호출해야 한다. Identity 조회 전 접근 제어용으로 락 밖에서 사용할 수는 있지만, 그 결과로
+     * 저장 여부를 결정하면 안 되며 별도 쓰기 트랜잭션에서 반드시 다시 확인해야 한다.</p>
      *
      * @throws site.omagotchi.learningservice.global.exception.BusinessException 팀원이 아니거나 MASTER가 아니면 403
      */
@@ -146,23 +146,4 @@ public class TeamAccessSupport {
         return member;
     }
 
-    /**
-     * {@code teams} 행 락을 잡은 뒤 MASTER 권한을 값으로 다시 확인한다.
-     *
-     * <p>{@link #requireMaster}를 그대로 재호출하면 안 된다. 같은 트랜잭션에서 락 밖 사전
-     * 검증이 이미 {@link #requireMaster}(또는 {@link #requireMembership})를 호출해
-     * 그 멤버십의 {@code TeamMember}를 엔티티로 읽었다면, 영속성 컨텍스트에 캐시된 그
-     * 인스턴스가 재조회의 반환값이 된다 — 그 사이 다른 트랜잭션이 위임을 커밋해 role이
-     * 바뀌었어도 캐시는 락 이전 스냅샷을 그대로 들고 있다. 이 메서드는 엔티티가 아니라
-     * boolean 값으로 확인해 이 함정을 피한다.</p>
-     *
-     * @throws site.omagotchi.learningservice.global.exception.BusinessException MASTER가 아니면 403
-     */
-    public void requireStillMaster(Long teamId, Long cohortMembershipId) {
-        boolean master = teamMemberRepository.existsByTeamIdAndCohortMembershipIdAndRole(
-                teamId, cohortMembershipId, TeamMemberRole.MASTER);
-        if (!master) {
-            throw new BusinessException(TeamErrorCode.MASTER_REQUIRED);
-        }
-    }
 }

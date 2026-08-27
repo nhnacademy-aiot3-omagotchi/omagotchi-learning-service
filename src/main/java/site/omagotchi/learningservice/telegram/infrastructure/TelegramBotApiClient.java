@@ -7,6 +7,7 @@ import org.telegram.telegrambots.bots.DefaultBotOptions;
 import site.omagotchi.learningservice.telegram.application.TelegramProperties;
 
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 텔레그램 HTTP 클라이언트
@@ -20,6 +21,15 @@ public class TelegramBotApiClient extends DefaultAbsSender {
     @PreDestroy
     public void shutdown(){
         exe.shutdown();
+
+        try{
+            if(!exe.awaitTermination(5, TimeUnit.SECONDS)){
+                exe.shutdownNow();
+            }
+        }catch (InterruptedException e){
+            exe.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     private static DefaultBotOptions botOptions(TelegramProperties.Bot bot){

@@ -17,18 +17,18 @@ class StudyTimePolicyTest {
     class MinuteNormalization {
 
         @Test
-        @DisplayName("시작 내림과 종료 올림")
-        void normalizesStartAndEndToMinutes() {
+        @DisplayName("시작과 종료 내림")
+        void floorsTimeToMinutes() {
             Instant instant = Instant.parse("2000-01-01T00:00:30Z");
 
-            Instant startTime = StudyTimePolicy.floorToMinute(instant);
-            Instant endTime = StudyTimePolicy.ceilToMinute(instant);
+            Instant normalizedTime = StudyTimePolicy.floorToMinute(instant);
 
             assertAll(
-                    () -> assertEquals(Instant.parse("2000-01-01T00:00:00Z"), startTime),
-                    () -> assertEquals(Instant.parse("2000-01-01T00:01:00Z"), endTime),
-                    () -> assertTrue(StudyTimePolicy.isMinuteAligned(startTime)),
-                    () -> assertTrue(StudyTimePolicy.isMinuteAligned(endTime)),
+                    () -> assertEquals(
+                            Instant.parse("2000-01-01T00:00:00Z"),
+                            normalizedTime
+                    ),
+                    () -> assertTrue(StudyTimePolicy.isMinuteAligned(normalizedTime)),
                     () -> assertTrue(StudyTimePolicy.isMinuteAligned(LocalTime.of(10, 0))),
                     () -> assertFalse(StudyTimePolicy.isMinuteAligned(LocalTime.of(10, 0, 1)))
             );

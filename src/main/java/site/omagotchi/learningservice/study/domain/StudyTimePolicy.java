@@ -25,11 +25,6 @@ public final class StudyTimePolicy {
         return instant.truncatedTo(ChronoUnit.MINUTES);
     }
 
-    public static Instant ceilToMinute(Instant instant) {
-        Instant floor = floorToMinute(instant);
-        return instant.equals(floor) ? floor : floor.plus(1, ChronoUnit.MINUTES);
-    }
-
     public static boolean crossesAggregationBoundary(Instant startTime, Instant endTime) {
         return !AggregationDateTime.aggregationDate(startTime)
                 .equals(AggregationDateTime.aggregationDate(endTime.minusNanos(1)));

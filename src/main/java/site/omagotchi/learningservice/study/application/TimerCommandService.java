@@ -5,9 +5,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.event.StudyCompletedEvent;
 import site.omagotchi.learningservice.study.application.port.StudyEventPublisher;
+import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
+import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.port.TimerRunQueryRepository;
 import site.omagotchi.learningservice.study.application.port.TimerRunRepository;
@@ -21,6 +22,7 @@ import site.omagotchi.learningservice.study.domain.TimerTimePolicy;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,6 +36,7 @@ public class TimerCommandService {
     private final TimerRunRepository timerRunRepository;
     private final TimerRunQueryRepository timerRunQueryRepository;
     private final StudyRecordRepository studyRecordRepository;
+    private final StudyRecordQueryRepository studyRecordQueryRepository;
     private final StudyWriteLock studyWriteLock;
     private final Clock clock;
     private final TimerTimePolicy timerTimePolicy;
@@ -85,12 +88,16 @@ public class TimerCommandService {
         TimerEndReason endReason = timerRun.stopOrExpire(currentAt, timerTimePolicy);
 
         if (endReason == TimerEndReason.STOP && timerRun.getMeasuredSeconds() > 0L) {
-            createStudyRecords(timerRun).forEach(studyRecordRepository::save);
-            studyEventPublisher.publishCompleted(new StudyCompletedEvent(
-                    userId,
-                    timerRunId,
-                    timerRun.getEndedAt()
-            ));
+            List<StudyRecord> studyRecords = createStudyRecords(timerRun);
+            if (!studyRecords.isEmpty()) {
+                studyRecords.forEach(this::validateNoExistingRecordOverlap);
+                studyRecords.forEach(studyRecordRepository::save);
+                studyEventPublisher.publishCompleted(new StudyCompletedEvent(
+                        userId,
+                        timerRunId,
+                        timerRun.getEndedAt()
+                ));
+            }
         }
         timerRunRepository.end(timerRun);
     }
@@ -129,7 +136,7 @@ public class TimerCommandService {
         Instant startedAt = timerRun.getStartedAt();
         Instant endedAt = timerRun.getEndedAt();
         Instant recordStartedAt = StudyTimePolicy.floorToMinute(startedAt);
-        Instant recordEndedAt = StudyTimePolicy.ceilToMinute(endedAt);
+        Instant recordEndedAt = StudyTimePolicy.floorToMinute(endedAt);
         long measuredSeconds = timerRun.getMeasuredSeconds();
 
         return StudyTimePolicy.findCrossedAggregationBoundary(startedAt, endedAt)
@@ -139,12 +146,12 @@ public class TimerCommandService {
                         boundary,
                         recordEndedAt
                 ))
-                .orElseGet(() -> List.of(StudyRecord.create(
+                .orElseGet(() -> createStudyRecord(
                         timerRun.getCohortMembershipId(),
                         recordStartedAt,
                         recordEndedAt,
                         measuredSeconds
-                )));
+                ).stream().toList());
     }
 
     private List<StudyRecord> createSplitStudyRecords(
@@ -153,25 +160,61 @@ public class TimerCommandService {
             Instant boundary,
             Instant recordEndedAt
     ) {
-        long firstChunkSeconds = Duration.between(
+        long measuredFirstChunkSeconds = Duration.between(
                 timerRun.getStartedAt(),
                 boundary
         ).getSeconds();
-        long secondChunkSeconds = timerRun.getMeasuredSeconds() - firstChunkSeconds;
+        long measuredSecondChunkSeconds = timerRun.getMeasuredSeconds()
+                - measuredFirstChunkSeconds;
+        List<StudyRecord> studyRecords = new ArrayList<>(2);
 
-        return List.of(
-                StudyRecord.create(
-                        timerRun.getCohortMembershipId(),
-                        recordStartedAt,
-                        boundary,
-                        firstChunkSeconds
-                ),
-                StudyRecord.create(
-                        timerRun.getCohortMembershipId(),
-                        boundary,
-                        recordEndedAt,
-                        secondChunkSeconds
-                )
+        createStudyRecord(
+                timerRun.getCohortMembershipId(),
+                recordStartedAt,
+                boundary,
+                measuredFirstChunkSeconds
+        ).ifPresent(studyRecords::add);
+        createStudyRecord(
+                timerRun.getCohortMembershipId(),
+                boundary,
+                recordEndedAt,
+                measuredSecondChunkSeconds
+        ).ifPresent(studyRecords::add);
+
+        return List.copyOf(studyRecords);
+    }
+
+    private Optional<StudyRecord> createStudyRecord(
+            Long cohortMembershipId,
+            Instant startTime,
+            Instant endTime,
+            long measuredSeconds
+    ) {
+        if (!startTime.isBefore(endTime) || measuredSeconds <= 0L) {
+            return Optional.empty();
+        }
+
+        long occupiedSeconds = Duration.between(startTime, endTime).getSeconds();
+        // 종료 시각 내림으로 구간이 줄어든 경우 DB·도메인의 점유 구간 상한을 지킨다.
+        long studySeconds = Math.min(measuredSeconds, occupiedSeconds);
+        return Optional.of(StudyRecord.create(
+                cohortMembershipId,
+                startTime,
+                endTime,
+                studySeconds
+        ));
+    }
+
+    private void validateNoExistingRecordOverlap(StudyRecord studyRecord) {
+        boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
+                studyRecord.getCohortMembershipId(),
+                studyRecord.getStartTime(),
+                studyRecord.getEndTime(),
+                null
         );
+
+        if (overlaps) {
+            throw new BusinessException(StudyRecordErrorCode.OVERLAP);
+        }
     }
 }

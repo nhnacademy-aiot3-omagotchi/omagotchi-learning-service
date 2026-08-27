@@ -209,11 +209,55 @@ class TimerCommandServiceIT {
                         studyRecord.getStartTime()
                 ),
                 () -> assertEquals(
-                        Instant.parse("2000-01-01T00:02:00Z"),
+                        Instant.parse("2000-01-01T00:01:00Z"),
                         studyRecord.getEndTime()
                 ),
-                () -> assertEquals(80L, studyRecord.getStudySeconds()),
+                () -> assertEquals(60L, studyRecord.getStudySeconds()),
                 () -> assertEquals(1, receiptCount)
+        );
+    }
+
+    @Test
+    @DisplayName("초 단위로 연속 실행한 타이머의 공부 기록 구간은 겹치지 않음")
+    void doesNotOverlapRecordsForConsecutiveTimers() {
+        Instant firstStartedAt = Instant.parse("2000-01-01T00:00:50Z");
+        Instant firstEndedAt = Instant.parse("2000-01-01T00:02:10Z");
+
+        // firstEndedAt = secondStartedAt
+        Instant secondStartedAt = Instant.parse("2000-01-01T00:02:10Z");
+        Instant secondEndedAt = Instant.parse("2000-01-01T00:04:00Z");
+        given(clock.instant()).willReturn(
+                firstStartedAt,
+                firstEndedAt,
+                secondStartedAt,
+                secondEndedAt
+        );
+
+        TimerStateResult firstTimer = timerCommandService.start(USER_ID, COHORT_ID);
+        timerCommandService.stop(USER_ID, COHORT_ID, firstTimer.timerRunId());
+        TimerStateResult secondTimer = timerCommandService.start(USER_ID, COHORT_ID);
+        timerCommandService.stop(USER_ID, COHORT_ID, secondTimer.timerRunId());
+
+        List<StudyRecord> records = studyRecordJpaRepository.findAll().stream()
+                .sorted(Comparator.comparing(StudyRecord::getStartTime))
+                .toList();
+        assertAll(
+                () -> assertEquals(2, records.size()),
+                () -> assertEquals(
+                        Instant.parse("2000-01-01T00:00:00Z"),
+                        records.get(0).getStartTime()
+                ),
+                () -> assertEquals(
+                        Instant.parse("2000-01-01T00:02:00Z"),
+                        records.get(0).getEndTime()
+                ),
+                () -> assertEquals(records.get(0).getEndTime(), records.get(1).getStartTime()),
+                () -> assertEquals(
+                        Instant.parse("2000-01-01T00:04:00Z"),
+                        records.get(1).getEndTime()
+                ),
+                () -> assertEquals(80L, records.get(0).getStudySeconds()),
+                () -> assertEquals(110L, records.get(1).getStudySeconds())
         );
     }
 

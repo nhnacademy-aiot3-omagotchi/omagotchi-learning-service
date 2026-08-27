@@ -1,0 +1,38 @@
+# SSE 스트리밍 응답이라 IntelliJ HTTP Client가 도착하는 대로 그대로 이어붙여 보여줍니다.
+
+@baseUrl = http://localhost:8084
+@accessToken = <USER JWT>
+
+### AI 채팅 - 날씨 질문
+GET {{baseUrl}}/api/v1/chat?question=광주 동구 날씨 알려줘
+Authorization: Bearer {{accessToken}}
+Accept: text/event-stream
+
+### AI 채팅 - 지역명 모호한 경우 (되물어야 함)
+GET {{baseUrl}}/api/v1/chat?question=동구 날씨 어때
+Authorization: Bearer {{accessToken}}
+Accept: text/event-stream
+
+### AI 채팅 - 지역명을 못 찾는 경우
+GET {{baseUrl}}/api/v1/chat?question=아무말이나써서지역못찾게 날씨 어때
+Authorization: Bearer {{accessToken}}
+Accept: text/event-stream
+
+### AI 채팅 - 지원 범위 밖 날짜 (5일 이후)
+GET {{baseUrl}}/api/v1/chat?question=서울 다음 주 날씨 어때
+Authorization: Bearer {{accessToken}}
+Accept: text/event-stream
+
+### AI 채팅 - 대화 맥락 유지 확인 (직전 질문 이어서 물어보기)
+GET {{baseUrl}}/api/v1/chat?question=거기 내일은 어때
+Authorization: Bearer {{accessToken}}
+Accept: text/event-stream
+
+### AI 채팅 - question 검증 실패 (빈 값)
+GET {{baseUrl}}/api/v1/chat?question=
+Authorization: Bearer {{accessToken}}
+Accept: text/event-stream
+
+### 인증 없이 호출 (401 확인)
+GET {{baseUrl}}/api/v1/chat?question=서울 날씨 어때
+Accept: text/event-stream

@@ -6,7 +6,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import site.omagotchi.learningservice.chat.application.AiToolProvider;
+import site.omagotchi.learningservice.global.ai.AiToolProvider;
 import site.omagotchi.learningservice.chat.application.ChatSystemPrompt;
 
 import java.util.List;

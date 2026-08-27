@@ -32,7 +32,7 @@ class WeatherQueryServiceTest {
     private static final RegionGrid BUSAN_DONGGU = new RegionGrid("부산광역시", "동구", "", 98, 75);
 
     @Mock
-    private CsvRegionGridResolver csvRegionGridResolver;
+    private CsvRegionGridResolver regionGridResolver;
 
     @Mock
     private WeatherApiClient weatherApiClient;
@@ -43,7 +43,7 @@ class WeatherQueryServiceTest {
     @Test
     @DisplayName("지역을 못 찾으면 NOT_FOUND를 반환하고 KMA를 호출하지 않는다")
     void returnsNotFoundWithoutCallingApi() {
-        given(csvRegionGridResolver.resolve("없는지역")).willReturn(List.of());
+        given(regionGridResolver.resolve("없는지역")).willReturn(List.of());
 
         WeatherQueryResult result = this.weatherQueryService.query("없는지역");
 
@@ -58,7 +58,7 @@ class WeatherQueryServiceTest {
     @Test
     @DisplayName("후보가 여러 곳이면 AMBIGUOUS를 반환하고 KMA를 호출하지 않는다")
     void returnsAmbiguousWithoutCallingApi() {
-        given(csvRegionGridResolver.resolve("동구"))
+        given(regionGridResolver.resolve("동구"))
                 .willReturn(List.of(GWANGJU_DONGGU, BUSAN_DONGGU));
 
         WeatherQueryResult result = this.weatherQueryService.query("동구");
@@ -86,7 +86,7 @@ class WeatherQueryServiceTest {
                 1.7
         );
 
-        given(csvRegionGridResolver.resolve("광주 동구")).willReturn(List.of(GWANGJU_DONGGU));
+        given(regionGridResolver.resolve("광주 동구")).willReturn(List.of(GWANGJU_DONGGU));
         given(weatherApiClient.getForecast(60, 74)).willReturn(List.of(forecast));
 
         WeatherQueryResult result = this.weatherQueryService.query("광주 동구");

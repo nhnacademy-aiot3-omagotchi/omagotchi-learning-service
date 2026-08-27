@@ -12,6 +12,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * classpath 번들 CSV를 기동 시 한 번 읽어 메모리에 올린다
+ * 외부 시스템이 아니라 정적 리소스라 port를 두지 않는다 (KMA는 네트워크 경계라 WeatherApiClient port 사용)
+ */
 @Component
 @Slf4j
 public class CsvRegionGridResolver {

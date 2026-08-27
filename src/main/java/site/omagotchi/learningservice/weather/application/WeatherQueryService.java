@@ -18,11 +18,11 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WeatherQueryService {
 
-    private final CsvRegionGridResolver csvRegionGridResolver;
+    private final CsvRegionGridResolver regionGridResolver;
     private final WeatherApiClient weatherApiClient;
 
     public WeatherQueryResult query(String region) {
-        List<RegionGrid> candidates = this.csvRegionGridResolver.resolve(region);
+        List<RegionGrid> candidates = this.regionGridResolver.resolve(region);
 
         if (candidates.isEmpty()) {
             return WeatherQueryResult.notFound();

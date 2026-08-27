@@ -4,54 +4,44 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.objects.Message;
-import org.telegram.telegrambots.meta.bots.AbsSender;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSender;
+import site.omagotchi.learningservice.telegram.application.TelegramNotificationService;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
+/**
+ * 공실 알림·삭제 통보의 문구를 고정한다.
+ */
 @ExtendWith(MockitoExtension.class)
 class TelegramVacancyAlertSenderTest {
 
-    private static final String TEST_CHAT_ID = "test-vacancy-chat";
     private static final UUID RECIPIENT_USER_ID =
             UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final OffsetDateTime VACATED_AT =
             OffsetDateTime.of(2026, 8, 13, 18, 30, 0, 0, ZoneOffset.ofHours(9));
 
     @Mock
-    private AbsSender telegramSender;
+    private TelegramNotificationService notificationService;
+
+    @InjectMocks
+    private TelegramVacancyAlertSender sender;
 
     @Test
-    @DisplayName("Telegram 성공 응답을 받으면 지정 chat ID와 공실 시각으로 동기 발송한다.")
-    void sendsToConfiguredChatWithVacatedTime() throws Exception {
-        TelegramVacancyAlertSender sender =
-                new TelegramVacancyAlertSender(telegramSender, TEST_CHAT_ID);
-        Message response = new Message();
-        response.setMessageId(1);
-        given(telegramSender.execute(any(SendMessage.class))).willReturn(response);
+    @DisplayName("공실 알림을 신청자에게 공간 이름과 공실 시각으로 보낸다.")
+    void sendsVacancyAlertToRecipientWithVacatedTime() {
+        sender.sendVacancyAlert(notice());
 
-        assertThatCode(() -> sender.sendVacancyAlert(notice())).doesNotThrowAnyException();
-
-        ArgumentCaptor<SendMessage> request = ArgumentCaptor.forClass(SendMessage.class);
-        verify(telegramSender).execute(request.capture());
-        assertThat(request.getValue().getChatId()).isEqualTo(TEST_CHAT_ID);
-        assertThat(request.getValue().getText())
-                .contains("공간: 테스트 회의실")
+        assertThat(capturedText()).contains("공간: 테스트 회의실")
                 .contains("2026-08-13 18:30:00 (KST)");
     }
 
@@ -61,61 +51,39 @@ class TelegramVacancyAlertSenderTest {
      */
     @Test
     @DisplayName("본문에 사람을 식별할 정보를 담지 않는다.")
-    void messageCarriesNoPersonalInformation() throws Exception {
-        TelegramVacancyAlertSender sender =
-                new TelegramVacancyAlertSender(telegramSender, TEST_CHAT_ID);
-        Message response = new Message();
-        response.setMessageId(1);
-        given(telegramSender.execute(any(SendMessage.class))).willReturn(response);
-
+    void messageCarriesNoPersonalInformation() {
         sender.sendVacancyAlert(notice());
 
-        ArgumentCaptor<SendMessage> request = ArgumentCaptor.forClass(SendMessage.class);
-        verify(telegramSender).execute(request.capture());
-        assertThat(request.getValue().getText())
-                .doesNotContain(RECIPIENT_USER_ID.toString());
+        assertThat(capturedText()).doesNotContain(RECIPIENT_USER_ID.toString());
     }
 
     /** 알림은 사용 권한을 보장하지 않는다 (MR-04). 적지 않으면 이미 점유된 방을 보게 된다. */
     @Test
     @DisplayName("선착순임을 본문에 함께 알린다.")
-    void messageStatesFirstComeFirstServed() throws Exception {
-        TelegramVacancyAlertSender sender =
-                new TelegramVacancyAlertSender(telegramSender, TEST_CHAT_ID);
-        Message response = new Message();
-        response.setMessageId(1);
-        given(telegramSender.execute(any(SendMessage.class))).willReturn(response);
-
+    void messageStatesFirstComeFirstServed() {
         sender.sendVacancyAlert(notice());
 
-        ArgumentCaptor<SendMessage> request = ArgumentCaptor.forClass(SendMessage.class);
-        verify(telegramSender).execute(request.capture());
-        assertThat(request.getValue().getText()).contains("먼저 점유하는 사람");
+        assertThat(capturedText()).contains("먼저 점유하는 사람");
     }
 
+    /**
+     * 삭제 통보는 <b>왜 사라졌는지</b>를 반드시 적는다. 이유가 없으면 사용자는 다시 신청하려다
+     * 400을 받는다 — 비활성 공간에는 활성 점유가 있을 수 없기 때문이다.
+     */
     @Test
-    @DisplayName("Telegram API 오류는 정상 반환하지 않고 호출부로 전파한다.")
-    void propagatesTelegramApiFailure() throws Exception {
-        TelegramVacancyAlertSender sender =
-                new TelegramVacancyAlertSender(telegramSender, TEST_CHAT_ID);
-        TelegramApiException apiException = new TelegramApiException("강제 Telegram 오류");
-        willThrow(apiException).given(telegramSender).execute(any(SendMessage.class));
+    @DisplayName("삭제 통보에 비활성화가 사유임을 적는다.")
+    void discardNoticeStatesReason() {
+        sender.sendDiscardNotice(new VacancyAlertSender.DiscardNotice(
+                7L, "테스트 회의실", RECIPIENT_USER_ID, VACATED_AT));
 
-        assertThatThrownBy(() -> sender.sendVacancyAlert(notice()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasCause(apiException);
+        assertThat(capturedText()).contains("비활성화")
+                .contains("공간: 테스트 회의실");
     }
 
-    @Test
-    @DisplayName("성공 Message를 확인할 수 없으면 발송 성공으로 처리하지 않는다.")
-    void rejectsUnconfirmedSuccessResponse() throws Exception {
-        TelegramVacancyAlertSender sender =
-                new TelegramVacancyAlertSender(telegramSender, TEST_CHAT_ID);
-        given(telegramSender.execute(any(SendMessage.class))).willReturn(null);
-
-        assertThatThrownBy(() -> sender.sendVacancyAlert(notice()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("성공 응답");
+    private String capturedText() {
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).send(eq(RECIPIENT_USER_ID), text.capture());
+        return text.getValue();
     }
 
     private VacancyAlertSender.VacancyNotice notice() {

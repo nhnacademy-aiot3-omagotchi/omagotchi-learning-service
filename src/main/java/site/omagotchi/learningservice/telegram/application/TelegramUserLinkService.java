@@ -17,6 +17,8 @@ import site.omagotchi.learningservice.telegram.infrastructure.TelegramUserLinkRe
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.HexFormat;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -82,6 +84,16 @@ public class TelegramUserLinkService {
 
         token.markUsed(now);
         return TelegramUserLinkResponse.from(userLinkRepository.save(link));
+    }
+
+    public Optional<TelegramUserLinkResponse> findByChatId(Long telegramChatId) {
+        if (Objects.isNull(telegramChatId)) {
+            return Optional.empty();
+        }
+
+        return userLinkRepository.findByTelegramChatId(telegramChatId)
+                .filter(link -> Objects.isNull(link.getDisconnectedAt()))
+                .map(TelegramUserLinkResponse::from);
     }
 
     public TelegramUserLinkResponse getMyLink(UUID userId) {

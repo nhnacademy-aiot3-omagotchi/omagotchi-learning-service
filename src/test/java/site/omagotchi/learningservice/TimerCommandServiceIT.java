@@ -168,8 +168,8 @@ class TimerCommandServiceIT {
     }
 
     @Test
-    @DisplayName("타이머 초 정밀도와 공부 기록 분 정밀도 저장")
-    void persistsTimerAtSecondsAndStudyRecordAtMinutes() {
+    @DisplayName("타이머와 공부 기록을 실제 초 정밀도로 저장")
+    void persistsTimerAndStudyRecordAtSeconds() {
         Instant startedAt = Instant.parse("2000-01-01T00:00:20Z");
         Instant endedAt = Instant.parse("2000-01-01T00:01:40Z");
         given(clock.instant()).willReturn(startedAt);
@@ -204,15 +204,9 @@ class TimerCommandServiceIT {
                 () -> assertEquals(endedAt, endedTimer.getEndedAt()),
                 () -> assertEquals(0, endedTimer.getStartedAt().getNano()),
                 () -> assertEquals(0, endedTimer.getEndedAt().getNano()),
-                () -> assertEquals(
-                        Instant.parse("2000-01-01T00:00:00Z"),
-                        studyRecord.getStartTime()
-                ),
-                () -> assertEquals(
-                        Instant.parse("2000-01-01T00:01:00Z"),
-                        studyRecord.getEndTime()
-                ),
-                () -> assertEquals(60L, studyRecord.getStudySeconds()),
+                () -> assertEquals(startedAt, studyRecord.getStartTime()),
+                () -> assertEquals(endedAt, studyRecord.getEndTime()),
+                () -> assertEquals(80L, studyRecord.getStudySeconds()),
                 () -> assertEquals(1, receiptCount)
         );
     }
@@ -245,11 +239,11 @@ class TimerCommandServiceIT {
         assertAll(
                 () -> assertEquals(2, records.size()),
                 () -> assertEquals(
-                        Instant.parse("2000-01-01T00:00:00Z"),
+                        firstStartedAt,
                         records.get(0).getStartTime()
                 ),
                 () -> assertEquals(
-                        Instant.parse("2000-01-01T00:02:00Z"),
+                        firstEndedAt,
                         records.get(0).getEndTime()
                 ),
                 () -> assertEquals(records.get(0).getEndTime(), records.get(1).getStartTime()),

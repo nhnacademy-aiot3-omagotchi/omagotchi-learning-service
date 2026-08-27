@@ -17,6 +17,10 @@ public final class StudyTimePolicy {
         return instant.equals(floorToMinute(instant));
     }
 
+    public static boolean isSecondAligned(Instant instant) {
+        return instant.equals(instant.truncatedTo(ChronoUnit.SECONDS));
+    }
+
     public static boolean isMinuteAligned(LocalTime time) {
         return time.equals(time.truncatedTo(ChronoUnit.MINUTES));
     }

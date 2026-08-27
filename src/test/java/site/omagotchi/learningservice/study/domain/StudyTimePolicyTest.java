@@ -29,6 +29,8 @@ class StudyTimePolicyTest {
                             normalizedTime
                     ),
                     () -> assertTrue(StudyTimePolicy.isMinuteAligned(normalizedTime)),
+                    () -> assertTrue(StudyTimePolicy.isSecondAligned(instant)),
+                    () -> assertFalse(StudyTimePolicy.isSecondAligned(instant.plusNanos(1))),
                     () -> assertTrue(StudyTimePolicy.isMinuteAligned(LocalTime.of(10, 0))),
                     () -> assertFalse(StudyTimePolicy.isMinuteAligned(LocalTime.of(10, 0, 1)))
             );

@@ -5,7 +5,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
 import site.omagotchi.learningservice.study.application.command.UpdateStudyRecordCommand;
 import site.omagotchi.learningservice.study.application.event.StudyCompletedEvent;
@@ -16,7 +15,6 @@ import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.port.TimerRunQueryRepository;
 import site.omagotchi.learningservice.study.application.result.StudyRecordResult;
 import site.omagotchi.learningservice.study.domain.StudyRecord;
-import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -36,6 +34,8 @@ public class StudyRecordCommandService {
     private final Clock clock;
     private final StudyWriteLock studyWriteLock;
     private final StudyEventPublisher studyEventPublisher;
+    private final ManualStudyRecordPolicy manualStudyRecordPolicy;
+    private final StudyRecordOverlapGuard studyRecordOverlapGuard;
 
     public StudyRecordResult create(
             UUID userId,
@@ -48,9 +48,7 @@ public class StudyRecordCommandService {
         Instant startInstant = command.startTime();
         Instant endInstant = command.endTime();
 
-        // 기록 시간 범위, 집계 경계 겹침 검증
-        validateTimeRange(startInstant, endInstant);
-        validateSingleAggregationDate(startInstant, endInstant);
+        manualStudyRecordPolicy.validate(startInstant, endInstant);
 
         // cohortMembershipId 단위 transaction-scoped advisory lock 획득
         studyWriteLock.acquire(cohortMembershipId);
@@ -59,7 +57,7 @@ public class StudyRecordCommandService {
         validateNoActiveTimer(cohortMembershipId);
 
         // 오버랩 검증
-        validateNoExistingRecordOverlap(
+        studyRecordOverlapGuard.requireNoOverlap(
                 cohortMembershipId,
                 startInstant,
                 endInstant,
@@ -110,12 +108,10 @@ public class StudyRecordCommandService {
         Instant startInstant = command.startTime();
         Instant endInstant = command.endTime();
 
-        // 기록 시간 범위, 집계 경계 겹침 검증
-        validateTimeRange(startInstant, endInstant);
-        validateSingleAggregationDate(startInstant, endInstant);
+        manualStudyRecordPolicy.validate(startInstant, endInstant);
 
         // 오버랩 검증 (자신 제외)
-        validateNoExistingRecordOverlap(
+        studyRecordOverlapGuard.requireNoOverlap(
                 cohortMembershipId,
                 startInstant,
                 endInstant,
@@ -166,36 +162,6 @@ public class StudyRecordCommandService {
                 });
     }
 
-    private void validateTimeRange(Instant startInstant, Instant endInstant) {
-        // startTime < endTime 검증
-        if (!startInstant.isBefore(endInstant)) {
-            throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
-        }
-        // 미래 시간 저장 예외 검증
-        if (endInstant.isAfter(clock.instant())) {
-            throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
-        }
-        // TODO: KDT 학습 기간 범위 검증 + 과거 기록 범위 검증(Optional)
-    }
-
-    private void validateNoExistingRecordOverlap(
-            Long cohortMembershipId,
-            Instant startInstant,
-            Instant endInstant,
-            UUID excludedStudyRecordId
-    ) {
-        boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
-                cohortMembershipId,
-                startInstant,
-                endInstant,
-                excludedStudyRecordId
-        );
-
-        if (overlaps) {
-            throw new BusinessException(StudyRecordErrorCode.OVERLAP);
-        }
-    }
-
     private void validateExpectedVersion(
             StudyRecord entity,
             Long expectedVersion
@@ -205,13 +171,4 @@ public class StudyRecordCommandService {
         }
     }
 
-    // 반개구간 [startInstant, endInstant)이 KST 04:00 집계 경계를 넘는지 검증한다.
-    private void validateSingleAggregationDate(
-            Instant startInstant,
-            Instant endInstant
-    ) {
-        if (StudyTimePolicy.crossesAggregationBoundary(startInstant, endInstant)) {
-            throw new BusinessException(StudyRecordErrorCode.AGGREGATION_BOUNDARY_CROSSED);
-        }
-    }
 }

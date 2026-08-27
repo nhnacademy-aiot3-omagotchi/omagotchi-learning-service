@@ -1,12 +1,12 @@
 package site.omagotchi.learningservice.study.application;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -74,8 +74,22 @@ class StudyRecordCommandServiceTest {
     @Mock
     private StudyEventPublisher studyEventPublisher;
 
-    @InjectMocks
     private StudyRecordCommandService studyRecordCommandService;
+
+    @BeforeEach
+    void setUp() {
+        studyRecordCommandService = new StudyRecordCommandService(
+                cohortAccessService,
+                studyRecordRepository,
+                studyRecordQueryRepository,
+                timerRunQueryRepository,
+                clock,
+                studyWriteLock,
+                studyEventPublisher,
+                new ManualStudyRecordPolicy(clock),
+                new StudyRecordOverlapGuard(studyRecordQueryRepository)
+        );
+    }
 
     @Nested
     @DisplayName("공부 기록 생성")
@@ -240,6 +254,21 @@ class StudyRecordCommandServiceTest {
         class TimeRangeValidation {
 
             @Test
+            @DisplayName("초가 포함된 수동 기록 예외")
+            void rejectsSecondPrecisionManualRecord() {
+                givenActiveMembership();
+                CreateStudyRecordCommand command = new CreateStudyRecordCommand(
+                        START_TIME.plusSeconds(1),
+                        END_TIME
+                );
+
+                BusinessException exception = assertInvalidCreate(command);
+
+                assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
+                verifyNoInteractions(studyWriteLock, studyRecordQueryRepository);
+            }
+
+            @Test
             @DisplayName("동일한 시작 및 종료 시각 예외")
             void rejectsEqualStartAndEndTime() {
             givenActiveMembership();
@@ -325,11 +354,14 @@ class StudyRecordCommandServiceTest {
     class Update {
 
         @Test
-        @DisplayName("기록 수정")
-        void updatesExistingStudyRecord() {
+        @DisplayName("초 단위 타이머 기록을 분 단위 수동 구간으로 수정")
+        void updatesSecondPrecisionRecordWithManualMinuteRange() {
             givenActiveMembership();
             UUID studyRecordId = STUDY_RECORD_ID;
-            StudyRecord entity = createEntity(START_TIME, END_TIME);
+            StudyRecord entity = createEntity(
+                    START_TIME.plusSeconds(10),
+                    END_TIME.plusSeconds(10)
+            );
             Instant updatedStartTime = Instant.parse("2000-01-01T03:00:00Z");
             Instant updatedEndTime = Instant.parse("2000-01-01T05:00:00Z");
             Instant expectedStartTime = Instant.parse("2000-01-01T03:00:00Z");
@@ -429,6 +461,42 @@ class StudyRecordCommandServiceTest {
             );
 
             assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
+            verify(studyRecordRepository, never()).saveWithVersionCheck(any(StudyRecord.class));
+        }
+
+        @Test
+        @DisplayName("초가 포함된 수동 수정 예외")
+        void rejectsSecondPrecisionManualUpdate() {
+            givenActiveMembership();
+            StudyRecord entity = createEntity(START_TIME.plusSeconds(10), END_TIME.plusSeconds(10));
+            UpdateStudyRecordCommand command = new UpdateStudyRecordCommand(
+                    START_TIME.plusSeconds(1),
+                    END_TIME,
+                    0L
+            );
+            given(studyRecordQueryRepository.findActiveByIdAndCohortMembershipId(
+                    STUDY_RECORD_ID,
+                    COHORT_MEMBERSHIP_ID
+            )).willReturn(Optional.of(entity));
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> studyRecordCommandService.update(
+                            USER_ID,
+                            COHORT_ID,
+                            STUDY_RECORD_ID,
+                            command
+                    )
+            );
+
+            assertAll(
+                    () -> assertSame(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode()),
+                    () -> assertEquals(START_TIME.plusSeconds(10), entity.getStartTime()),
+                    () -> assertEquals(END_TIME.plusSeconds(10), entity.getEndTime())
+            );
+            verify(studyRecordQueryRepository, never()).existsActiveOverlap(
+                    anyLong(), any(), any(), any()
+            );
             verify(studyRecordRepository, never()).saveWithVersionCheck(any(StudyRecord.class));
         }
 

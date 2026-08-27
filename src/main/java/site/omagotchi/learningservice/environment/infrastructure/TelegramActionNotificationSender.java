@@ -10,6 +10,7 @@ import site.omagotchi.learningservice.telegram.application.TelegramNotificationS
 
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.Objects;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -37,21 +38,28 @@ public class TelegramActionNotificationSender implements ActionNotificationSende
                 [자동 조치 완료]
 
                 위치: %s
-                측정: %s %s (기준 %s %s)
+                측정: %s %s%s
                 조치: %s
                 확인: %s"""
                 .formatted(
                         notice.location(),
                         notice.measurement(),
                         notice.value(),
-                        notice.threshold(),
-                        directionOf(notice.operator()),
+                        criterionOf(notice),
                         notice.action().label(),
                         notice.confirmedAt().atZone(DateTimePolicy.ZONE_ID).format(DISPLAY_FORMATTER)
                 );
 
         // 실제 장치가 아닌데 "환기 완료"만 오면 받는 사람이 오해한다(§3 계약③)
         return notice.simulated() ? body + "\n\n※ 시뮬레이터 응답입니다" : body;
+    }
+
+    private static String criterionOf(ActionNotice notice){
+        if(Objects.isNull(notice.operator()) || Objects.isNull(notice.threshold())){
+            return "";
+        }
+
+        return "(기준 %s %s)".formatted(notice.threshold(), directionOf(notice.operator()));
     }
 
     private static String directionOf(Operator operator) {

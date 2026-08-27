@@ -97,16 +97,12 @@ public class TelegramUserLinkService {
     }
 
     public TelegramUserLinkResponse getMyLink(UUID userId) {
-        return userLinkRepository.findByUserId(userId)
-                .filter(link -> Objects.isNull(link.getDisconnectedAt()))
-                .map(TelegramUserLinkResponse::from)
-                .orElseThrow(() -> new BusinessException(TelegramErrorCode.TELEGRAM_USER_LINK_NOT_FOUND));
+        return TelegramUserLinkResponse.from(requireActiveLink(userId));
     }
 
     @Transactional
     public TelegramUserLinkResponse updateNotification(UUID userId, UpdateTelegramNotificationCommand command) {
-        TelegramUserLink link = userLinkRepository.findByUserId(userId)
-                .orElseThrow(() -> new BusinessException(TelegramErrorCode.TELEGRAM_USER_LINK_NOT_FOUND));
+        TelegramUserLink link = requireActiveLink(userId);
 
         link.changeNotificationEnabled(command.enabled());
         return TelegramUserLinkResponse.from(link);
@@ -114,10 +110,9 @@ public class TelegramUserLinkService {
 
     @Transactional
     public TelegramUserLinkResponse disconnect(UUID userId) {
-        TelegramUserLink link = userLinkRepository.findByUserId(userId)
-                .orElseThrow(() -> new BusinessException(TelegramErrorCode.TELEGRAM_USER_LINK_NOT_FOUND));
-
+        TelegramUserLink link = requireActiveLink(userId);
         link.disconnect();
+
         return TelegramUserLinkResponse.from(link);
     }
 
@@ -158,6 +153,11 @@ public class TelegramUserLinkService {
                 command.telegramUserId(),
                 command.telegramChatId()
         );
+    }
+    private TelegramUserLink requireActiveLink(UUID userId){
+        return userLinkRepository.findByUserId(userId)
+                .filter(link -> Objects.isNull(link.getDisconnectedAt()))
+                .orElseThrow(() -> new BusinessException(TelegramErrorCode.TELEGRAM_USER_LINK_NOT_FOUND));
     }
 
     private String generateRawToken() {

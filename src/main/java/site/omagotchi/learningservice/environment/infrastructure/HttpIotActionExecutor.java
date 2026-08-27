@@ -42,8 +42,8 @@ public class HttpIotActionExecutor implements IotActionExecutor {
                     .retrieve()
                     .body(CommandResponse.class);
 
-            if(Objects.isNull(response)){
-                return IotActionResult.failure("제어기 응답이 비었습니다.");
+            if(Objects.isNull(response) || Objects.isNull(response.at)){
+                return IotActionResult.failure("제어기 응답 혹은 응답 시간이 비어있습니다.");
             }
 
             return new IotActionResult(response.actioned(), response.at(), response.simulated(), null);

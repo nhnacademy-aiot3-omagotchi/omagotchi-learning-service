@@ -1,4 +1,4 @@
-가package site.omagotchi.learningservice.telegram.presentation;
+package site.omagotchi.learningservice.telegram.presentation;
 
 import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.telegram.application.TelegramProperties;

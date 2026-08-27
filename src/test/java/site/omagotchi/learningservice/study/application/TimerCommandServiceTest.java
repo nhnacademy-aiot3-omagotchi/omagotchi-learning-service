@@ -431,8 +431,8 @@ class TimerCommandServiceTest {
         }
 
         @Test
-        @DisplayName("기존 공부 기록과 겹치면 저장 전 충돌 예외")
-        void rejectsStopWhenStudyRecordOverlaps() {
+        @DisplayName("기존 공부 기록과 겹치면 기록 없이 OVERLAP으로 종료")
+        void endsTimerAsOverlapWithoutStudyRecord() {
             TimerRun timerRun = TimerRun.start(COHORT_MEMBERSHIP_ID, STARTED_AT);
             Instant endedAt = STARTED_AT.plusSeconds(3_600L);
             givenOwnedTimer(timerRun);
@@ -444,13 +444,16 @@ class TimerCommandServiceTest {
                     null
             )).willReturn(true);
 
-            BusinessException exception = assertThrows(
-                    BusinessException.class,
-                    () -> timerCommandService.stop(USER_ID, COHORT_ID, TIMER_RUN_ID)
-            );
+            timerCommandService.stop(USER_ID, COHORT_ID, TIMER_RUN_ID);
 
-            assertSame(StudyRecordErrorCode.OVERLAP, exception.getErrorCode());
-            verifyNoInteractions(studyRecordRepository, timerRunRepository, studyEventPublisher);
+            assertAll(
+                    () -> assertFalse(timerRun.isRunning()),
+                    () -> assertEquals(endedAt, timerRun.getEndedAt()),
+                    () -> assertNull(timerRun.getMeasuredSeconds()),
+                    () -> assertEquals(TimerEndReason.OVERLAP, timerRun.getEndReason())
+            );
+            verify(timerRunRepository).end(timerRun);
+            verifyNoInteractions(studyRecordRepository, studyEventPublisher);
         }
 
         @Test

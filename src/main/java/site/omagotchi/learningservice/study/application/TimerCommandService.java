@@ -87,18 +87,24 @@ public class TimerCommandService {
         if (endReason == TimerEndReason.STOP && timerRun.getMeasuredSeconds() > 0L) {
             List<StudyRecord> studyRecords = timerStudyRecordFactory.createFrom(timerRun);
             if (!studyRecords.isEmpty()) {
-                studyRecords.forEach(studyRecord -> studyRecordOverlapGuard.requireNoOverlap(
-                        studyRecord.getCohortMembershipId(),
-                        studyRecord.getStartTime(),
-                        studyRecord.getEndTime(),
-                        null
-                ));
-                studyRecords.forEach(studyRecordRepository::save);
-                studyEventPublisher.publishCompleted(new StudyCompletedEvent(
-                        userId,
-                        timerRunId,
-                        timerRun.getEndedAt()
-                ));
+                boolean overlaps = studyRecords.stream().anyMatch(studyRecord ->
+                        studyRecordOverlapGuard.hasOverlap(
+                                studyRecord.getCohortMembershipId(),
+                                studyRecord.getStartTime(),
+                                studyRecord.getEndTime(),
+                                null
+                        ));
+
+                if (overlaps) {
+                    timerRun.rejectStudyRecordDueToOverlap();
+                } else {
+                    studyRecords.forEach(studyRecordRepository::save);
+                    studyEventPublisher.publishCompleted(new StudyCompletedEvent(
+                            userId,
+                            timerRunId,
+                            timerRun.getEndedAt()
+                    ));
+                }
             }
         }
         timerRunRepository.end(timerRun);

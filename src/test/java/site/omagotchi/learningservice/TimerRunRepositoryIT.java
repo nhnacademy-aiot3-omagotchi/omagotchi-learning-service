@@ -115,6 +115,27 @@ class TimerRunRepositoryIT {
         }
 
         @Test
+        @DisplayName("겹침 종료 상태 저장")
+        void persistsOverlapEndState() {
+            TimerRun timerRun = timerRunRepository.create(
+                    TimerRun.start(COHORT_MEMBERSHIP_ID, STARTED_AT)
+            );
+            timerRun.stopOrExpire(ENDED_AT, TIME_POLICY);
+            timerRun.rejectStudyRecordDueToOverlap();
+
+            timerRunRepository.end(timerRun);
+
+            TimerRun overlapped = timerRunQueryRepository
+                    .findOwnedById(timerRun.getId(), COHORT_MEMBERSHIP_ID)
+                    .orElseThrow();
+            assertAll(
+                    () -> assertEquals(ENDED_AT, overlapped.getEndedAt()),
+                    () -> assertEquals(TimerEndReason.OVERLAP, overlapped.getEndReason()),
+                    () -> assertNull(overlapped.getMeasuredSeconds())
+            );
+        }
+
+        @Test
         @DisplayName("같은 기수의 여러 학생 멤버십에서 열린 타이머만 일괄 조회")
         void findsOpenRunsForStudentMembershipsOfSameCohort() {
             TimerRun firstActive = timerRunRepository.create(
@@ -240,7 +261,7 @@ class TimerRunRepositoryIT {
         }
 
         @ParameterizedTest(name = "{0} 사유")
-        @ValueSource(strings = {"STOP", "DISCARD", "EXPIRED"})
+        @ValueSource(strings = {"STOP", "OVERLAP", "DISCARD", "EXPIRED"})
         @DisplayName("종료 시각 없는 종료 사유 저장 거절")
         void rejectsEndReasonWithoutEndTime(String endReason) {
             String sql = """
@@ -379,7 +400,7 @@ class TimerRunRepositoryIT {
         }
 
         @ParameterizedTest(name = "{0} 상태")
-        @ValueSource(strings = {"DISCARD", "EXPIRED"})
+        @ValueSource(strings = {"OVERLAP", "DISCARD", "EXPIRED"})
         @DisplayName("측정 시간 있는 미기록 종료 상태 저장 거절")
         void rejectsUnrecordedEndStateWithMeasuredSeconds(String endReason) {
             String sql = """

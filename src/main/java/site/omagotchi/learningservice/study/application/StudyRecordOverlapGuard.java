@@ -21,15 +21,27 @@ public class StudyRecordOverlapGuard {
             Instant endTime,
             UUID excludedStudyRecordId
     ) {
-        boolean overlaps = studyRecordQueryRepository.existsActiveOverlap(
+        if (hasOverlap(
+                cohortMembershipId,
+                startTime,
+                endTime,
+                excludedStudyRecordId
+        )) {
+            throw new BusinessException(StudyRecordErrorCode.OVERLAP);
+        }
+    }
+
+    public boolean hasOverlap(
+            Long cohortMembershipId,
+            Instant startTime,
+            Instant endTime,
+            UUID excludedStudyRecordId
+    ) {
+        return studyRecordQueryRepository.existsActiveOverlap(
                 cohortMembershipId,
                 startTime,
                 endTime,
                 excludedStudyRecordId
         );
-
-        if (overlaps) {
-            throw new BusinessException(StudyRecordErrorCode.OVERLAP);
-        }
     }
 }

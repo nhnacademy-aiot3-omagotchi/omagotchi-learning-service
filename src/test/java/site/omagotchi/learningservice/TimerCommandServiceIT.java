@@ -257,6 +257,46 @@ class TimerCommandServiceIT {
     }
 
     @Test
+    @DisplayName("기존 공부 기록과 겹치면 기록을 추가하지 않고 OVERLAP으로 종료")
+    void endsTimerAsOverlapWithoutCreatingStudyRecord() {
+        TimerRun timerRun = saveRunningTimer(SINGLE_RECORD_STARTED_AT);
+        Instant existingStartedAt = SINGLE_RECORD_STARTED_AT.plusSeconds(600L);
+        Instant existingEndedAt = SINGLE_RECORD_STARTED_AT.plusSeconds(1_200L);
+        StudyRecord existingRecord = studyRecordJpaRepository.saveAndFlush(
+                StudyRecord.create(
+                        COHORT_MEMBERSHIP_ID,
+                        existingStartedAt,
+                        existingEndedAt,
+                        600L
+                )
+        );
+        given(clock.instant()).willReturn(SINGLE_RECORD_ENDED_AT);
+
+        timerCommandService.stop(
+                USER_ID,
+                COHORT_ID,
+                timerRun.getId()
+        );
+
+        TimerRun endedTimer = timerRunJpaRepository.findById(timerRun.getId()).orElseThrow();
+        List<StudyRecord> records = studyRecordJpaRepository.findAll();
+        Integer outboxCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM learning_service.gamification_event_outbox
+                WHERE event_type = 'STUDY_COMPLETED'
+                  AND source_id = ?
+                """, Integer.class, timerRun.getId().toString());
+        assertAll(
+                () -> assertEquals(TimerEndReason.OVERLAP, endedTimer.getEndReason()),
+                () -> assertEquals(SINGLE_RECORD_ENDED_AT, endedTimer.getEndedAt()),
+                () -> assertNull(endedTimer.getMeasuredSeconds()),
+                () -> assertEquals(1, records.size()),
+                () -> assertEquals(existingRecord.getId(), records.getFirst().getId()),
+                () -> assertEquals(0, outboxCount)
+        );
+    }
+
+    @Test
     @DisplayName("공부 기록 저장 실패 시 타이머 정지 롤백")
     void rollsBackTimerStopWhenStudyRecordSaveFails() {
         TimerRun timerRun = saveRunningTimer();

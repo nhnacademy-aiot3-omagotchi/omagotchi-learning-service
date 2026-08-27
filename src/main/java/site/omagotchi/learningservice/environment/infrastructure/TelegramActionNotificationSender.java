@@ -59,7 +59,7 @@ public class TelegramActionNotificationSender implements ActionNotificationSende
             return "";
         }
 
-        return "(기준 %s %s)".formatted(notice.threshold(), directionOf(notice.operator()));
+        return " (기준 %s %s)".formatted(notice.threshold(), directionOf(notice.operator()));
     }
 
     private static String directionOf(Operator operator) {

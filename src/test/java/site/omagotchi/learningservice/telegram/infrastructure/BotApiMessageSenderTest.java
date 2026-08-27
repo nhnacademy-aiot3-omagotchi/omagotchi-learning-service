@@ -27,7 +27,7 @@ import static org.mockito.Mockito.verify;
  * 이 계약이 Feature별 sender 세 곳에 복제돼 있었고 지금은 여기 하나다.</p>
  */
 @ExtendWith(MockitoExtension.class)
-class TelegramMessageSenderTest {
+class BotApiMessageSenderTest {
 
     private static final Long CHAT_ID = 12345L;
 
@@ -39,7 +39,7 @@ class TelegramMessageSenderTest {
     void sendsToGivenChat() throws Exception {
         given(absSender.execute(any(SendMessage.class))).willReturn(messageWithId());
 
-        TelegramMessageSender sender = new TelegramMessageSender(absSender);
+        BotApiMessageSender sender = new BotApiMessageSender(absSender);
         assertThatCode(() -> sender.send(CHAT_ID, "본문")).doesNotThrowAnyException();
 
         ArgumentCaptor<SendMessage> request = ArgumentCaptor.forClass(SendMessage.class);
@@ -54,7 +54,7 @@ class TelegramMessageSenderTest {
         TelegramApiException apiException = new TelegramApiException("강제 Telegram 오류");
         willThrow(apiException).given(absSender).execute(any(SendMessage.class));
 
-        TelegramMessageSender sender = new TelegramMessageSender(absSender);
+        BotApiMessageSender sender = new BotApiMessageSender(absSender);
         assertThatThrownBy(() -> sender.send(CHAT_ID, "본문"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasCause(apiException);
@@ -69,7 +69,7 @@ class TelegramMessageSenderTest {
     void rejectsUnconfirmedResponse() throws Exception {
         given(absSender.execute(any(SendMessage.class))).willReturn(null);
 
-        TelegramMessageSender sender = new TelegramMessageSender(absSender);
+        BotApiMessageSender sender = new BotApiMessageSender(absSender);
         assertThatThrownBy(() -> sender.send(CHAT_ID, "본문"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("확인할 수 없");

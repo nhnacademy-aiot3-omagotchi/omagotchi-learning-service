@@ -11,7 +11,7 @@ import site.omagotchi.learningservice.telegram.application.command.UpdateTelegra
 import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResponse;
 import site.omagotchi.learningservice.telegram.domain.Command;
 import site.omagotchi.learningservice.telegram.domain.TelegramErrorCode;
-import site.omagotchi.learningservice.telegram.infrastructure.TelegramMessageSender;
+import site.omagotchi.learningservice.telegram.application.port.TelegramMessageSender;
 
 import java.util.Objects;
 import java.util.Optional;

@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.telegram.presentation.dto.request;
+package site.omagotchi.learningservice.telegram.presentation.request;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

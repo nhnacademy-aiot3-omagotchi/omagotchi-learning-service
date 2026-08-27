@@ -6,7 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import site.omagotchi.learningservice.telegram.application.TelegramWebhookService;
-import site.omagotchi.learningservice.telegram.presentation.dto.request.TelegramWebhookRequest;
+import site.omagotchi.learningservice.telegram.presentation.request.TelegramWebhookRequest;
 
 @Slf4j
 @RestController

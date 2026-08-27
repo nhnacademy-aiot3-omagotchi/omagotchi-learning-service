@@ -36,12 +36,15 @@ class TelegramSenderConfigTest {
         ).withPropertyValues(overrides);
     }
 
+    /**
+     * 어댑터({@code BotApiMessageSender})는 {@code @Component}로 스스로 등록되므로 여기서
+     * 확인하지 않는다 — 이 Config가 만드는 것은 클라이언트 하나뿐이다.
+     */
     @Test
-    @DisplayName("설정이 갖춰지면 발송 Bean이 등록된다.")
-    void registersSenderBeans() {
+    @DisplayName("설정이 갖춰지면 봇 API 클라이언트가 등록된다.")
+    void registersBotApiClient() {
         withProperties().run(context -> assertThat(context)
-                .hasSingleBean(TelegramBotApiClient.class)
-                .hasSingleBean(TelegramMessageSender.class));
+                .hasSingleBean(TelegramBotApiClient.class));
     }
 
     @Test

@@ -6,13 +6,13 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.telegram.application.command.TelegramWebhookCommand;
 import site.omagotchi.learningservice.telegram.application.command.UpdateTelegramNotificationCommand;
+import site.omagotchi.learningservice.telegram.application.port.TelegramLinkTokenRepository;
+import site.omagotchi.learningservice.telegram.application.port.TelegramUserLinkRepository;
 import site.omagotchi.learningservice.telegram.application.result.TelegramLinkTokenResponse;
 import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResponse;
 import site.omagotchi.learningservice.telegram.domain.TelegramErrorCode;
 import site.omagotchi.learningservice.telegram.domain.TelegramLinkToken;
 import site.omagotchi.learningservice.telegram.domain.TelegramUserLink;
-import site.omagotchi.learningservice.telegram.infrastructure.TelegramLinkTokenRepository;
-import site.omagotchi.learningservice.telegram.infrastructure.TelegramUserLinkRepository;
 
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;

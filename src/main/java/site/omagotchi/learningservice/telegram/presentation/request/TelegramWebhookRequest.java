@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.telegram.presentation.dto.request;
+package site.omagotchi.learningservice.telegram.presentation.request;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import site.omagotchi.learningservice.telegram.application.command.TelegramWebhookCommand;

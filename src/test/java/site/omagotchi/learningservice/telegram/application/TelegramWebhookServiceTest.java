@@ -14,7 +14,7 @@ import site.omagotchi.learningservice.telegram.application.command.TelegramWebho
 import site.omagotchi.learningservice.telegram.application.command.UpdateTelegramNotificationCommand;
 import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResponse;
 import site.omagotchi.learningservice.telegram.domain.TelegramErrorCode;
-import site.omagotchi.learningservice.telegram.infrastructure.TelegramMessageSender;
+import site.omagotchi.learningservice.telegram.application.port.TelegramMessageSender;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;

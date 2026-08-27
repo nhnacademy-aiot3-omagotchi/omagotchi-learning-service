@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.telegram.presentation.dto.request;
+package site.omagotchi.learningservice.telegram.presentation.request;
 
 import jakarta.validation.constraints.NotNull;
 import site.omagotchi.learningservice.telegram.application.command.UpdateTelegramNotificationCommand;

@@ -8,7 +8,7 @@ import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.telegram.application.TelegramUserLinkService;
 import site.omagotchi.learningservice.telegram.application.result.TelegramLinkTokenResponse;
 import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResponse;
-import site.omagotchi.learningservice.telegram.presentation.dto.request.UpdateTelegramNotificationRequest;
+import site.omagotchi.learningservice.telegram.presentation.request.UpdateTelegramNotificationRequest;
 
 @RestController
 @RequiredArgsConstructor

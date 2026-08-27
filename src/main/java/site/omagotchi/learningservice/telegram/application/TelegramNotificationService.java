@@ -2,10 +2,10 @@ package site.omagotchi.learningservice.telegram.application;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import site.omagotchi.learningservice.telegram.domain.TelegramUserLink;
 import org.springframework.stereotype.Service;
-import site.omagotchi.learningservice.telegram.infrastructure.TelegramMessageSender;
-import site.omagotchi.learningservice.telegram.infrastructure.TelegramUserLinkRepository;
+import site.omagotchi.learningservice.telegram.application.port.TelegramMessageSender;
+import site.omagotchi.learningservice.telegram.application.port.TelegramUserLinkRepository;
+import site.omagotchi.learningservice.telegram.domain.TelegramUserLink;
 
 import java.util.Optional;
 import java.util.UUID;

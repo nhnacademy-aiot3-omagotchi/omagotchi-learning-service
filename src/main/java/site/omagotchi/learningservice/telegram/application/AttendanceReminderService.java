@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.telegram.application.dto.result.AttendanceReminderResponse;
+import site.omagotchi.learningservice.telegram.application.result.AttendanceReminderResponse;
 import site.omagotchi.learningservice.telegram.domain.AttendanceReminder;
 import site.omagotchi.learningservice.telegram.domain.ReminderChannel;
 import site.omagotchi.learningservice.telegram.domain.ReminderType;

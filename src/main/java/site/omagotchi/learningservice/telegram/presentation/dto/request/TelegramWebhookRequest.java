@@ -1,7 +1,7 @@
 package site.omagotchi.learningservice.telegram.presentation.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import site.omagotchi.learningservice.telegram.application.dto.command.TelegramWebhookCommand;
+import site.omagotchi.learningservice.telegram.application.command.TelegramWebhookCommand;
 
 /**
  * Telegram Bot Webhook 요청

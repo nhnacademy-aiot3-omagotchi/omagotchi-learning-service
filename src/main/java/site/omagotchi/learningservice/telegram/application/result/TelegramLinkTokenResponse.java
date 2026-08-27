@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.telegram.application.dto.result;
+package site.omagotchi.learningservice.telegram.application.result;
 
 import java.time.OffsetDateTime;
 

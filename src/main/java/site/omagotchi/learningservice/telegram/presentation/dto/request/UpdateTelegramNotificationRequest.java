@@ -1,7 +1,7 @@
 package site.omagotchi.learningservice.telegram.presentation.dto.request;
 
 import jakarta.validation.constraints.NotNull;
-import site.omagotchi.learningservice.telegram.application.dto.command.UpdateTelegramNotificationCommand;
+import site.omagotchi.learningservice.telegram.application.command.UpdateTelegramNotificationCommand;
 
 /**
  * Telegram 알림 수신 여부 변경 요청

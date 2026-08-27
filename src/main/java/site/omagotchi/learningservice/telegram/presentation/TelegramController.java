@@ -6,8 +6,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.web.bind.annotation.*;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.telegram.application.TelegramUserLinkService;
-import site.omagotchi.learningservice.telegram.application.dto.result.TelegramLinkTokenResponse;
-import site.omagotchi.learningservice.telegram.application.dto.result.TelegramUserLinkResponse;
+import site.omagotchi.learningservice.telegram.application.result.TelegramLinkTokenResponse;
+import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResponse;
 import site.omagotchi.learningservice.telegram.presentation.dto.request.UpdateTelegramNotificationRequest;
 
 @RestController

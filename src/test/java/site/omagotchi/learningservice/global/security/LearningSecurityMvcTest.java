@@ -21,7 +21,7 @@ import site.omagotchi.learningservice.rule.presentation.ThresholdRuleController;
 import site.omagotchi.learningservice.telegram.application.TelegramUserLinkService;
 import site.omagotchi.learningservice.telegram.application.TelegramWebhookService;
 import site.omagotchi.learningservice.telegram.presentation.TelegramWebhookAuthenticator;
-import site.omagotchi.learningservice.telegram.application.dto.result.TelegramUserLinkResponse;
+import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResponse;
 import site.omagotchi.learningservice.telegram.presentation.TelegramController;
 import site.omagotchi.learningservice.telegram.presentation.TelegramWebhookController;
 

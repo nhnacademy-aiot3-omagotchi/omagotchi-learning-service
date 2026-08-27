@@ -10,14 +10,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.telegram.application.dto.command.TelegramWebhookCommand;
-import site.omagotchi.learningservice.telegram.application.dto.command.UpdateTelegramNotificationCommand;
-import site.omagotchi.learningservice.telegram.application.dto.result.TelegramUserLinkResponse;
+import site.omagotchi.learningservice.telegram.application.command.TelegramWebhookCommand;
+import site.omagotchi.learningservice.telegram.application.command.UpdateTelegramNotificationCommand;
+import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResponse;
 import site.omagotchi.learningservice.telegram.domain.TelegramErrorCode;
 import site.omagotchi.learningservice.telegram.infrastructure.TelegramMessageSender;
 
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 

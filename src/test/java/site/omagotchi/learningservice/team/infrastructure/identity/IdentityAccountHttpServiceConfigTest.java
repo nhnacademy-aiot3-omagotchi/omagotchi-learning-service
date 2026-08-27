@@ -35,7 +35,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
                 "spring.autoconfigure.exclude="
                         + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
                         + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
-                        + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
+                        + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration,"
+                        + "org.springframework.ai.model.google.genai.autoconfigure.chat.GoogleGenAiChatAutoConfiguration",
                 "spring.http.serviceclient.identity-service.base-url=http://localhost:8083",
                 "clients.identity.username=learning-service",
                 "clients.identity.password=test-only-learning-identity-password"

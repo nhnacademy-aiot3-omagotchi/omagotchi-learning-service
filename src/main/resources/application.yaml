@@ -2,6 +2,20 @@ server:
   port: ${SERVER_PORT}
 
 spring:
+  ai:
+    google:
+      genai:
+        api-key: ${GEMINI_API_KEY}
+        chat:
+          model: gemini-2.5-flash # 변경 가능
+          temperature: 0.7
+    ollama:
+      base-url: ${OLLAMA_BASE_URL}
+      chat:
+        model: qwen2.5:latest # 변경 가능
+        temperature: 0.3
+        top-p: 0.9
+        top-k: 40
   application:
     name: learning-service
 
@@ -204,17 +218,7 @@ omagotchi:
       fixed-delay: ${OCCUPANCY_MEMBERSHIP_SWEEP_FIXED_DELAY:300000}
       initial-delay: ${OCCUPANCY_MEMBERSHIP_SWEEP_INITIAL_DELAY:60000}
       batch-size: ${OCCUPANCY_MEMBERSHIP_SWEEP_BATCH_SIZE:200}
-    telegram:
-      # 실제 발송 테스트에서만 켠다. false이면 sender Bean 자체를 등록하지 않는다
-      enabled: ${OCCUPANCY_TELEGRAM_ENABLED:false}
-      bot-token: ${TELEGRAM_BOT_TOKEN:}
-      chat-id: ${TELEGRAM_CHAT_ID:}
   team:
-    telegram:
-      # 실제 발송 테스트에서만 켠다. false이면 sender Bean 자체를 등록하지 않는다
-      enabled: ${TEAM_TELEGRAM_ENABLED:false}
-      bot-token: ${TELEGRAM_BOT_TOKEN:}
-      chat-id: ${TELEGRAM_CHAT_ID:}
     sweep:
       # 고아 팀원 정합성 스윕 주기 = 복구 지연의 상한 (ADR space-team/0013).
       # 이미 실패한 건만 다루는 예외 경로라 만료 정리보다 길게 잡는다
@@ -223,3 +227,8 @@ omagotchi:
       # 한 배치에서 훑을 소속 행 수. team_members는 물리 삭제라 전체가 유계지만
       # 한 번에 전건을 들고 오지 않는다
       batch-size: ${TEAM_SWEEP_BATCH_SIZE:200}
+
+kma:
+  base-url: https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0
+  service-key: ${KMA_SERVICE_KEY}
+  request-timeout: 3s

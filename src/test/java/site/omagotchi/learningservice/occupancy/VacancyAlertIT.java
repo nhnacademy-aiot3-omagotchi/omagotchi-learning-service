@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.occupancy;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -79,11 +81,20 @@ class VacancyAlertIT {
 
     /**
      * 실제 발송 수단이 아직 없다. Mock을 넣지 않으면 Dispatcher가 "sender 없음"으로
-     * 건너뛰어 발송 경로가 통째로 검증되지 않는다 — 정상 반환이 곧 발송 성공이라는
-     * Port 계약을 Mock의 기본 동작이 그대로 만족한다.
+     * 건너뛰어 발송 경로가 통째로 검증되지 않는다.
+     *
+     * <p>{@code sendVacancyAlert}는 {@code boolean}을 반환하고 Mock의 기본값은
+     * {@code false}(건너뜀)이므로, 아래 {@code setUp}에서 {@code true}(발송 성공)로
+     * 명시적으로 스텁한다 — 스텁하지 않으면 모든 발송이 건너뛴 것으로 처리돼 소진 기록이
+     * 남지 않는다.</p>
      */
     @MockitoBean
     VacancyAlertSender vacancyAlertSender;
+
+    @BeforeEach
+    void stubSuccessfulSendByDefault() {
+        given(vacancyAlertSender.sendVacancyAlert(any())).willReturn(true);
+    }
 
     /**
      * 잠금 지점을 가로채 순서를 제어하려고 감싼다. Mock이 아니라 Spy인 것이 중요하다 —
@@ -261,19 +272,6 @@ class VacancyAlertIT {
 
     /**
      * <b>신청과 반납의 교차 실행을 결정적으로 재현한다.</b>
-     *
-     * <p>순서를 잠금 지점에서 직접 제어한다 — 신청 Transaction이 {@code lockById} <b>직전에</b>
-     * 멈추고, 그 사이 반납이 같은 행을 잠그고 커밋한 뒤, 신청을 재개시킨다. 간격을
-     * {@code Thread.sleep}으로 기대하지 않으므로 CI에서도 순서가 뒤집히지 않는다.</p>
-     *
-     * <p>잠그지 않던 시절에는 이 순서에서 신청이 <b>받아들여졌다.</b> 요약 조회가 반납 이전
-     * 스냅샷을 보고 통과시켰고, 반납의 {@code AFTER_COMMIT} 발송은 아직 커밋되지 않은 그
-     * 신청을 보지 못해 <b>이미 빈 방에 대기 신청</b>이 남았다 — 그 방이 다시 차고 비워질
-     * 때까지 발송되지 않는다.</p>
-     *
-     * <p>이 테스트가 성립하는 전제가 하나 더 있다 — 신청이 요약을 <b>값으로</b> 읽는다는 것.
-     * 엔티티로 읽으면 1차 캐시에 올라가 {@code lockById}가 반납 이전 스냅샷을 돌려주고,
-     * 잠금을 얻고도 ACTIVE로 판정한다.</p>
      */
     @Test
     @DisplayName("신청이 잠금을 기다리는 사이 반납이 커밋되면 빈 방으로 거절된다.")

@@ -45,7 +45,7 @@ public class TelegramBotApiClient extends DefaultAbsSender {
 
     private static String requiredConfigured(String token){
         if(Objects.isNull(token) || token.isBlank()){
-            throw new IllegalArgumentException("telegram.bot.enabled=true이면 TELEGRAM_BOT_TOKEN이 필요합니다.");
+            throw new IllegalArgumentException("telegram.notification.enabled=true이면 TELEGRAM_BOT_TOKEN이 필요합니다.");
         }
 
         return token;

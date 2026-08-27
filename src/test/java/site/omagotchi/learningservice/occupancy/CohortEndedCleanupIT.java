@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.occupancy;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -22,7 +23,9 @@ import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
@@ -63,6 +66,14 @@ class CohortEndedCleanupIT {
     /** CE-02 실패 시나리오에서 한 단계만 실패시키기 위한 Spy. */
     @MockitoSpyBean
     VacancyAlertService spiedVacancyAlertService;
+
+    @BeforeEach
+    void stubSuccessfulSendByDefault() {
+        // sendVacancyAlert는 boolean을 반환하고 Mock 기본값은 false(건너뜀)이므로,
+        // 명시적으로 true(발송 성공)를 스텁한다 — 아니면 CE-05 뒤 대기 알림이 소진되지
+        // 않아 waitingAlertRows가 0이 되길 기다리는 awaitUntil이 타임아웃한다.
+        given(vacancyAlertSender.sendVacancyAlert(any())).willReturn(true);
+    }
 
     @Test
     @DisplayName("기수 종료는 팀·알림·점유·실습실을 한 번에 정리한다.")

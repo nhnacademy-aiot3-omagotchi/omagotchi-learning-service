@@ -41,24 +41,27 @@ public record TelegramProperties(
 
             int maxThreads,
 
+            @Valid
             Timeout timeout
     ) {
         private static final int DEFAULT_MAX_THREADS = 4;
-        private static final int CONNECTION_REQUEST_DURATION  = 5;
-        private static final int CONNECTION_DURATION = 5;
-        private static final int READ_DURATION = 10;
 
-        //컴팩트 생성자 검증
+        /**
+         * 설정을 생략해도 기동되게 한다. {@code Timeout} 내부가 값별로 기본값을 채우는 것과
+         * 같은 방식이며, 블록 자체가 없을 때를 여기서 받는다 — 발송을 끄고 쓰는 환경에서
+         * 타임아웃 설정을 강제하지 않기 위해서다.
+         */
         public Bot {
-            if (maxThreads <= 0) {
-                maxThreads = DEFAULT_MAX_THREADS;
-            }
-
-            // Timeout 의 컴팩트 생성자가 3종 기본값을 채운다
             if (Objects.isNull(timeout)) {
                 timeout = new Timeout(null, null, null);
             }
+            if (maxThreads <= 0) {
+                maxThreads = DEFAULT_MAX_THREADS;
+            }
         }
+        private static final int CONNECTION_REQUEST_DURATION  = 5;
+        private static final int CONNECTION_DURATION = 5;
+        private static final int READ_DURATION = 10;
 
         /**
          * 전체적인 타임아웃
@@ -96,8 +99,4 @@ public record TelegramProperties(
             Duration ttl
     ) { }
 
-    public record notification(
-            @NotNull
-            Boolean enabled
-    ){}
 }

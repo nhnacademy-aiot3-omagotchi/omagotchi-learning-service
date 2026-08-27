@@ -29,4 +29,14 @@ public interface SpaceRepository {
     List<Space> findAllNotDeleted();
 
     Space save(Space space);
+
+    /**
+     * 이 기수가 관리 주체인 공간의 배정을 전부 해제한다 (CE-04)
+     *
+     * <p>해제 후에는 기수 매니저 누구나 수정·활성화·비활성화할 수 있고(RM-16), 삭제하려면
+     * 먼저 인수해야 한다(RM-25) — 그 인수 경로가 {@code assignCohort}다.</p>
+     *
+     * @return 해제한 공간 수. 기수당 여러 개일 수 있다 (RM-26)
+     */
+    int unassignByCohort(Long cohortId);
 }

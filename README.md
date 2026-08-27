@@ -61,6 +61,20 @@ Redis·RabbitMQ·Identity·Gateway·View는 검증 범위에 따라 별도로 �
 정의, IntelliJ 설정, 전체 서비스 실행 순서와 오류별 해결 방법은
 [Learning Service E2E 실행·검증 가이드](docs/testing/Learning-Service-E2E-Guide.md)를 따른다.
 
+### 런타임 기초·기동 실패 진단
+
+DB 커넥션 풀(HikariCP), 실행기 3종의 차이, `.env.local` 키 누락 진단은
+[Learning Service 런타임 기초 가이드](docs/runtime/Learning-Service-Runtime-Guide.md)를 참고한다.
+
+`git pull` 후 `Could not resolve placeholder`로 기동이 실패하면 다음을 먼저 실행한다.
+
+```bash
+grep -oE '\$\{[A-Z0-9_]+\}' src/main/resources/application.yaml \
+  | tr -d '${}' | sort -u > /tmp/req.txt
+grep -oE '^[A-Z0-9_]+' .env.local | sort -u > /tmp/have.txt
+echo "누락된 키:"; comm -23 /tmp/req.txt /tmp/have.txt
+```
+
 ### JWT Public Key
 
 - 용도: Identity Access JWT 검증

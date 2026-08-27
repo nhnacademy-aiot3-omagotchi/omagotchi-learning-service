@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,6 +27,16 @@ class AggregationDateTimeTest {
             );
 
             assertEquals(Instant.parse("2000-01-01T01:30:00Z"), instant);
+        }
+
+        @Test
+        @DisplayName("한국 일시를 Instant로 변환")
+        void convertsSeoulLocalDateTimeToInstant() {
+            Instant instant = AggregationDateTime.toInstant(
+                    LocalDateTime.parse("2000-01-01T23:30")
+            );
+
+            assertEquals(Instant.parse("2000-01-01T14:30:00Z"), instant);
         }
     }
 

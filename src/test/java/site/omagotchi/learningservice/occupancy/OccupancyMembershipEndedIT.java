@@ -18,11 +18,18 @@ import site.omagotchi.learningservice.occupancy.application.VacancyAlertService;
 import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSender;
 import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 
+import org.mockito.ArgumentCaptor;
+import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSender.VacancyNotice;
+
 import java.time.OffsetDateTime;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 
 /**
  * 소속 종료에 따른 점유·참여 정리 (MR-26, CE-07 점유 부분).
@@ -170,6 +177,62 @@ class OccupancyMembershipEndedIT {
 
         awaitUntil(() -> waitingAlertRows(roomId) == 0,
                 "정리로 비워진 방의 공실 알림이 발송되지 않았습니다");
+    }
+
+    /**
+     * 명세 06 §2 8단계 — 이 사람이 걸어 둔 대기 알림도 함께 지운다.
+     *
+     * <p><b>남기면 서비스를 떠난 사람에게 나중에 공실 알림이 발송된다.</b> 계정 삭제라면
+     * 존재하지 않는 수신자에게 보내는 셈이다. 점유 반납과 같은 Transaction이라 공실
+     * 이벤트가 커밋 후 발송될 때는 이미 행이 없다.</p>
+     */
+    @Test
+    @DisplayName("소속이 끝나면 그 사람의 대기 알림도 삭제된다.")
+    void discardsWaitingAlertsOfEndedMembership() {
+        Long cohortId = fixture.createCohort("소속종료-알림삭제");
+        OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member waiter = fixture.createActiveStudent(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "소속종료-알림삭제-1", 8);
+
+        roomOccupancyService.start(roomId, occupier.userId());
+        vacancyAlertService.request(roomId, null, waiter.userId());
+
+        occupancyCleanup.cleanUp(waiter.membershipId(), waiter.userId(), OffsetDateTime.now());
+
+        assertThat(waitingAlertRows(roomId)).isZero();
+    }
+
+    /**
+     * 신청자의 소속이 끝난 뒤 <b>그 방이 비어도</b> 알림이 가지 않아야 한다. 위 테스트가
+     * 행 삭제를 보는 것과 달리 여기는 발송 자체를 본다 — 삭제를 점유 반납과 다른
+     * Transaction으로 옮기면 행은 지워지지만 발송은 나가는 상태가 되기 때문이다.
+     */
+    @Test
+    @DisplayName("소속이 끝난 신청자는 방이 비어도 공실 알림을 받지 않는다.")
+    void endedApplicantReceivesNoVacancyAlert() {
+        Long cohortId = fixture.createCohort("소속종료-미발송");
+        OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member endedWaiter = fixture.createActiveStudent(cohortId);
+        OccupancyTestFixture.Member survivingWaiter = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "소속종료-미발송-1", 8);
+
+        roomOccupancyService.start(roomId, occupier.userId());
+        vacancyAlertService.request(roomId, null, endedWaiter.userId());
+        vacancyAlertService.request(roomId, null, survivingWaiter.userId());
+
+        occupancyCleanup.cleanUp(endedWaiter.membershipId(), endedWaiter.userId(), OffsetDateTime.now());
+        // 신청자가 아니라 점유자가 나가서 방이 빈다 — 공실 발송 경로를 실제로 태운다.
+        occupancyCleanup.cleanUp(occupier.membershipId(), occupier.userId(), OffsetDateTime.now());
+
+        // 완료 신호는 생존 신청자에게 실제로 발송된 것 — 이것이 관찰되면 발송 경로가
+        // 이 방에 대해 끝까지 돌았다는 뜻이다.
+        ArgumentCaptor<VacancyNotice> captor = ArgumentCaptor.forClass(VacancyNotice.class);
+        verify(vacancyAlertSender, timeout(5_000)).sendVacancyAlert(captor.capture());
+
+        assertThat(captor.getAllValues())
+                .extracting(VacancyNotice::recipientUserId)
+                .containsExactly(survivingWaiter.userId())
+                .doesNotContain(endedWaiter.userId());
     }
 
     @Test

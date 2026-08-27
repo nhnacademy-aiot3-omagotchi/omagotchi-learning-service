@@ -66,6 +66,11 @@ public class TeamJpaPersistence implements TeamRepository {
     }
 
     @Override
+    public List<Long> findActiveIdsByCohortId(Long cohortId) {
+        return teamJpaRepository.findActiveIdsByCohortId(cohortId);
+    }
+
+    @Override
     public List<Team> findByIdInAndDeletedAtIsNull(List<Long> ids) {
         return teamJpaRepository.findByIdInAndDeletedAtIsNull(ids);
     }

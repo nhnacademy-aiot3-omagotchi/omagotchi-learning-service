@@ -5,12 +5,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.team.application.event.TeamDisbandedEvent;
+import site.omagotchi.learningservice.team.application.port.TeamEventPublisher;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.application.port.TeamRepository;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.team.domain.TeamMemberRole;
 
+import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -38,6 +42,8 @@ public class TeamMasterService {
     private final TeamRepository teamRepository;
     private final TeamMemberRepository teamMemberRepository;
     private final TeamAccessSupport accessSupport;
+    private final TeamEventPublisher eventPublisher;
+    private final Clock clock;
 
     /**
      * 마스터를 다른 팀원에게 넘긴다 (GR-14, GR-20).
@@ -98,13 +104,54 @@ public class TeamMasterService {
         TeamMembership membership = accessSupport.requireActiveMembership(team.getCohortId(), userId);
         accessSupport.requireMaster(teamId, membership.id());
 
+        // 통보 대상을 지우기 전에 잡는다 (GR-19).
+        // 해체한 본인은 뺀다 — 자기가 방금 누른 버튼의 결과를 통보로 다시 알릴 이유가 없다.
+        List<Long> recipients = teamMemberRepository.findByTeamIdOrderByJoinedAtAsc(teamId).stream()
+                .map(TeamMember::getCohortMembershipId)
+                .filter(cohortMembershipId -> !cohortMembershipId.equals(membership.id()))
+                .toList();
+
         teamMemberRepository.deleteByTeamId(teamId);
         team.disband();
 
-        // TODO: 커밋 후 (구)팀원 전원에게 해체 통보를 발송한다 (GR-19, 알림 파트).
-        //  점유의 RoomVacatedEvent와 같은 구조 — AFTER_COMMIT + @Async 리스너이며,
-        //  발송 실패가 해체를 롤백시키면 안 된다.
-        log.debug("팀이 해체됐습니다. teamId={}", teamId);
+        // 받을 사람이 없으면 발행하지 않는다: 마스터 혼자였던 팀이 그렇다.
+        if (!recipients.isEmpty()) {
+            eventPublisher.publishTeamDisbanded(new TeamDisbandedEvent(
+                    teamId, team.getName(), recipients, OffsetDateTime.now(clock)));
+        }
+        log.debug("팀이 해체됐습니다. teamId={}, 통보 대상={}건", teamId, recipients.size());
+    }
+
+    /**
+     * 팀 하나를 해체한다 (CE-01, 기수 종료 연동). 팀 단위로 격리된 Transaction이다 — 이
+     * 팀의 실패가 다른 팀의 해체를 막으면 안 되므로, 여러 팀에 걸친 반복은 호출자
+     * ({@code CohortEndedCleanup})가 건별로 이 메서드를 불러 나눠 가진다.
+     *
+     * <p>{@link #disband}와 달리 <b>행위자 검증도 통보도 없다.</b> 기수 종료라는 시스템
+     * 사건이 근거이고, 서비스 이용 자체가 끝나므로 해체 통보를 보내지 않는다 (명세 08 §2
+     * 1단계). {@code removeEndedMember}처럼 시스템 경로다.</p>
+     *
+     * <p><b>이 정리가 없으면 GR-18(1인 1팀)이 실질적으로 무너진다.</b> 재수강생은 종료
+     * 기수와 신규 기수의 멤버십을 모두 가지므로, 종료 기수의 팀이 남아 있으면 한 사람이
+     * 두 팀에 속하게 된다 — {@code uq_team_members_membership}은 멤버십 기준이라 이를
+     * 막지 못한다.</p>
+     *
+     * <p>같은 팀에 두 번 호출해도 안전하다. 조회와 잠금 사이에 다른 경로가 이미 해체했으면
+     * 잠금 후 재확인이 건너뛴다.</p>
+     *
+     * @return 이번 호출로 해체했으면 {@code true}, 이미 해체됐거나 없으면 {@code false}
+     */
+    @Transactional
+    public boolean disbandOne(Long teamId) {
+        // 잠근 뒤 활성 여부를 다시 본다 — 조회와 잠금 사이에 마지막 팀원의 탈퇴가
+        // 해체를 먼저 커밋했을 수 있다.
+        Team team = teamRepository.findByIdForUpdate(teamId).orElse(null);
+        if (team == null || team.getDeletedAt() != null) {
+            return false;
+        }
+        teamMemberRepository.deleteByTeamId(teamId);
+        team.disband();
+        return true;
     }
 
     /**

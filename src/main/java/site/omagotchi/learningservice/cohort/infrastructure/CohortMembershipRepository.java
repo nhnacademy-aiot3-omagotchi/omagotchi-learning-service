@@ -278,4 +278,8 @@ public interface CohortMembershipRepository extends
 
     /** 소속된 매니저를 찾음 */
     List<CohortMembership> findByRoleAndStatusAndEndedAtIsNull(CohortMembershipRole role, CohortMembershipStatus status);
+
+    /** 한 기수의 매니저를 찾음 */
+    List<CohortMembership> findByCohortIdAndRoleAndStatusAndEndedAtIsNull(
+            Long cohortId, CohortMembershipRole role, CohortMembershipStatus status);
 }

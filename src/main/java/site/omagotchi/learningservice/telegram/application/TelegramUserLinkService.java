@@ -98,6 +98,7 @@ public class TelegramUserLinkService {
 
     public TelegramUserLinkResponse getMyLink(UUID userId) {
         return userLinkRepository.findByUserId(userId)
+                .filter(link -> Objects.isNull(link.getDisconnectedAt()))
                 .map(TelegramUserLinkResponse::from)
                 .orElseThrow(() -> new BusinessException(TelegramErrorCode.TELEGRAM_USER_LINK_NOT_FOUND));
     }

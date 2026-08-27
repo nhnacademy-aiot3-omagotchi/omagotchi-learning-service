@@ -240,6 +240,6 @@ omagotchi:
       batch-size: ${TEAM_SWEEP_BATCH_SIZE:200}
 
 kma:
-  base-url: http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0
+  base-url: https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0
   service-key: ${KMA_SERVICE_KEY}
   request-timeout: 3s

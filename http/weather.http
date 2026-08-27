@@ -3,10 +3,10 @@
 # base_date/base_time은 KmaBaseTimeCalculator 로직대로 직접 채워야 합니다
 # (02, 05, 08, 11, 14, 17, 20, 23시 중 지금 시각+10분 이전인 가장 늦은 시각)
 
-@host = http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0
+@host = https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0
 @serviceKey = <서비스 키>
-@baseDate = 20260824
-@baseTime = 1400
+@baseDate = 20260827
+@baseTime = 0800
 @nx = 60
 @ny = 74
 

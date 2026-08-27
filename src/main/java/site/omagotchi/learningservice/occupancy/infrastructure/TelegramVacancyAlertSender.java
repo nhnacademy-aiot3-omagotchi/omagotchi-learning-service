@@ -32,9 +32,9 @@ public class TelegramVacancyAlertSender implements VacancyAlertSender {
     private final TelegramNotificationService notificationService;
 
     @Override
-    public void sendVacancyAlert(VacancyNotice notice) {
+    public boolean sendVacancyAlert(VacancyNotice notice) {
         Objects.requireNonNull(notice, "공실 알림은 필수입니다.");
-        notificationService.send(notice.recipientUserId(), messageOf(notice));
+        return notificationService.send(notice.recipientUserId(), messageOf(notice));
     }
 
     @Override

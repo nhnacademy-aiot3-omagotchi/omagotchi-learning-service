@@ -32,9 +32,9 @@ public class TelegramOccupancyReminderSender implements OccupancyReminderSender 
     private final TelegramNotificationService notificationService;
 
     @Override
-    public void sendExpiryReminder(ExpiryReminder reminder) {
+    public boolean sendExpiryReminder(ExpiryReminder reminder) {
         Objects.requireNonNull(reminder, "만료 임박 알림은 필수입니다.");
-        notificationService.send(reminder.occupierUserId(), messageOf(reminder));
+        return notificationService.send(reminder.occupierUserId(), messageOf(reminder));
     }
 
     private static String messageOf(ExpiryReminder reminder) {

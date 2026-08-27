@@ -26,21 +26,25 @@ public class TelegramNotificationService {
 
     /**
      * 한 사람에게 보낸다.
+     *
+     * @return 실제로 발송을 시도해 성공했으면 {@code true}, 미연동이거나 알림을 받지 않는
+     *         사용자라 시도조차 하지 않았으면 {@code false}
      * @throws IllegalStateException 발송을 시도했으나 실패한 경우
      */
     @Transactional(readOnly = true)
-    public void send(UUID recipientUserId, String text) {
+    public boolean send(UUID recipientUserId, String text) {
         Optional<TelegramUserLink> link = userLinkRepository.findByUserId(recipientUserId);
 
         if (link.isEmpty()) {
             log.debug("텔레그램 미연동 사용자라 발송하지 않습니다. recipientUserId={}", recipientUserId);
-            return;
+            return false;
         }
         if (!link.get().canReceiveNotification()) {
             log.debug("텔레그램 알림을 받지 않는 사용자라 발송하지 않습니다. recipientUserId={}", recipientUserId);
-            return;
+            return false;
         }
 
         messageSender.send(link.get().getTelegramChatId(), text);
+        return true;
     }
 }

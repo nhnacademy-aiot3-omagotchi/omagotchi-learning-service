@@ -1,13 +1,17 @@
 package site.omagotchi.learningservice.telegram.infrastructure;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import site.omagotchi.learningservice.telegram.application.TelegramNotificationService;
 import site.omagotchi.learningservice.telegram.application.TelegramProperties;
 
+/**
+ * 텔레그램 HTTP 발송 수단을 조립한다.
+ *
+ * <p>인프라 Bean만 만든다 — {@code TelegramNotificationService}는 {@code @Service}로
+ * 스스로 등록된다. 여기서 함께 만들면 컴포넌트 스캔과 이름이 겹쳐
+ * {@code BeanDefinitionOverrideException}이 난다.</p>
+ */
 @Configuration
-@ConditionalOnProperty(prefix = "telegram.notification", name = "enabled", havingValue = "true")
 public class TelegramSenderConfig {
 
     @Bean
@@ -18,17 +22,5 @@ public class TelegramSenderConfig {
     @Bean
     public TelegramMessageSender telegramMessageSender(TelegramBotApiClient sender){
         return new TelegramMessageSender(sender);
-    }
-
-    /**
-     * 다른 Feature가 쓰는 발송 진입점. 발송 Bean과 생명주기를 맞춘다
-     * 발송을 끄면 sender가 사라져야 함
-     */
-    @Bean
-    public TelegramNotificationService telegramNotificationService(
-            TelegramUserLinkRepository userLinkRepository,
-            TelegramMessageSender messageSender
-    ){
-        return new TelegramNotificationService(userLinkRepository, messageSender);
     }
 }

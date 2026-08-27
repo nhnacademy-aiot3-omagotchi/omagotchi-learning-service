@@ -198,27 +198,21 @@ class VacancyAlertDispatcherTest {
     }
 
     /**
-     * no-op으로 넘기면 발송 수단이 붙기 전에 신청이 전부 소진되어, 정작 알림이 가능해졌을
-     * 때 대기자가 없다. {@code OccupancyReminderSender}가 없을 때와 같은 정책이다.
+     * 발송 수단이 <b>정확히 하나</b>가 아니면 기동을 멈춘다. 0개는 보낼 방법이 없는 것이고,
+     * 둘 이상은 어느 발송의 성공을 완료로 볼지 정할 수 없다.
      *
-     * <p>sender가 <b>둘 이상</b>인 경우는 여기서 검증하지 않는다. {@code Optional} 주입이라
-     * Container가 기동 시점에 거부하므로 이 Method에 도달하지 못한다.</p>
+     * <p>주입을 {@code Optional}이나 단건으로 되돌리면 후자의 방어가 사라진다 —
+     * {@code @Primary}가 붙은 후보 하나만 조용히 선택되고 나머지는 무시된다.
+     * 생성자가 {@code List}를 받는 이유다.</p>
      */
     @Test
-    @DisplayName("sender가 없으면 후보를 조회하지도, 소진하지도 않는다.")
-    void keepsApplicantsWaitingWhenNoSenderRegistered() {
-        assertThat(withSender(null).dispatch(SPACE_ID, VACATED_AT)).isZero();
-
-        verify(alertRepository, never()).findWaitingBySpaceId(anyLong());
-        verify(alertDelivery, never()).send(anyLong(), anyLong(), any(), any(), any(), any());
+    @DisplayName("sender가 없으면 생성 시점에 실패한다.")
+    void failsToCreateWithoutSender() {
+        assertThatThrownBy(() -> withSender(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("정확히 하나여야 합니다");
     }
 
-    /**
-     * 어느 발송의 성공을 완료로 볼지 정할 수 없는 설정이라 기동을 멈춘다.
-     *
-     * <p>주입을 {@code Optional}로 되돌리면 이 방어가 사라진다 — {@code @Primary}가 붙은
-     * 후보 하나만 조용히 선택되고 나머지는 무시된다. 그래서 생성자가 {@code List}를 받는다.</p>
-     */
     @Test
     @DisplayName("sender가 둘 이상이면 생성 시점에 실패한다.")
     void failsToCreateWithMultipleSenders() {
@@ -233,7 +227,7 @@ class VacancyAlertDispatcherTest {
                 staleAlertDiscarder,
                 List.of(sender, another)
         )).isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("하나만 등록할 수 있습니다");
+                .hasMessageContaining("정확히 하나여야 합니다");
     }
 
     // ────────────────────────────── 헬퍼 ──────────────────────────────

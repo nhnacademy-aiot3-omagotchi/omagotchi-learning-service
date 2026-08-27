@@ -2,7 +2,6 @@ package site.omagotchi.learningservice.environment.infrastructure;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.environment.application.port.ActionNotificationSender;
 import site.omagotchi.learningservice.global.util.DateTimePolicy;
@@ -14,7 +13,6 @@ import java.util.Locale;
 
 @Slf4j
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "telegram.notification", name = "enabled", havingValue = "true")
 @Component
 public class TelegramActionNotificationSender implements ActionNotificationSender {
 

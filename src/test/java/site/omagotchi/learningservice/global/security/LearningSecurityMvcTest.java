@@ -19,6 +19,8 @@ import site.omagotchi.learningservice.space.presentation.SpaceQueryController;
 import site.omagotchi.learningservice.rule.application.ThresholdRuleService;
 import site.omagotchi.learningservice.rule.presentation.ThresholdRuleController;
 import site.omagotchi.learningservice.telegram.application.TelegramUserLinkService;
+import site.omagotchi.learningservice.telegram.application.TelegramWebhookService;
+import site.omagotchi.learningservice.telegram.presentation.TelegramWebhookAuthenticator;
 import site.omagotchi.learningservice.telegram.application.dto.result.TelegramUserLinkResponse;
 import site.omagotchi.learningservice.telegram.presentation.TelegramController;
 import site.omagotchi.learningservice.telegram.presentation.TelegramWebhookController;
@@ -69,6 +71,12 @@ class LearningSecurityMvcTest {
     private TelegramUserLinkService telegramUserLinkService;
 
     @MockitoBean
+    private TelegramWebhookService telegramWebhookService;
+
+    @MockitoBean
+    private TelegramWebhookAuthenticator telegramWebhookAuthenticator;
+
+    @MockitoBean
     private SpaceCommandService spaceCommandService;
 
     @MockitoBean
@@ -77,12 +85,16 @@ class LearningSecurityMvcTest {
     @MockitoBean
     private ThresholdRuleService thresholdRuleService;
 
+    /**
+     * 웹훅은 텔레그램 서버가 부르므로 JWT 가 있을 수 없다. SecurityConfig 가 이 경로를
+     * permitAll 로 열어 두는지만 본다 — 시크릿 검증은 컨트롤러의 몫이라 여기서는
+     * 인증기를 통과시켜 놓고 <b>시큐리티에 막히지 않는가</b>만 확인한다.
+     */
     @Test
-    @DisplayName("Telegram webhook은 Access JWT 없이 호출")
+    @DisplayName("Telegram webhook은 Access JWT 없이 시큐리티를 통과한다")
     void permitsTelegramWebhookWithoutToken() throws Exception {
         // Given
-        given(telegramUserLinkService.linkByWebhook(any()))
-                .willReturn(linkResponse(USER_ID));
+        given(telegramWebhookAuthenticator.isTelegram(any())).willReturn(true);
 
         // When
         ResultActions result = mockMvc.perform(post("/api/v1/webhooks/telegram")
@@ -91,6 +103,27 @@ class LearningSecurityMvcTest {
 
         // Then
         result.andExpect(status().isOk());
+        verify(telegramWebhookService).handle(any());
+    }
+
+    /**
+     * 시크릿이 틀리면 401 이다. 이 경로가 permitAll 이라 <b>시큐리티가 아니라 컨트롤러가</b>
+     * 막는 유일한 지점이며, 빠지면 누구나 연동 요청을 밀어 넣을 수 있다.
+     */
+    @Test
+    @DisplayName("Telegram webhook은 시크릿이 맞지 않으면 401")
+    void rejectsTelegramWebhookWithWrongSecret() throws Exception {
+        // Given
+        given(telegramWebhookAuthenticator.isTelegram(any())).willReturn(false);
+
+        // When
+        ResultActions result = mockMvc.perform(post("/api/v1/webhooks/telegram")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"));
+
+        // Then
+        result.andExpect(status().isUnauthorized());
+        verifyNoInteractions(telegramWebhookService);
     }
 
     @Test

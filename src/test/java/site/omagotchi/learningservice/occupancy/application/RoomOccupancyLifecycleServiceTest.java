@@ -484,10 +484,14 @@ class RoomOccupancyLifecycleServiceTest {
         verify(occupancyExpiryReminder).send(healthy, reminderSender);
     }
 
+    /**
+     * 발송 수단이 <b>정확히 하나</b>가 아니면 기동을 멈춘다. 0개는 보낼 방법이 없는 것이고,
+     * 둘 이상은 어느 발송의 성공을 완료로 볼지 정할 수 없다.
+     */
     @Test
-    @DisplayName("실제 sender 구현이 없으면 후보를 조회하거나 완료 처리하지 않는다.")
-    void doesNotConsumeCandidatesWithoutActualSender() {
-        RoomOccupancyLifecycleService withoutSender = new RoomOccupancyLifecycleService(
+    @DisplayName("sender가 없으면 생성 시점에 실패한다.")
+    void failsToCreateWithoutSender() {
+        assertThatThrownBy(() -> new RoomOccupancyLifecycleService(
                 occupancyRepository,
                 participantRepository,
                 eventPublisher,
@@ -498,12 +502,8 @@ class RoomOccupancyLifecycleServiceTest {
                 cohortMembershipQueryService,
                 alertRepository,
                 clock
-        );
-
-        assertThat(withoutSender.sendExpiryReminders()).isZero();
-
-        verify(occupancyRepository, never()).findExpiringSoon(any(), any());
-        verify(occupancyExpiryReminder, never()).send(any(), any());
+        )).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("정확히 하나여야 합니다");
     }
 
     private RoomOccupancy occupancy(OffsetDateTime expiresAt) {

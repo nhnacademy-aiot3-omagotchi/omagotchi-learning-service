@@ -3,71 +3,72 @@ package site.omagotchi.learningservice.telegram.infrastructure;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.Bean;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import site.omagotchi.learningservice.telegram.application.TelegramNotificationService;
 import site.omagotchi.learningservice.telegram.application.TelegramProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 발송 Bean의 등록 조건을 고정한다.
+ * 발송 수단이 <b>설정 없이는 만들어지지 않는다</b>는 계약을 고정한다.
  *
- * <p><b>이 테스트가 필요한 이유는 실패가 조용하기 때문이다.</b> {@code @ConditionalOnProperty}는
- * 키가 없으면 예외 없이 비활성화된다 — 실제로 조건 경로가 설정과 한 단계 어긋나 있어
- * ({@code telegram.notification.enabled} vs {@code telegram.notification.action.enabled})
- * 켜도 Bean이 만들어지지 않는 상태였고, 로그도 에러도 남지 않았다.</p>
+ * <p>예전에는 {@code @ConditionalOnProperty}로 발송을 켜고 껐고, 이 테스트는 그 조건 경로가
+ * 설정과 어긋나지 않는지 감시했다. 조건이 사라진 지금 감시할 대상은 하나 위로 올라갔다 —
+ * <b>필수 설정이 비어 있을 때 기동이 실패하는가</b>다.</p>
  *
- * <p>꺼졌을 때 Bean이 <b>없어야</b> 하는 것도 계약이다. 각 Feature의 sender가 이 Bean에
- * 의존하므로, 없으면 sender도 등록되지 않아 "발송 수단이 없으면 후보를 소진하지 않는다"는
- * Application 정책이 성립한다.</p>
+ * <p>실패가 조용하다는 점은 그대로다. 토큰이 빈 문자열이어도 {@link TelegramBotApiClient}는
+ * 아무 불평 없이 만들어지고, 룰 히트가 원래 드물어서 발송이 안 되는 것을 며칠 뒤에나
+ * 알아챈다. 그래서 기동 시점에 막는다.</p>
  */
 class TelegramSenderConfigTest {
 
     @EnableConfigurationProperties(TelegramProperties.class)
-    static class PropertiesConfiguration {
-
-        /** 연동 조회는 이 테스트의 관심사가 아니다 — Bean 등록 조건만 본다. */
-        @Bean
-        TelegramUserLinkRepository telegramUserLinkRepository() {
-            return org.mockito.Mockito.mock(TelegramUserLinkRepository.class);
-        }
-    }
+    static class PropertiesConfiguration { }
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
-            .withUserConfiguration(PropertiesConfiguration.class, TelegramSenderConfig.class)
-            .withPropertyValues(
-                    "telegram.bot.username=testbot",
-                    "telegram.bot.token=dummy-token",
-                    "telegram.link-token.ttl=PT10M"
-            );
+            .withUserConfiguration(PropertiesConfiguration.class, TelegramSenderConfig.class);
 
-    @Test
-    @DisplayName("발송이 켜져 있으면 발송 Bean이 등록된다.")
-    void registersSenderWhenEnabled() {
-        runner.withPropertyValues("telegram.notification.enabled=true")
-                .run(context -> assertThat(context)
-                        .hasSingleBean(TelegramNotificationService.class)
-                        .hasSingleBean(TelegramMessageSender.class));
+    private ApplicationContextRunner withProperties(String... overrides) {
+        return runner.withPropertyValues(
+                "telegram.bot.username=testbot",
+                "telegram.bot.token=dummy-token",
+                "telegram.webhook.secret=dummy-secret",
+                "telegram.link-token.ttl=PT10M"
+        ).withPropertyValues(overrides);
     }
 
     @Test
-    @DisplayName("발송이 꺼져 있으면 발송 Bean을 등록하지 않는다.")
-    void registersNothingWhenDisabled() {
-        runner.withPropertyValues("telegram.notification.enabled=false")
-                .run(context -> assertThat(context)
-                        .doesNotHaveBean(TelegramNotificationService.class)
-                        .doesNotHaveBean(TelegramMessageSender.class));
+    @DisplayName("설정이 갖춰지면 발송 Bean이 등록된다.")
+    void registersSenderBeans() {
+        withProperties().run(context -> assertThat(context)
+                .hasSingleBean(TelegramBotApiClient.class)
+                .hasSingleBean(TelegramMessageSender.class));
+    }
+
+    @Test
+    @DisplayName("봇 토큰이 비면 기동에 실패한다.")
+    void failsWhenBotTokenMissing() {
+        withProperties("telegram.bot.token=").run(context -> assertThat(context)
+                .hasFailed()
+                .getFailure()
+                .hasStackTraceContaining("TELEGRAM_BOT_TOKEN"));
+    }
+
+    @Test
+    @DisplayName("웹훅 시크릿이 비면 기동에 실패한다.")
+    void failsWhenWebhookSecretMissing() {
+        withProperties("telegram.webhook.secret=").run(context -> assertThat(context)
+                .hasFailed()
+                .getFailure()
+                .hasStackTraceContaining("TELEGRAM_WEBHOOK_SECRET"));
     }
 
     /**
-     * 타임아웃 블록은 생략할 수 있다 — 발송을 끄고 쓰는 환경에 설정을 강제하지 않기 위해서다.
-     * {@code Bot}의 컴팩트 생성자가 기본값을 채운다.
+     * 타임아웃 블록은 생략할 수 있다 — {@code Bot}의 컴팩트 생성자가 기본값을 채운다.
+     * 필수와 선택을 가르는 선이 여기다.
      */
     @Test
     @DisplayName("타임아웃 설정을 생략해도 기동한다.")
     void startsWithoutTimeoutConfiguration() {
-        runner.withPropertyValues("telegram.notification.enabled=false")
-                .run(context -> assertThat(context).hasNotFailed());
+        withProperties().run(context -> assertThat(context).hasNotFailed());
     }
 }

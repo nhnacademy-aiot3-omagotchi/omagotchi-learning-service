@@ -12,7 +12,6 @@ import site.omagotchi.learningservice.environment.domain.SensorDetection;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -22,14 +21,9 @@ public class ActionNotifier {
     private final CohortMembershipQueryService membershipQueryService;
     private final EnvironmentProperties properties;
     private final Clock clock;
-
-    private final Optional<ActionNotificationSender> sender;
+    private final ActionNotificationSender sender;
 
     public Instant notifyConfirmed(SensorDetection detection, IotAction action, IotActionResult result){
-        if(sender.isEmpty()){
-            return null;
-        }
-
         List<UUID> managerIds = membershipQueryService.findActiveManagerUserIds();
         if(managerIds.isEmpty()){
             log.info("활성된 기수 관리자가 없습니다. location={}, action={}", detection.location(), action);
@@ -48,7 +42,7 @@ public class ActionNotifier {
             }
 
             try{
-                boolean success = sender.get().send(
+                boolean success = sender.send(
                         ActionNotificationSender.ActionNotice.of(recipientUserId, detection, action, result)
                 );
 

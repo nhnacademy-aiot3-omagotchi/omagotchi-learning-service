@@ -24,7 +24,7 @@ import java.util.UUID;
 public class TelegramNotificationService {
 
     private final TelegramUserLinkRepository userLinkRepository;
-    private final Optional<TelegramMessageSender> messageSender;
+    private final TelegramMessageSender messageSender;
 
     /**
      * 한 사람에게 보낸다.

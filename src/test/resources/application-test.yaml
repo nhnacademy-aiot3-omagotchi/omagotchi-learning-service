@@ -54,6 +54,10 @@ prediction:
 telegram:
   bot:
     username: omagotchi_test_bot
+    # 발송을 시도하지 않는 테스트라 형식만 맞으면 된다
+    token: test-bot-token
+  webhook:
+    secret: test-webhook-secret
   link-token:
     ttl: PT10M
 

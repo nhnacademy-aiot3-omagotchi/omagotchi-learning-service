@@ -1,7 +1,5 @@
 package site.omagotchi.learningservice.team.application.result;
 
-import site.omagotchi.learningservice.team.domain.Team;
-
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -20,14 +18,14 @@ public record TeamDetailResult(
         Long cohortId,
         String name,
         OffsetDateTime createdAt,
-        int memberCount,
         List<TeamMemberResult> members
 ) {
     /** {@code members}는 이미 정렬된(마스터 우선) 목록이어야 한다. 여기서 다시 정렬하지 않는다. */
-    public static TeamDetailResult of(Team team, List<TeamMemberResult> members) {
-        return new TeamDetailResult(
-                team.getId(), team.getCohortId(), team.getName(),
-                team.getCreatedAt(), members.size(), members
-        );
+    public TeamDetailResult {
+        members = List.copyOf(members);
+    }
+
+    public int memberCount() {
+        return members.size();
     }
 }

@@ -2,11 +2,11 @@ package site.omagotchi.learningservice.team.application;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
-import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
@@ -16,8 +16,10 @@ import java.util.UUID;
 /**
  * 팀원 추가·제외·탈퇴 (GR-03, GR-05, GR-07, GR-08, GR-13).
  *
- * <p>세 연산 모두 {@code teams} 행 락을 먼저 잡는다. 락 순서를 teams → team_members로
- * 고정하는 것이 데드락 방지 규칙이며, 위임(#8)도 같은 순서를 따라야 한다.</p>
+ * <p>상태 변경 트랜잭션은 모두 {@code teams} 행을 먼저 잠근다. 팀원 추가는 쓰기 트랜잭션을
+ * 시작하기 전에 Identity 조회 전 접근 제어와 계정 조회를 끝내고, 실제 저장 트랜잭션은 팀 락으로
+ * 시작한다. 락 순서를 teams → team_members로 고정하는 것이 데드락 방지 규칙이며,
+ * 위임(#8)도 같은 순서를 따른다.</p>
  *
  * <p>이 도메인에서 DB가 막아주지 못하는 제약이 둘 있다. 정원 8명(GR-17)은 "최대 N행"이라
  * 유니크로 표현할 수 없어 락 안 카운트가 유일한 방어선이고, 팀원의 기수 정합(GR-22)은
@@ -34,22 +36,24 @@ public class TeamMemberService {
 
     private final TeamMemberRepository teamMemberRepository;
     private final TeamAccessSupport accessSupport;
-    private final CohortMembershipQueryService cohortMembershipQueryService;
     private final IdentityAccountClient identityAccountClient;
+    private final TeamMemberAddition teamMemberAddition;
 
     /**
      * 팀원 추가 (GR-03). 수락 절차 없이 즉시 반영된다.
      * <p>
-     * 검증을 락 밖에서 먼저 끝내고 락 구간에는 카운트와 INSERT만 남긴다 —
-     * 계정 조회는 외부 호출이라 락 안에 넣으면 그 시간만큼 다른 요청이 전부 대기한다.
+     * Identity 조회 전 접근 제어를 먼저 끝내고 계정 조회는 쓰기 트랜잭션 밖에서 수행한다.
+     * 외부 호출 뒤의 팀 상태·권한·정원 판단은 {@link TeamMemberAddition}이
+     * 팀 행 락을 잡은 별도 트랜잭션에서 다시 수행한다.
      * <p>
-     * 락 전 단계에서 Team을 엔티티로 읽지 않는 것이 핵심이다. 읽어두면 1차 캐시의
-     * 인스턴스가 lockActiveTeam의 반환값이 되어 해체 재확인이 락 이전 상태를 본다.
+     * 이 접근 제어는 빠른 실패와 권한 없는 요청의 Identity 계정 탐색을 막기
+     * 위한 것일 뿐 정합성 방어선이 아니다. Identity 조회 중 팀이 해체되거나 MASTER가
+     * 위임될 수 있으므로 저장 여부는 쓰기 트랜잭션의 락 이후 재검증만으로 결정한다.
      *
      * @param targetUserId 추가할 계정 id. 어느 기수의 멤버십으로 넣을지는 서버가 팀의 기수로 역조회한다
      * @param userId       요청자 계정 id. 이 팀의 MASTER여야 한다
      */
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void addMember(Long teamId, UUID targetUserId, UUID userId) {
         Long cohortId = accessSupport.requireActiveTeamCohortId(teamId);
         TeamMembership requestMembership =
@@ -57,36 +61,7 @@ public class TeamMemberService {
         accessSupport.requireMaster(teamId, requestMembership.id());
 
         validateAccount(targetUserId);
-
-        // GR-22: 팀의 기수로 대상 멤버십을 역조회한다.
-        // 조회 방향을 뒤집으면 "대상의 기수 == 팀의 기수" 검증이 조회 결과로 자동 충족된다.
-        // team_members에 cohort_id가 없으므로 이 앱 검증이 유일한 방어선이다.
-        TeamMembership targetMembership = cohortMembershipQueryService
-                .findActiveMembership(cohortId, targetUserId)
-                .map(view -> new TeamMembership(view.membershipId(), view.cohortId(), view.userId()))
-                .orElseThrow(() -> new BusinessException(TeamErrorCode.TARGET_NOT_IN_COHORT));
-
-        // 여기부터 락 구간.
-        // 정원은 "최대 8행"이라 유니크 인덱스로 표현할 수 없다 — 락이 유일한 방어선이고,
-        // 락 밖에서 세면 7명 팀에 둘이 동시에 들어와 9명이 된다.
-        Team lockedTeam = accessSupport.lockActiveTeam(teamId);
-
-        // MASTER 재확인. 위 57행 확인은 락 밖 빠른 실패용일 뿐이다 — 그 사이 다른
-        // 트랜잭션이 위임(delegate)을 커밋하면 요청자는 이미 MEMBER인데, 락 이후
-        // 재확인이 없으면 무효화된 권한으로 팀원이 추가된다.
-        //
-        // requireMaster를 그대로 다시 부르면 안 된다 — 57행에서 이미 그 멤버십의
-        // TeamMember를 엔티티로 읽어 영속성 컨텍스트에 캐시해뒀으므로, 같은 조회를
-        // 반복하면 캐시된 인스턴스가 그대로 반환돼 그 사이 커밋된 위임을 보지 못한다.
-        accessSupport.requireStillMaster(teamId, requestMembership.id());
-
-        if (teamMemberRepository.countByTeamId(lockedTeam.getId()) >= TeamMember.MAX_MEMBERS_PER_TEAM) {
-            throw new BusinessException(TeamErrorCode.CAPACITY_EXCEEDED);
-        }
-
-        // 대상이 이미 같은 기수의 다른 팀 소속이면 uq_team_members_membership 위반이 되고 (GR-10, GR-18),
-        // Port 구현이 그것을 ALREADY_IN_TEAM으로 변환해 던진다.
-        teamMemberRepository.save(TeamMember.member(lockedTeam.getId(), targetMembership.id()));
+        teamMemberAddition.add(teamId, targetUserId, userId);
     }
 
     /**
@@ -121,7 +96,7 @@ public class TeamMemberService {
         }
 
         // 물리 삭제다. 소프트 삭제하면 옛 행이 uq_team_members_membership을
-        // 계속 점유해 그 사람리 어떤 팀에도 다시 못 들어간다.
+        // 계속 점유해 그 사람이 어떤 팀에도 다시 못 들어간다.
         teamMemberRepository.delete(target);
     }
 

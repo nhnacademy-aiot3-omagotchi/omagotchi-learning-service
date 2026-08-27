@@ -2,22 +2,24 @@ package site.omagotchi.learningservice.team.application;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
+import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
+import site.omagotchi.learningservice.team.application.port.TeamRepository;
+import site.omagotchi.learningservice.team.application.result.TeamDetailLocalResult;
 import site.omagotchi.learningservice.team.application.result.TeamDetailResult;
 import site.omagotchi.learningservice.team.application.result.TeamMemberResult;
 import site.omagotchi.learningservice.team.application.result.TeamResult;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
-import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
-import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
-import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
-import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
-import site.omagotchi.learningservice.team.application.port.TeamRepository;
 
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -43,6 +45,7 @@ public class TeamService {
     private final TeamAccessSupport accessSupport;
     private final CohortMembershipQueryService cohortMembershipQueryService;
     private final IdentityAccountClient identityAccountClient;
+    private final TeamDetailLookup teamDetailLookup;
 
     /**
      * 팀을 생성하고 생성자를 MASTER로 등록한다 (GR-01, GR-02, GR-18, GR-21).
@@ -119,37 +122,47 @@ public class TeamService {
     /**
      * 팀 상세와 팀원 목록 (GR-15). 소속자만 조회할 수 있다.
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public TeamDetailResult getTeam(Long teamId, UUID userId) {
-        Team team = accessSupport.loadActiveTeam(teamId);
-        TeamMembership membership = accessSupport.requireActiveMembership(team.getCohortId(), userId);
-        accessSupport.requireMembership(teamId, membership.id());
-
-        List<TeamMember> members = teamMemberRepository.findByTeamIdOrderByJoinedAtAsc(teamId);
-        return TeamDetailResult.of(team, toMemberResults(members));
+        TeamDetailLocalResult localResult = teamDetailLookup.load(teamId, userId);
+        Map<UUID, String> displayNames = identityAccountClient.findDisplayNames(
+                localResult.members().stream()
+                        .map(TeamDetailLocalResult.Member::userId)
+                        .filter(Objects::nonNull)
+                        .toList()
+        );
+        return toResult(localResult, displayNames);
     }
 
     /**
      * membership → user_id → accounts.name 경로.
-     * 두 단계 모두 배치라 팀원이 몇 명이든 외부 조회는 2회로 고정된다.
+     * membership → user_id는 {@link TeamDetailLookup}의 Learning DB 배치 조회로
+     * 이미 끝났고, 여기서는 Identity 표시명만 한 번의 배치 호출로 붙인다.
      */
-    private List<TeamMemberResult> toMemberResults(List<TeamMember> members) {
-        List<Long> membershipIds = members.stream()
-                .map(TeamMember::getCohortMembershipId)
-                .toList();
-
-        Map<Long, UUID> userIdsByMembership = cohortMembershipQueryService.findUserIds(membershipIds);
-        Map<UUID, String> displayNames = identityAccountClient.findDisplayNames(userIdsByMembership.values());
-
-        return members.stream()
-                .sorted(Comparator
-                        .comparing(TeamMember::isMaster).reversed()
-                        .thenComparing(TeamMember::getJoinedAt)
-                        .thenComparing(TeamMember::getId))
+    private TeamDetailResult toResult(
+            TeamDetailLocalResult localResult,
+            Map<UUID, String> displayNames
+    ) {
+        List<TeamMemberResult> members = localResult.members().stream()
                 .map(member -> {
-                    UUID memberUserId = userIdsByMembership.get(member.getCohortMembershipId());
-                    String displayName = memberUserId == null ? null : displayNames.get(memberUserId);
-                    return TeamMemberResult.of(member, displayName);
+                    String displayName = member.userId() == null
+                            ? null
+                            : displayNames.get(member.userId());
+                    return new TeamMemberResult(
+                            member.memberId(),
+                            displayName,
+                            member.role(),
+                            member.joinedAt()
+                    );
                 })
                 .toList();
+
+        return new TeamDetailResult(
+                localResult.teamId(),
+                localResult.cohortId(),
+                localResult.name(),
+                localResult.createdAt(),
+                members
+        );
     }
 }

@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.occupancy;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,7 @@ import java.util.function.BooleanSupplier;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -78,6 +80,14 @@ class CohortClosedTriggerIT {
 
     @MockitoBean
     VacancyAlertSender vacancyAlertSender;
+
+    @BeforeEach
+    void stubSuccessfulSendByDefault() {
+        // sendVacancyAlert는 boolean을 반환하고 Mock 기본값은 false(건너뜀)이므로,
+        // 명시적으로 true(발송 성공)를 스텁한다 — 발송이 실제로 일어나야 하는 시나리오에서
+        // waitingAlertRows가 0이 되길 기다리는 awaitUntil이 타임아웃하지 않게 한다.
+        given(vacancyAlertSender.sendVacancyAlert(any())).willReturn(true);
+    }
 
     /** 멤버십별 이벤트가 나가지 않는 것을 직접 본다 — CE-05를 지키는 결정이다. */
     @MockitoSpyBean

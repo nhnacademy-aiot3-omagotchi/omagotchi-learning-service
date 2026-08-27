@@ -86,10 +86,15 @@ public class VacancyAlertDelivery {
             return false;
         }
 
-        sender.sendVacancyAlert(new VacancyAlertSender.VacancyNotice(
+        boolean sent = sender.sendVacancyAlert(new VacancyAlertSender.VacancyNotice(
                 alert.getId(), spaceId, spaceName, recipientUserId, vacatedAt));
+        if (!sent) {
+            // 수신자가 미연동이거나 알림을 꺼서 건너뛴 경우다. 대기 상태를 그대로 둬야
+            // 다음 공실에 다시 평가된다 — 여기서 소진하면 나중에 연동해도 못 받는다.
+            return false;
+        }
 
-        // sender가 실제 성공을 뜻하는 정상 반환을 한 경우에만 기록한다.
+        // sender가 실제 성공을 뜻하는 true를 반환한 경우에만 기록한다.
         return alert.markNotified(OffsetDateTime.now(clock));
     }
 }

@@ -7,3 +7,9 @@ eureka:
   client:
     # Discovery를 함께 실행할 때 .env.local에서 true로 변경
     enabled: ${EUREKA_ENABLED:false}
+
+logging:
+  level:
+    # AI 채팅 질문은 자유 텍스트라 개인정보가 섞일 수 있어 운영에서는 남기지 않는다
+    # Tool 호출 판단을 확인해야 하는 로컬에서만 DEBUG로 내려 본다
+    site.omagotchi.learningservice.chat: DEBUG

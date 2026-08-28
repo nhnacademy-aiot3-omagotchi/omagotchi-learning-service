@@ -8,6 +8,7 @@ import site.omagotchi.learningservice.cohort.application.command.CreateJoinComma
 import site.omagotchi.learningservice.cohort.application.command.RejectMembershipCommand;
 import site.omagotchi.learningservice.cohort.application.event.CohortMembershipEndedEvent;
 import site.omagotchi.learningservice.cohort.application.port.CohortEventPublisher;
+import site.omagotchi.learningservice.cohort.application.port.JoinCodePersistence;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
@@ -17,7 +18,6 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortJoinCodeRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
@@ -40,7 +40,7 @@ public class CohortMembershipService {
     );
 
     private final CohortRepository cohortRepository;
-    private final CohortJoinCodeRepository joinCodeRepository;
+    private final JoinCodePersistence joinCodePersistence;
     private final CohortMembershipRepository membershipRepository;
     private final CohortAccessService accessService;
     private final CohortEventPublisher eventPublisher;
@@ -94,7 +94,7 @@ public class CohortMembershipService {
             throw new BusinessException(CohortErrorCode.JOIN_CODE_REQUIRED);
         }
 
-        CohortJoinCode joinCode = joinCodeRepository.findByCodeHash(JoinCodeHash.sha256(rawJoinCode))
+        CohortJoinCode joinCode = joinCodePersistence.findByCodeHash(JoinCodeHash.sha256(rawJoinCode))
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.JOIN_CODE_NOT_FOUND));
         validateJoinCode(joinCode);
 

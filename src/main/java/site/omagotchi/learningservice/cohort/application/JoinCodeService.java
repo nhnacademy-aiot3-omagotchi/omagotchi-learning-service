@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.command.IssueJoinCodeCommand;
+import site.omagotchi.learningservice.cohort.application.port.JoinCodePersistence;
 import site.omagotchi.learningservice.cohort.application.result.IssuedJoinCodeResponse;
 import site.omagotchi.learningservice.cohort.application.result.JoinCodeResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
@@ -11,7 +12,6 @@ import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortJoinCode;
 import site.omagotchi.learningservice.cohort.domain.CohortJoinCodeStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortJoinCodeRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
@@ -29,7 +29,7 @@ public class JoinCodeService {
     private static final HexFormat HEX_FORMAT = HexFormat.of();
 
     private final CohortRepository cohortRepository;
-    private final CohortJoinCodeRepository joinCodeRepository;
+    private final JoinCodePersistence joinCodePersistence;
     private final CohortAccessService accessService;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -40,8 +40,13 @@ public class JoinCodeService {
     public JoinCodeResponse getActiveJoinCode(Long cohortId, UUID actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
+<<<<<<< Updated upstream
         CohortJoinCode joinCode = joinCodeRepository
                 .findFirstByCohortIdAndStatusOrderByIssuedAtDesc(cohortId, CohortJoinCodeStatus.ACTIVE)
+=======
+        CohortJoinCode joinCode = joinCodePersistence
+                .findLatestByCohortId(cohortId)
+>>>>>>> Stashed changes
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.JOIN_CODE_NOT_FOUND));
 
         return JoinCodeResponse.from(joinCode);
@@ -58,10 +63,25 @@ public class JoinCodeService {
         Cohort cohort = getCohortOrThrow(cohortId);
         validateIssuable(cohort, command.expiresAt());
 
+<<<<<<< Updated upstream
         joinCodeRepository.findFirstByCohortIdAndStatusOrderByIssuedAtDesc(
                 cohortId,
                 CohortJoinCodeStatus.ACTIVE
         ).ifPresent(CohortJoinCode::revoke);
+=======
+        OffsetDateTime now = OffsetDateTime.now();
+        joinCodePersistence
+                .findLatestByCohortId(cohortId)
+                .ifPresent(existingJoinCode -> {
+                    if (existingJoinCode.getExpiresAt().isAfter(now)) {
+                        throw new BusinessException(CohortErrorCode.JOIN_CODE_ALREADY_EXISTS);
+                    }
+                    if (existingJoinCode.getStatus() == CohortJoinCodeStatus.ACTIVE) {
+                        existingJoinCode.revoke();
+                        joinCodePersistence.saveRevoked(existingJoinCode);
+                    }
+                });
+>>>>>>> Stashed changes
 
         String rawCode = generateRawCode();
         CohortJoinCode joinCode = CohortJoinCode.issue(
@@ -71,7 +91,7 @@ public class JoinCodeService {
                 issuedByUserId
         );
 
-        CohortJoinCode savedJoinCode = joinCodeRepository.save(joinCode);
+        CohortJoinCode savedJoinCode = joinCodePersistence.saveIssued(joinCode);
         return IssuedJoinCodeResponse.from(savedJoinCode, rawCode);
     }
 
@@ -83,11 +103,12 @@ public class JoinCodeService {
     public JoinCodeResponse revoke(Long cohortId, UUID actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
-        CohortJoinCode joinCode = joinCodeRepository
-                .findFirstByCohortIdAndStatusOrderByIssuedAtDesc(cohortId, CohortJoinCodeStatus.ACTIVE)
+        CohortJoinCode joinCode = joinCodePersistence
+                .findActiveByCohortId(cohortId)
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.JOIN_CODE_NOT_FOUND));
 
         joinCode.revoke();
+        joinCodePersistence.saveRevoked(joinCode);
         return JoinCodeResponse.from(joinCode);
     }
 

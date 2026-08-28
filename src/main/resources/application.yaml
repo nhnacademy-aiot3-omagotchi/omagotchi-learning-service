@@ -134,7 +134,7 @@ telegram:
   bot:
     username: ${TELEGRAM_BOT_USERNAME}
     token: ${TELEGRAM_BOT_TOKEN}
-    max-threads: 4
+    max-threads: 8
     timeout:
       connection-request: ${TELEGRAM_CONNECTION_REQUEST_TIMEOUT:PT5S}
       connect: ${TELEGRAM_CONNECT_TIMEOUT:PT5S}

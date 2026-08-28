@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.telegram.domain;
+package site.omagotchi.learningservice.telegram.application.command;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * "무엇이 명령인가"보다 <b>"무엇이 명령이 아닌가"</b>가 더 중요하다 — 잘못 잡으면
  * 인사말 하나가 연동을 끊는다.</p>
  */
-class CommandTest {
+class BotCommandTest {
 
     @ParameterizedTest(name = "\"{0}\" -> {1}")
     @DisplayName("명령어를 그대로 알아본다.")
@@ -28,8 +28,8 @@ class CommandTest {
             "/status,    STATUS",
             "/help,      HELP"
     })
-    void recognizesEachCommand(String text, Command expected) {
-        assertThat(Command.of(text)).isEqualTo(expected);
+    void recognizesEachCommand(String text, BotCommand expected) {
+        assertThat(BotCommand.of(text)).isEqualTo(expected);
     }
 
     /**
@@ -39,7 +39,7 @@ class CommandTest {
     @Test
     @DisplayName("뒤에 붙은 인자를 무시하고 앞머리만 본다.")
     void ignoresArguments() {
-        assertThat(Command.of("/start a1b2c3d4")).isEqualTo(Command.START);
+        assertThat(BotCommand.of("/start a1b2c3d4")).isEqualTo(BotCommand.START);
     }
 
     /**
@@ -49,13 +49,13 @@ class CommandTest {
     @Test
     @DisplayName("@봇이름 접미사를 떼고 본다.")
     void stripsBotMention() {
-        assertThat(Command.of("/status@omagotchi_bot")).isEqualTo(Command.STATUS);
+        assertThat(BotCommand.of("/status@omagotchi_bot")).isEqualTo(BotCommand.STATUS);
     }
 
     @Test
     @DisplayName("앞뒤 공백을 무시한다.")
     void trimsSurroundingWhitespace() {
-        assertThat(Command.of("   /stop   ")).isEqualTo(Command.STOP);
+        assertThat(BotCommand.of("   /stop   ")).isEqualTo(BotCommand.STOP);
     }
 
     /**
@@ -65,18 +65,23 @@ class CommandTest {
     @Test
     @DisplayName("명령어로 시작하기만 하는 입력은 명령이 아니다.")
     void doesNotMatchByPrefix() {
-        assertThat(Command.of("/stopwatch")).isEqualTo(Command.UNKNOWN);
+        assertThat(BotCommand.of("/stopwatch")).isEqualTo(BotCommand.UNKNOWN);
     }
 
     /**
      * 대문자는 알아보지 못한다. 텔레그램 명령은 소문자가 규약이고 클라이언트가 그렇게
      * 자동완성하므로 정규화하지 않는다 — 잘못 들어와도 도움말로 떨어져 안전하다.
      */
+    /**
+     * {@code "@"}는 {@code split("@")}가 <b>빈 배열</b>을 돌려주는 입력이다 — limit 없이
+     * 자르면 {@code [0]} 접근에서 터지고, 사용자가 {@code @} 한 글자를 보내는 것만으로
+     * 웹훅이 오류 응답을 낸다.
+     */
     @ParameterizedTest
     @DisplayName("명령이 아닌 입력은 모두 UNKNOWN이다.")
-    @ValueSource(strings = {"안녕하세요", "stop", "//stop", "/STOP", "stop /stop", "?", "/"})
+    @ValueSource(strings = {"안녕하세요", "stop", "//stop", "/STOP", "stop /stop", "?", "/", "@", "@bot", "@@", " @ "})
     void treatsEverythingElseAsUnknown(String text) {
-        assertThat(Command.of(text)).isEqualTo(Command.UNKNOWN);
+        assertThat(BotCommand.of(text)).isEqualTo(BotCommand.UNKNOWN);
     }
 
     @ParameterizedTest
@@ -84,6 +89,6 @@ class CommandTest {
     @NullAndEmptySource
     @ValueSource(strings = {"   ", "\n"})
     void treatsBlankAsUnknown(String text) {
-        assertThat(Command.of(text)).isEqualTo(Command.UNKNOWN);
+        assertThat(BotCommand.of(text)).isEqualTo(BotCommand.UNKNOWN);
     }
 }

@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.time.AggregationDateTime;
+import site.omagotchi.learningservice.global.util.DateTimePolicy;
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.result.StudyPatternResult;
 import site.omagotchi.learningservice.study.domain.StudyRecord;
@@ -30,10 +31,9 @@ public class StudyPatternQueryService {
     private static final int DEFAULT_PERIOD_DAYS = 14;
     private static final int MIN_PERIOD_DAYS = 1;
     private static final int MAX_PERIOD_DAYS = 90;
-    // AggregationDateTime과 같은 KST 기준. 시각대 계산에 필요해 여기서도 선언한다
-    private static final ZoneId ZONE_ID = ZoneId.of("Asia/Seoul");
-    // 집계일이 새벽 4시에 시작하므로, 시작 시각 중앙값도 4시를 하루의 원점으로 계산한다
-    private static final int RESET_MINUTES = 4 * 60;
+    // 시간대와 리셋 시각은 전역 정책(DateTimePolicy)을 단일 출처로 쓴다
+    private static final ZoneId ZONE_ID = DateTimePolicy.ZONE_ID;
+    private static final int RESET_MINUTES = DateTimePolicy.DAILY_RESET_TIME.toSecondOfDay() / 60;
 
     private final CohortAccessService cohortAccessService;
     private final StudyRecordQueryRepository studyRecordQueryRepository;
@@ -118,7 +118,17 @@ public class StudyPatternQueryService {
         }
 
         Collections.sort(shiftedMinutes);
-        int median = shiftedMinutes.get(shiftedMinutes.size() / 2);
+        int size = shiftedMinutes.size();
+        int median;
+        if (size % 2 == 1) {
+            // 홀수 개면 정확히 가운데 값
+            median = shiftedMinutes.get(size / 2);
+        } else {
+            // 짝수 개면 가운데 두 값의 평균
+            int lower = shiftedMinutes.get(size / 2 - 1);
+            int upper = shiftedMinutes.get(size / 2);
+            median = (lower + upper) / 2;
+        }
         int minutesOfDay = (median + RESET_MINUTES) % 1440;
         return String.format("%02d:%02d", minutesOfDay / 60, minutesOfDay % 60);
     }

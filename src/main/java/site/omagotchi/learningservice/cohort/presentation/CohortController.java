@@ -106,7 +106,7 @@ public class CohortController {
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return joinCodeService.getActiveJoinCode(cohortId, user.userId());
+        return joinCodeService.getLatestJoinCode(cohortId, user.userId());
     }
 
     @PostMapping("/{cohortId}/join-code")

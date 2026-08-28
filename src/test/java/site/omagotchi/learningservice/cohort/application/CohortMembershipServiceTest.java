@@ -11,12 +11,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.command.ApproveMembershipCommand;
 import site.omagotchi.learningservice.cohort.application.event.CohortMembershipEndedEvent;
 import site.omagotchi.learningservice.cohort.application.port.CohortEventPublisher;
+import site.omagotchi.learningservice.cohort.application.port.JoinCodePersistence;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortJoinCodeRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
@@ -42,7 +42,7 @@ class CohortMembershipServiceTest {
     private CohortRepository cohortRepository;
 
     @Mock
-    private CohortJoinCodeRepository joinCodeRepository;
+    private JoinCodePersistence joinCodePersistence;
 
     @Mock
     private CohortMembershipRepository membershipRepository;

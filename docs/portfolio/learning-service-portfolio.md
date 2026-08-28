@@ -3,7 +3,7 @@
 > 프로젝트: **Omagotchi** (NHN Academy AIoT 3기 팀 프로젝트) / MSA 중 **Learning Service** 담당
 > 저장소: `nhnacademy-aiot3-omagotchi/omagotchi-learning-service`
 > 기간: **2026-07-21 ~ 2026-08-26** (약 5주)
-> 기여자 식별: git author `m00n <mjm3204@naver.com>` 기준으로 추출한 본인 커밋만 정리
+> 기여자 식별: git author `m00n` 기준으로 추출한 본인 커밋만 정리
 
 ---
 
@@ -64,7 +64,7 @@ Identity Service(인증), Rule Service(센서 임계치), Frontend BFF, Gateway�
 
 ### 계층 구조 원칙
 
-```
+```text
 presentation → application → domain
                     ↕
               infrastructure
@@ -96,7 +96,7 @@ CohortJoinCode joinCode = CohortJoinCode.issue(
         cohortId, JoinCodeHash.sha256(rawCode), command.expiresAt(), issuedByUserId
 );
 // 저장은 해시, 반환은 원문 — 조회 API는 메타데이터만 응답한다
-return IssuedJoinCodeResponse.from(joinCodeRepository.save(joinCode), rawCode);
+return IssuedJoinCodeResponse.from(joinCodePersistence.saveIssued(joinCode), rawCode);
 ```
 
 **설계 의도**: 가입 코드는 비밀번호와 같은 성격의 자격 증명이다. DB 유출 시에도 코드가 그대로 노출되지 않도록 단방향 해시로 저장했고, 조회 API는 발급 시각·만료 시각 같은 메타데이터만 응답하도록 계약을 분리했다.
@@ -215,7 +215,7 @@ if (record.getCheckedInAt() != null) {
 출석·학습 완료 이벤트가 캐릭터 경험치와 퀘스트에 반영되어야 하는데,
 **유실되어도 안 되고 두 번 반영되어도 안 되는** 요구가 있었다.
 
-```
+```text
 [출석 트랜잭션]                    [비동기 처리]                 [적용]
 AttendanceService                GamificationEventRetry        DailyQuestService
       │ publish                  Coordinator.dispatch()        XpRewardService
@@ -388,7 +388,7 @@ private String safeOriginalFileName(String originalFileName) {
 
 ### 2.6.2 Redis 다중 세션 Presence
 
-```
+```text
 presence:session:{sessionId}   → Hash(userId, cohortId)  + TTL
 presence:user:{userId}:sessions → Set(sessionId…)
 presence:cohort:{cohortId}      → Set(userId…)

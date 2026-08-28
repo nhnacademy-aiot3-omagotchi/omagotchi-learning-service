@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.environment.application;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
@@ -69,13 +70,13 @@ class ActionNotifierTest {
         givenCohortResolved();
         given(membershipQueryService.findActiveManagerUserIds(COHORT_ID))
                 .willReturn(List.of(MANAGER_A, MANAGER_B));
-        given(sender.send(any())).willReturn(true);
+        given(sender.send(any(), any())).willReturn(true);
 
         Instant notifiedAt = notifyAction();
 
         assertThat(notifiedAt).isEqualTo(clock.instant());
-        verify(sender).send(argThat(notice -> MANAGER_A.equals(notice.recipientUserId())));
-        verify(sender).send(argThat(notice -> MANAGER_B.equals(notice.recipientUserId())));
+        verify(sender).send(argThat(notice -> MANAGER_A.equals(notice.recipientUserId())), any());
+        verify(sender).send(argThat(notice -> MANAGER_B.equals(notice.recipientUserId())), any());
         verify(membershipQueryService).findActiveManagerUserIds(COHORT_ID);
     }
 
@@ -135,7 +136,7 @@ class ActionNotifierTest {
     void returnsNullWhenNobodyActuallyReceived() {
         givenCohortResolved();
         given(membershipQueryService.findActiveManagerUserIds(COHORT_ID)).willReturn(List.of(MANAGER_A));
-        given(sender.send(any())).willReturn(false);
+        given(sender.send(any(), any())).willReturn(false);
 
         assertThat(notifyAction()).isNull();
     }
@@ -150,7 +151,7 @@ class ActionNotifierTest {
         givenCohortResolved();
         given(membershipQueryService.findActiveManagerUserIds(COHORT_ID))
                 .willReturn(List.of(MANAGER_A, MANAGER_B));
-        given(sender.send(any())).willAnswer(invocation -> {
+        given(sender.send(any(), any())).willAnswer(invocation -> {
             ActionNotificationSender.ActionNotice notice = invocation.getArgument(0);
 
             if (MANAGER_A.equals(notice.recipientUserId())) {
@@ -160,6 +161,26 @@ class ActionNotifierTest {
         });
 
         assertThat(notifyAction()).isEqualTo(clock.instant());
+    }
+
+    /**
+     * <b>검사만 하는 것으로는 부족하다.</b> 남은 예산을 넘기지 않으면 마지막 한 건이
+     * 예산을 넘겨 시작해, MQ 리스너가 예산 + read 타임아웃만큼 묶인다.
+     */
+    @Test
+    @DisplayName("남은 예산을 발송 제한 시간으로 넘긴다.")
+    void passesRemainingBudgetAsSendTimeout() {
+        givenCohortResolved();
+        given(membershipQueryService.findActiveManagerUserIds(COHORT_ID)).willReturn(List.of(MANAGER_A));
+        given(sender.send(any(), any())).willReturn(true);
+
+        notifyAction();
+
+        ArgumentCaptor<Duration> timeout = ArgumentCaptor.forClass(Duration.class);
+        verify(sender).send(any(), timeout.capture());
+        assertThat(timeout.getValue())
+                .isPositive()
+                .isLessThanOrEqualTo(Duration.ofSeconds(5));
     }
 
     /**
@@ -175,7 +196,7 @@ class ActionNotifierTest {
 
         assertThat(notifier(Duration.ofNanos(1))
                 .notifyConfirmed(detection(DEVICE_EUI), IotAction.VENTILATE, result())).isNull();
-        verify(sender, never()).send(any());
+        verify(sender, never()).send(any(), any());
     }
 
     // ────────────────────────────── 헬퍼 ──────────────────────────────

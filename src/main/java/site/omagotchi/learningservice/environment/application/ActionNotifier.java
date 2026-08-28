@@ -12,6 +12,7 @@ import site.omagotchi.learningservice.rule.application.SensorDeviceService;
 import site.omagotchi.learningservice.space.application.SpaceCohortQueryService;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -61,14 +62,18 @@ public class ActionNotifier {
 
         int sent = 0;
         for(UUID recipientUserId : managerIds){
-            if(System.nanoTime() > deadline){
+            // 남은 예산을 그대로 넘긴다. 검사만 하고 넘기지 않으면 마지막 한 건이 예산을
+            // 넘겨 시작해, MQ 리스너가 예산 + read 타임아웃만큼 묶인다.
+            long remainingNanos = deadline - System.nanoTime();
+            if(remainingNanos <= 0){
                 log.warn("조치 알림 발송 데드라인을 넘겨 중단합니다. location={}", detection.location());
                 break;
             }
 
             try{
                 boolean success = sender.send(
-                        ActionNotificationSender.ActionNotice.of(recipientUserId, detection, action, result)
+                        ActionNotificationSender.ActionNotice.of(recipientUserId, detection, action, result),
+                        Duration.ofNanos(remainingNanos)
                 );
 
                 if(success){

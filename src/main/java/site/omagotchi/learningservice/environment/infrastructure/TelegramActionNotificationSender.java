@@ -8,6 +8,7 @@ import site.omagotchi.learningservice.global.util.DateTimePolicy;
 import site.omagotchi.learningservice.rule.domain.Operator;
 import site.omagotchi.learningservice.telegram.application.TelegramNotificationService;
 
+import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Objects;
@@ -23,8 +24,8 @@ public class TelegramActionNotificationSender implements ActionNotificationSende
     private final TelegramNotificationService notificationService;
 
     @Override
-    public boolean send(ActionNotice notice) {
-        boolean success = notificationService.send(notice. recipientUserId(), messageOf(notice));
+    public boolean send(ActionNotice notice, Duration timeout) {
+        boolean success = notificationService.send(notice.recipientUserId(), messageOf(notice), timeout);
 
         if(!success){
             log.info("텔레그램을 연동하지 않은 관리자입니다. 건너뜁니다. userId={}", notice.recipientUserId());

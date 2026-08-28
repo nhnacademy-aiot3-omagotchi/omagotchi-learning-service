@@ -18,6 +18,7 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -129,7 +130,13 @@ class JoinCodeServiceIT {
                         .filter(joinCode -> joinCode.getStatus() == CohortJoinCodeStatus.ACTIVE)
                         .count()
         );
-        assertEquals(secondExpiry.toInstant(), activeCode.expiresAt().toInstant());
-        assertEquals(second.issuedAt().toInstant(), activeCode.issuedAt().toInstant());
+        assertEquals(
+                secondExpiry.toInstant().truncatedTo(ChronoUnit.MICROS),
+                activeCode.expiresAt().toInstant().truncatedTo(ChronoUnit.MICROS)
+        );
+        assertEquals(
+                second.issuedAt().toInstant().truncatedTo(ChronoUnit.MICROS),
+                activeCode.issuedAt().toInstant().truncatedTo(ChronoUnit.MICROS)
+        );
     }
 }

@@ -55,4 +55,13 @@ public class JpaCohortMembershipQuery implements CohortMembershipQuery {
     public boolean existsActiveManager(Long cohortId) {
         return repository.existsActiveManagerByCohortId(cohortId);
     }
+
+    @Override
+    public boolean existsActiveManagerByUserId(UUID userId) {
+        return repository.existsByUserIdAndRoleAndStatusAndEndedAtIsNull(
+                userId,
+                CohortMembershipRole.MANAGER,
+                CohortMembershipStatus.ACTIVE
+        );
+    }
 }

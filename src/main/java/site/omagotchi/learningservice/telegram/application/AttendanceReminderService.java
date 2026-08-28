@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.telegram.application.dto.result.AttendanceReminderResponse;
+import site.omagotchi.learningservice.telegram.application.result.AttendanceReminderResult;
 import site.omagotchi.learningservice.telegram.domain.AttendanceReminder;
 import site.omagotchi.learningservice.telegram.domain.ReminderChannel;
 import site.omagotchi.learningservice.telegram.domain.ReminderType;
@@ -28,7 +28,7 @@ public class AttendanceReminderService {
      * 스케줄러가 중복 실행되어도 같은 알림 row를 재사용하기 위한 멱등 생성 메서드다.
      */
     @Transactional
-    public AttendanceReminderResponse getOrCreatePending(
+    public AttendanceReminderResult getOrCreatePending(
             Long cohortMembershipId,
             LocalDate attendanceDate,
             ReminderType reminderType,
@@ -44,11 +44,11 @@ public class AttendanceReminderService {
                         reminderType,
                         channel
                 )
-                .map(AttendanceReminderResponse::from)
+                .map(AttendanceReminderResult::from)
                 .orElseGet(() -> createPending(cohortMembershipId, attendanceDate, reminderType, channel));
     }
 
-    private AttendanceReminderResponse createPending(
+    private AttendanceReminderResult createPending(
             Long cohortMembershipId,
             LocalDate attendanceDate,
             ReminderType reminderType,
@@ -61,7 +61,7 @@ public class AttendanceReminderService {
                     reminderType,
                     channel
             );
-            return AttendanceReminderResponse.from(reminderRepository.save(reminder));
+            return AttendanceReminderResult.from(reminderRepository.save(reminder));
         } catch (DataIntegrityViolationException exception) {
             return reminderRepository.findByCohortMembershipIdAndAttendanceDateAndReminderTypeAndChannel(
                             cohortMembershipId,
@@ -69,7 +69,7 @@ public class AttendanceReminderService {
                             reminderType,
                             channel
                     )
-                    .map(AttendanceReminderResponse::from)
+                    .map(AttendanceReminderResult::from)
                     .orElseThrow(() -> exception);
         }
     }

@@ -7,7 +7,7 @@ import org.telegram.telegrambots.bots.DefaultBotOptions;
 import site.omagotchi.learningservice.telegram.application.TelegramProperties;
 
 import java.time.Duration;
-import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 텔레그램 HTTP 클라이언트
@@ -15,12 +15,21 @@ import java.util.Objects;
 public class TelegramBotApiClient extends DefaultAbsSender {
 
     public TelegramBotApiClient(TelegramProperties properties){
-        super(botOptions(properties.bot()), requiredConfigured(properties.bot().token()));
+        super(botOptions(properties.bot()), properties.bot().token());
     }
 
     @PreDestroy
     public void shutdown(){
         exe.shutdown();
+
+        try{
+            if(!exe.awaitTermination(5, TimeUnit.SECONDS)){
+                exe.shutdownNow();
+            }
+        }catch (InterruptedException e){
+            exe.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     private static DefaultBotOptions botOptions(TelegramProperties.Bot bot){
@@ -41,13 +50,5 @@ public class TelegramBotApiClient extends DefaultAbsSender {
 
     private static int millis(Duration duration){
         return (int) duration.toMillis();
-    }
-
-    private static String requiredConfigured(String token){
-        if(Objects.isNull(token) || token.isBlank()){
-            throw new IllegalArgumentException("telegram.notification.enabled=true이면 TELEGRAM_BOT_TOKEN이 필요합니다.");
-        }
-
-        return token;
     }
 }

@@ -1,11 +1,11 @@
-package site.omagotchi.learningservice.telegram.application.dto.result;
+package site.omagotchi.learningservice.telegram.application.result;
 
 import site.omagotchi.learningservice.telegram.domain.TelegramUserLink;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-public record TelegramUserLinkResponse(
+public record TelegramUserLinkResult(
         UUID userId,
         Long telegramUserId,
         Long telegramChatId,
@@ -14,8 +14,8 @@ public record TelegramUserLinkResponse(
         OffsetDateTime disconnectedAt // 연동 해제 시각
 ) {
 
-    public static TelegramUserLinkResponse from(TelegramUserLink link) {
-        return new TelegramUserLinkResponse(
+    public static TelegramUserLinkResult from(TelegramUserLink link) {
+        return new TelegramUserLinkResult(
                 link.getUserId(),
                 link.getTelegramUserId(),
                 link.getTelegramChatId(),

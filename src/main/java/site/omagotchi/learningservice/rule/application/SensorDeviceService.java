@@ -94,6 +94,18 @@ public class SensorDeviceService {
         }
     }
 
+    /**
+     * 이 기기가 설치된 공간. 조치 알림의 수신자 판정이 소비처다.
+     *
+     * <p>등록되지 않은 기기이거나 공간이 배정되지 않은 기기면 비어 있다. 소비처는 둘을
+     * 구분하지 않아도 된다 — 어느 쪽이든 "이 기기가 어느 공간 것인지 말할 수 없다"는
+     * 같은 결론이다.</p>
+     */
+    public Optional<Long> findSpaceId(String deviceEui) {
+        return sensorDeviceRepository.findByDeviceEui(deviceEui)
+                .map(SensorDevice::getSpaceId);
+    }
+
     /** 표시명. 등록되지 않은 기기면 비어 있다. */
     public Optional<String> findDisplayName(String deviceEui) {
         return sensorDeviceRepository.findByDeviceEui(deviceEui)

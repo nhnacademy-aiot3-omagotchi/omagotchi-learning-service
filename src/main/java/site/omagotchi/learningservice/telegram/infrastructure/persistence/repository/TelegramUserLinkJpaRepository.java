@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.telegram.infrastructure;
+package site.omagotchi.learningservice.telegram.infrastructure.persistence.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import site.omagotchi.learningservice.telegram.domain.TelegramUserLink;
@@ -6,7 +6,7 @@ import site.omagotchi.learningservice.telegram.domain.TelegramUserLink;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface TelegramUserLinkRepository extends JpaRepository<TelegramUserLink, Long> {
+public interface TelegramUserLinkJpaRepository extends JpaRepository<TelegramUserLink, Long> {
 
     Optional<TelegramUserLink> findByUserId(UUID userId);
 

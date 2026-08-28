@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.telegram.application.dto.result;
+package site.omagotchi.learningservice.telegram.application.result;
 
 import site.omagotchi.learningservice.telegram.domain.AttendanceReminder;
 import site.omagotchi.learningservice.telegram.domain.ReminderChannel;
@@ -8,7 +8,7 @@ import site.omagotchi.learningservice.telegram.domain.ReminderType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
-public record AttendanceReminderResponse(
+public record AttendanceReminderResult(
         Long id,
         Long cohortMembershipId,
         LocalDate attendanceDate,
@@ -24,8 +24,8 @@ public record AttendanceReminderResponse(
         OffsetDateTime updatedAt
 ) {
 
-    public static AttendanceReminderResponse from(AttendanceReminder reminder) {
-        return new AttendanceReminderResponse(
+    public static AttendanceReminderResult from(AttendanceReminder reminder) {
+        return new AttendanceReminderResult(
                 reminder.getId(),
                 reminder.getCohortMembershipId(),
                 reminder.getAttendanceDate(),

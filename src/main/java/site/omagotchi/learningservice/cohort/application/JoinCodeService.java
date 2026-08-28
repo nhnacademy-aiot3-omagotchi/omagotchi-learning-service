@@ -34,22 +34,22 @@ public class JoinCodeService {
     private final SecureRandom secureRandom = new SecureRandom();
 
     /**
-     * 특정 기수의 현재 ACTIVE 가입 코드 메타데이터를 조회한다.
+     * 특정 기수에서 가장 최근에 발급한 가입 코드 메타데이터를 조회한다.
      * 원문 코드는 저장하지 않으므로 응답에도 포함하지 않는다.
      */
-    public JoinCodeResponse getActiveJoinCode(Long cohortId, UUID actorUserId) {
+    public JoinCodeResponse getLatestJoinCode(Long cohortId, UUID actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
         CohortJoinCode joinCode = joinCodeRepository
-                .findFirstByCohortIdAndStatusOrderByIssuedAtDesc(cohortId, CohortJoinCodeStatus.ACTIVE)
+                .findFirstByCohortIdOrderByIssuedAtDesc(cohortId)
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.JOIN_CODE_NOT_FOUND));
 
         return JoinCodeResponse.from(joinCode);
     }
 
     /**
-     * 가입 코드를 발급하거나 재발급한다.
-     * 기존 ACTIVE 코드는 폐기하고, 새 원문 코드는 이 응답에서만 1회 반환한다.
+     * 활성 코드가 없거나 기존 코드가 만료된 경우에만 가입 코드를 발급한다.
+     * 새 원문 코드는 이 응답에서만 1회 반환한다.
      */
     @Transactional
     public IssuedJoinCodeResponse issue(Long cohortId, IssueJoinCodeCommand command, UUID issuedByUserId) {
@@ -58,10 +58,18 @@ public class JoinCodeService {
         Cohort cohort = getCohortOrThrow(cohortId);
         validateIssuable(cohort, command.expiresAt());
 
-        joinCodeRepository.findFirstByCohortIdAndStatusOrderByIssuedAtDesc(
-                cohortId,
-                CohortJoinCodeStatus.ACTIVE
-        ).ifPresent(CohortJoinCode::revoke);
+        OffsetDateTime now = OffsetDateTime.now();
+        joinCodeRepository
+                .findFirstByCohortIdOrderByIssuedAtDesc(cohortId)
+                .ifPresent(existingJoinCode -> {
+                    if (existingJoinCode.getExpiresAt().isAfter(now)) {
+                        throw new BusinessException(CohortErrorCode.JOIN_CODE_ALREADY_EXISTS);
+                    }
+                    if (existingJoinCode.getStatus() == CohortJoinCodeStatus.ACTIVE) {
+                        existingJoinCode.revoke();
+                        joinCodeRepository.flush();
+                    }
+                });
 
         String rawCode = generateRawCode();
         CohortJoinCode joinCode = CohortJoinCode.issue(

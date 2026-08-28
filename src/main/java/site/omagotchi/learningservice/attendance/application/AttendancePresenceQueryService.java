@@ -5,11 +5,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
+import site.omagotchi.learningservice.attendance.application.result.OpenUserPresenceView;
 import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * 다른 Feature가 재실 여부를 묻는 공개 계약.
@@ -59,5 +63,17 @@ public class AttendancePresenceQueryService {
                     openPresences.size(), userId);
         }
         return openPresences.stream().findFirst();
+    }
+
+    /** 계정별 최신 열린 재실 구간을 한 번에 조회한다. */
+    public Map<UUID, OpenPresenceView> findOpenPresences(Collection<UUID> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, OpenPresenceView> latestByUserId = new LinkedHashMap<>();
+        for (OpenUserPresenceView presence : presenceIntervalRepository.findOpenPresences(userIds)) {
+            latestByUserId.putIfAbsent(presence.userId(), presence.toPresenceView());
+        }
+        return Map.copyOf(latestByUserId);
     }
 }

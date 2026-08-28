@@ -91,6 +91,23 @@ public class CohortMembershipQueryService {
                 .map(CohortMembershipView::from);
     }
 
+    /** 같은 기수의 ACTIVE 소속을 계정별로 일괄 조회한다. */
+    public Map<UUID, CohortMembershipView> findActiveMemberships(
+            Long cohortId,
+            Collection<UUID> userIds
+    ) {
+        if (cohortId == null || userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        return membershipRepository.findByCohortIdAndUserIdInAndStatus(
+                        cohortId,
+                        userIds,
+                        CohortMembershipStatus.ACTIVE
+                ).stream()
+                .map(CohortMembershipView::from)
+                .collect(Collectors.toMap(CohortMembershipView::userId, view -> view));
+    }
+
     /**
      * 이 계정의 ACTIVE 소속 전체를 조회한다.
      *

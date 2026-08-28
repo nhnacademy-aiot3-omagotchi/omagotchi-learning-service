@@ -70,6 +70,17 @@ public class OccupancyParticipantJpaPersistence implements OccupancyParticipantR
     }
 
     @Override
+    public Map<UUID, Long> findActiveOccupancyIdsByUserIds(Collection<UUID> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Long> occupancyIdsByUserId = new LinkedHashMap<>();
+        participantJpaRepository.findActiveByUserIds(userIds).forEach(participation ->
+                occupancyIdsByUserId.put(participation.getUserId(), participation.getOccupancyId()));
+        return Map.copyOf(occupancyIdsByUserId);
+    }
+
+    @Override
     public List<OpenParticipation> findOpenParticipationsAfter(Long afterId, int limit) {
         return participantJpaRepository.findOpenParticipationsAfter(
                 afterId, PageRequest.of(0, limit));

@@ -57,6 +57,9 @@ public interface OccupancyParticipantRepository {
      */
     Map<Long, List<UUID>> findActiveUserIdsByOccupancyIds(Collection<Long> occupancyIds);
 
+    /** 계정별 현재 참여 중인 점유 식별자. 열린 참여 행은 계정당 최대 하나다. */
+    Map<UUID, Long> findActiveOccupancyIdsByUserIds(Collection<UUID> userIds);
+
 
     /**
      * 이 점유에서 이 사람의 행을 찾는다. 이탈 여부와 무관하게 조회한다.

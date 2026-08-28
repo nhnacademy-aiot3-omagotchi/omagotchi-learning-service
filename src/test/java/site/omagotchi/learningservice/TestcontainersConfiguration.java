@@ -10,9 +10,11 @@ import org.testcontainers.utility.DockerImageName;
 import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountView;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -44,6 +46,11 @@ public class TestcontainersConfiguration {
                                 userId -> userId,
                                 UUID::toString
                         ));
+            }
+
+            @Override
+            public List<IdentityAccountView> search(String query) {
+                return List.of();
             }
         };
     }

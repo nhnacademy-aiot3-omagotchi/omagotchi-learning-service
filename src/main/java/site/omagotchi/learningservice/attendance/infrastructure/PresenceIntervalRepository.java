@@ -4,11 +4,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
+import site.omagotchi.learningservice.attendance.application.result.OpenUserPresenceView;
 import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Collection;
 
 public interface PresenceIntervalRepository extends JpaRepository<PresenceInterval, Long> {
 
@@ -42,4 +44,16 @@ public interface PresenceIntervalRepository extends JpaRepository<PresenceInterv
                    AND i.state <> site.omagotchi.learningservice.attendance.domain.PresenceState.AWAY
                  ORDER BY i.startedAt DESC""")
     List<OpenPresenceView> findOpenPresences(@Param("userId") UUID userId);
+
+    @Query("""
+                SELECT new site.omagotchi.learningservice.attendance.application.result.OpenUserPresenceView(
+                           m.userId, r.cohortMembershipId, i.startedAt)
+                  FROM PresenceInterval i
+                  JOIN AttendanceRecord r ON r.id = i.attendanceId
+                  JOIN CohortMembership m ON m.id = r.cohortMembershipId
+                 WHERE m.userId IN :userIds
+                   AND i.endedAt IS NULL
+                   AND i.state <> site.omagotchi.learningservice.attendance.domain.PresenceState.AWAY
+                 ORDER BY m.userId ASC, i.startedAt DESC""")
+    List<OpenUserPresenceView> findOpenPresences(@Param("userIds") Collection<UUID> userIds);
 }

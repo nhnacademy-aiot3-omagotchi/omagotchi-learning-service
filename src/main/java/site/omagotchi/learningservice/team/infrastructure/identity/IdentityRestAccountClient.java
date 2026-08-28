@@ -10,8 +10,10 @@ import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.http.RestClientCallExecutor;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountView;
 import site.omagotchi.learningservice.team.infrastructure.identity.request.IdentityAccountBatchRequest;
 import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountResponse;
+import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountSearchResponse;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -49,6 +51,16 @@ public class IdentityRestAccountClient implements IdentityAccountClient {
 
         return callExecutor.execute(
                 () -> fetchDisplayNames(requestedIds),
+                exception -> {
+                    throw errorResolver.resolveBatchLookupError(exception);
+                }
+        );
+    }
+
+    @Override
+    public List<IdentityAccountView> search(String query) {
+        return callExecutor.execute(
+                () -> fetchSearchResults(query),
                 exception -> {
                     throw errorResolver.resolveBatchLookupError(exception);
                 }
@@ -106,6 +118,39 @@ public class IdentityRestAccountClient implements IdentityAccountClient {
             }
         }
         return Map.copyOf(displayNames);
+    }
+
+    private List<IdentityAccountView> fetchSearchResults(String query) {
+        ResponseEntity<List<IdentityAccountSearchResponse>> response =
+                httpService.searchAccounts(query);
+        if (response.getStatusCode().value() != HttpStatus.OK.value()) {
+            throw invalidResponse(
+                    "검색 성공 응답 Status 불일치 expected=200, actual="
+                            + response.getStatusCode().value()
+            );
+        }
+        List<IdentityAccountSearchResponse> accounts = response.getBody();
+        if (accounts == null) {
+            throw invalidResponse("검색 성공 응답 Body 누락");
+        }
+
+        Set<UUID> accountIds = new LinkedHashSet<>();
+        return accounts.stream().map(account -> {
+            if (account == null
+                    || account.accountId() == null
+                    || !accountIds.add(account.accountId())
+                    || !StringUtils.hasText(account.displayName())
+                    || !StringUtils.hasText(account.email())
+                    || account.status() == null) {
+                throw invalidResponse("검색 응답의 필수 필드 누락 또는 accountId 중복");
+            }
+            return new IdentityAccountView(
+                    account.accountId(),
+                    account.displayName(),
+                    account.email(),
+                    account.status()
+            );
+        }).toList();
     }
 
     private static BusinessException invalidResponse(String diagnosticMessage) {

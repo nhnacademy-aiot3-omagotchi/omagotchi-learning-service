@@ -68,6 +68,12 @@ public interface CohortMembershipRepository extends
 
     Optional<CohortMembership> findByCohortIdAndUserId(Long cohortId, UUID userId);
 
+    List<CohortMembership> findByCohortIdAndUserIdInAndStatus(
+            Long cohortId,
+            Collection<UUID> userIds,
+            CohortMembershipStatus status
+    );
+
     List<CohortMembership> findByUserIdOrderByRequestedAtDesc(UUID userId);
 
     List<CohortMembership> findByCohortId(Long cohortId);

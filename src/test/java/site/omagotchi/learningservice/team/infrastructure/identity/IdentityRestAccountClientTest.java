@@ -14,6 +14,7 @@ import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
 import site.omagotchi.learningservice.team.infrastructure.identity.request.IdentityAccountBatchRequest;
 import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountResponse;
+import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountSearchResponse;
 
 import java.util.List;
 import java.util.Map;
@@ -93,6 +94,27 @@ class IdentityRestAccountClientTest {
                 secondId, "둘째 사용자"
         ));
         verify(httpService).getAccounts(expectedRequest);
+    }
+
+    @Test
+    @DisplayName("Identity 이름 이메일 검색 응답을 Application 값으로 변환")
+    void searchesAccounts() {
+        UUID accountId = UUID.randomUUID();
+        given(httpService.searchAccounts("사용자")).willReturn(ResponseEntity.ok(List.of(
+                new IdentityAccountSearchResponse(
+                        accountId,
+                        "검색 사용자",
+                        "search@example.com",
+                        IdentityAccountState.ACTIVE
+                )
+        )));
+
+        assertThat(accountClient.search("사용자")).singleElement().satisfies(account -> {
+            assertThat(account.accountId()).isEqualTo(accountId);
+            assertThat(account.displayName()).isEqualTo("검색 사용자");
+            assertThat(account.email()).isEqualTo("search@example.com");
+            assertThat(account.status()).isEqualTo(IdentityAccountState.ACTIVE);
+        });
     }
 
     @Test

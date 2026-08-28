@@ -52,6 +52,21 @@ public interface OccupancyParticipantJpaRepository extends JpaRepository<Occupan
         UUID getUserId();
     }
 
+    @Query("""
+                SELECT p.userId AS userId, p.occupancyId AS occupancyId
+                  FROM OccupancyParticipant p
+                 WHERE p.userId IN :userIds
+                   AND p.leftAt IS NULL""")
+    List<ActiveParticipationProjection> findActiveByUserIds(
+            @Param("userIds") Collection<UUID> userIds
+    );
+
+    interface ActiveParticipationProjection {
+        UUID getUserId();
+
+        Long getOccupancyId();
+    }
+
     /**
      * 열린 참여자 전원 마감 (MR-32).
      *

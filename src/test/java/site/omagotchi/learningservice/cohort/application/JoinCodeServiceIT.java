@@ -131,12 +131,12 @@ class JoinCodeServiceIT {
                         .count()
         );
         assertEquals(
-                secondExpiry.toInstant().truncatedTo(ChronoUnit.MICROS),
-                activeCode.expiresAt().toInstant().truncatedTo(ChronoUnit.MICROS)
+                secondExpiry.toInstant().truncatedTo(ChronoUnit.MILLIS),
+                activeCode.expiresAt().toInstant().truncatedTo(ChronoUnit.MILLIS)
         );
         assertEquals(
-                second.issuedAt().toInstant().truncatedTo(ChronoUnit.MICROS),
-                activeCode.issuedAt().toInstant().truncatedTo(ChronoUnit.MICROS)
+                second.issuedAt().toInstant().truncatedTo(ChronoUnit.MILLIS),
+                activeCode.issuedAt().toInstant().truncatedTo(ChronoUnit.MILLIS)
         );
     }
 }

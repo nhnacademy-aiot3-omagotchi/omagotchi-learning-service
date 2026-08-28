@@ -6,8 +6,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.web.bind.annotation.*;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.telegram.application.TelegramUserLinkService;
-import site.omagotchi.learningservice.telegram.application.result.TelegramLinkTokenResponse;
-import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResponse;
+import site.omagotchi.learningservice.telegram.presentation.response.TelegramLinkTokenResponse;
+import site.omagotchi.learningservice.telegram.presentation.response.TelegramUserLinkResponse;
 import site.omagotchi.learningservice.telegram.presentation.request.UpdateTelegramNotificationRequest;
 
 @RestController
@@ -22,7 +22,7 @@ public class TelegramController {
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return telegramUserLinkService.issueLinkToken(user.userId());
+        return TelegramLinkTokenResponse.from(telegramUserLinkService.issueLinkToken(user.userId()));
     }
 
     @GetMapping("/link")
@@ -30,7 +30,7 @@ public class TelegramController {
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return telegramUserLinkService.getMyLink(user.userId());
+        return TelegramUserLinkResponse.from(telegramUserLinkService.getMyLink(user.userId()));
     }
 
     @PatchMapping("/link/notification")
@@ -39,7 +39,8 @@ public class TelegramController {
             @Valid @RequestBody UpdateTelegramNotificationRequest request
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return telegramUserLinkService.updateNotification(user.userId(), request.toCommand());
+        return TelegramUserLinkResponse.from(
+                telegramUserLinkService.updateNotification(user.userId(), request.toCommand()));
     }
 
     @DeleteMapping("/link")
@@ -47,6 +48,6 @@ public class TelegramController {
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return telegramUserLinkService.disconnect(user.userId());
+        return TelegramUserLinkResponse.from(telegramUserLinkService.disconnect(user.userId()));
     }
 }

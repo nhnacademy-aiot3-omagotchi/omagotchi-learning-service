@@ -8,8 +8,8 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
 import site.omagotchi.learningservice.telegram.application.command.TelegramWebhookCommand;
 import site.omagotchi.learningservice.telegram.application.command.UpdateTelegramNotificationCommand;
-import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResponse;
-import site.omagotchi.learningservice.telegram.domain.Command;
+import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResult;
+import site.omagotchi.learningservice.telegram.application.command.BotCommand;
 import site.omagotchi.learningservice.telegram.domain.TelegramErrorCode;
 import site.omagotchi.learningservice.telegram.application.port.TelegramMessageSender;
 
@@ -47,7 +47,7 @@ public class TelegramWebhookService {
         }
 
         try {
-            switch (Command.of(command.text())) {
+            switch (BotCommand.of(command.text())) {
                 case START -> start(chatId, command);
                 case STOP -> stop(chatId);
                 case RESUME -> resume(chatId);
@@ -78,7 +78,7 @@ public class TelegramWebhookService {
     }
 
     private void stop(Long chatId) {
-        TelegramUserLinkResponse link = findLinkOrReply(chatId);
+        TelegramUserLinkResult link = findLinkOrReply(chatId);
 
         if (Objects.isNull(link)) {
             return;
@@ -94,7 +94,7 @@ public class TelegramWebhookService {
     }
 
     private void resume(Long chatId) {
-        TelegramUserLinkResponse link = findLinkOrReply(chatId);
+        TelegramUserLinkResult link = findLinkOrReply(chatId);
 
         if (Objects.isNull(link)) {
             return;
@@ -105,7 +105,7 @@ public class TelegramWebhookService {
     }
 
     private void disconnect(Long chatId) {
-        TelegramUserLinkResponse link = findLinkOrReply(chatId);
+        TelegramUserLinkResult link = findLinkOrReply(chatId);
 
         if (Objects.isNull(link)) {
             return;
@@ -124,7 +124,7 @@ public class TelegramWebhookService {
     }
 
     private void status(Long chatId) {
-        TelegramUserLinkResponse link = findLinkOrReply(chatId);
+        TelegramUserLinkResult link = findLinkOrReply(chatId);
 
         if (Objects.isNull(link)) {
             return;
@@ -139,8 +139,8 @@ public class TelegramWebhookService {
      * <p>연동이 없을 때의 응답을 한 곳에 모은다 — 명령마다 같은 분기를 반복하면 문구가
      * 갈라진다. 호출부는 {@code null} 검사 후 곧바로 반환하면 된다.</p>
      */
-    private TelegramUserLinkResponse findLinkOrReply(Long chatId) {
-        Optional<TelegramUserLinkResponse> found = userLinkService.findByChatId(chatId);
+    private TelegramUserLinkResult findLinkOrReply(Long chatId) {
+        Optional<TelegramUserLinkResult> found = userLinkService.findByChatId(chatId);
 
         if (found.isEmpty()) {
             reply(chatId, notLinkedMessage());
@@ -149,7 +149,7 @@ public class TelegramWebhookService {
         return found.get();
     }
 
-    private String statusMessage(TelegramUserLinkResponse link) {
+    private String statusMessage(TelegramUserLinkResult link) {
         boolean on = Boolean.TRUE.equals(link.notificationEnabled());
         boolean manager = membershipQueryService.isActiveManager(link.userId());
 

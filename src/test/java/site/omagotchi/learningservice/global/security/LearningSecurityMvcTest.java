@@ -21,7 +21,7 @@ import site.omagotchi.learningservice.rule.presentation.ThresholdRuleController;
 import site.omagotchi.learningservice.telegram.application.TelegramUserLinkService;
 import site.omagotchi.learningservice.telegram.application.TelegramWebhookService;
 import site.omagotchi.learningservice.telegram.presentation.TelegramWebhookAuthenticator;
-import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResponse;
+import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResult;
 import site.omagotchi.learningservice.telegram.presentation.TelegramController;
 import site.omagotchi.learningservice.telegram.presentation.TelegramWebhookController;
 
@@ -258,8 +258,8 @@ class LearningSecurityMvcTest {
         verify(thresholdRuleService).readAll();
     }
 
-    private TelegramUserLinkResponse linkResponse(UUID userId) {
-        return new TelegramUserLinkResponse(
+    private TelegramUserLinkResult linkResponse(UUID userId) {
+        return new TelegramUserLinkResult(
                 userId,
                 1L,
                 2L,

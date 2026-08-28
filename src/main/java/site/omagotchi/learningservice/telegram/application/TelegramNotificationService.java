@@ -7,6 +7,8 @@ import site.omagotchi.learningservice.telegram.application.port.TelegramMessageS
 import site.omagotchi.learningservice.telegram.application.port.TelegramUserLinkRepository;
 import site.omagotchi.learningservice.telegram.domain.TelegramUserLink;
 
+import java.time.Duration;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -40,6 +42,15 @@ public class TelegramNotificationService {
      * @throws IllegalStateException 발송을 시도했으나 실패한 경우
      */
     public boolean send(UUID recipientUserId, String text) {
+        return send(recipientUserId, text, null);
+    }
+
+    /**
+     * 제한 시간 안에 보낸다. {@code timeout}이 {@code null}이면 설정된 read 타임아웃을 쓴다.
+     *
+     * <p>호출 스레드를 오래 붙잡으면 안 되는 경로(조치 알림)가 소비처다.</p>
+     */
+    public boolean send(UUID recipientUserId, String text, Duration timeout) {
         Optional<TelegramUserLink> link = userLinkRepository.findByUserId(recipientUserId);
 
         if (link.isEmpty()) {
@@ -51,7 +62,13 @@ public class TelegramNotificationService {
             return false;
         }
 
-        messageSender.send(link.get().getTelegramChatId(), text);
+        Long chatId = link.get().getTelegramChatId();
+
+        if (Objects.isNull(timeout)) {
+            messageSender.send(chatId, text);
+        } else {
+            messageSender.send(chatId, text, timeout);
+        }
         return true;
     }
 }

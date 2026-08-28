@@ -3,18 +3,13 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.cohort.application.port.CohortMembershipQuery;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -38,6 +33,7 @@ import java.util.stream.Collectors;
 public class CohortMembershipQueryService {
 
     private final CohortMembershipRepository membershipRepository;
+    private final CohortMembershipQuery membershipQuery;
 
     /**
      * 특정 기수에서 종료되지 않은 ACTIVE STUDENT 소속을 일괄 조회한다.
@@ -222,8 +218,7 @@ public class CohortMembershipQueryService {
             return false;
         }
 
-        return membershipRepository.existsByUserIdAndRoleAndStatusAndEndedAtIsNull(
-                userId, CohortMembershipRole.MANAGER, CohortMembershipStatus.ACTIVE);
+        return membershipQuery.existsActiveManagerByUserId(userId);
     }
 
     /**
@@ -240,12 +235,7 @@ public class CohortMembershipQueryService {
             return List.of();
         }
 
-        return membershipRepository.findByCohortIdAndRoleAndStatusAndEndedAtIsNull(
-                        cohortId, CohortMembershipRole.MANAGER, CohortMembershipStatus.ACTIVE)
-                .stream()
-                .map(CohortMembership::getUserId)
-                .distinct()
-                .toList();
+        return membershipQuery.findAllActiveManagerUserIds(cohortId);
     }
 
 }

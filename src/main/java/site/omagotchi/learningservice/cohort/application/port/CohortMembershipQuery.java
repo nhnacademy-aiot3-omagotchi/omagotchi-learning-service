@@ -12,4 +12,6 @@ public interface CohortMembershipQuery {
     List<UUID> findAllActiveManagerUserIds(Long cohortId);
 
     boolean existsActiveManager(Long cohortId);
+
+    boolean existsActiveManagerByUserId(UUID userId);
 }

@@ -12,7 +12,7 @@ import site.omagotchi.learningservice.cohort.application.CohortMembershipQuerySe
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.telegram.application.command.TelegramWebhookCommand;
 import site.omagotchi.learningservice.telegram.application.command.UpdateTelegramNotificationCommand;
-import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResponse;
+import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResult;
 import site.omagotchi.learningservice.telegram.domain.TelegramErrorCode;
 import site.omagotchi.learningservice.telegram.application.port.TelegramMessageSender;
 
@@ -234,7 +234,7 @@ class TelegramWebhookServiceTest {
     }
 
     private void givenLinked(boolean notificationEnabled) {
-        given(userLinkService.findByChatId(CHAT_ID)).willReturn(Optional.of(new TelegramUserLinkResponse(
+        given(userLinkService.findByChatId(CHAT_ID)).willReturn(Optional.of(new TelegramUserLinkResult(
                 USER_ID, TELEGRAM_USER_ID, CHAT_ID, notificationEnabled,
                 OffsetDateTime.parse("2026-08-01T00:00:00Z"), null)));
     }

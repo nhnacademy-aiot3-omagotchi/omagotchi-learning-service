@@ -8,8 +8,8 @@ import site.omagotchi.learningservice.telegram.application.command.TelegramWebho
 import site.omagotchi.learningservice.telegram.application.command.UpdateTelegramNotificationCommand;
 import site.omagotchi.learningservice.telegram.application.port.TelegramLinkTokenRepository;
 import site.omagotchi.learningservice.telegram.application.port.TelegramUserLinkRepository;
-import site.omagotchi.learningservice.telegram.application.result.TelegramLinkTokenResponse;
-import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResponse;
+import site.omagotchi.learningservice.telegram.application.result.TelegramLinkTokenResult;
+import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResult;
 import site.omagotchi.learningservice.telegram.domain.TelegramErrorCode;
 import site.omagotchi.learningservice.telegram.domain.TelegramLinkToken;
 import site.omagotchi.learningservice.telegram.domain.TelegramUserLink;
@@ -38,7 +38,7 @@ public class TelegramUserLinkService {
      * 서비스 사용자가 Telegram Bot과 개인 대화를 시작할 수 있는 일회용 딥링크를 발급한다.
      */
     @Transactional
-    public TelegramLinkTokenResponse issueLinkToken(UUID userId) {
+    public TelegramLinkTokenResult issueLinkToken(UUID userId) {
         String rawToken = generateRawToken();
         OffsetDateTime expiresAt = OffsetDateTime.now().plus(telegramProperties.linkToken().ttl());
 
@@ -49,7 +49,7 @@ public class TelegramUserLinkService {
         );
         linkTokenRepository.save(token);
 
-        return new TelegramLinkTokenResponse(
+        return new TelegramLinkTokenResult(
                 "https://t.me/" + telegramProperties.bot().username() + "?start=" + rawToken,
                 expiresAt
         );
@@ -59,7 +59,7 @@ public class TelegramUserLinkService {
      * Telegram Webhook의 /start token 메시지를 처리해 서비스 사용자와 개인 chat_id를 연결한다.
      */
     @Transactional
-    public TelegramUserLinkResponse linkByWebhook(TelegramWebhookCommand command) {
+    public TelegramUserLinkResult linkByWebhook(TelegramWebhookCommand command) {
         WebhookStartCommand startCommand = parseStartCommand(command);
         TelegramLinkToken token = linkTokenRepository.findByTokenHash(TelegramTokenHash.sha256(startCommand.token()))
                 .orElseThrow(() -> new BusinessException(TelegramErrorCode.TELEGRAM_LINK_TOKEN_NOT_FOUND));
@@ -83,37 +83,37 @@ public class TelegramUserLinkService {
                 ));
 
         token.markUsed(now);
-        return TelegramUserLinkResponse.from(userLinkRepository.save(link));
+        return TelegramUserLinkResult.from(userLinkRepository.save(link));
     }
 
-    public Optional<TelegramUserLinkResponse> findByChatId(Long telegramChatId) {
+    public Optional<TelegramUserLinkResult> findByChatId(Long telegramChatId) {
         if (Objects.isNull(telegramChatId)) {
             return Optional.empty();
         }
 
         return userLinkRepository.findByTelegramChatId(telegramChatId)
                 .filter(link -> Objects.isNull(link.getDisconnectedAt()))
-                .map(TelegramUserLinkResponse::from);
+                .map(TelegramUserLinkResult::from);
     }
 
-    public TelegramUserLinkResponse getMyLink(UUID userId) {
-        return TelegramUserLinkResponse.from(requireActiveLink(userId));
+    public TelegramUserLinkResult getMyLink(UUID userId) {
+        return TelegramUserLinkResult.from(requireActiveLink(userId));
     }
 
     @Transactional
-    public TelegramUserLinkResponse updateNotification(UUID userId, UpdateTelegramNotificationCommand command) {
+    public TelegramUserLinkResult updateNotification(UUID userId, UpdateTelegramNotificationCommand command) {
         TelegramUserLink link = requireActiveLink(userId);
 
         link.changeNotificationEnabled(command.enabled());
-        return TelegramUserLinkResponse.from(link);
+        return TelegramUserLinkResult.from(link);
     }
 
     @Transactional
-    public TelegramUserLinkResponse disconnect(UUID userId) {
+    public TelegramUserLinkResult disconnect(UUID userId) {
         TelegramUserLink link = requireActiveLink(userId);
         link.disconnect();
 
-        return TelegramUserLinkResponse.from(link);
+        return TelegramUserLinkResult.from(link);
     }
 
     private void validateTelegramChatOwnership(UUID userId, Long telegramChatId, Long telegramUserId) {

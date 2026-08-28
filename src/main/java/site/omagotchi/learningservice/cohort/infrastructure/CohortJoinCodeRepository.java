@@ -13,5 +13,7 @@ public interface CohortJoinCodeRepository extends JpaRepository<CohortJoinCode, 
             CohortJoinCodeStatus status
     );
 
+    Optional<CohortJoinCode> findFirstByCohortIdOrderByIssuedAtDesc(Long cohortId);
+
     Optional<CohortJoinCode> findByCodeHash(String codeHash);
 }

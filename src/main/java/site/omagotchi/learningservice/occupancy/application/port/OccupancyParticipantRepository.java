@@ -70,17 +70,13 @@ public interface OccupancyParticipantRepository {
 
 
     /**
+     * 이 계정에게 열린 참여가 있는가.
+     */
+    boolean existsActiveParticipationByUserId(UUID userId);
+
+
+    /**
      * 열린 참여자 전원의 {@code left_at}을 종료 시각으로 일괄 마감한다 (MR-32).
-     *
-     * <p>반납·강제 종료·만료가 공유하는 마무리다. 점유가 끝나면 그 안의 참여도 끝나야
-     * 하는데, 남겨두면 {@code uq_occupancy_participants_one_active}가 계정 기준이라
-     * 그 사람들이 영구히 다른 회의에 참여할 수 없게 된다.</p>
-     *
-     * <p>점유자 본인의 참여 행도 함께 닫힌다 — 점유 시작이 점유자를 참여자로 등록했으므로
-     * (MR-27) 별도 처리가 필요 없다.</p>
-     *
-     * <p>행을 삭제하지 않고 시각만 찍는 것이 구간 모델의 요점이다. 지우면 참여 이력이
-     * 사라진다.</p>
      *
      * @return 마감된 행 수
      */
@@ -89,13 +85,6 @@ public interface OccupancyParticipantRepository {
     /**
      * 이 계정의 열린 참여를 마감한다 (MR-26 참여 처리, 명세 06 §2 7항).
      *
-     * <p>남의 점유에 참여자로 들어가 있는 경우가 대상이다. 열어 두면
-     * {@code uq_occupancy_participants_one_active}가 계정 기준이라 그 사람이 다시는
-     * 어떤 회의에도 들어갈 수 없다.</p>
-     *
-     * <p>{@code left_at IS NULL} 조건부라 멱등하다. 점유자 본인의 참여 행은 점유 종료가
-     * 이미 닫으므로 여기서 다시 닫히지 않는다.</p>
-     *
      * @return 마감한 행 수
      */
     int closeActiveByUserId(UUID userId, OffsetDateTime endedAt);
@@ -103,17 +92,10 @@ public interface OccupancyParticipantRepository {
     /**
      * 열린 참여 행을 커서로 훑는다 (MR-26 정합성 스윕).
      *
-     * <p><b>열린 참여에서 출발하는 것이 요점이다.</b> 점유 시작이 점유자를 참여자로
-     * 자동 등록하므로(MR-27), 이 한 번의 순회가 <b>점유자와 참여자를 모두</b> 포함한다 —
-     * 점유 테이블과 참여 테이블을 따로 훑을 필요가 없다.</p>
-     *
      * <p>커서로 전진하는 이유는 조회 대상이 "고아"가 아니라 <b>열린 참여 전체</b>이기
      * 때문이다. 소속이 살아 있는지는 기수 파트에 물어야 알 수 있어 SQL로 걸러낼 수 없고,
      * {@code LIMIT}만 두면 앞쪽 배치만 반복해 뒤쪽에 닿지 못한다
      * ({@code TeamMemberRepository.findMembershipRefsAfter}와 같은 규약).</p>
-     *
-     * <p>엔티티가 아니라 값을 돌려주는 이유는 1차 캐시다. 여기서 엔티티로 읽으면 뒤이은
-     * 정리가 {@code FOR UPDATE}를 걸어도 Hibernate가 캐시 인스턴스를 돌려준다.</p>
      *
      * @param afterId 이 값보다 큰 {@code occupancy_participants.id}부터. 첫 배치는 0
      * @param limit   한 배치 크기

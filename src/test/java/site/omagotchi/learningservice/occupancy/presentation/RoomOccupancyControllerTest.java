@@ -13,6 +13,7 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
 import site.omagotchi.learningservice.occupancy.application.OccupancyErrorCode;
+import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
 import site.omagotchi.learningservice.occupancy.application.result.RoomOccupancyResult;
@@ -27,6 +28,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -48,14 +50,16 @@ class RoomOccupancyControllerTest {
 
     private RoomOccupancyService roomOccupancyService;
     private RoomOccupancyLifecycleService roomOccupancyLifecycleService;
+    private OccupancyQueryService occupancyQueryService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         roomOccupancyService = mock(RoomOccupancyService.class);
         roomOccupancyLifecycleService = mock(RoomOccupancyLifecycleService.class);
+        occupancyQueryService = mock(OccupancyQueryService.class);
         mockMvc = standaloneSetup(new RoomOccupancyController(
-                        roomOccupancyService, roomOccupancyLifecycleService))
+                        roomOccupancyService, roomOccupancyLifecycleService, occupancyQueryService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 // @AuthenticationPrincipal은 Security의 Resolver가 있어야 풀린다.
                 // standaloneSetup은 Spring Security 필터를 끼우지 않으므로 직접 등록한다.
@@ -268,6 +272,17 @@ class RoomOccupancyControllerTest {
                 1,
                 1800L
         );
+    }
+
+
+    @Test
+    @DisplayName("회의 중이 아니면 false를 응답한다.")
+    void myStatusReturnsFalseWhenNotInMeeting() throws Exception {
+        when(occupancyQueryService.isInMeeting(USER_ID)).thenReturn(false);
+
+        mockMvc.perform(get("/api/v1/occupancies/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inMeeting").value(false));
     }
 
     private void assertErrorResponse(ErrorCode errorCode, int expectedStatus) throws Exception {

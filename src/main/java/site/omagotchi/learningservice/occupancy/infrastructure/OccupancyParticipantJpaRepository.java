@@ -27,6 +27,12 @@ public interface OccupancyParticipantJpaRepository extends JpaRepository<Occupan
     Optional<OccupancyParticipant> findByOccupancyIdAndUserId(Long occupancyId, UUID userId);
 
     /**
+     * 이 계정에게 열린 참여 행이 있는가. 점유자도 참여 행을 가지므로(MR-27)
+     * 이 하나로 점유자·참여자를 모두 덮는다.
+     */
+    boolean existsByUserIdAndLeftAtIsNull(UUID userId);
+
+    /**
      * 여러 점유의 현재 참여자를 배치로 읽는다 (공간 목록의 참여자 표시용).
      *
      * <p>엔티티가 아니라 Projection인 것이 의도다. 필요한 것은 {@code occupancy_id}와

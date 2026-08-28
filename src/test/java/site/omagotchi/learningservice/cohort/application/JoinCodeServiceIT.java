@@ -91,7 +91,9 @@ class JoinCodeServiceIT {
                 JoinCodeHash.sha256(first.code())
         );
 
-        OffsetDateTime secondExpiry = OffsetDateTime.now().plusDays(2);
+        OffsetDateTime secondExpiry = OffsetDateTime.now()
+                .plusDays(2)
+                .truncatedTo(ChronoUnit.MICROS);
         var second = joinCodeService.issue(
                 fixture.cohortId(),
                 new IssueJoinCodeCommand(secondExpiry),

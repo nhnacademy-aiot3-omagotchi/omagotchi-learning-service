@@ -5,21 +5,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.event.StudyCompletedEvent;
 import site.omagotchi.learningservice.study.application.port.StudyEventPublisher;
+import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.port.TimerRunQueryRepository;
 import site.omagotchi.learningservice.study.application.port.TimerRunRepository;
 import site.omagotchi.learningservice.study.application.result.TimerStateResult;
 import site.omagotchi.learningservice.study.domain.StudyRecord;
-import site.omagotchi.learningservice.study.domain.StudyTimePolicy;
 import site.omagotchi.learningservice.study.domain.TimerEndReason;
 import site.omagotchi.learningservice.study.domain.TimerRun;
 import site.omagotchi.learningservice.study.domain.TimerTimePolicy;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -38,6 +36,8 @@ public class TimerCommandService {
     private final Clock clock;
     private final TimerTimePolicy timerTimePolicy;
     private final StudyEventPublisher studyEventPublisher;
+    private final TimerStudyRecordFactory timerStudyRecordFactory;
+    private final StudyRecordOverlapGuard studyRecordOverlapGuard;
 
     public TimerStateResult start(
             UUID userId,
@@ -85,12 +85,27 @@ public class TimerCommandService {
         TimerEndReason endReason = timerRun.stopOrExpire(currentAt, timerTimePolicy);
 
         if (endReason == TimerEndReason.STOP && timerRun.getMeasuredSeconds() > 0L) {
-            createStudyRecords(timerRun).forEach(studyRecordRepository::save);
-            studyEventPublisher.publishCompleted(new StudyCompletedEvent(
-                    userId,
-                    timerRunId,
-                    timerRun.getEndedAt()
-            ));
+            List<StudyRecord> studyRecords = timerStudyRecordFactory.createFrom(timerRun);
+            if (!studyRecords.isEmpty()) {
+                boolean overlaps = studyRecords.stream().anyMatch(studyRecord ->
+                        studyRecordOverlapGuard.hasOverlap(
+                                studyRecord.getCohortMembershipId(),
+                                studyRecord.getStartTime(),
+                                studyRecord.getEndTime(),
+                                null
+                        ));
+
+                if (overlaps) {
+                    timerRun.rejectStudyRecordDueToOverlap();
+                } else {
+                    studyRecords.forEach(studyRecordRepository::save);
+                    studyEventPublisher.publishCompleted(new StudyCompletedEvent(
+                            userId,
+                            timerRunId,
+                            timerRun.getEndedAt()
+                    ));
+                }
+            }
         }
         timerRunRepository.end(timerRun);
     }
@@ -125,53 +140,4 @@ public class TimerCommandService {
         return timerRun;
     }
 
-    private List<StudyRecord> createStudyRecords(TimerRun timerRun) {
-        Instant startedAt = timerRun.getStartedAt();
-        Instant endedAt = timerRun.getEndedAt();
-        Instant recordStartedAt = StudyTimePolicy.floorToMinute(startedAt);
-        Instant recordEndedAt = StudyTimePolicy.ceilToMinute(endedAt);
-        long measuredSeconds = timerRun.getMeasuredSeconds();
-
-        return StudyTimePolicy.findCrossedAggregationBoundary(startedAt, endedAt)
-                .map(boundary -> createSplitStudyRecords(
-                        timerRun,
-                        recordStartedAt,
-                        boundary,
-                        recordEndedAt
-                ))
-                .orElseGet(() -> List.of(StudyRecord.create(
-                        timerRun.getCohortMembershipId(),
-                        recordStartedAt,
-                        recordEndedAt,
-                        measuredSeconds
-                )));
-    }
-
-    private List<StudyRecord> createSplitStudyRecords(
-            TimerRun timerRun,
-            Instant recordStartedAt,
-            Instant boundary,
-            Instant recordEndedAt
-    ) {
-        long firstChunkSeconds = Duration.between(
-                timerRun.getStartedAt(),
-                boundary
-        ).getSeconds();
-        long secondChunkSeconds = timerRun.getMeasuredSeconds() - firstChunkSeconds;
-
-        return List.of(
-                StudyRecord.create(
-                        timerRun.getCohortMembershipId(),
-                        recordStartedAt,
-                        boundary,
-                        firstChunkSeconds
-                ),
-                StudyRecord.create(
-                        timerRun.getCohortMembershipId(),
-                        boundary,
-                        recordEndedAt,
-                        secondChunkSeconds
-                )
-        );
-    }
 }

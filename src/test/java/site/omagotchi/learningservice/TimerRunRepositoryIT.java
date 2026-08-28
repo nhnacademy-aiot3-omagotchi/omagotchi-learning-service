@@ -5,6 +5,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -28,6 +30,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -111,6 +114,27 @@ class TimerRunRepositoryIT {
                     () -> assertEquals(3_600L, ended.getMeasuredSeconds()),
                     () -> assertEquals(TimerEndReason.STOP, ended.getEndReason()),
                     () -> assertEquals(active.getCreatedAt(), ended.getCreatedAt())
+            );
+        }
+
+        @Test
+        @DisplayName("겹침 종료 상태 저장")
+        void persistsOverlapEndState() {
+            TimerRun timerRun = timerRunRepository.create(
+                    TimerRun.start(COHORT_MEMBERSHIP_ID, STARTED_AT)
+            );
+            timerRun.stopOrExpire(ENDED_AT, TIME_POLICY);
+            timerRun.rejectStudyRecordDueToOverlap();
+
+            timerRunRepository.end(timerRun);
+
+            TimerRun overlapped = timerRunQueryRepository
+                    .findOwnedById(timerRun.getId(), COHORT_MEMBERSHIP_ID)
+                    .orElseThrow();
+            assertAll(
+                    () -> assertEquals(ENDED_AT, overlapped.getEndedAt()),
+                    () -> assertEquals(TimerEndReason.OVERLAP, overlapped.getEndReason()),
+                    () -> assertNull(overlapped.getMeasuredSeconds())
             );
         }
 
@@ -240,7 +264,7 @@ class TimerRunRepositoryIT {
         }
 
         @ParameterizedTest(name = "{0} 사유")
-        @ValueSource(strings = {"STOP", "DISCARD", "EXPIRED"})
+        @ValueSource(strings = {"STOP", "OVERLAP", "DISCARD", "EXPIRED"})
         @DisplayName("종료 시각 없는 종료 사유 저장 거절")
         void rejectsEndReasonWithoutEndTime(String endReason) {
             String sql = """
@@ -266,92 +290,15 @@ class TimerRunRepositoryIT {
             );
         }
 
-        @Test
-        @DisplayName("계약에 없는 종료 사유 저장 거절")
-        void rejectsUnknownEndReason() {
-            String sql = """
-                    INSERT INTO learning_service.timer_runs (
-                        id,
-                        cohort_membership_id,
-                        started_at,
-                        ended_at,
-                        end_reason
-                    ) VALUES (?, ?, ?, ?, 'UNKNOWN')
-                    """;
-            UUID timerRunId = UUID.fromString("00000000-0000-0000-0000-000000000104");
-            OffsetDateTime startedAt = OffsetDateTime.parse("2000-01-01T00:00:00Z");
-            OffsetDateTime endedAt = OffsetDateTime.parse("2000-01-01T01:00:00Z");
-
-            assertThrows(
-                    DataIntegrityViolationException.class,
-                    () -> jdbcTemplate.update(
-                            sql,
-                            timerRunId,
-                            COHORT_MEMBERSHIP_ID,
-                            startedAt,
-                            endedAt
-                    )
-            );
-        }
-
-        @Test
-        @DisplayName("종료 사유 없는 종료 실행 저장 거절")
-        void rejectsEndTimeWithoutEndReason() {
-            String sql = """
-                    INSERT INTO learning_service.timer_runs (
-                        id,
-                        cohort_membership_id,
-                        started_at,
-                        ended_at
-                    ) VALUES (?, ?, ?, ?)
-                    """;
-            UUID timerRunId = UUID.fromString("00000000-0000-0000-0000-000000000105");
-            OffsetDateTime startedAt = OffsetDateTime.parse("2000-01-01T00:00:00Z");
-            OffsetDateTime endedAt = OffsetDateTime.parse("2000-01-01T01:00:00Z");
-
-            assertThrows(
-                    DataIntegrityViolationException.class,
-                    () -> jdbcTemplate.update(
-                            sql,
-                            timerRunId,
-                            COHORT_MEMBERSHIP_ID,
-                            startedAt,
-                            endedAt
-                    )
-            );
-        }
-
-        @Test
-        @DisplayName("측정 시간 없는 정지 상태 저장 거절")
-        void rejectsStoppedStateWithoutMeasuredSeconds() {
-            String sql = """
-                    INSERT INTO learning_service.timer_runs (
-                        id,
-                        cohort_membership_id,
-                        started_at,
-                        ended_at,
-                        end_reason
-                    ) VALUES (?, ?, ?, ?, 'STOP')
-                    """;
-            UUID timerRunId = UUID.fromString("00000000-0000-0000-0000-000000000106");
-            OffsetDateTime startedAt = OffsetDateTime.parse("2000-01-01T00:00:00Z");
-            OffsetDateTime endedAt = OffsetDateTime.parse("2000-01-01T01:00:00Z");
-
-            assertThrows(
-                    DataIntegrityViolationException.class,
-                    () -> jdbcTemplate.update(
-                            sql,
-                            timerRunId,
-                            COHORT_MEMBERSHIP_ID,
-                            startedAt,
-                            endedAt
-                    )
-            );
-        }
-
-        @Test
-        @DisplayName("경과 시간을 초과한 정지 측정 시간 저장 거절")
-        void rejectsStoppedStateWhenMeasuredSecondsExceedsElapsedTime() {
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("invalidEndStates")
+        @DisplayName("유효하지 않은 종료 상태 저장 거절")
+        void rejectsInvalidEndState(
+                String ignoredDescription,
+                OffsetDateTime endedAt,
+                Long measuredSeconds,
+                String endReason
+        ) {
             String sql = """
                     INSERT INTO learning_service.timer_runs (
                         id,
@@ -360,11 +307,10 @@ class TimerRunRepositoryIT {
                         ended_at,
                         measured_seconds,
                         end_reason
-                    ) VALUES (?, ?, ?, ?, 3600, 'STOP')
+                    ) VALUES (?, ?, ?, ?, ?, ?)
                     """;
-            UUID timerRunId = UUID.fromString("00000000-0000-0000-0000-000000000107");
+            UUID timerRunId = UUID.fromString("00000000-0000-0000-0000-000000000104");
             OffsetDateTime startedAt = OffsetDateTime.parse("2000-01-01T00:00:00Z");
-            OffsetDateTime endedAt = OffsetDateTime.parse("2000-01-01T00:01:00Z");
 
             assertThrows(
                     DataIntegrityViolationException.class,
@@ -373,13 +319,47 @@ class TimerRunRepositoryIT {
                             timerRunId,
                             COHORT_MEMBERSHIP_ID,
                             startedAt,
-                            endedAt
+                            endedAt,
+                            measuredSeconds,
+                            endReason
+                    )
+            );
+        }
+
+        private static Stream<Arguments> invalidEndStates() {
+            OffsetDateTime oneMinuteAfterStart = OffsetDateTime.parse("2000-01-01T00:01:00Z");
+            OffsetDateTime oneHourAfterStart = OffsetDateTime.parse("2000-01-01T01:00:00Z");
+
+            return Stream.of(
+                    Arguments.of(
+                            "계약에 없는 종료 사유",
+                            oneHourAfterStart,
+                            null,
+                            "UNKNOWN"
+                    ),
+                    Arguments.of(
+                            "종료 사유 없는 종료 실행",
+                            oneHourAfterStart,
+                            null,
+                            null
+                    ),
+                    Arguments.of(
+                            "측정 시간 없는 정지 상태",
+                            oneHourAfterStart,
+                            null,
+                            "STOP"
+                    ),
+                    Arguments.of(
+                            "경과 시간을 초과한 정지 측정 시간",
+                            oneMinuteAfterStart,
+                            3_600L,
+                            "STOP"
                     )
             );
         }
 
         @ParameterizedTest(name = "{0} 상태")
-        @ValueSource(strings = {"DISCARD", "EXPIRED"})
+        @ValueSource(strings = {"OVERLAP", "DISCARD", "EXPIRED"})
         @DisplayName("측정 시간 있는 미기록 종료 상태 저장 거절")
         void rejectsUnrecordedEndStateWithMeasuredSeconds(String endReason) {
             String sql = """

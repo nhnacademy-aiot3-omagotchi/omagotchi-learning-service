@@ -86,26 +86,32 @@ class StudyRecordTest {
         }
 
         @Test
-        @DisplayName("분 정밀도 위반 예외")
-        void rejectsNonMinuteAlignedTime() {
+        @DisplayName("초 정밀도 기록 허용")
+        void acceptsSecondAlignedTime() {
+            StudyRecord studyRecord = StudyRecord.create(
+                    COHORT_MEMBERSHIP_ID,
+                    START_TIME.plusSeconds(1),
+                    END_TIME,
+                    3_599L
+            );
+
             assertAll(
-                    () -> assertThrows(
-                            IllegalArgumentException.class,
-                            () -> StudyRecord.create(
-                                    COHORT_MEMBERSHIP_ID,
-                                    START_TIME.plusSeconds(1),
-                                    END_TIME,
-                                    3_599L
-                            )
-                    ),
-                    () -> assertThrows(
-                            IllegalArgumentException.class,
-                            () -> StudyRecord.create(
-                                    COHORT_MEMBERSHIP_ID,
-                                    START_TIME,
-                                    END_TIME.plusNanos(1),
-                                    3_600L
-                            )
+                    () -> assertEquals(START_TIME.plusSeconds(1), studyRecord.getStartTime()),
+                    () -> assertEquals(END_TIME, studyRecord.getEndTime()),
+                    () -> assertEquals(3_599L, studyRecord.getStudySeconds())
+            );
+        }
+
+        @Test
+        @DisplayName("초 미만 정밀도 위반 예외")
+        void rejectsSubSecondPrecision() {
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> StudyRecord.create(
+                            COHORT_MEMBERSHIP_ID,
+                            START_TIME,
+                            END_TIME.plusNanos(1),
+                            3_600L
                     )
             );
         }

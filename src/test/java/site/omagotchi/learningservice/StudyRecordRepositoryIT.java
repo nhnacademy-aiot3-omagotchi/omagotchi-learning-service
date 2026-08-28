@@ -238,8 +238,8 @@ class StudyRecordRepositoryIT {
     class TimePrecisionConstraint {
 
         @Test
-        @DisplayName("분 미만 정밀도 저장 거절")
-        void rejectsSubMinutePrecision() {
+        @DisplayName("초 미만 정밀도 저장 거절")
+        void rejectsSubSecondPrecision() {
             assertThrows(
                     DataIntegrityViolationException.class,
                     () -> jdbcTemplate.update("""
@@ -258,6 +258,27 @@ class StudyRecordRepositoryIT {
                             OffsetDateTime.parse("2000-01-01T01:00:00.001Z"),
                             OffsetDateTime.parse("2000-01-01T02:00:00Z"),
                             3_600L
+                    )
+            );
+        }
+
+        @Test
+        @DisplayName("초 정밀도 저장 허용")
+        void allowsSecondPrecision() {
+            StudyRecord saved = saveRecord(
+                    101L,
+                    "2000-01-01T01:00:01Z",
+                    "2000-01-01T02:00:01Z"
+            );
+
+            assertAll(
+                    () -> assertEquals(
+                            Instant.parse("2000-01-01T01:00:01Z"),
+                            saved.getStartTime()
+                    ),
+                    () -> assertEquals(
+                            Instant.parse("2000-01-01T02:00:01Z"),
+                            saved.getEndTime()
                     )
             );
         }

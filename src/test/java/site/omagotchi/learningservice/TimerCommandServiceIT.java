@@ -168,8 +168,8 @@ class TimerCommandServiceIT {
     }
 
     @Test
-    @DisplayName("타이머 초 정밀도와 공부 기록 분 정밀도 저장")
-    void persistsTimerAtSecondsAndStudyRecordAtMinutes() {
+    @DisplayName("타이머와 공부 기록을 실제 초 정밀도로 저장")
+    void persistsTimerAndStudyRecordAtSeconds() {
         Instant startedAt = Instant.parse("2000-01-01T00:00:20Z");
         Instant endedAt = Instant.parse("2000-01-01T00:01:40Z");
         given(clock.instant()).willReturn(startedAt);
@@ -204,16 +204,95 @@ class TimerCommandServiceIT {
                 () -> assertEquals(endedAt, endedTimer.getEndedAt()),
                 () -> assertEquals(0, endedTimer.getStartedAt().getNano()),
                 () -> assertEquals(0, endedTimer.getEndedAt().getNano()),
-                () -> assertEquals(
-                        Instant.parse("2000-01-01T00:00:00Z"),
-                        studyRecord.getStartTime()
-                ),
-                () -> assertEquals(
-                        Instant.parse("2000-01-01T00:02:00Z"),
-                        studyRecord.getEndTime()
-                ),
+                () -> assertEquals(startedAt, studyRecord.getStartTime()),
+                () -> assertEquals(endedAt, studyRecord.getEndTime()),
                 () -> assertEquals(80L, studyRecord.getStudySeconds()),
                 () -> assertEquals(1, receiptCount)
+        );
+    }
+
+    @Test
+    @DisplayName("초 단위로 연속 실행한 타이머의 공부 기록 구간은 겹치지 않음")
+    void doesNotOverlapRecordsForConsecutiveTimers() {
+        Instant firstStartedAt = Instant.parse("2000-01-01T00:00:50Z");
+        Instant firstEndedAt = Instant.parse("2000-01-01T00:02:10Z");
+
+        // firstEndedAt = secondStartedAt
+        Instant secondStartedAt = Instant.parse("2000-01-01T00:02:10Z");
+        Instant secondEndedAt = Instant.parse("2000-01-01T00:04:00Z");
+
+        given(clock.instant()).willReturn(firstStartedAt);
+        TimerStateResult firstTimer = timerCommandService.start(USER_ID, COHORT_ID);
+
+        given(clock.instant()).willReturn(firstEndedAt);
+        timerCommandService.stop(USER_ID, COHORT_ID, firstTimer.timerRunId());
+
+        given(clock.instant()).willReturn(secondStartedAt);
+        TimerStateResult secondTimer = timerCommandService.start(USER_ID, COHORT_ID);
+
+        given(clock.instant()).willReturn(secondEndedAt);
+        timerCommandService.stop(USER_ID, COHORT_ID, secondTimer.timerRunId());
+
+        List<StudyRecord> records = studyRecordJpaRepository.findAll().stream()
+                .sorted(Comparator.comparing(StudyRecord::getStartTime))
+                .toList();
+        assertAll(
+                () -> assertEquals(2, records.size()),
+                () -> assertEquals(
+                        firstStartedAt,
+                        records.get(0).getStartTime()
+                ),
+                () -> assertEquals(
+                        firstEndedAt,
+                        records.get(0).getEndTime()
+                ),
+                () -> assertEquals(records.get(0).getEndTime(), records.get(1).getStartTime()),
+                () -> assertEquals(
+                        Instant.parse("2000-01-01T00:04:00Z"),
+                        records.get(1).getEndTime()
+                ),
+                () -> assertEquals(80L, records.get(0).getStudySeconds()),
+                () -> assertEquals(110L, records.get(1).getStudySeconds())
+        );
+    }
+
+    @Test
+    @DisplayName("기존 공부 기록과 겹치면 기록을 추가하지 않고 OVERLAP으로 종료")
+    void endsTimerAsOverlapWithoutCreatingStudyRecord() {
+        TimerRun timerRun = saveRunningTimer(SINGLE_RECORD_STARTED_AT);
+        Instant existingStartedAt = SINGLE_RECORD_STARTED_AT.plusSeconds(600L);
+        Instant existingEndedAt = SINGLE_RECORD_STARTED_AT.plusSeconds(1_200L);
+        StudyRecord existingRecord = studyRecordJpaRepository.saveAndFlush(
+                StudyRecord.create(
+                        COHORT_MEMBERSHIP_ID,
+                        existingStartedAt,
+                        existingEndedAt,
+                        600L
+                )
+        );
+        given(clock.instant()).willReturn(SINGLE_RECORD_ENDED_AT);
+
+        timerCommandService.stop(
+                USER_ID,
+                COHORT_ID,
+                timerRun.getId()
+        );
+
+        TimerRun endedTimer = timerRunJpaRepository.findById(timerRun.getId()).orElseThrow();
+        List<StudyRecord> records = studyRecordJpaRepository.findAll();
+        Integer outboxCount = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM learning_service.gamification_event_outbox
+                WHERE event_type = 'STUDY_COMPLETED'
+                  AND source_id = ?
+                """, Integer.class, timerRun.getId().toString());
+        assertAll(
+                () -> assertEquals(TimerEndReason.OVERLAP, endedTimer.getEndReason()),
+                () -> assertEquals(SINGLE_RECORD_ENDED_AT, endedTimer.getEndedAt()),
+                () -> assertNull(endedTimer.getMeasuredSeconds()),
+                () -> assertEquals(1, records.size()),
+                () -> assertEquals(existingRecord.getId(), records.getFirst().getId()),
+                () -> assertEquals(0, outboxCount)
         );
     }
 

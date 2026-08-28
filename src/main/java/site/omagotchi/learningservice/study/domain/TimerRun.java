@@ -93,6 +93,16 @@ public class TimerRun {
         return endTimer(currentAt, null, TimerEndReason.DISCARD);
     }
 
+    public TimerEndReason rejectStudyRecordDueToOverlap() {
+        if (endReason != TimerEndReason.STOP) {
+            throw new IllegalStateException("정상 정지된 타이머만 겹침 종료로 변경할 수 있습니다.");
+        }
+
+        measuredSeconds = null;
+        endReason = TimerEndReason.OVERLAP;
+        return endReason;
+    }
+
     public boolean expireIfDue(
             Instant currentAt,
             TimerTimePolicy timePolicy

@@ -12,6 +12,7 @@ public record StudyPatternToolResponse(
         long longestSessionMinutes,
         String typicalStartTime, // status가 OK일 때만 값이 있음
         Integer bestStartHour,   // status가 OK일 때만 값이 있음
+        int focusDensityPercent, // 몰입 밀도: 앉은 시간 중 실제 공부 비율
         int currentStreakDays
 ) {
     public static StudyPatternToolResponse from(StudyPatternResult result) {
@@ -25,6 +26,7 @@ public record StudyPatternToolResponse(
                 result.longestSessionMinutes(),
                 result.typicalStartTime(),
                 result.bestStartHour(),
+                result.focusDensityPercent(),
                 result.currentStreakDays()
         );
     }

@@ -247,6 +247,29 @@ public class StudyRecordQueryDslRepository implements StudyRecordQueryRepository
                 .fetch();
     }
 
+    /*
+     * SELECT sr.*
+     * FROM learning_service.study_records sr
+     * WHERE sr.cohort_membership_id IN (:cohortMembershipIds)
+     *   AND sr.aggregation_date BETWEEN :startDate AND :endDateInclusive
+     *   AND sr.deleted_at IS NULL;
+     */
+    @Override
+    public List<StudyRecord> findActiveRecordsBetweenForMemberships(
+            Collection<Long> cohortMembershipIds,
+            LocalDate startDate,
+            LocalDate endDateInclusive
+    ) {
+        return queryFactory
+                .selectFrom(studyRecord)
+                .where(
+                        studyRecord.cohortMembershipId.in(cohortMembershipIds),
+                        studyRecord.aggregationDate.between(startDate, endDateInclusive),
+                        studyRecord.deletedAt.isNull()
+                )
+                .fetch();
+    }
+
     private BooleanExpression activeRecordOfMembership(Long cohortMembershipId) {
         return studyRecord.cohortMembershipId.eq(cohortMembershipId)
                 .and(studyRecord.deletedAt.isNull());

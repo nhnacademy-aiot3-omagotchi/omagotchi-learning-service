@@ -49,5 +49,11 @@ public interface StudyRecordQueryRepository {
             LocalDate endDateInclusive
     );
 
+    List<StudyRecord> findActiveRecordsBetweenForMemberships(
+            Collection<Long> cohortMembershipIds,
+            LocalDate startDate,
+            LocalDate endDateInclusive
+    );
+
     StudyProfileSummaryResult summarizeActiveRecords(Long cohortMembershipId);
 }

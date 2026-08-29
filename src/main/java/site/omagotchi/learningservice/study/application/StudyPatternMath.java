@@ -4,6 +4,7 @@ import site.omagotchi.learningservice.global.util.DateTimePolicy;
 
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -28,17 +29,31 @@ final class StudyPatternMath {
 
     /** 이동된 분 목록의 중앙값을 "HH:mm"으로 돌려준다. 짝수 개면 가운데 두 값의 평균. */
     static String medianStartTime(List<Integer> shiftedMinutes) {
-        Collections.sort(shiftedMinutes);
-        int size = shiftedMinutes.size();
+        if (shiftedMinutes.isEmpty()) {
+            throw new IllegalArgumentException("shiftedMinutes는 비어 있을 수 없습니다");
+        }
+        // 호출자가 넘긴 리스트를 바꾸지 않도록 사본을 정렬한다
+        List<Integer> sorted = new ArrayList<>(shiftedMinutes);
+        Collections.sort(sorted);
+        int size = sorted.size();
         int median;
         if (size % 2 == 1) {
-            median = shiftedMinutes.get(size / 2);
+            median = sorted.get(size / 2);
         } else {
-            int lower = shiftedMinutes.get(size / 2 - 1);
-            int upper = shiftedMinutes.get(size / 2);
+            int lower = sorted.get(size / 2 - 1);
+            int upper = sorted.get(size / 2);
             median = (lower + upper) / 2;
         }
         int minutesOfDay = (median + RESET_MINUTES) % 1440;
         return String.format("%02d:%02d", minutesOfDay / 60, minutesOfDay % 60);
+    }
+
+    /** 앉아 있던 시간 중 실제 공부한 비율(0~100). 분모가 0이면 0을 돌려준다. */
+    static int focusDensityPercent(long totalStudySeconds, long totalOccupiedSeconds) {
+        if (totalOccupiedSeconds <= 0) {
+            return 0;
+        }
+        // 100을 먼저 곱해야 정수 나눗셈에서 0이 되지 않는다. 상한 100으로 계약을 지킨다
+        return (int) Math.min(100L, totalStudySeconds * 100 / totalOccupiedSeconds);
     }
 }

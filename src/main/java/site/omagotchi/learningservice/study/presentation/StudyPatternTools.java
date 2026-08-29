@@ -40,7 +40,8 @@ public class StudyPatternTools implements AiToolProvider {
               시작 시각을 추천할 때 사용하세요.
             - averageSessionMinutes가 짧고 sessionCount가 많으면 공부가 잘게 끊기고 있다는
               신호입니다. 몰입 블록을 만들라고 조언할 근거로 쓰세요.
-            - focusDensityPercent: 앉아 있던 시간 중 실제 공부한 비율입니다. 총 시간보다
+            - focusDensityPercent: 앉아 있던 시간 중 실제 공부한 비율입니다. status가 "OK"일
+              때만 의미가 있습니다(NO_DATA면 0이 내려오니 언급하지 마세요). 총 시간보다
               이 값을 먼저 보세요. 낮으면(70% 미만) "더 오래"가 아니라 "끊김을 줄이라"고
               조언하세요.
             - 응답에 없는 값(과목, 장소, 집중도 등)은 지어내지 마세요.

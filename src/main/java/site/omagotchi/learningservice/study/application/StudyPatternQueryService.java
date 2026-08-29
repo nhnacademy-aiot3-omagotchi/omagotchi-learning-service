@@ -81,8 +81,7 @@ public class StudyPatternQueryService {
                 longestSessionSeconds / 60,
                 typicalStartTime(byDate),
                 bestStartHour(records),
-                // 몰입 밀도: 100을 먼저 곱해야 정수 나눗셈에서 0이 되지 않는다
-                (int) (totalStudySeconds * 100 / totalOccupiedSeconds),
+                StudyPatternMath.focusDensityPercent(totalStudySeconds, totalOccupiedSeconds),
                 currentStreakDays(byDate.keySet(), today)
         );
     }

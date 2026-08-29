@@ -150,7 +150,7 @@ public class TopLearnerPatternQueryService {
                 totalStudySeconds / 60 / totalStudyDays,        // 공부한 날 하루 평균 분
                 (int) Math.round((double) totalStudyDays / topGroupSize),           // 1인당 평균 학습일 (반올림)
                 totalStudySeconds / topRecords.size() / 60,                         // 평균 세션 길이(분)
-                (int) (totalStudySeconds * 100 / totalOccupiedSeconds),             // 몰입 밀도(%)
+                StudyPatternMath.focusDensityPercent(totalStudySeconds, totalOccupiedSeconds), // 몰입 밀도(%)
                 StudyPatternMath.medianStartTime(shiftedMinutes),                   // 대표 시작 시각 "HH:mm"
                 myPattern                                                           // 내 패턴은 계산 없이 동봉
         );

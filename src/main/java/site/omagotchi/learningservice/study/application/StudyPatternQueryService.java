@@ -12,11 +12,9 @@ import site.omagotchi.learningservice.study.application.result.StudyPatternResul
 import site.omagotchi.learningservice.study.domain.StudyRecord;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,12 +26,9 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class StudyPatternQueryService {
 
-    private static final int DEFAULT_PERIOD_DAYS = 14;
+    private static final int DEFAULT_PERIOD_DAYS = 30;
     private static final int MIN_PERIOD_DAYS = 1;
     private static final int MAX_PERIOD_DAYS = 90;
-    // 시간대와 리셋 시각은 전역 정책(DateTimePolicy)을 단일 출처로 쓴다
-    private static final ZoneId ZONE_ID = DateTimePolicy.ZONE_ID;
-    private static final int RESET_MINUTES = DateTimePolicy.DAILY_RESET_TIME.toSecondOfDay() / 60;
 
     private final CohortAccessService cohortAccessService;
     private final StudyRecordQueryRepository studyRecordQueryRepository;
@@ -63,11 +58,14 @@ public class StudyPatternQueryService {
             daily.add(record);
         }
 
-        // 총 공부 시간과 최장 세션을 한 바퀴에 계산한다
+        // 총 공부 시간·앉아 있던 시간·최장 세션을 한 바퀴에 계산한다
         long totalStudySeconds = 0;
+        long totalOccupiedSeconds = 0;
         long longestSessionSeconds = 0;
         for (StudyRecord record : records) {
             totalStudySeconds = totalStudySeconds + record.getStudySeconds();
+            totalOccupiedSeconds = totalOccupiedSeconds
+                    + Duration.between(record.getStartTime(), record.getEndTime()).getSeconds();
             if (record.getStudySeconds() > longestSessionSeconds) {
                 longestSessionSeconds = record.getStudySeconds();
             }
@@ -83,6 +81,7 @@ public class StudyPatternQueryService {
                 longestSessionSeconds / 60,
                 typicalStartTime(byDate),
                 bestStartHour(records),
+                StudyPatternMath.focusDensityPercent(totalStudySeconds, totalOccupiedSeconds),
                 currentStreakDays(byDate.keySet(), today)
         );
     }
@@ -110,27 +109,10 @@ public class StudyPatternQueryService {
                     first = record;
                 }
             }
-
-            LocalTime time = first.getStartTime().atZone(ZONE_ID).toLocalTime();
-            int minutesOfDay = time.getHour() * 60 + time.getMinute();
-            // 새벽 0~4시 시작은 "그날의 늦은 밤"으로 취급되도록 4시 원점으로 이동
-            shiftedMinutes.add((minutesOfDay - RESET_MINUTES + 1440) % 1440);
+            shiftedMinutes.add(StudyPatternMath.toShiftedMinutes(first.getStartTime()));
         }
 
-        Collections.sort(shiftedMinutes);
-        int size = shiftedMinutes.size();
-        int median;
-        if (size % 2 == 1) {
-            // 홀수 개면 정확히 가운데 값
-            median = shiftedMinutes.get(size / 2);
-        } else {
-            // 짝수 개면 가운데 두 값의 평균
-            int lower = shiftedMinutes.get(size / 2 - 1);
-            int upper = shiftedMinutes.get(size / 2);
-            median = (lower + upper) / 2;
-        }
-        int minutesOfDay = (median + RESET_MINUTES) % 1440;
-        return String.format("%02d:%02d", minutesOfDay / 60, minutesOfDay % 60);
+        return StudyPatternMath.medianStartTime(shiftedMinutes);
     }
 
     /** 세션의 공부 시간을 시작 시각대에 귀속시켜, 시작 성과가 가장 좋은 시각대를 찾는다. */
@@ -138,7 +120,7 @@ public class StudyPatternQueryService {
         // 시각대 → 누적 공부 초
         Map<Integer, Long> secondsByHour = new HashMap<>();
         for (StudyRecord record : records) {
-            int hour = record.getStartTime().atZone(ZONE_ID).getHour();
+            int hour = record.getStartTime().atZone(DateTimePolicy.ZONE_ID).getHour();
             Long accumulated = secondsByHour.get(hour);
             if (accumulated == null) {
                 accumulated = 0L;

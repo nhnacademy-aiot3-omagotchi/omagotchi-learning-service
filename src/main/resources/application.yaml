@@ -189,6 +189,9 @@ clients:
   identity:
     username: ${LEARNING_IDENTITY_USERNAME}
     password: ${LEARNING_IDENTITY_PASSWORD}
+  prediction:
+    username: ${LEARNING_PREDICTION_USERNAME}
+    password: ${LEARNING_PREDICTION_PASSWORD}
 
 sensor:
   series:

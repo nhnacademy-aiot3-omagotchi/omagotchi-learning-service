@@ -85,6 +85,9 @@ clients:
   identity:
     username: learning-service
     password: test-only-learning-identity-password
+  prediction:
+    username: learning-service
+    password: test-only-learning-prediction-password
 
 sensor:
   influx:

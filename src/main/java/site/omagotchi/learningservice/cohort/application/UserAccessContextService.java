@@ -3,6 +3,8 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.cohort.application.port.CohortMembershipQuery;
+import site.omagotchi.learningservice.cohort.application.port.CohortPersistence;
 import site.omagotchi.learningservice.cohort.application.result.CohortAccessSummary;
 import site.omagotchi.learningservice.cohort.application.result.UserAccessContextResult;
 import site.omagotchi.learningservice.cohort.application.result.UserAccessType;
@@ -11,8 +13,6 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 
 import java.util.LinkedHashSet;
@@ -30,8 +30,8 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class UserAccessContextService {
 
-    private final CohortMembershipRepository membershipRepository;
-    private final CohortRepository cohortRepository;
+    private final CohortMembershipQuery membershipQuery;
+    private final CohortPersistence cohortPersistence;
 
     public UserAccessContextResult getContext(UUID userId, GlobalRole globalRole) {
         if (globalRole == GlobalRole.SYSTEM_ADMIN) {
@@ -43,13 +43,13 @@ public class UserAccessContextService {
             );
         }
 
-        List<CohortMembership> currentMemberships = membershipRepository
+        List<CohortMembership> currentMemberships = membershipQuery
                 .findByUserIdOrderByRequestedAtDesc(userId)
                 .stream()
                 .filter(this::isCurrent)
                 .toList();
 
-        Map<Long, Cohort> cohortsById = cohortRepository.findAllById(
+        Map<Long, Cohort> cohortsById = cohortPersistence.findAllById(
                         currentMemberships.stream()
                                 .map(CohortMembership::getCohortId)
                                 .collect(Collectors.toCollection(LinkedHashSet::new))

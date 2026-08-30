@@ -6,6 +6,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import site.omagotchi.learningservice.cohort.application.port.CohortMembershipQuery;
+import site.omagotchi.learningservice.cohort.application.port.CohortPersistence;
 import site.omagotchi.learningservice.cohort.application.result.UserAccessContextResult;
 import site.omagotchi.learningservice.cohort.application.result.UserAccessType;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
@@ -13,8 +15,6 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 
 import java.time.LocalDate;
@@ -36,10 +36,10 @@ class UserAccessContextServiceTest {
     private static final UUID USER_ID = UUID.fromString("019d2a48-80c0-4eb7-a51d-8a427525a7d3");
 
     @Mock
-    private CohortMembershipRepository membershipRepository;
+    private CohortMembershipQuery membershipQuery;
 
     @Mock
-    private CohortRepository cohortRepository;
+    private CohortPersistence cohortPersistence;
 
     @InjectMocks
     private UserAccessContextService service;
@@ -52,8 +52,8 @@ class UserAccessContextServiceTest {
         assertEquals(UserAccessType.SYSTEM_ADMIN, result.accessType());
         assertEquals(List.of(), result.managedCohorts());
         assertEquals(List.of(), result.studentCohorts());
-        verify(membershipRepository, never()).findByUserIdOrderByRequestedAtDesc(any());
-        verify(cohortRepository, never()).findAllById(any());
+        verify(membershipQuery, never()).findByUserIdOrderByRequestedAtDesc(any());
+        verify(cohortPersistence, never()).findAllById(any());
     }
 
     @Test
@@ -71,14 +71,14 @@ class UserAccessContextServiceTest {
                 OffsetDateTime.now()
         );
 
-        when(membershipRepository.findByUserIdOrderByRequestedAtDesc(USER_ID))
+        when(membershipQuery.findByUserIdOrderByRequestedAtDesc(USER_ID))
                 .thenReturn(List.of(
                         activeManager,
                         activeStudent,
                         closedManager,
                         endedManager
                 ));
-        when(cohortRepository.findAllById(any()))
+        when(cohortPersistence.findAllById(any()))
                 .thenReturn(List.of(preparing, activeStudentCohort, closed));
 
         UserAccessContextResult result = service.getContext(USER_ID, GlobalRole.USER);
@@ -98,9 +98,9 @@ class UserAccessContextServiceTest {
     void resolvesStudent() {
         Cohort active = cohort(2L, "학생 기수", CohortStatus.ACTIVE);
         CohortMembership activeStudent = membership(2L, CohortMembershipRole.STUDENT, null);
-        when(membershipRepository.findByUserIdOrderByRequestedAtDesc(USER_ID))
+        when(membershipQuery.findByUserIdOrderByRequestedAtDesc(USER_ID))
                 .thenReturn(List.of(activeStudent));
-        when(cohortRepository.findAllById(any())).thenReturn(List.of(active));
+        when(cohortPersistence.findAllById(any())).thenReturn(List.of(active));
 
         UserAccessContextResult result = service.getContext(USER_ID, GlobalRole.USER);
 
@@ -114,9 +114,9 @@ class UserAccessContextServiceTest {
     @Test
     @DisplayName("현재 소속이 없으면 일반 사용자 접근으로 판정한다")
     void resolvesUserWithoutCurrentMembership() {
-        when(membershipRepository.findByUserIdOrderByRequestedAtDesc(USER_ID))
+        when(membershipQuery.findByUserIdOrderByRequestedAtDesc(USER_ID))
                 .thenReturn(List.of());
-        when(cohortRepository.findAllById(any())).thenReturn(List.of());
+        when(cohortPersistence.findAllById(any())).thenReturn(List.of());
 
         UserAccessContextResult result = service.getContext(USER_ID, GlobalRole.USER);
 

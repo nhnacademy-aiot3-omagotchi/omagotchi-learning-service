@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import site.omagotchi.learningservice.environment.application.port.ActionNotificationSender;
 import site.omagotchi.learningservice.global.util.DateTimePolicy;
-import site.omagotchi.learningservice.rule.domain.Operator;
+import site.omagotchi.learningservice.sensor.domain.Operator;
 import site.omagotchi.learningservice.telegram.application.TelegramNotificationService;
 
 import java.time.Duration;

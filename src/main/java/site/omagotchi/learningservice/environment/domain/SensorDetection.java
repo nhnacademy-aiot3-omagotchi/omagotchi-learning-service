@@ -1,6 +1,6 @@
 package site.omagotchi.learningservice.environment.domain;
 
-import site.omagotchi.learningservice.rule.domain.Operator;
+import site.omagotchi.learningservice.sensor.domain.Operator;
 
 import java.time.Instant;
 import java.util.Objects;

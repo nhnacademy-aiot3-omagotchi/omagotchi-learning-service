@@ -8,7 +8,7 @@ import site.omagotchi.learningservice.environment.application.port.ActionNotific
 import site.omagotchi.learningservice.environment.application.result.IotActionResult;
 import site.omagotchi.learningservice.environment.domain.IotAction;
 import site.omagotchi.learningservice.environment.domain.SensorDetection;
-import site.omagotchi.learningservice.rule.application.SensorDeviceService;
+import site.omagotchi.learningservice.sensor.application.SensorDeviceService;
 import site.omagotchi.learningservice.space.application.SpaceCohortQueryService;
 
 import java.time.Clock;

@@ -7,7 +7,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.rule.application.SensorDeviceService;
 import site.omagotchi.learningservice.sensor.application.port.SpaceSeriesRepository;
 import site.omagotchi.learningservice.sensor.application.result.SensorRef;
 import site.omagotchi.learningservice.sensor.application.result.SpaceSeries;

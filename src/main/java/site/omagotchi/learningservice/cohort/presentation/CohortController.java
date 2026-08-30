@@ -16,6 +16,8 @@ import site.omagotchi.learningservice.cohort.application.CohortService;
 import site.omagotchi.learningservice.cohort.application.result.IssuedJoinCodeResponse;
 import site.omagotchi.learningservice.cohort.application.result.JoinCodeResponse;
 import site.omagotchi.learningservice.cohort.application.JoinCodeService;
+import site.omagotchi.learningservice.cohort.application.UserAccessContextService;
+import site.omagotchi.learningservice.cohort.application.result.UserAccessContextResult;
 import site.omagotchi.learningservice.cohort.presentation.dto.request.AssignCohortManagerRequest;
 import site.omagotchi.learningservice.cohort.presentation.dto.request.ChangeCohortMemberRoleRequest;
 import site.omagotchi.learningservice.cohort.presentation.dto.request.ChangeCohortStatusRequest;
@@ -42,6 +44,7 @@ public class CohortController {
     private final CohortMembershipService membershipService;
     private final CohortManagerService managerService;
     private final CohortAttendancePolicyService attendancePolicyService;
+    private final UserAccessContextService userAccessContextService;
 
     @PostMapping
     public CohortResponse create(
@@ -63,6 +66,14 @@ public class CohortController {
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return cohortService.getAdminSummaries(user.globalRole());
+    }
+
+    @GetMapping("/me/access-context")
+    public UserAccessContextResult getMyAccessContext(
+            JwtAuthenticationToken authentication
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        return userAccessContextService.getContext(user.userId(), user.globalRole());
     }
 
     @GetMapping("/{cohortId}")

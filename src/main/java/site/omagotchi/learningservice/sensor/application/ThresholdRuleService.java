@@ -17,10 +17,7 @@ import site.omagotchi.learningservice.sensor.application.result.ApplySpaceThresh
 import site.omagotchi.learningservice.sensor.application.result.SpaceThresholdResult;
 import site.omagotchi.learningservice.sensor.application.result.SpaceThresholdResult.MetricThresholdResult;
 import site.omagotchi.learningservice.sensor.application.result.UpdateThresholdRuleResult;
-import site.omagotchi.learningservice.sensor.domain.ChangeType;
-import site.omagotchi.learningservice.sensor.domain.SensorDevice;
-import site.omagotchi.learningservice.sensor.domain.ThresholdRule;
-import site.omagotchi.learningservice.sensor.domain.ThresholdRuleHistory;
+import site.omagotchi.learningservice.sensor.domain.*;
 
 import java.util.*;
 

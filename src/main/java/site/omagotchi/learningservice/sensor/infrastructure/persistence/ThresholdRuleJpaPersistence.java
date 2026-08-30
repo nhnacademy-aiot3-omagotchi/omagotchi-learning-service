@@ -5,7 +5,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.sensor.application.SensorErrorCode;
+import site.omagotchi.learningservice.sensor.domain.SensorErrorCode;
 import site.omagotchi.learningservice.sensor.application.port.ThresholdRuleRepository;
 import site.omagotchi.learningservice.sensor.domain.ThresholdRule;
 

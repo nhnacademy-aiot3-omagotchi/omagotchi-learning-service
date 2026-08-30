@@ -10,6 +10,7 @@ import site.omagotchi.learningservice.sensor.application.command.UpdateSensorDev
 import site.omagotchi.learningservice.sensor.application.port.SensorDeviceRepository;
 import site.omagotchi.learningservice.sensor.application.result.SensorDeviceResult;
 import site.omagotchi.learningservice.sensor.domain.SensorDevice;
+import site.omagotchi.learningservice.sensor.domain.SensorErrorCode;
 import site.omagotchi.learningservice.space.application.SpaceAccessService;
 
 import java.util.*;

@@ -12,8 +12,8 @@ import site.omagotchi.learningservice.environment.application.result.IotActionRe
 import site.omagotchi.learningservice.environment.domain.IotAction;
 import site.omagotchi.learningservice.environment.domain.SensorDetection;
 import site.omagotchi.learningservice.environment.domain.SensorEventType;
-import site.omagotchi.learningservice.rule.application.SensorDeviceService;
-import site.omagotchi.learningservice.rule.domain.Operator;
+import site.omagotchi.learningservice.sensor.application.SensorDeviceService;
+import site.omagotchi.learningservice.sensor.domain.Operator;
 import site.omagotchi.learningservice.space.application.SpaceCohortQueryService;
 
 import java.time.Clock;

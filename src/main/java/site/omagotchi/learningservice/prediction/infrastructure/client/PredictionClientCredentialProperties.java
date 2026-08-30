@@ -18,6 +18,13 @@ public record PredictionClientCredentialProperties(
                 regexp = "^[^:]*$",
                 message = "clients.prediction.username에는 ':'를 사용할 수 없습니다."
         )
+        // HTTP Basic payload는 ASCII로 해석되므로(Prediction의 FastAPI HTTPBasic) username도 ASCII로 제한한다.
+        // 비-ASCII를 허용하면 이 서비스의 기동 검증은 통과하고 Prediction 호출만 401로 실패해 원인 파악이 어렵다.
+        // 0x21~0x7e(출력 가능한 ASCII)에서 구분자 ':'(0x3a)만 제외한다.
+        @Pattern(
+                regexp = "^[\\x21-\\x39\\x3b-\\x7e]*$",
+                message = "clients.prediction.username은 공백을 제외한 ASCII 출력 가능 문자만 사용할 수 있습니다."
+        )
         String username,
 
         @NotBlank(message = "clients.prediction.password는 필수입니다.")

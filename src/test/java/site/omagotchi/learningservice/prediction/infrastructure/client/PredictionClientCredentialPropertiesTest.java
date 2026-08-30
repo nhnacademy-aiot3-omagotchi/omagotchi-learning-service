@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
@@ -114,6 +115,21 @@ class PredictionClientCredentialPropertiesTest {
     }
 
     @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"learning-service", "learning_service", "learning.service", "svc-01"})
+    @DisplayName("ASCII Prediction 클라이언트 username 허용")
+    void acceptsAsciiUsername(String username) {
+        // given: 공백과 ':'를 제외한 ASCII username
+        // when: 설정 바인딩
+        contextRunner
+                .withPropertyValues(
+                        "clients.prediction.username=" + username,
+                        "clients.prediction.password=" + VALID_PASSWORD
+                )
+                // then: Application Context 기동 성공
+                .run(context -> then(context).hasNotFailed());
+    }
+
+    @ParameterizedTest(name = "{0}")
     @MethodSource("invalidSettings")
     @DisplayName("지원하지 않는 Prediction 클라이언트 설정 거절")
     void rejectsInvalidSetting(
@@ -144,6 +160,18 @@ class PredictionClientCredentialPropertiesTest {
                         "learning:service",
                         VALID_PASSWORD,
                         "clients.prediction.username에는 ':'를 사용할 수 없습니다."
+                ),
+                Arguments.of(
+                        "Unicode username",
+                        "학습서비스",
+                        VALID_PASSWORD,
+                        "clients.prediction.username은 공백을 제외한 ASCII 출력 가능 문자만 사용할 수 있습니다."
+                ),
+                Arguments.of(
+                        "공백을 포함한 username",
+                        "learning service",
+                        VALID_PASSWORD,
+                        "clients.prediction.username은 공백을 제외한 ASCII 출력 가능 문자만 사용할 수 있습니다."
                 ),
                 Arguments.of(
                         "빈 username",

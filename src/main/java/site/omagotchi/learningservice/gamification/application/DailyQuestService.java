@@ -89,7 +89,7 @@ public class DailyQuestService {
         }
         LocalDate today = dateTimeProvider.currentAggregationDate();
         if (quest.getQuestDate().isBefore(today)) {
-            // 지난 날짜 보상은 수령 불가. 상태 전환은 expirePastQuests가 담당한다.
+            // 과거 퀘스트는 저장된 상태와 무관하게 보상을 수령할 수 없다.
             throw new BusinessException(GamificationErrorCode.DAILY_QUEST_EXPIRED);
         }
         if (quest.getStatus() == QuestStatus.CLAIMED) {
@@ -108,13 +108,6 @@ public class DailyQuestService {
                 quest.getId()
         );
         return DailyQuestResult.from(quest);
-    }
-
-    @Transactional
-    public void expirePastQuests() {
-        LocalDate today = dateTimeProvider.currentAggregationDate();
-        userDailyQuestRepository.findByQuestDateBefore(today)
-                .forEach(UserDailyQuest::expire);
     }
 
     private List<DailyQuestResult> findDailyQuests(UUID userId, LocalDate questDate) {

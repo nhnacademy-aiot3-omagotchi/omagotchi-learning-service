@@ -16,21 +16,13 @@ import site.omagotchi.learningservice.sensor.application.port.ThresholdRuleRepos
 import site.omagotchi.learningservice.sensor.application.result.ApplySpaceThresholdResult;
 import site.omagotchi.learningservice.sensor.application.result.SpaceThresholdResult;
 import site.omagotchi.learningservice.sensor.application.result.SpaceThresholdResult.MetricThresholdResult;
-import site.omagotchi.learningservice.sensor.application.result.ThresholdConditionResult;
 import site.omagotchi.learningservice.sensor.application.result.UpdateThresholdRuleResult;
 import site.omagotchi.learningservice.sensor.domain.ChangeType;
 import site.omagotchi.learningservice.sensor.domain.SensorDevice;
 import site.omagotchi.learningservice.sensor.domain.ThresholdRule;
 import site.omagotchi.learningservice.sensor.domain.ThresholdRuleHistory;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -118,22 +110,6 @@ public class ThresholdRuleService {
         log.info("임계치 룰 변경 id={}, v{}", thresholdRule.getId(), thresholdRule.getVersion());
         return new UpdateThresholdRuleResult(true, thresholdRule.getVersion());
 
-    }
-
-    public Optional<ThresholdConditionResult> findCondition(String deviceEui, String metric) {
-
-        if (Objects.isNull(deviceEui) || Objects.isNull(metric) || metric.isBlank()) {
-            return Optional.empty();
-        }
-
-        String normalized = metric.trim().toLowerCase(Locale.ROOT);
-        Optional<ThresholdRule> found = thresholdRuleRepository.findByDeviceEuiAndMetric(deviceEui, normalized);
-
-        if (found.isEmpty()) {
-            return Optional.empty();
-        }
-
-        return Optional.of(ThresholdConditionResult.from(found.get()));
     }
 
     public List<ThresholdRule> readAll(){

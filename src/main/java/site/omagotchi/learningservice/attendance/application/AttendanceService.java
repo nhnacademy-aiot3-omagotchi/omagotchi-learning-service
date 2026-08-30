@@ -22,6 +22,7 @@ import site.omagotchi.learningservice.attendance.infrastructure.AttendanceChange
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
 import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
@@ -46,6 +47,7 @@ import java.util.UUID;
 public class AttendanceService {
 
     private final CohortAccessService cohortAccessService;
+    private final CohortMembershipQueryService cohortMembershipQueryService;
     private final CohortMembershipRepository membershipRepository;
     private final CohortAttendancePolicyRepository attendancePolicyRepository;
     private final AttendanceRecordRepository attendanceRecordRepository;
@@ -188,6 +190,12 @@ public class AttendanceService {
 
         AttendanceRecord record = attendanceRecordRepository.findById(attendanceId)
                 .orElseThrow(() -> new BusinessException(AttendanceErrorCode.ATTENDANCE_RECORD_NOT_FOUND));
+        Long recordCohortId = cohortMembershipQueryService
+                .findCohortIds(List.of(record.getCohortMembershipId()))
+                .get(record.getCohortMembershipId());
+        if (!cohortId.equals(recordCohortId)) {
+            throw new BusinessException(AttendanceErrorCode.ATTENDANCE_RECORD_NOT_FOUND);
+        }
         AttendanceStatus previousStatus = record.getFinalStatus();
 
         record.overrideFinalStatus(command.nextStatus());

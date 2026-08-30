@@ -9,6 +9,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.attendance.application.AttendanceErrorCode;
+import site.omagotchi.learningservice.attendance.application.command.ChangeAttendanceStatusCommand;
 import site.omagotchi.learningservice.attendance.application.query.AttendancePageQuery;
 import site.omagotchi.learningservice.attendance.application.event.AttendanceCheckedInEvent;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceEventPublisher;
@@ -19,6 +20,7 @@ import site.omagotchi.learningservice.attendance.infrastructure.AttendanceChange
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
 import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
@@ -31,6 +33,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -55,6 +58,9 @@ class AttendanceServiceTest {
 
     @Mock
     private CohortAccessService cohortAccessService;
+
+    @Mock
+    private CohortMembershipQueryService cohortMembershipQueryService;
 
     @Mock
     private CohortMembershipRepository membershipRepository;
@@ -272,6 +278,61 @@ class AttendanceServiceTest {
         assertEquals(1, result.page());
         assertEquals(11, result.totalElements());
         assertEquals(2, result.totalPages());
+    }
+
+    @Test
+    @DisplayName("관리자는 자기 기수의 출결 상태만 변경")
+    void changesFinalStatusOnlyForOwnCohortRecord() {
+        Long attendanceId = 500L;
+        AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
+        ReflectionTestUtils.setField(record, "id", attendanceId);
+        given(attendanceRecordRepository.findById(attendanceId)).willReturn(Optional.of(record));
+        given(cohortMembershipQueryService.findCohortIds(java.util.List.of(MEMBERSHIP_ID)))
+                .willReturn(Map.of(MEMBERSHIP_ID, COHORT_ID));
+        given(attendanceRecordRepository.save(record)).willReturn(record);
+
+        var result = attendanceService.changeFinalStatus(
+                COHORT_ID,
+                attendanceId,
+                MANAGER_ID,
+                new ChangeAttendanceStatusCommand(
+                        AttendanceStatus.PRESENT,
+                        "관리자 확인",
+                        "request-1"
+                )
+        );
+
+        assertEquals(AttendanceStatus.PRESENT, result.finalStatus());
+        verify(attendanceChangeLogRepository).save(any());
+        verify(attendanceRecordRepository).save(record);
+    }
+
+    @Test
+    @DisplayName("다른 기수의 출결 ID로 상태를 변경할 수 없음")
+    void rejectsFinalStatusChangeForAnotherCohortRecord() {
+        Long attendanceId = 500L;
+        AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
+        ReflectionTestUtils.setField(record, "id", attendanceId);
+        given(attendanceRecordRepository.findById(attendanceId)).willReturn(Optional.of(record));
+        given(cohortMembershipQueryService.findCohortIds(java.util.List.of(MEMBERSHIP_ID)))
+                .willReturn(Map.of(MEMBERSHIP_ID, 999L));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> attendanceService.changeFinalStatus(
+                        COHORT_ID,
+                        attendanceId,
+                        MANAGER_ID,
+                        new ChangeAttendanceStatusCommand(
+                                AttendanceStatus.PRESENT,
+                                "관리자 확인",
+                                "request-2"
+                        )
+                )
+        );
+
+        assertSame(AttendanceErrorCode.ATTENDANCE_RECORD_NOT_FOUND, exception.getErrorCode());
+        verifyNoInteractions(attendanceChangeLogRepository);
     }
 
     private void givenActiveMembership() {

@@ -17,10 +17,16 @@ import site.omagotchi.learningservice.cohort.application.CohortManagerService;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
 import site.omagotchi.learningservice.cohort.application.CohortService;
 import site.omagotchi.learningservice.cohort.application.JoinCodeService;
+import site.omagotchi.learningservice.cohort.application.UserAccessContextService;
 import site.omagotchi.learningservice.cohort.application.command.SaveAttendancePolicyCommand;
 import site.omagotchi.learningservice.cohort.application.command.AssignCohortManagerCommand;
 import site.omagotchi.learningservice.cohort.application.result.CohortAttendancePolicyResponse;
+import site.omagotchi.learningservice.cohort.application.result.CohortAccessSummary;
+import site.omagotchi.learningservice.cohort.application.result.UserAccessContextResult;
+import site.omagotchi.learningservice.cohort.application.result.UserAccessType;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.domain.CohortStatus;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.security.JwtAuthorityConfig;
 import site.omagotchi.learningservice.global.security.JwtConfig;
@@ -30,7 +36,9 @@ import site.omagotchi.learningservice.global.security.SecurityErrorResponseHandl
 import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 
 import java.time.LocalTime;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.eq;
@@ -79,6 +87,40 @@ class CohortControllerTest {
 
     @MockitoBean
     private CohortAttendancePolicyService attendancePolicyService;
+
+    @MockitoBean
+    private UserAccessContextService userAccessContextService;
+
+    @Test
+    @DisplayName("내 접근 컨텍스트는 JWT 사용자와 전역 역할을 사용한다")
+    void getsMyAccessContext() throws Exception {
+        CohortAccessSummary managedCohort = new CohortAccessSummary(
+                COHORT_ID,
+                "AIoT 3기",
+                LocalDate.of(2026, 9, 1),
+                LocalDate.of(2026, 12, 31),
+                CohortStatus.PREPARING
+        );
+        given(userAccessContextService.getContext(USER_ID, GlobalRole.USER))
+                .willReturn(new UserAccessContextResult(
+                        GlobalRole.USER,
+                        UserAccessType.COHORT_MANAGER,
+                        List.of(managedCohort),
+                        List.of()
+                ));
+
+        mockMvc.perform(get("/api/v1/cohorts/me/access-context")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.globalRole").value("USER"))
+                .andExpect(jsonPath("$.accessType").value("COHORT_MANAGER"))
+                .andExpect(jsonPath("$.managedCohorts[0].cohortId").value(COHORT_ID))
+                .andExpect(jsonPath("$.managedCohorts[0].status").value("PREPARING"))
+                .andExpect(jsonPath("$.studentCohorts").isEmpty())
+                .andDo(document("cohort/get-my-access-context"));
+
+        verify(userAccessContextService).getContext(USER_ID, GlobalRole.USER);
+    }
 
     @Test
     @DisplayName("SYSTEM_ADMIN은 전체 기수 요약을 조회한다")

@@ -10,12 +10,13 @@ public record StudyPatternResult(
         long longestSessionMinutes, // 최장 세션
         String typicalStartTime,    // 하루 첫 세션 시작의 중앙값
         Integer bestStartHour,      // 공부량이 가장 많은 세션 시작 시각
+        int focusDensityPercent,    // 몰입 밀도: 앉아 있던 시간 중 실제 공부한 비율 (0~100)
         int currentStreakDays       // 연속 학습일
 ) {
     public enum Status { OK, NO_DATA }
 
     public static StudyPatternResult noData(int periodDays) {
         return new StudyPatternResult(Status.NO_DATA, periodDays,
-                0, 0, 0, 0, 0, null, null, 0);
+                0, 0, 0, 0, 0, null, null, 0, 0);
     }
 }

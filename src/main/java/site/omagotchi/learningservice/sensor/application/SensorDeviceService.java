@@ -98,6 +98,59 @@ public class SensorDeviceService {
         return SensorDeviceResult.from(save(device));
     }
 
+    /**
+     * 주인 없는 센서를 이 기수 공간으로 인계한다.
+     *
+     * <p>기수가 끝나거나 공간이 삭제되면 센서는 어느 기수에도 속하지 않게 된다. 그 상태에서는
+     * {@code device_eui}가 기본키라 재등록이 409로 막히고, 수정·비활성화는 기수 검사에 걸려
+     * 404가 되며, 삭제 경로는 애초에 없다. 이 Method가 없으면 물리 센서는 벽에 붙어 값을
+     * 보내는데 서버에서는 영원히 손댈 수 없는 행으로 남는다.</p>
+     *
+     * <p>기수 간 장비 인계는 예외 상황이 아니라 정상 업무다 — 기수가 바뀌어도 실습실 설비는
+     * 그대로 이어 쓴다.</p>
+     */
+    @Transactional
+    public SensorDeviceResult claim(
+            Long cohortId,
+            UUID requesterId,
+            String deviceEui,
+            Long spaceId
+    ) {
+        cohortAccessService.requireManager(cohortId, requesterId);
+        requireSpaceInCohort(spaceId, cohortId);
+
+        SensorDevice device = sensorDeviceRepository.findByDeviceEui(deviceEui)
+                .orElseThrow(() -> new BusinessException(SensorErrorCode.DEVICE_NOT_FOUND));
+
+        // 주인 없는 센서만 인계할 수 있다. 이 검사가 빠지면 남의 기수 센서를 가져오는
+        // 통로가 된다. 소유 중인 센서도 404로 답한다 — 403이면 "남의 기수 것"이라는 사실을
+        // 알려주는 셈이라 다른 기수 구성을 훑을 수 있다.
+        if (spaceCohortQueryService.findCohortId(device.getSpaceId()).isPresent()) {
+            throw new BusinessException(SensorErrorCode.DEVICE_NOT_FOUND);
+        }
+
+        try {
+            device.update(
+                    spaceId,
+                    device.getDisplayName(),
+                    device.getInstallationPoint(),
+                    device.getExpectedIntervalSeconds(),
+                    device.getInstalledAt()
+            );
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(SensorErrorCode.DEVICE_INVALID_ATTRIBUTE, e.getMessage(), e);
+        }
+
+        // 기수 회수로 꺼져 있던 센서를 다시 운영에 올린다. 이걸 빼면 인계는 됐는데 공간
+        // 집계에도 안 잡히고 룰도 돌지 않는 어중간한 상태가 된다.
+        device.changeActive(true);
+
+        log.info("주인 없는 센서를 인계했습니다. cohortId={}, deviceEui={}, spaceId={}",
+                cohortId, deviceEui, spaceId);
+
+        return SensorDeviceResult.from(save(device));
+    }
+
     private void requireSpaceInCohort(Long spaceId, Long cohortId) {
         boolean belongsToCohort = spaceCohortQueryService.findCohortId(spaceId)
                 .filter(cohortId::equals)

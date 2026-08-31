@@ -34,6 +34,9 @@ class SensorDeviceServiceTest {
 
     private static final Long COHORT_ID = 1L;
     private static final Long SPACE_ID = 10L;
+    /** 기수 배정이 풀렸거나 삭제된 공간. 그 공간의 센서가 주인 없는 상태다. */
+    private static final Long ORPHAN_SPACE_ID = 90L;
+    private static final Long OTHER_SPACE_ID = 91L;
     private static final UUID REQUESTER_ID = UUID.fromString(
             "00000000-0000-0000-0000-000000000001"
     );
@@ -146,6 +149,56 @@ class SensorDeviceServiceTest {
         assertThat(thrown.getErrorCode())
                 .isEqualTo(CohortErrorCode.COHORT_NOT_FOUND);
         verifyNoInteractions(sensorDeviceRepository, spaceCohortQueryService);
+    }
+
+    @Test
+    void claimsOrphanSensorIntoCohortSpace() {
+        // 이전 기수가 쓰다 회수된 센서 — 붙어 있던 공간은 기수가 풀렸다
+        SensorDevice orphan = device(ORPHAN_SPACE_ID);
+        orphan.changeActive(false);
+        when(spaceCohortQueryService.findCohortId(SPACE_ID)).thenReturn(Optional.of(COHORT_ID));
+        when(sensorDeviceRepository.findByDeviceEui(DEVICE_EUI)).thenReturn(Optional.of(orphan));
+        when(spaceCohortQueryService.findCohortId(ORPHAN_SPACE_ID)).thenReturn(Optional.empty());
+        when(sensorDeviceRepository.save(any(SensorDevice.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = sensorDeviceService.claim(COHORT_ID, REQUESTER_ID, DEVICE_EUI, SPACE_ID);
+
+        verify(cohortAccessService).requireManager(COHORT_ID, REQUESTER_ID);
+        assertThat(result.spaceId()).isEqualTo(SPACE_ID);
+        // 회수 상태로 넘어온 센서를 다시 켜지 않으면 집계에도 룰에도 잡히지 않는다
+        assertThat(result.active()).isTrue();
+        // 표시명·설치 지점은 이전 기수 값을 그대로 잇는다
+        assertThat(result.displayName()).isEqualTo("실습실 센서");
+    }
+
+    @Test
+    void rejectsClaimingSensorOwnedByAnotherCohort() {
+        SensorDevice owned = device(OTHER_SPACE_ID);
+        when(spaceCohortQueryService.findCohortId(SPACE_ID)).thenReturn(Optional.of(COHORT_ID));
+        when(sensorDeviceRepository.findByDeviceEui(DEVICE_EUI)).thenReturn(Optional.of(owned));
+        when(spaceCohortQueryService.findCohortId(OTHER_SPACE_ID)).thenReturn(Optional.of(999L));
+
+        BusinessException thrown = catchThrowableOfType(BusinessException.class, () ->
+                sensorDeviceService.claim(COHORT_ID, REQUESTER_ID, DEVICE_EUI, SPACE_ID)
+        );
+
+        // 남의 기수 것이라는 사실도 숨긴다 — 403이면 다른 기수 구성을 훑을 수 있다
+        assertThat(thrown.getErrorCode()).isEqualTo(SensorErrorCode.DEVICE_NOT_FOUND);
+        verify(sensorDeviceRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectsClaimIntoSpaceOfAnotherCohort() {
+        when(spaceCohortQueryService.findCohortId(SPACE_ID)).thenReturn(Optional.of(999L));
+
+        BusinessException thrown = catchThrowableOfType(BusinessException.class, () ->
+                sensorDeviceService.claim(COHORT_ID, REQUESTER_ID, DEVICE_EUI, SPACE_ID)
+        );
+
+        assertThat(thrown.getErrorCode()).isEqualTo(SensorErrorCode.DEVICE_SPACE_NOT_FOUND);
+        // 공간 검사가 기기 조회보다 먼저다 — 남의 기수 공간을 찍어 EUI 존재를 떠볼 수 없다
+        verify(sensorDeviceRepository, never()).findByDeviceEui(any());
     }
 
     private CreateSensorDeviceCommand createCommand() {

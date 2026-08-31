@@ -71,7 +71,7 @@ class AttendanceControllerTest {
         given(attendanceService.getMyRecords(COHORT_ID, USER_ID, query))
                 .willReturn(new AttendanceRecordPageResult(List.of(record()), 0, 10, 1, 1));
 
-        mockMvc.perform(get("/api/v1/cohorts/{cohortId}/attendance-records/me", COHORT_ID)
+        mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/attendance-records/me", COHORT_ID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
                         .param("from", "2026-08-01")
                         .param("to", "2026-08-31")
@@ -106,7 +106,7 @@ class AttendanceControllerTest {
         given(attendanceService.getDailyRecords(COHORT_ID, USER_ID, date, query))
                 .willReturn(new AttendanceRecordPageResult(List.of(record()), 0, 10, 12, 2));
 
-        mockMvc.perform(get("/api/v1/cohorts/{cohortId}/attendance-records", COHORT_ID)
+        mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/attendance-records", COHORT_ID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
                         .param("date", "2026-08-20")
                         .param("page", "0")
@@ -133,7 +133,7 @@ class AttendanceControllerTest {
         given(attendanceService.getDailyRecords(COHORT_ID, USER_ID, date, query))
                 .willReturn(new AttendanceRecordPageResult(List.of(record()), 0, 20, 1, 1));
 
-        mockMvc.perform(get("/api/v1/cohorts/{cohortId}/attendance-records", COHORT_ID)
+        mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/attendance-records", COHORT_ID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
                         .param("date", "2026-08-20"))
                 .andExpect(status().isOk())
@@ -148,7 +148,7 @@ class AttendanceControllerTest {
     @Test
     @DisplayName("일자별 출결 목록은 date가 없으면 400을 반환한다")
     void rejectsDailyAttendanceRecordsWithoutDate() throws Exception {
-        mockMvc.perform(get("/api/v1/cohorts/{cohortId}/attendance-records", COHORT_ID)
+        mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/attendance-records", COHORT_ID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isBadRequest());
 

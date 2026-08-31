@@ -95,9 +95,9 @@ PATCH /api/users/me/nickname
 ```http
 POST /api/cohorts
 GET /api/cohorts
-GET /api/cohorts/{cohortId}
-PATCH /api/cohorts/{cohortId}
-PATCH /api/cohorts/{cohortId}/status
+GET /api/cohorts/{cohort-id}
+PATCH /api/cohorts/{cohort-id}
+PATCH /api/cohorts/{cohort-id}/status
 ```
 
 생성/수정 요청:
@@ -138,18 +138,18 @@ PATCH /api/cohorts/{cohortId}/status
 ### 가입 코드 / 신청 / 멤버
 
 ```http
-GET /api/cohorts/{cohortId}/join-code
-POST /api/cohorts/{cohortId}/join-code
-PATCH /api/cohorts/{cohortId}/join-code/revoke
+GET /api/cohorts/{cohort-id}/join-code
+POST /api/cohorts/{cohort-id}/join-code
+PATCH /api/cohorts/{cohort-id}/join-code/revoke
 POST /api/cohorts/join-requests
 POST /api/cohorts/applications
 GET /api/cohorts/join-requests/me
-GET /api/cohorts/{cohortId}/join-requests
-GET /api/cohorts/{cohortId}/members
-PATCH /api/cohort-memberships/{membershipId}/approve
-PATCH /api/cohort-memberships/{membershipId}/reject
-POST /api/cohorts/{cohortId}/managers
-PATCH /api/cohorts/{cohortId}/members/{memberUserId}/role
+GET /api/cohorts/{cohort-id}/join-requests
+GET /api/cohorts/{cohort-id}/members
+PATCH /api/cohort-memberships/{membership-id}/approve
+PATCH /api/cohort-memberships/{membership-id}/reject
+POST /api/cohorts/{cohort-id}/managers
+PATCH /api/cohorts/{cohort-id}/members/{member-user-id}/role
 ```
 
 가입 코드 발급:
@@ -206,8 +206,8 @@ PATCH /api/cohorts/{cohortId}/members/{memberUserId}/role
 기수 매니저용이다.
 
 ```http
-GET /api/cohorts/{cohortId}/attendance-policy
-PUT /api/cohorts/{cohortId}/attendance-policy
+GET /api/cohorts/{cohort-id}/attendance-policy
+PUT /api/cohorts/{cohort-id}/attendance-policy
 ```
 
 저장 요청:
@@ -242,7 +242,7 @@ PUT /api/cohorts/{cohortId}/attendance-policy
 기수 매니저용이다.
 
 ```http
-GET /api/cohorts/{cohortId}/audit-logs
+GET /api/cohorts/{cohort-id}/audit-logs
 ```
 
 ```json
@@ -266,11 +266,11 @@ GET /api/cohorts/{cohortId}/audit-logs
 ## Attendance
 
 ```http
-POST /api/cohorts/{cohortId}/attendance-records/check-in
-POST /api/cohorts/{cohortId}/attendance-records/check-out
-GET /api/cohorts/{cohortId}/attendance-records/me
-GET /api/cohorts/{cohortId}/attendance-records?date=2026-08-10
-PATCH /api/cohorts/{cohortId}/attendance-records/{attendance-id}/status
+POST /api/cohorts/{cohort-id}/attendance-records/check-in
+POST /api/cohorts/{cohort-id}/attendance-records/check-out
+GET /api/cohorts/{cohort-id}/attendance-records/me
+GET /api/cohorts/{cohort-id}/attendance-records?date=2026-08-10
+PATCH /api/cohorts/{cohort-id}/attendance-records/{attendance-id}/status
 ```
 
 상태 변경 요청:
@@ -310,13 +310,13 @@ PATCH /api/cohorts/{cohortId}/attendance-records/{attendance-id}/status
 
 ```http
 GET /api/community/posts?page=0&size=20&type=NOTICE&search=공지
-GET /api/community/posts/{postId}
+GET /api/community/posts/{post-id}
 POST /api/community/posts
 POST /api/community/posts (multipart/form-data)
-PATCH /api/community/posts/{postId}
-PATCH /api/community/posts/{postId} (multipart/form-data)
-DELETE /api/community/posts/{postId}
-PATCH /api/community/posts/{postId}/pin
+PATCH /api/community/posts/{post-id}
+PATCH /api/community/posts/{post-id} (multipart/form-data)
+DELETE /api/community/posts/{post-id}
+PATCH /api/community/posts/{post-id}/pin
 ```
 
 JSON 생성 요청:
@@ -462,7 +462,7 @@ POST /gamification/characters/representative
 ```http
 GET /gamification/home
 GET /gamification/quests/daily
-POST /gamification/quests/{userDailyQuestId}/claim
+POST /gamification/quests/{user-daily-quest-id}/claim
 ```
 
 > 현재 계약에서는 `/api/v1/gamification/events/**` 공개 API가 제거되었다. 출석과 학습 완료는
@@ -591,7 +591,7 @@ SEND /app/presence/heartbeat
 프론트 구독:
 
 ```text
-SUBSCRIBE /topic/cohorts/{cohortId}/presence
+SUBSCRIBE /topic/cohorts/{cohort-id}/presence
 SUBSCRIBE /user/queue/notifications
 ```
 

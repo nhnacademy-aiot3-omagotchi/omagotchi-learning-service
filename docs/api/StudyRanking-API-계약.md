@@ -5,7 +5,7 @@
 - 상태: 구현 기준, 검토 중
 - 최종 변경일: 2026-08-20
 - 범위: 기수 수강생용 오늘 및 확정 기간 학습 랭킹 조회
-- 수강생 base path: `/api/v1/cohorts/{cohortId}/study-rankings`
+- 수강생 base path: `/api/v1/cohorts/{cohort-id}/study-rankings`
 
 이 문서는 `MemberStudyRankingController`와 response record가 구현할 수강생용 외부 HTTP 계약이다.
 관리자 화면의 학습시간 상위 목록은 별도 Ranking API가 아니라 `StudyStatistics-API-계약.md`의 수강생 통계 page를 정렬해 조회한다.
@@ -15,7 +15,7 @@
 ### 인증과 권한
 
 - 모든 요청에 `Authorization: Bearer {JWT}`가 필요하다.
-- 수강생 랭킹 보드와 내 랭킹은 인증 사용자가 `{cohortId}` 기수의 활성 `STUDENT` membership이어야 한다.
+- 수강생 랭킹 보드와 내 랭킹은 인증 사용자가 `{cohort-id}` 기수의 활성 `STUDENT` membership이어야 한다.
 - 수강생 여부는 JWT의 전역 role이 아니라 기수 membership으로 판정한다.
 - 활성 기수 소속이 없으면 기수의 존재를 숨기기 위해 `404 COHORT_NOT_FOUND`를 반환한다.
 - 활성 소속은 있지만 수강생 API의 `STUDENT`가 아니면 `403 COHORT_ACCESS_DENIED`를 반환한다.
@@ -45,7 +45,7 @@
 
 | 이름 | 위치 | 필수 | 기본값 | 제약 |
 | --- | --- | --- | --- | --- |
-| `cohortId` | path | 예 | 없음 | `Long` 형식의 기수 ID |
+| `cohort-id` | path | 예 | 없음 | `Long` 형식의 기수 ID |
 | `maxRank` | query | 보드 API만 선택 | `100` | 1~1,000의 정수 |
 
 - `maxRank`는 수강생 보드에서만 사용한다.
@@ -56,10 +56,10 @@
 
 | 구분 | Method | Path |
 | --- | --- | --- |
-| 오늘 | GET | `/api/v1/cohorts/{cohortId}/study-rankings/today?maxRank={N}` |
-| 일간 | GET | `/api/v1/cohorts/{cohortId}/study-rankings/daily/{date}?maxRank={N}` |
-| 주간 | GET | `/api/v1/cohorts/{cohortId}/study-rankings/weekly/{weekStartDate}?maxRank={N}` |
-| 월간 | GET | `/api/v1/cohorts/{cohortId}/study-rankings/monthly/{month}?maxRank={N}` |
+| 오늘 | GET | `/api/v1/cohorts/{cohort-id}/study-rankings/today?maxRank={N}` |
+| 일간 | GET | `/api/v1/cohorts/{cohort-id}/study-rankings/daily/{date}?maxRank={N}` |
+| 주간 | GET | `/api/v1/cohorts/{cohort-id}/study-rankings/weekly/{week-start-date}?maxRank={N}` |
+| 월간 | GET | `/api/v1/cohorts/{cohort-id}/study-rankings/monthly/{month}?maxRank={N}` |
 
 보드의 순위 상한과 관계없이 인증 사용자의 순위를 `myRanking`에 별도로 반환한다.
 

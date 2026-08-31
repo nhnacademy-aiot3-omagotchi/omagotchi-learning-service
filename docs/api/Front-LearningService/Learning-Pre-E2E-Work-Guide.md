@@ -57,7 +57,7 @@ Frontend는 `/images/characters/${assetKey}.png`로 정적 PNG를 찾는다. 기
 4. 아래 인증 endpoint를 추가한다.
 
 ```http
-GET /api/v1/community/posts/{postId}/attachments/{attachmentId}
+GET /api/v1/community/posts/{post-id}/attachments/{attachment-id}
 ```
 
 5. 응답에는 저장 경로가 아니라 원본 파일명 기반 `Content-Disposition`, 저장된 `Content-Type`,
@@ -115,7 +115,7 @@ Frontend는 출석 또는 학습 완료 API 성공 후 `/events/**`를 추가 �
 구현 완료. 내 출결은 날짜 범위와 페이지를 받고 관리자 일별 조회도 같은 Page 응답을 사용한다.
 
 ```http
-GET /api/v1/cohorts/{cohortId}/attendance-records/me
+GET /api/v1/cohorts/{cohort-id}/attendance-records/me
     ?from=2026-08-01&to=2026-08-31&page=0&size=31
 ```
 

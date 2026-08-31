@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/cohorts/{cohortId}/timer")
+@RequestMapping("/api/v1/cohorts/{cohort-id}/timer")
 public class TimerController {
 
     private final TimerCommandService timerCommandService;
@@ -25,7 +25,7 @@ public class TimerController {
     @PostMapping("/start")
     public ResponseEntity<StartTimerResponse> startTimer(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId
+            @PathVariable("cohort-id") Long cohortId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         TimerStateResult result = timerCommandService.start(
@@ -40,7 +40,7 @@ public class TimerController {
     @GetMapping
     public ResponseEntity<CurrentTimerResponse> getCurrentTimer(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId
+            @PathVariable("cohort-id") Long cohortId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         TimerStateResult result = timerQueryService.getCurrent(user.userId(), cohortId);
@@ -48,11 +48,11 @@ public class TimerController {
         return ResponseEntity.ok(CurrentTimerResponse.from(result));
     }
 
-    @PostMapping("/{timerRunId}/stop")
+    @PostMapping("/{timer-run-id}/stop")
     public ResponseEntity<Void> stopTimer(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
-            @PathVariable UUID timerRunId
+            @PathVariable("cohort-id") Long cohortId,
+            @PathVariable("timer-run-id") UUID timerRunId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         timerCommandService.stop(
@@ -64,11 +64,11 @@ public class TimerController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/{timerRunId}/discard")
+    @PostMapping("/{timer-run-id}/discard")
     public ResponseEntity<Void> discardTimer(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
-            @PathVariable UUID timerRunId
+            @PathVariable("cohort-id") Long cohortId,
+            @PathVariable("timer-run-id") UUID timerRunId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         timerCommandService.discard(

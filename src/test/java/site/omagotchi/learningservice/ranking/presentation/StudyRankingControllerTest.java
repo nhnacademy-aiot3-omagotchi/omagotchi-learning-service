@@ -85,7 +85,7 @@ class StudyRankingControllerTest {
             ));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-rankings/today",
+                            "/api/v1/cohorts/{cohort-id}/study-rankings/today",
                             COHORT_ID
                     ).queryParam("maxRank", "2")
                     .principal(authentication()))
@@ -121,7 +121,7 @@ class StudyRankingControllerTest {
             ));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-rankings/daily/{date}",
+                            "/api/v1/cohorts/{cohort-id}/study-rankings/daily/{date}",
                             COHORT_ID,
                             date
                     ).principal(authentication()))
@@ -153,7 +153,7 @@ class StudyRankingControllerTest {
             ));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-rankings/weekly/{weekStartDate}",
+                            "/api/v1/cohorts/{cohort-id}/study-rankings/weekly/{week-start-date}",
                             COHORT_ID,
                             monday
                     ).principal(authentication()))
@@ -167,7 +167,7 @@ class StudyRankingControllerTest {
         @DisplayName("일간 날짜 형식 오류 요청 거부")
         void rejectsInvalidDailyDateFormat() throws Exception {
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-rankings/daily/{date}",
+                            "/api/v1/cohorts/{cohort-id}/study-rankings/daily/{date}",
                             COHORT_ID,
                             "not-a-date"
                     ).principal(authentication()))

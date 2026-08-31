@@ -79,7 +79,7 @@ class StudyRecordControllerTest {
                     .willReturn(result);
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-records/{studyRecordId}",
+                            "/api/v1/cohorts/{cohort-id}/study-records/{study-record-id}",
                             COHORT_ID,
                             STUDY_RECORD_ID
                     )
@@ -109,7 +109,7 @@ class StudyRecordControllerTest {
             )).willReturn(result);
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-records",
+                            "/api/v1/cohorts/{cohort-id}/study-records",
                             COHORT_ID
                     )
                     .principal(authentication())
@@ -132,7 +132,7 @@ class StudyRecordControllerTest {
         @DisplayName("잘못된 집계일 형식 예외")
         void rejectsInvalidAggregationDateFormat() throws Exception {
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-records",
+                            "/api/v1/cohorts/{cohort-id}/study-records",
                             COHORT_ID
                     )
                     .principal(authentication())
@@ -148,7 +148,7 @@ class StudyRecordControllerTest {
         @DisplayName("집계일 누락 예외")
         void rejectsMissingAggregationDate() throws Exception {
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-records",
+                            "/api/v1/cohorts/{cohort-id}/study-records",
                             COHORT_ID
                     )
                     .principal(authentication()))
@@ -189,7 +189,7 @@ class StudyRecordControllerTest {
             )).willReturn(result);
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-time-summaries",
+                            "/api/v1/cohorts/{cohort-id}/study-time-summaries",
                             COHORT_ID
                     )
                     .principal(authentication())
@@ -214,7 +214,7 @@ class StudyRecordControllerTest {
         @DisplayName("잘못된 집계월 형식 예외")
         void rejectsInvalidAggregationMonthFormat() throws Exception {
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-time-summaries",
+                            "/api/v1/cohorts/{cohort-id}/study-time-summaries",
                             COHORT_ID
                     )
                     .principal(authentication())
@@ -230,7 +230,7 @@ class StudyRecordControllerTest {
         @DisplayName("집계월 누락 예외")
         void rejectsMissingAggregationMonth() throws Exception {
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-time-summaries",
+                            "/api/v1/cohorts/{cohort-id}/study-time-summaries",
                             COHORT_ID
                     )
                     .principal(authentication()))
@@ -254,7 +254,7 @@ class StudyRecordControllerTest {
                     .willReturn(result);
 
             mockMvc.perform(post(
-                            "/api/v1/cohorts/{cohortId}/study-records",
+                            "/api/v1/cohorts/{cohort-id}/study-records",
                             COHORT_ID
                     )
                             .principal(authentication())
@@ -279,7 +279,7 @@ class StudyRecordControllerTest {
         @DisplayName("초 단위 시간 형식 예외")
         void rejectsSecondPrecisionTime() throws Exception {
             mockMvc.perform(post(
-                            "/api/v1/cohorts/{cohortId}/study-records",
+                            "/api/v1/cohorts/{cohort-id}/study-records",
                             COHORT_ID
                     )
                             .principal(authentication())
@@ -314,7 +314,7 @@ class StudyRecordControllerTest {
             )).willReturn(result);
 
             mockMvc.perform(put(
-                            "/api/v1/cohorts/{cohortId}/study-records/{studyRecordId}",
+                            "/api/v1/cohorts/{cohort-id}/study-records/{study-record-id}",
                             COHORT_ID,
                             STUDY_RECORD_ID
                     )
@@ -347,7 +347,7 @@ class StudyRecordControllerTest {
         @DisplayName("소수 초 시간 형식 예외")
         void rejectsFractionalSecondTime() throws Exception {
             mockMvc.perform(put(
-                            "/api/v1/cohorts/{cohortId}/study-records/{studyRecordId}",
+                            "/api/v1/cohorts/{cohort-id}/study-records/{study-record-id}",
                             COHORT_ID,
                             STUDY_RECORD_ID
                     )
@@ -376,7 +376,7 @@ class StudyRecordControllerTest {
         @DisplayName("정상 처리")
         void deletesStudyRecord() throws Exception {
             mockMvc.perform(delete(
-                            "/api/v1/cohorts/{cohortId}/study-records/{studyRecordId}",
+                            "/api/v1/cohorts/{cohort-id}/study-records/{study-record-id}",
                             COHORT_ID,
                             STUDY_RECORD_ID
                     )

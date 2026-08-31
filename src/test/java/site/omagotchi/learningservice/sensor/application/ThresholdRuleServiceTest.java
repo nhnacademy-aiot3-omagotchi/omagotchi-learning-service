@@ -143,6 +143,14 @@ class ThresholdRuleServiceTest {
     }
 
     @Test
+    void feedsRuleEngineOnlyWithRulesOfActiveDevices() {
+        thresholdRuleService.readAllForRuleEngine();
+
+        // 전수 조회로 되돌아가면 회수된 센서의 룰이 다시 나가 조치가 계속 일어난다
+        verify(thresholdRuleRepository).findAllWithActiveDevice();
+    }
+
+    @Test
     void rejectsReadingRulesWhenRequesterIsNotManager() {
         doThrow(new BusinessException(CohortErrorCode.COHORT_MANAGER_REQUIRED))
                 .when(cohortAccessService)

@@ -57,8 +57,8 @@ public class ThresholdRuleJpaPersistence implements ThresholdRuleRepository {
     }
 
     @Override
-    public List<ThresholdRule> findAll() {
-        return thresholdRuleJpaRepository.findAll();
+    public List<ThresholdRule> findAllWithActiveDevice() {
+        return thresholdRuleJpaRepository.findAllWithActiveDevice();
     }
 
     @Override

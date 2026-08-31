@@ -133,8 +133,18 @@ public class ThresholdRuleService {
 
     }
 
+    /**
+     * Rule Engine 적재용 — 기수를 가리지 않는다.
+     *
+     * <p>다만 <b>회수된 기기의 룰은 내리지 않는다.</b> {@code active=false}는 "이 기기의
+     * 판정을 멈춘다"는 뜻인데, 그 뜻이 rule-service까지 전달되는 지점이 여기뿐이다.
+     * 기수가 끝나 회수된 센서가 계속 조치를 일으키는 것을 막는다.</p>
+     *
+     * <p>rule-service는 인메모리 캐시를 주기적으로 다시 적재하므로 회수가 반영되기까지
+     * 최대 한 주기가 걸린다.</p>
+     */
     public List<ThresholdRule> readAllForRuleEngine() {
-        return thresholdRuleRepository.findAll();
+        return thresholdRuleRepository.findAllWithActiveDevice();
     }
 
     /** 임계치는 rule-service 판정을 바꾸는 운영 설정이다. 사용자 화면에 쓰이지 않으므로 매니저만. */

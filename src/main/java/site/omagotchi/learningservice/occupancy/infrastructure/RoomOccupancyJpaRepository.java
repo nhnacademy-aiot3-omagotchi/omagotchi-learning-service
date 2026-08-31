@@ -102,10 +102,12 @@ public interface RoomOccupancyJpaRepository extends JpaRepository<RoomOccupancy,
      */
     @Query("""
                 SELECT new site.omagotchi.learningservice.occupancy.application.result.ActiveSpaceOccupancy(
-                           o.id, o.spaceId, o.expiresAt, o.occupierMembershipId, o.occupierUserId)
+                           o.id, o.spaceId, o.startedAt, o.expiresAt,
+                           o.occupierMembershipId, o.occupierUserId)
                   FROM RoomOccupancy o
                  WHERE o.spaceId IN :spaceIds
                    AND o.status = :active
+                   AND o.endedAt IS NULL
                    AND o.expiresAt > :now""")
     List<ActiveSpaceOccupancy> findActiveBySpaceIds(
             @Param("spaceIds") Collection<Long> spaceIds,

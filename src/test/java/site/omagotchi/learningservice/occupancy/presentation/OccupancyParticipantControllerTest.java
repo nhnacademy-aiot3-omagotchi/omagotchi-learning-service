@@ -15,13 +15,20 @@ import site.omagotchi.learningservice.global.exception.ErrorCode;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
 import site.omagotchi.learningservice.occupancy.application.OccupancyErrorCode;
 import site.omagotchi.learningservice.occupancy.application.OccupancyParticipantService;
+import site.omagotchi.learningservice.occupancy.application.OccupancyParticipantQueryService;
+import site.omagotchi.learningservice.occupancy.application.result.OccupancyParticipantResult;
+import site.omagotchi.learningservice.occupancy.application.result.ParticipantCandidateResult;
+import site.omagotchi.learningservice.occupancy.application.result.ParticipantCandidateStatus;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -41,12 +48,16 @@ class OccupancyParticipantControllerTest {
     private static final UUID TARGET_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
     private OccupancyParticipantService occupancyParticipantService;
+    private OccupancyParticipantQueryService occupancyParticipantQueryService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         occupancyParticipantService = mock(OccupancyParticipantService.class);
-        mockMvc = standaloneSetup(new OccupancyParticipantController(occupancyParticipantService))
+        occupancyParticipantQueryService = mock(OccupancyParticipantQueryService.class);
+        mockMvc = standaloneSetup(new OccupancyParticipantController(
+                        occupancyParticipantService,
+                        occupancyParticipantQueryService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 // @AuthenticationPrincipal은 Security의 Resolver가 있어야 풀린다.
                 // standaloneSetup은 Spring Security 필터를 끼우지 않으므로 직접 등록한다.
@@ -91,6 +102,39 @@ class OccupancyParticipantControllerTest {
                 .andExpect(status().isCreated());
 
         verify(occupancyParticipantService).add(1L, TARGET_ID, REQUESTER_ID);
+    }
+
+    @Test
+    @DisplayName("참여 후보 검색 결과를 응답한다.")
+    void returnsParticipantCandidates() throws Exception {
+        given(occupancyParticipantQueryService.searchCandidates(1L, "사용자", REQUESTER_ID))
+                .willReturn(List.of(new ParticipantCandidateResult(
+                        TARGET_ID,
+                        "대상 사용자",
+                        "target@example.com",
+                        ParticipantCandidateStatus.AVAILABLE
+                )));
+
+        mockMvc.perform(get(PATH + "/candidates").queryParam("query", "사용자"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].userId").value(TARGET_ID.toString()))
+                .andExpect(jsonPath("$[0].displayName").value("대상 사용자"))
+                .andExpect(jsonPath("$[0].email").value("target@example.com"))
+                .andExpect(jsonPath("$[0].status").value("AVAILABLE"));
+    }
+
+    @Test
+    @DisplayName("현재 참여자 상세 목록을 응답한다.")
+    void returnsCurrentParticipants() throws Exception {
+        given(occupancyParticipantQueryService.getParticipants(1L, REQUESTER_ID))
+                .willReturn(List.of(new OccupancyParticipantResult(
+                        REQUESTER_ID, "점유자", true)));
+
+        mockMvc.perform(get(PATH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].userId").value(REQUESTER_ID.toString()))
+                .andExpect(jsonPath("$[0].displayName").value("점유자"))
+                .andExpect(jsonPath("$[0].occupier").value(true));
     }
 
     @Test

@@ -5,11 +5,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
-import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
+import site.omagotchi.learningservice.attendance.application.result.OpenUserPresenceView;
+import site.omagotchi.learningservice.attendance.application.port.AttendancePresenceQuery;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * 다른 Feature가 재실 여부를 묻는 공개 계약.
@@ -31,7 +35,7 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class AttendancePresenceQueryService {
 
-    private final PresenceIntervalRepository presenceIntervalRepository;
+    private final AttendancePresenceQuery attendancePresenceQuery;
 
     /**
      * 지금 재실 중인지 조회한다.
@@ -53,11 +57,23 @@ public class AttendancePresenceQueryService {
             return Optional.empty();
         }
 
-        List<OpenPresenceView> openPresences = presenceIntervalRepository.findOpenPresences(userId);
+        List<OpenPresenceView> openPresences = attendancePresenceQuery.findOpenPresences(userId);
         if (openPresences.size() > 1) {
             log.debug("열린 재실 구간이 {}개입니다. 최신 구간을 사용합니다. userId={}",
                     openPresences.size(), userId);
         }
         return openPresences.stream().findFirst();
+    }
+
+    /** 계정별 최신 열린 재실 구간을 한 번에 조회한다. */
+    public Map<UUID, OpenPresenceView> findOpenPresences(Collection<UUID> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, OpenPresenceView> latestByUserId = new LinkedHashMap<>();
+        for (OpenUserPresenceView presence : attendancePresenceQuery.findOpenPresences(userIds)) {
+            latestByUserId.putIfAbsent(presence.userId(), presence.toPresenceView());
+        }
+        return Map.copyOf(latestByUserId);
     }
 }

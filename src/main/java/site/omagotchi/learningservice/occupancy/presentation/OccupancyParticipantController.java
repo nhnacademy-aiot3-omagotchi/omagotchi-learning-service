@@ -8,8 +8,12 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.occupancy.application.OccupancyParticipantService;
+import site.omagotchi.learningservice.occupancy.application.OccupancyParticipantQueryService;
 import site.omagotchi.learningservice.occupancy.presentation.request.AddParticipantRequest;
+import site.omagotchi.learningservice.occupancy.presentation.response.OccupancyParticipantResponse;
+import site.omagotchi.learningservice.occupancy.presentation.response.ParticipantCandidateResponse;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -32,6 +36,29 @@ import java.util.UUID;
 public class OccupancyParticipantController {
 
     private final OccupancyParticipantService occupancyParticipantService;
+    private final OccupancyParticipantQueryService occupancyParticipantQueryService;
+
+    @GetMapping
+    public List<OccupancyParticipantResponse> getParticipants(
+            @PathVariable("space-id") Long spaceId,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return occupancyParticipantQueryService.getParticipants(spaceId, requesterId(jwt)).stream()
+                .map(OccupancyParticipantResponse::from)
+                .toList();
+    }
+
+    @GetMapping("/candidates")
+    public List<ParticipantCandidateResponse> searchCandidates(
+            @PathVariable("space-id") Long spaceId,
+            @RequestParam String query,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return occupancyParticipantQueryService
+                .searchCandidates(spaceId, query, requesterId(jwt)).stream()
+                .map(ParticipantCandidateResponse::from)
+                .toList();
+    }
 
     /**
      * 참여자 추가 (MR-19, MR-28, MR-33). 점유자만 호출할 수 있고 수락 절차는 없다.

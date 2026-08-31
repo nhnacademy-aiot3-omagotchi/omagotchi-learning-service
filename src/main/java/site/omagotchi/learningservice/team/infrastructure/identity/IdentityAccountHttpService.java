@@ -7,7 +7,9 @@ import org.springframework.web.service.annotation.GetExchange;
 import org.springframework.web.service.annotation.HttpExchange;
 import org.springframework.web.service.annotation.PostExchange;
 import site.omagotchi.learningservice.team.infrastructure.identity.request.IdentityAccountBatchRequest;
+import site.omagotchi.learningservice.team.infrastructure.identity.request.IdentityAccountSearchRequest;
 import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountResponse;
+import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountSearchResponse;
 
 import java.util.List;
 import java.util.UUID;
@@ -24,5 +26,10 @@ public interface IdentityAccountHttpService {
     @PostExchange("/batch")
     ResponseEntity<List<IdentityAccountResponse>> getAccounts(
             @RequestBody IdentityAccountBatchRequest request
+    );
+
+    @PostExchange("/search")
+    ResponseEntity<List<IdentityAccountSearchResponse>> searchAccounts(
+            @RequestBody IdentityAccountSearchRequest request
     );
 }

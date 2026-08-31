@@ -20,6 +20,7 @@ import java.util.UUID;
 public record ActiveSpaceOccupancy(
         Long occupancyId,
         Long spaceId,
+        OffsetDateTime startedAt,
         OffsetDateTime expiresAt,
         Long occupierMembershipId,
         UUID occupierUserId

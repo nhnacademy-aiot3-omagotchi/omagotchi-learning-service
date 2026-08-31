@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
+import site.omagotchi.learningservice.sensor.application.CohortEndedSensorCleanup;
 import site.omagotchi.learningservice.space.application.CohortEndedSpaceCleanup;
 import site.omagotchi.learningservice.team.application.CohortEndedTeamCleanup;
 
@@ -37,11 +38,12 @@ public class CohortEndedCleanup {
     private final VacancyAlertService vacancyAlertService;
     private final RoomOccupancyRepository occupancyRepository;
     private final EndedMembershipOccupancyCleanup occupancyCleanup;
+    private final CohortEndedSensorCleanup sensorCleanup;
     private final CohortEndedSpaceCleanup spaceCleanup;
     private final Clock clock;
 
     /**
-     * 종료된 기수를 4단계로 정리한다. 같은 기수에 두 번 호출해도 안전하다 — 각 단계가
+     * 종료된 기수를 5단계로 정리한다. 같은 기수에 두 번 호출해도 안전하다 — 각 단계가
      * 조건부 연산이라 두 번째는 대상이 없다 (명세 08 §5 "훅 중복 수신").
      *
      * <p><b>이 Method에 Transaction이 없는 것이 의도다.</b> 단계마다 자기 Transaction을
@@ -84,7 +86,16 @@ public class CohortEndedCleanup {
             }
         }
 
-        // 4단계 — 공간 관리 주체 해제 (CE-04). 앞 단계와 무관하게 시도한다.
+        // 4단계 — 센서 회수 (CE-05). 5단계보다 반드시 먼저다 — 공간의 cohort_id가 지워진
+        // 뒤에는 대상 센서를 특정할 수 없고, 회수되지 못한 센서는 룰을 계속 발화시킨다.
+        try {
+            sensorCleanup.deactivateSensors(endedCohortId);
+        } catch (Exception exception) {
+            log.error("기수 종료 센서 회수(CE-05)에 실패했습니다. 해당 센서의 룰이 계속 발화합니다. cohortId={}",
+                    endedCohortId, exception);
+        }
+
+        // 5단계 — 공간 관리 주체 해제 (CE-04). 앞 단계와 무관하게 시도한다.
         try {
             spaceCleanup.unassignSpaces(endedCohortId);
         } catch (Exception exception) {

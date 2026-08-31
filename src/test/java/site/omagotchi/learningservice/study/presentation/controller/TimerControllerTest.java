@@ -72,7 +72,7 @@ class TimerControllerTest {
                     .willReturn(result);
 
             mockMvc.perform(post(
-                            "/api/v1/cohorts/{cohortId}/timer/start",
+                            "/api/v1/cohorts/{cohort-id}/timer/start",
                             COHORT_ID
                     )
                             .principal(authentication()))
@@ -102,7 +102,7 @@ class TimerControllerTest {
             given(timerQueryService.getCurrent(USER_ID, COHORT_ID)).willReturn(result);
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/timer",
+                            "/api/v1/cohorts/{cohort-id}/timer",
                             COHORT_ID
                     )
                             .principal(authentication()))
@@ -122,7 +122,7 @@ class TimerControllerTest {
                     .willReturn(TimerStateResult.stopped());
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/timer",
+                            "/api/v1/cohorts/{cohort-id}/timer",
                             COHORT_ID
                     )
                             .principal(authentication()))
@@ -144,7 +144,7 @@ class TimerControllerTest {
         @DisplayName("정상 처리")
         void discardsTimer() throws Exception {
             mockMvc.perform(post(
-                            "/api/v1/cohorts/{cohortId}/timer/{timerRunId}/discard",
+                            "/api/v1/cohorts/{cohort-id}/timer/{timer-run-id}/discard",
                             COHORT_ID,
                             TIMER_RUN_ID
                     )
@@ -167,7 +167,7 @@ class TimerControllerTest {
         @DisplayName("정상 처리")
         void stopsTimerSuccessfully() throws Exception {
             mockMvc.perform(post(
-                            "/api/v1/cohorts/{cohortId}/timer/{timerRunId}/stop",
+                            "/api/v1/cohorts/{cohort-id}/timer/{timer-run-id}/stop",
                             COHORT_ID,
                             TIMER_RUN_ID
                     )

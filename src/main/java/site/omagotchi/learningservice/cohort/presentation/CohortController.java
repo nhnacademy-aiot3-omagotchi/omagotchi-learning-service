@@ -76,14 +76,14 @@ public class CohortController {
         return userAccessContextService.getContext(user.userId(), user.globalRole());
     }
 
-    @GetMapping("/{cohortId}")
-    public CohortResponse getCohort(@PathVariable Long cohortId) {
+    @GetMapping("/{cohort-id}")
+    public CohortResponse getCohort(@PathVariable("cohort-id") Long cohortId) {
         return cohortService.getCohort(cohortId);
     }
 
-    @PatchMapping("/{cohortId}")
+    @PatchMapping("/{cohort-id}")
     public CohortResponse update(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication,
             @Valid @RequestBody UpdateCohortRequest request
     ) {
@@ -91,9 +91,9 @@ public class CohortController {
         return cohortService.update(cohortId, request.toCommand(), user.userId());
     }
 
-    @PatchMapping("/{cohortId}/status")
+    @PatchMapping("/{cohort-id}/status")
     public CohortResponse changeStatus(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication,
             @Valid @RequestBody ChangeCohortStatusRequest request
     ) {
@@ -101,9 +101,9 @@ public class CohortController {
         return cohortService.changeStatus(cohortId, request.toCommand(), user.globalRole());
     }
 
-    @DeleteMapping("/{cohortId}")
+    @DeleteMapping("/{cohort-id}")
     public ResponseEntity<Void> delete(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
@@ -111,18 +111,18 @@ public class CohortController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/{cohortId}/join-code")
+    @GetMapping("/{cohort-id}/join-code")
     public JoinCodeResponse getJoinCode(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return joinCodeService.getLatestJoinCode(cohortId, user.userId());
     }
 
-    @PostMapping("/{cohortId}/join-code")
+    @PostMapping("/{cohort-id}/join-code")
     public IssuedJoinCodeResponse issueJoinCode(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication,
             @Valid @RequestBody IssueJoinCodeRequest request
     ) {
@@ -130,9 +130,9 @@ public class CohortController {
         return joinCodeService.issue(cohortId, request.toCommand(), user.userId());
     }
 
-    @PatchMapping("/{cohortId}/join-code/revoke")
+    @PatchMapping("/{cohort-id}/join-code/revoke")
     public JoinCodeResponse revokeJoinCode(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
@@ -165,27 +165,27 @@ public class CohortController {
         return membershipService.getMyMemberships(user.userId());
     }
 
-    @GetMapping("/{cohortId}/join-requests")
+    @GetMapping("/{cohort-id}/join-requests")
     public List<CohortMembershipResponse> getJoinRequests(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return membershipService.getPendingJoinRequests(cohortId, user.userId());
     }
 
-    @GetMapping("/{cohortId}/members")
+    @GetMapping("/{cohort-id}/members")
     public List<CohortMembershipResponse> getMembers(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return membershipService.getMembers(cohortId, user.userId());
     }
 
-    @PostMapping("/{cohortId}/managers")
+    @PostMapping("/{cohort-id}/managers")
     public CohortMembershipResponse assignManager(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication,
             @Valid @RequestBody AssignCohortManagerRequest request
     ) {
@@ -198,10 +198,10 @@ public class CohortController {
         );
     }
 
-    @PatchMapping("/{cohortId}/members/{memberUserId}/role")
+    @PatchMapping("/{cohort-id}/members/{member-user-id}/role")
     public CohortMembershipResponse changeMemberRole(
-            @PathVariable Long cohortId,
-            @PathVariable UUID memberUserId,
+            @PathVariable("cohort-id") Long cohortId,
+            @PathVariable("member-user-id") UUID memberUserId,
             JwtAuthenticationToken authentication,
             @Valid @RequestBody ChangeCohortMemberRoleRequest request
     ) {
@@ -215,18 +215,18 @@ public class CohortController {
         );
     }
 
-    @GetMapping("/{cohortId}/attendance-policy")
+    @GetMapping("/{cohort-id}/attendance-policy")
     public CohortAttendancePolicyResponse getAttendancePolicy(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return attendancePolicyService.getPolicy(cohortId, user.userId());
     }
 
-    @PutMapping("/{cohortId}/attendance-policy")
+    @PutMapping("/{cohort-id}/attendance-policy")
     public CohortAttendancePolicyResponse saveAttendancePolicy(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication,
             @Valid @RequestBody SaveAttendancePolicyRequest request
     ) {

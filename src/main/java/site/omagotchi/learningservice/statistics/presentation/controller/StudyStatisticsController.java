@@ -21,7 +21,7 @@ import java.time.LocalDate;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/cohorts/{cohortId}/study-statistics")
+@RequestMapping("/api/v1/cohorts/{cohort-id}/study-statistics")
 public class StudyStatisticsController {
 
     private final CohortStatisticsService cohortStatisticsService;
@@ -30,7 +30,7 @@ public class StudyStatisticsController {
     @GetMapping("/today")
     public ResponseEntity<TodayResponse> getToday(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId
+            @PathVariable("cohort-id") Long cohortId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
 
@@ -42,7 +42,7 @@ public class StudyStatisticsController {
     @GetMapping("/trend")
     public ResponseEntity<TrendResponse> getTrend(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             @RequestParam String window
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
@@ -59,7 +59,7 @@ public class StudyStatisticsController {
     @GetMapping("/members")
     public ResponseEntity<MemberPageResponse> getMembers(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             @RequestParam String window,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
@@ -79,11 +79,11 @@ public class StudyStatisticsController {
         ));
     }
 
-    @GetMapping("/members/{cohortMembershipId}/overview")
+    @GetMapping("/members/{cohort-membership-id}/overview")
     public ResponseEntity<MemberOverviewResponse> getMemberOverview(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
-            @PathVariable Long cohortMembershipId,
+            @PathVariable("cohort-id") Long cohortId,
+            @PathVariable("cohort-membership-id") Long cohortMembershipId,
             @RequestParam String window
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
@@ -98,11 +98,11 @@ public class StudyStatisticsController {
         ));
     }
 
-    @GetMapping("/members/{cohortMembershipId}/records")
+    @GetMapping("/members/{cohort-membership-id}/records")
     public ResponseEntity<MemberDailyRecordsResponse> getMemberDailyRecords(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
-            @PathVariable Long cohortMembershipId,
+            @PathVariable("cohort-id") Long cohortId,
+            @PathVariable("cohort-membership-id") Long cohortMembershipId,
             @RequestParam LocalDate date
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);

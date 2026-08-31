@@ -16,9 +16,9 @@ import java.util.UUID;
 @HttpExchange("/api/v1/internal/accounts")
 public interface IdentityAccountHttpService {
 
-    @GetExchange("/{accountId}")
+    @GetExchange("/{account-id}")
     ResponseEntity<IdentityAccountResponse> getAccount(
-            @PathVariable UUID accountId
+            @PathVariable("account-id") UUID accountId
     );
 
     @PostExchange("/batch")

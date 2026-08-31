@@ -193,7 +193,7 @@ sequenceDiagram
     G->>L: Learning route 전달
     L-->>S: approvedCohort.cohortId
     S->>H: 기수 ID + 날짜 + Pagination으로 출결 조회
-    H->>G: GET /api/v1/cohorts/{cohortId}/attendance-records/me
+    H->>G: GET /api/v1/cohorts/{cohort-id}/attendance-records/me
     G->>L: Learning route 전달
     L-->>S: items + page
     S-->>C: AttendanceRecordPageResponse
@@ -265,7 +265,7 @@ X-CSRF-TOKEN: ...
 BFF는 Session의 Access Token과 승인된 기수 ID를 찾아 Gateway 요청으로 바꾼다.
 
 ```http
-POST /api/v1/cohorts/{cohortId}/attendance-records/check-in
+POST /api/v1/cohorts/{cohort-id}/attendance-records/check-in
 Authorization: Bearer <Access Token>
 ```
 
@@ -303,7 +303,7 @@ Browser FormData
 다운로드는 상태를 변경하지 않는 GET 요청이다.
 
 ```text
-GET /bff/v1/community/posts/{postId}/attachments/{attachmentId}
+GET /bff/v1/community/posts/{post-id}/attachments/{attachment-id}
 → BFF가 Bearer Token을 붙여 Gateway로 전달
 → Learning Service가 권한과 게시글-첨부파일 소속을 검증
 → 파일 Resource와 Content-Disposition을 Browser에 반환
@@ -392,7 +392,7 @@ DOM을 직접 수정하지 않는다. 두 계약을 연결하고 필요한 값�
 ```text
 화면 Page 경로:          /home
 Browser용 BFF 경로:      /bff/v1/attendance/history
-내부 Gateway API 경로:   /api/v1/cohorts/{cohortId}/attendance-records/me
+내부 Gateway API 경로:   /api/v1/cohorts/{cohort-id}/attendance-records/me
 ```
 
 ### 팀끼리 API를 전달할 때 필요한 최소 정보

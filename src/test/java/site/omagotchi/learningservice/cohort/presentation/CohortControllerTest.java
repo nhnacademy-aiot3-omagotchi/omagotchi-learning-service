@@ -137,7 +137,7 @@ class CohortControllerTest {
     @Test
     @DisplayName("SYSTEM_ADMIN의 PREPARING 기수 삭제는 204를 반환한다")
     void deletesPreparingCohort() throws Exception {
-        mockMvc.perform(delete("/api/v1/cohorts/{cohortId}", COHORT_ID)
+        mockMvc.perform(delete("/api/v1/cohorts/{cohort-id}", COHORT_ID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue("SYSTEM_ADMIN")))
                 .andExpect(status().isNoContent());
 
@@ -155,7 +155,7 @@ class CohortControllerTest {
                 any()
         )).willThrow(new BusinessException(CohortErrorCode.COHORT_MANAGER_PERIOD_CONFLICT));
 
-        mockMvc.perform(post("/api/v1/cohorts/{cohortId}/managers", COHORT_ID)
+        mockMvc.perform(post("/api/v1/cohorts/{cohort-id}/managers", COHORT_ID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue("SYSTEM_ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -171,7 +171,7 @@ class CohortControllerTest {
         given(attendancePolicyService.getPolicy(COHORT_ID, USER_ID))
                 .willReturn(policyResponse());
 
-        mockMvc.perform(get("/api/v1/cohorts/{cohortId}/attendance-policy", COHORT_ID)
+        mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/attendance-policy", COHORT_ID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cohortId").value(COHORT_ID))
@@ -200,7 +200,7 @@ class CohortControllerTest {
                 eq(USER_ID)
         )).willReturn(policyResponse());
 
-        mockMvc.perform(put("/api/v1/cohorts/{cohortId}/attendance-policy", COHORT_ID)
+        mockMvc.perform(put("/api/v1/cohorts/{cohort-id}/attendance-policy", COHORT_ID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""

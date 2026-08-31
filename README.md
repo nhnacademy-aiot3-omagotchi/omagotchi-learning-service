@@ -131,9 +131,9 @@ echo "누락된 키:"; comm -23 /tmp/req.txt /tmp/have.txt
 주요 Resource:
 
 - `/api/v1/cohorts/**`: 기수·소속·출결 정책
-- `/api/v1/cohorts/{cohortId}/attendance-records/**`: 출결
-- `/api/v1/cohorts/{cohortId}/timer/**`: 학습 타이머
-- `/api/v1/cohorts/{cohortId}/study-statistics/**`: 학습 통계
+- `/api/v1/cohorts/{cohort-id}/attendance-records/**`: 출결
+- `/api/v1/cohorts/{cohort-id}/timer/**`: 학습 타이머
+- `/api/v1/cohorts/{cohort-id}/study-statistics/**`: 학습 통계
 - `/api/v1/spaces/**`: 공간·점유
 - `/api/v1/teams/**`: 팀·팀원
 - `/api/v1/community/posts/**`: 커뮤니티

@@ -16,7 +16,7 @@ import java.time.YearMonth;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/cohorts/{cohortId}/study-rankings")
+@RequestMapping("/api/v1/cohorts/{cohort-id}/study-rankings")
 public class MemberStudyRankingController {
 
     private final StudyRankingQueryService studyRankingQueryService;
@@ -25,7 +25,7 @@ public class MemberStudyRankingController {
     @GetMapping("/today")
     public TodayMemberStudyRankingResponse getTodayRanking(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             @RequestParam(required = false) Integer maxRank
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
@@ -42,7 +42,7 @@ public class MemberStudyRankingController {
     @GetMapping("/daily/{date}")
     public MemberStudyRankingResponse getDailyRanking(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) Integer maxRank
     ) {
@@ -55,11 +55,11 @@ public class MemberStudyRankingController {
     }
 
     // 주간 랭킹 조회
-    @GetMapping("/weekly/{weekStartDate}")
+    @GetMapping("/weekly/{week-start-date}")
     public MemberStudyRankingResponse getWeeklyRanking(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
-            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate weekStartDate,
+            @PathVariable("cohort-id") Long cohortId,
+            @PathVariable("week-start-date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate weekStartDate,
             @RequestParam(required = false) Integer maxRank
     ) {
         return getHistoricalRanking(
@@ -74,7 +74,7 @@ public class MemberStudyRankingController {
     @GetMapping("/monthly/{month}")
     public MemberStudyRankingResponse getMonthlyRanking(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             @PathVariable @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
             @RequestParam(required = false) Integer maxRank
     ) {

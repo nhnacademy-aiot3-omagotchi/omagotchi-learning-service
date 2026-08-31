@@ -97,13 +97,13 @@ learning/
 | `PATCH /bff/v1/me/nickname` | `PATCH /api/v1/user-profiles/me/nickname` |
 | `POST /bff/v1/cohorts/applications` | `POST /api/v1/cohorts/applications` |
 | `GET /bff/v1/cohorts/applications/me` | `GET /api/v1/cohorts/join-requests/me` |
-| `GET /bff/v1/attendance/history` | `GET /api/v1/cohorts/{approvedCohortId}/attendance-records/me?from=&to=&page=&size=` |
+| `GET /bff/v1/attendance/history` | `GET /api/v1/cohorts/{cohort-id}/attendance-records/me?from=&to=&page=&size=` |
 | `GET /bff/v1/attendance/today` | 위 출결 목록에서 오늘 날짜 선택 |
-| `POST /bff/v1/attendance/check-in` | `POST /api/v1/cohorts/{approvedCohortId}/attendance-records/check-in` |
-| `POST /bff/v1/attendance/check-out` | `POST /api/v1/cohorts/{approvedCohortId}/attendance-records/check-out` |
+| `POST /bff/v1/attendance/check-in` | `POST /api/v1/cohorts/{cohort-id}/attendance-records/check-in` |
+| `POST /bff/v1/attendance/check-out` | `POST /api/v1/cohorts/{cohort-id}/attendance-records/check-out` |
 | `GET /bff/v1/community/posts` | `GET /api/v1/community/posts` |
 | `GET /bff/v1/gamification/home` | `GET /api/v1/gamification/home` |
-| `GET /bff/v1/cohorts/{cohortId}/study-rankings` | 같은 `/api/v1` 경로 |
+| `GET /bff/v1/cohorts/{cohort-id}/study-rankings` | 같은 `/api/v1` 경로 |
 | `GET /bff/v1/presence` | `GET /api/v1/cohorts/me/presence` |
 
 Attendance BFF는 Browser가 보낸 임의의 기수 ID를 신뢰하지 말고, Profile의
@@ -173,7 +173,7 @@ resolver에 넘겨 경로를 만듭니다.
 예전 `GET /rankings/study?cohortId=...&baseDate=...` 계약을 사용하지 않습니다.
 
 ```http
-GET /api/v1/cohorts/{cohortId}/study-rankings?period=WEEKLY&maxRank=100
+GET /api/v1/cohorts/{cohort-id}/study-rankings?period=WEEKLY&maxRank=100
 ```
 
 응답에도 `period`, `baseDate`, `generatedAt`이 없습니다.
@@ -200,7 +200,7 @@ GET /api/v1/cohorts/{cohortId}/study-rankings?period=WEEKLY&maxRank=100
 직렬화하지 않고 `Content-Type` Header도 직접 설정하지 않도록 분기합니다.
 
 첨부파일은 상세 응답의 ID로
-`GET /api/v1/community/posts/{postId}/attachments/{attachmentId}`를 호출하고 byte stream을 relay합니다.
+`GET /api/v1/community/posts/{post-id}/attachments/{attachment-id}`를 호출하고 byte stream을 relay합니다.
 
 ### Presence
 
@@ -246,7 +246,7 @@ nickname
 아래는 Frontend가 임의로 채우지 말고 Backend 담당자와 합의해 주세요.
 
 1. 기수 멤버 응답에 이름·이메일이 없음
-2. `/cohorts/{cohortId}/audit-logs` API가 없음
+2. `/cohorts/{cohort-id}/audit-logs` API가 없음
 3. Gateway에 `/ws` route가 없어 Presence 실시간 연결 불가
 
 위 항목은 Frontend에서 임의 DTO나 가짜 값을 만들어 해결하지 않습니다. REST Snapshot처럼 일부만

@@ -67,10 +67,10 @@ public class CommunityPostController {
         ));
     }
 
-    @GetMapping("/{postId}")
+    @GetMapping("/{post-id}")
     public CommunityPostDetailResponse getPost(
             JwtAuthenticationToken authentication,
-            @PathVariable Long postId
+            @PathVariable("post-id") Long postId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return CommunityPostDetailResponse.from(communityPostQueryService.getPost(
@@ -79,11 +79,11 @@ public class CommunityPostController {
         ));
     }
 
-    @GetMapping("/{postId}/attachments/{attachmentId}")
+    @GetMapping("/{post-id}/attachments/{attachment-id}")
     public ResponseEntity<Resource> downloadAttachment(
             JwtAuthenticationToken authentication,
-            @PathVariable Long postId,
-            @PathVariable Long attachmentId
+            @PathVariable("post-id") Long postId,
+            @PathVariable("attachment-id") Long attachmentId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         var download = communityPostQueryService.downloadAttachment(user.userId(), postId, attachmentId);
@@ -130,10 +130,10 @@ public class CommunityPostController {
         ));
     }
 
-    @PatchMapping("/{postId}")
+    @PatchMapping("/{post-id}")
     public CommunityPostDetailResponse update(
             JwtAuthenticationToken authentication,
-            @PathVariable Long postId,
+            @PathVariable("post-id") Long postId,
             @Valid @RequestBody UpdateCommunityPostRequest request
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
@@ -146,12 +146,12 @@ public class CommunityPostController {
     }
 
     @PatchMapping(
-            path = "/{postId}",
+            path = "/{post-id}",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
     public CommunityPostDetailResponse updateWithAttachments(
             JwtAuthenticationToken authentication,
-            @PathVariable Long postId,
+            @PathVariable("post-id") Long postId,
             @Valid @RequestPart("post") UpdateCommunityPostRequest request,
             @RequestPart(value = "attachments", required = false) List<MultipartFile> attachments
     ) {
@@ -164,11 +164,11 @@ public class CommunityPostController {
         ));
     }
 
-    @DeleteMapping("/{postId}")
+    @DeleteMapping("/{post-id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
             JwtAuthenticationToken authentication,
-            @PathVariable Long postId
+            @PathVariable("post-id") Long postId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         communityPostCommandService.delete(
@@ -178,10 +178,10 @@ public class CommunityPostController {
         );
     }
 
-    @PatchMapping("/{postId}/pin")
+    @PatchMapping("/{post-id}/pin")
     public CommunityPostDetailResponse pin(
             JwtAuthenticationToken authentication,
-            @PathVariable Long postId,
+            @PathVariable("post-id") Long postId,
             @Valid @RequestBody PinCommunityPostRequest request
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);

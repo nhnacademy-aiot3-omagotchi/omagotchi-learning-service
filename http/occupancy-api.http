@@ -6,7 +6,7 @@
 ### 재실 판정은 실제 출결 데이터를 본다 (AttendancePresenceQueryService·PresenceIntervalRepository) —
 ### cohort_memberships만으로는 재실이 되지 않는다. presence_intervals가 ended_at IS NULL이고
 ### state <> 'AWAY'인 열린 구간이 있어야 재실이며, 그 구간은 출석 체크인(POST
-### /api/v1/cohorts/{cohortId}/attendance-records/check-in)이 만든다 — 아래 "사전 준비" 참고.
+### /api/v1/cohorts/{cohort-id}/attendance-records/check-in)이 만든다 — 아래 "사전 준비" 참고.
 ### 응답 필드: occupancyId, spaceId, status, startedAt, expiresAt, extensionCount, remainingSeconds
 
 ### =========================================================

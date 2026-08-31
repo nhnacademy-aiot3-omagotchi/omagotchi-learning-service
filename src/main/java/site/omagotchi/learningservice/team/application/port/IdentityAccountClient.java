@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.team.application.port;
 import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
+import java.util.List;
 
 /**
  * Identity Service 계정 조회 파사드.
@@ -22,4 +23,7 @@ public interface IdentityAccountClient {
      * 팀원 8명이어도 호출은 1회여야 한다.
      */
     Map<UUID, String> findDisplayNames(Collection<UUID> userIds);
+
+    /** Learning이 확정한 후보 계정 범위 안에서 이름 또는 이메일로 최대 20개를 검색한다. */
+    List<IdentityAccountView> search(String query, Collection<UUID> candidateIds);
 }

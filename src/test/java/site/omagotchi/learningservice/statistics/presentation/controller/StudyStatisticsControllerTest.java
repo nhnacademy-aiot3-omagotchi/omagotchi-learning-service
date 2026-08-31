@@ -117,7 +117,7 @@ class StudyStatisticsControllerTest {
                     ));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/today",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/today",
                             COHORT_ID
                     ).principal(authentication()))
                     .andExpect(status().isOk())
@@ -146,7 +146,7 @@ class StudyStatisticsControllerTest {
                     .willThrow(new BusinessException(CohortErrorCode.COHORT_MANAGER_REQUIRED));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/today",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/today",
                             COHORT_ID
                     ).principal(authentication()))
                     .andExpect(status().isForbidden())
@@ -177,7 +177,7 @@ class StudyStatisticsControllerTest {
             ));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/trend",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/trend",
                             COHORT_ID
                     ).queryParam("window", "14d")
                     .principal(authentication()))
@@ -205,7 +205,7 @@ class StudyStatisticsControllerTest {
         @DisplayName("조회 기간 누락 예외")
         void rejectsMissingTrendWindow() throws Exception {
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/trend",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/trend",
                             COHORT_ID
                     ).principal(authentication()))
                     .andExpect(status().isBadRequest())
@@ -225,7 +225,7 @@ class StudyStatisticsControllerTest {
             )).willThrow(new BusinessException(CommonErrorCode.INVALID_REQUEST));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/trend",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/trend",
                             COHORT_ID
                     ).queryParam("window", "61d")
                     .principal(authentication()))
@@ -281,7 +281,7 @@ class StudyStatisticsControllerTest {
             ));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/members",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/members",
                             COHORT_ID
                     ).queryParam("window", "30d")
                     .principal(authentication()))
@@ -317,7 +317,7 @@ class StudyStatisticsControllerTest {
         @DisplayName("조회 기간 누락 예외")
         void rejectsMissingMemberStatisticsWindow() throws Exception {
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/members",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/members",
                             COHORT_ID
                     ).principal(authentication()))
                     .andExpect(status().isBadRequest())
@@ -340,7 +340,7 @@ class StudyStatisticsControllerTest {
             )).willThrow(new BusinessException(CommonErrorCode.INVALID_REQUEST));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/members",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/members",
                             COHORT_ID
                     ).queryParam("window", "30d")
                     .queryParam("page", "-1")
@@ -364,7 +364,7 @@ class StudyStatisticsControllerTest {
             )).willThrow(new BusinessException(CommonErrorCode.INVALID_REQUEST));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/members",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/members",
                             COHORT_ID
                     ).queryParam("window", "30d")
                     .queryParam("size", String.valueOf(size))
@@ -392,7 +392,7 @@ class StudyStatisticsControllerTest {
             )).willThrow(new BusinessException(CommonErrorCode.INVALID_REQUEST));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/members",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/members",
                             COHORT_ID
                     ).queryParam("window", "30d")
                     .queryParam("sort", sort)
@@ -432,8 +432,8 @@ class StudyStatisticsControllerTest {
             ));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/members/"
-                                    + "{cohortMembershipId}/overview",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/members/"
+                                    + "{cohort-membership-id}/overview",
                             COHORT_ID,
                             cohortMembershipId
                     ).queryParam("window", "7d")
@@ -474,8 +474,8 @@ class StudyStatisticsControllerTest {
             )).willThrow(new BusinessException(CohortErrorCode.COHORT_MEMBERSHIP_NOT_FOUND));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/members/"
-                                    + "{cohortMembershipId}/overview",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/members/"
+                                    + "{cohort-membership-id}/overview",
                             COHORT_ID,
                             cohortMembershipId
                     ).queryParam("window", "7d")
@@ -489,8 +489,8 @@ class StudyStatisticsControllerTest {
         @DisplayName("조회 기간 누락 예외")
         void rejectsMemberOverviewWithoutWindow() throws Exception {
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/members/"
-                                    + "{cohortMembershipId}/overview",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/members/"
+                                    + "{cohort-membership-id}/overview",
                             COHORT_ID,
                             101L
                     ).principal(authentication()))
@@ -539,8 +539,8 @@ class StudyStatisticsControllerTest {
             ));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/members/"
-                                    + "{cohortMembershipId}/records",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/members/"
+                                    + "{cohort-membership-id}/records",
                             COHORT_ID,
                             cohortMembershipId
                     ).queryParam("date", "2000-01-07")
@@ -570,8 +570,8 @@ class StudyStatisticsControllerTest {
         @DisplayName("집계일 누락 예외")
         void rejectsMemberDailyRecordsWithoutDate() throws Exception {
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/members/"
-                                    + "{cohortMembershipId}/records",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/members/"
+                                    + "{cohort-membership-id}/records",
                             COHORT_ID,
                             101L
                     ).principal(authentication()))
@@ -586,8 +586,8 @@ class StudyStatisticsControllerTest {
         @DisplayName("잘못된 집계일 형식 예외")
         void rejectsMalformedMemberDailyRecordsDate() throws Exception {
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/members/"
-                                    + "{cohortMembershipId}/records",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/members/"
+                                    + "{cohort-membership-id}/records",
                             COHORT_ID,
                             101L
                     ).queryParam("date", "2000-01-XX")
@@ -610,8 +610,8 @@ class StudyStatisticsControllerTest {
             )).willThrow(new BusinessException(CommonErrorCode.INVALID_REQUEST));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/members/"
-                                    + "{cohortMembershipId}/records",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/members/"
+                                    + "{cohort-membership-id}/records",
                             COHORT_ID,
                             101L
                     ).queryParam("date", "2000-01-31")
@@ -632,8 +632,8 @@ class StudyStatisticsControllerTest {
             )).willThrow(new BusinessException(CohortErrorCode.COHORT_MEMBERSHIP_NOT_FOUND));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-statistics/members/"
-                                    + "{cohortMembershipId}/records",
+                            "/api/v1/cohorts/{cohort-id}/study-statistics/members/"
+                                    + "{cohort-membership-id}/records",
                             COHORT_ID,
                             101L
                     ).queryParam("date", "2000-01-07")

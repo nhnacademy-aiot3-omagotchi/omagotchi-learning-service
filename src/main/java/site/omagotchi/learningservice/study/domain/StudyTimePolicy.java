@@ -17,17 +17,16 @@ public final class StudyTimePolicy {
         return instant.equals(floorToMinute(instant));
     }
 
+    public static boolean isSecondAligned(Instant instant) {
+        return instant.equals(instant.truncatedTo(ChronoUnit.SECONDS));
+    }
+
     public static boolean isMinuteAligned(LocalTime time) {
         return time.equals(time.truncatedTo(ChronoUnit.MINUTES));
     }
 
     public static Instant floorToMinute(Instant instant) {
         return instant.truncatedTo(ChronoUnit.MINUTES);
-    }
-
-    public static Instant ceilToMinute(Instant instant) {
-        Instant floor = floorToMinute(instant);
-        return instant.equals(floor) ? floor : floor.plus(1, ChronoUnit.MINUTES);
     }
 
     public static boolean crossesAggregationBoundary(Instant startTime, Instant endTime) {

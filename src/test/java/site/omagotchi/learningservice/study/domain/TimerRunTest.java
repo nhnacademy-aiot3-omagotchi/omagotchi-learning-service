@@ -157,6 +157,47 @@ class TimerRunTest {
     }
 
     @Nested
+    @DisplayName("겹침 종료")
+    class Overlap {
+
+        @Test
+        @DisplayName("정지 결과를 겹침 종료로 확정")
+        void rejectsStoppedStudyRecordDueToOverlap() {
+            TimerRun timerRun = createTimerRun();
+            timerRun.stopOrExpire(ENDED_AT, TIME_POLICY);
+
+            TimerEndReason endReason = timerRun.rejectStudyRecordDueToOverlap();
+
+            assertAll(
+                    () -> assertEquals(TimerEndReason.OVERLAP, endReason),
+                    () -> assertFalse(timerRun.isRunning()),
+                    () -> assertEquals(ENDED_AT, timerRun.getEndedAt()),
+                    () -> assertNull(timerRun.getMeasuredSeconds()),
+                    () -> assertEquals(TimerEndReason.OVERLAP, timerRun.getEndReason())
+            );
+        }
+
+        @Test
+        @DisplayName("정상 정지 상태가 아니면 겹침 종료 거절")
+        void rejectsOverlapTransitionFromNonStoppedState() {
+            TimerRun running = createTimerRun();
+            TimerRun discarded = createTimerRun();
+            discarded.discardOrExpire(ENDED_AT, TIME_POLICY);
+
+            assertAll(
+                    () -> assertThrows(
+                            IllegalStateException.class,
+                            running::rejectStudyRecordDueToOverlap
+                    ),
+                    () -> assertThrows(
+                            IllegalStateException.class,
+                            discarded::rejectStudyRecordDueToOverlap
+                    )
+            );
+        }
+    }
+
+    @Nested
     @DisplayName("폐기")
     class Discard {
 

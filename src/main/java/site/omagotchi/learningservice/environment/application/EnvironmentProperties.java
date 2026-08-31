@@ -14,6 +14,7 @@ import java.util.Objects;
 public record EnvironmentProperties(
         Cache cache,
         Duration coolDown,
+        Duration notifyDeadline,
         Iot iot
 ) {
     // 컴팩트 생성자 검증
@@ -25,6 +26,10 @@ public record EnvironmentProperties(
 
         if (Objects.isNull(coolDown) || coolDown.isNegative() || coolDown.isZero()) {
             coolDown = Duration.ofMinutes(5);
+        }
+
+        if(Objects.isNull(notifyDeadline) || notifyDeadline.isNegative() || notifyDeadline.isZero()){
+            notifyDeadline = Duration.ofSeconds(5);
         }
 
         if (Objects.isNull(iot)) {
@@ -77,7 +82,7 @@ public record EnvironmentProperties(
         }
 
         public boolean configured() {
-            return (Objects.nonNull(baseUrl) && !baseUrl.isBlank()) || (Objects.nonNull(secret) && secret.isBlank());
+            return (Objects.nonNull(baseUrl) && !baseUrl.isBlank()) && (Objects.nonNull(secret) && !secret.isBlank());
         }
     }
 }

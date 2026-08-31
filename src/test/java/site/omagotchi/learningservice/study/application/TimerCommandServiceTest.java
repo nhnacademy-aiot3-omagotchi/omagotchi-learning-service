@@ -13,9 +13,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.event.StudyCompletedEvent;
 import site.omagotchi.learningservice.study.application.port.StudyEventPublisher;
+import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
+import site.omagotchi.learningservice.study.application.port.StudyRecordRepository;
 import site.omagotchi.learningservice.study.application.port.StudyWriteLock;
 import site.omagotchi.learningservice.study.application.port.TimerRunQueryRepository;
 import site.omagotchi.learningservice.study.application.port.TimerRunRepository;
@@ -70,6 +71,9 @@ class TimerCommandServiceTest {
     private StudyRecordRepository studyRecordRepository;
 
     @Mock
+    private StudyRecordQueryRepository studyRecordQueryRepository;
+
+    @Mock
     private StudyWriteLock studyWriteLock;
 
     @Mock
@@ -90,7 +94,9 @@ class TimerCommandServiceTest {
                 studyWriteLock,
                 clock,
                 TIME_POLICY,
-                studyEventPublisher
+                studyEventPublisher,
+                new TimerStudyRecordFactory(),
+                new StudyRecordOverlapGuard(studyRecordQueryRepository)
         );
     }
 
@@ -322,8 +328,8 @@ class TimerCommandServiceTest {
         }
 
         @Test
-        @DisplayName("공부 기록 시작 내림과 종료 올림")
-        void savesStudyRecordWithMinuteAlignedTimes() {
+        @DisplayName("공부 기록을 타이머 실제 초 구간으로 저장")
+        void savesStudyRecordWithExactTimerTimes() {
             Instant startedAt = STARTED_AT.plusSeconds(20);
             Instant endedAt = STARTED_AT.plusSeconds(3_640);
             TimerRun timerRun = TimerRun.start(COHORT_MEMBERSHIP_ID, startedAt);
@@ -340,10 +346,114 @@ class TimerCommandServiceTest {
             verify(studyRecordRepository).save(captor.capture());
             StudyRecord saved = captor.getValue();
             assertAll(
-                    () -> assertEquals(STARTED_AT, saved.getStartTime()),
-                    () -> assertEquals(STARTED_AT.plusSeconds(3_660), saved.getEndTime()),
+                    () -> assertEquals(startedAt, saved.getStartTime()),
+                    () -> assertEquals(endedAt, saved.getEndTime()),
                     () -> assertEquals(3_620L, saved.getStudySeconds())
             );
+        }
+
+        @Test
+        @DisplayName("초 단위로 연속 실행한 타이머의 공부 기록 구간은 겹치지 않음")
+        void doesNotOverlapRecordsForConsecutiveTimers() {
+            Instant firstStartedAt = Instant.parse("2000-01-01T00:00:50Z");
+            Instant firstEndedAt = Instant.parse("2000-01-01T00:02:10Z");
+
+            // firstEndedAt = secondStartedAt
+            Instant secondStartedAt = Instant.parse("2000-01-01T00:02:10Z");
+            Instant secondEndedAt = Instant.parse("2000-01-01T00:04:00Z");
+            TimerRun firstTimer = TimerRun.start(COHORT_MEMBERSHIP_ID, firstStartedAt);
+            TimerRun secondTimer = TimerRun.start(COHORT_MEMBERSHIP_ID, secondStartedAt);
+            UUID secondTimerRunId = UUID.fromString(
+                    "00000000-0000-0000-0000-000000000004"
+            );
+            givenActiveMembership();
+            given(timerRunQueryRepository.findOwnedById(
+                    any(UUID.class),
+                    eq(COHORT_MEMBERSHIP_ID)
+            )).willReturn(Optional.of(firstTimer), Optional.of(secondTimer));
+            given(clock.instant()).willReturn(firstEndedAt, secondEndedAt);
+
+            timerCommandService.stop(USER_ID, COHORT_ID, TIMER_RUN_ID);
+            timerCommandService.stop(USER_ID, COHORT_ID, secondTimerRunId);
+
+            ArgumentCaptor<StudyRecord> captor = ArgumentCaptor.forClass(StudyRecord.class);
+            verify(studyRecordRepository, times(2)).save(captor.capture());
+            List<StudyRecord> records = captor.getAllValues();
+            assertAll(
+                    () -> assertEquals(
+                            firstStartedAt,
+                            records.get(0).getStartTime()
+                    ),
+                    () -> assertEquals(
+                            firstEndedAt,
+                            records.get(0).getEndTime()
+                    ),
+                    () -> assertEquals(
+                            records.get(0).getEndTime(),
+                            records.get(1).getStartTime()
+                    ),
+                    () -> assertEquals(
+                            secondEndedAt,
+                            records.get(1).getEndTime()
+                    ),
+                    () -> assertEquals(80L, records.get(0).getStudySeconds()),
+                    () -> assertEquals(110L, records.get(1).getStudySeconds())
+            );
+        }
+
+        @Test
+        @DisplayName("1분 미만 타이머도 실제 초 구간으로 저장")
+        void savesSubMinuteTimerAsStudyRecord() {
+            Instant startedAt = STARTED_AT.plusSeconds(10);
+            Instant endedAt = STARTED_AT.plusSeconds(50);
+            TimerRun timerRun = TimerRun.start(COHORT_MEMBERSHIP_ID, startedAt);
+            givenOwnedTimer(timerRun);
+            given(clock.instant()).willReturn(endedAt);
+
+            timerCommandService.stop(USER_ID, COHORT_ID, TIMER_RUN_ID);
+
+            ArgumentCaptor<StudyRecord> captor = ArgumentCaptor.forClass(StudyRecord.class);
+            verify(studyRecordRepository).save(captor.capture());
+            StudyRecord saved = captor.getValue();
+            assertAll(
+                    () -> assertFalse(timerRun.isRunning()),
+                    () -> assertEquals(40L, timerRun.getMeasuredSeconds()),
+                    () -> assertEquals(startedAt, saved.getStartTime()),
+                    () -> assertEquals(endedAt, saved.getEndTime()),
+                    () -> assertEquals(40L, saved.getStudySeconds())
+            );
+            verify(timerRunRepository).end(timerRun);
+            verify(studyEventPublisher).publishCompleted(new StudyCompletedEvent(
+                    USER_ID,
+                    TIMER_RUN_ID,
+                    endedAt
+            ));
+        }
+
+        @Test
+        @DisplayName("기존 공부 기록과 겹치면 기록 없이 OVERLAP으로 종료")
+        void endsTimerAsOverlapWithoutStudyRecord() {
+            TimerRun timerRun = TimerRun.start(COHORT_MEMBERSHIP_ID, STARTED_AT);
+            Instant endedAt = STARTED_AT.plusSeconds(3_600L);
+            givenOwnedTimer(timerRun);
+            given(clock.instant()).willReturn(endedAt);
+            given(studyRecordQueryRepository.existsActiveOverlap(
+                    COHORT_MEMBERSHIP_ID,
+                    STARTED_AT,
+                    endedAt,
+                    null
+            )).willReturn(true);
+
+            timerCommandService.stop(USER_ID, COHORT_ID, TIMER_RUN_ID);
+
+            assertAll(
+                    () -> assertFalse(timerRun.isRunning()),
+                    () -> assertEquals(endedAt, timerRun.getEndedAt()),
+                    () -> assertNull(timerRun.getMeasuredSeconds()),
+                    () -> assertEquals(TimerEndReason.OVERLAP, timerRun.getEndReason())
+            );
+            verify(timerRunRepository).end(timerRun);
+            verifyNoInteractions(studyRecordRepository, studyEventPublisher);
         }
 
         @Test
@@ -582,7 +692,9 @@ class TimerCommandServiceTest {
                 studyWriteLock,
                 configuredClock,
                 TIME_POLICY,
-                studyEventPublisher
+                studyEventPublisher,
+                new TimerStudyRecordFactory(),
+                new StudyRecordOverlapGuard(studyRecordQueryRepository)
         );
     }
 

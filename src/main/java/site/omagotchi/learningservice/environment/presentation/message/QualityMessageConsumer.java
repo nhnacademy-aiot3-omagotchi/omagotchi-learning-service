@@ -14,7 +14,7 @@ public class QualityMessageConsumer {
     private static final String CONSUME_QUEUE = "omagotchi.sensor.quality.queue";
     private final SensorEventRecordService recordService;
 
-    @RabbitListener(queues = CONSUME_QUEUE)
+    @RabbitListener(queues = CONSUME_QUEUE, concurrency = "3-5")
     public void consume(QualityEventMessage message){
         recordService.record(message.toSensorEvent());
     }

@@ -8,7 +8,7 @@ import site.omagotchi.learningservice.environment.application.query.SensorEventP
 import site.omagotchi.learningservice.environment.application.query.SensorEventQuery;
 import site.omagotchi.learningservice.environment.domain.SensorEvent;
 import site.omagotchi.learningservice.environment.domain.SensorEventType;
-import site.omagotchi.learningservice.rule.application.SensorDeviceService;
+import site.omagotchi.learningservice.sensor.application.SensorDeviceService;
 
 import java.time.Clock;
 import java.time.Instant;

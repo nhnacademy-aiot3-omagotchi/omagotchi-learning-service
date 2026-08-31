@@ -280,7 +280,10 @@ class OccupancyExpiryIT {
         Long occupancyId = startAt(cohortId, "임박-성공중복방지-1", now.plusMinutes(5), null);
         RoomOccupancyRepository.ExpiringOccupancy candidate = expiringCandidate(occupancyId);
         AtomicInteger attempts = new AtomicInteger();
-        OccupancyReminderSender sender = reminder -> attempts.incrementAndGet();
+        OccupancyReminderSender sender = reminder -> {
+            attempts.incrementAndGet();
+            return true;
+        };
 
         assertThat(occupancyExpiryReminder.send(candidate, sender)).isTrue();
         assertThat(reminderSentAt(occupancyId)).isNotNull();
@@ -304,7 +307,7 @@ class OccupancyExpiryIT {
 
         assertThat(reminderSentAt(occupancyId)).isNull();
         assertThat(expiringOccupancyIds()).contains(occupancyId);
-        assertThat(occupancyExpiryReminder.send(candidate, reminder -> { })).isTrue();
+        assertThat(occupancyExpiryReminder.send(candidate, reminder -> true)).isTrue();
         assertThat(reminderSentAt(occupancyId)).isNotNull();
     }
 

@@ -1,35 +1,28 @@
 package site.omagotchi.learningservice.team.service;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
-import site.omagotchi.learningservice.team.application.TeamAccessSupport;
-import site.omagotchi.learningservice.team.application.TeamService;
-import site.omagotchi.learningservice.team.domain.Team;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
-import site.omagotchi.learningservice.team.infrastructure.persistence.TeamJpaRepository;
+import site.omagotchi.learningservice.team.application.TeamMasterService;
+import site.omagotchi.learningservice.team.application.TeamMemberService;
+import site.omagotchi.learningservice.team.application.TeamService;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
+import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.support.TeamTestFixture;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.willAnswer;
 
-/**
- * 해체 레이스 회귀 테스트.
- *
- * lockActiveTeam은 SELECT ... FOR UPDATE로 행을 잡은 뒤 deleted_at을 재확인해
- * "해체 커밋 직후 도착한 요청"을 404로 잡는 것이 설계 의도다. 그런데 같은
- * 트랜잭션에서 Team을 미리 엔티티로 읽어두면 Hibernate가 1차 캐시의 인스턴스를
- * 그대로 돌려주기 때문에 재확인이 락 이전 스냅샷을 보고 통과해버린다.
- *
- * 이 테스트는 락 전 조회가 엔티티를 만들지 않는다는 것을 고정한다.
- * 회귀(= 락 전에 loadActiveTeam을 부르는 코드)가 들어오면 실패한다.
- */
+/** 팀원 추가의 Identity 조회 중 팀이 해체되는 레이스 회귀 테스트. */
 @SpringBootTest
 @ActiveProfiles("test")
 @Import({TestcontainersConfiguration.class, TeamTestFixture.class})
@@ -42,93 +35,49 @@ class TeamDisbandRaceIT {
     TeamService teamService;
 
     @Autowired
-    TeamAccessSupport accessSupport;
+    TeamMemberService teamMemberService;
 
     @Autowired
-    TeamJpaRepository teamJpaRepository;
+    TeamMasterService teamMasterService;
 
     @Autowired
-    TransactionTemplate transactionTemplate;
+    TeamMemberRepository teamMemberRepository;
 
-    @Test
-    @DisplayName("락 전에 기수를 조회했어도, 그 사이 해체가 커밋되면 락 시점에 404로 잡힌다")
-    void lockDetectsDisbandCommittedBeforeLockEvenAfterPreLockLookup() {
-        Long cohortId = fixture.createCohort("1기");
-        var master = fixture.createActiveMember(cohortId);
-        var team = teamService.create(cohortId, "오마고치", master.userId());
-        Long teamId = team.teamId();
-
-        Throwable thrown = transactionTemplate.execute(status -> {
-            // 팀원 추가가 락 전에 수행하는 검증 단계와 같은 조회다.
-            assertThat(accessSupport.requireActiveTeamCohortId(teamId)).isEqualTo(cohortId);
-
-            // 이 트랜잭션이 열려 있는 동안 다른 트랜잭션이 해체하고 커밋한다.
-            disbandInSeparateTransaction(teamId);
-
-            return catchThrowable(() -> accessSupport.lockActiveTeam(teamId));
-        });
-
-        assertThat(thrown)
-                .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.TEAM_NOT_FOUND);
-    }
+    @MockitoSpyBean
+    IdentityAccountClient identityAccountClient;
 
     /**
-     * [대조군] 락 전에 Team을 엔티티로 미리 읽어두면 무슨 일이 생기는지 고정해둔다.
-     *
-     * requireActiveTeamCohortId 대신 loadActiveTeam(스칼라가 아니라 엔티티 조회)을 먼저 호출하면,
-     * 그 Team 인스턴스가 트랜잭션의 1차 캐시에 올라간다. 이후 lockActiveTeam이 SELECT ... FOR UPDATE를
-     * 실제로 실행해도 Hibernate는 새로 읽은 컬럼값으로 필드를 덮어쓰지 않고 캐시된 인스턴스를 그대로
-     * 반환한다. 그래서 해체가 그 사이 커밋됐어도 isDisbanded()는 락 이전 스냅샷(false)을 보고,
-     * 예외 없이 통과해버린다 — 이 테스트는 그 실패를 재현해 고정한 것이다 (thrown이 null이어야 통과).
-     *
-     * test1과 이 테스트의 유일한 차이는 락을 잡기 전 사전 조회를 무엇으로 하느냐뿐이다.
-     *
-     * <p>상시 실행하지 않는 이유: 이 테스트의 기대값(thrown == null)은 "올바른 동작"이 아니라
-     * Hibernate의 1차 캐시 구현 세부사항이다. 버전이 올라가 재조회 시 필드를 갱신하도록
-     * 바뀌거나, loadActiveTeam 자체가 제거되면 이 테스트만 빨갛게 뜬다. 그때 진짜 회귀로
-     * 오인해 시간을 쓰는 것을 막으려고 꺼둔다. 실패 원인을 눈으로 확인하고 싶을 때만
-     * {@code @Disabled}를 떼고 단독으로 돌린다. 회귀 방어는 test1이 담당한다.</p>
+     * 사전 권한 검사가 통과한 뒤 Identity 응답을 기다리는 사이 팀 해체를 커밋한다.
+     * 뒤따르는 쓰기 작업은 새 트랜잭션에서 팀 행을 잠근 뒤 deleted_at을 다시 확인하므로
+     * 404로 중단하고 대상 팀원 행을 남기지 않아야 한다.
      */
     @Test
-    @Disabled("Hibernate 1차 캐시 동작을 문서화한 재현 테스트. 회귀 방어는 test1이 담당한다.")
-    @DisplayName("[대조군] 락 전에 loadActiveTeam으로 엔티티를 미리 읽으면, 해체가 커밋돼도 캐시된 인스턴스가 반환되어 재확인이 무력화된다")
-    void controlCaseStaleEntityHidesDisbandWhenLoadedBeforeLock() {
-        Long cohortId = fixture.createCohort("1기");
-        var master = fixture.createActiveMember(cohortId);
-        var team = teamService.create(cohortId, "오마고치", master.userId());
-        Long teamId = team.teamId();
+    @DisplayName("Identity 조회 중 팀이 해체되면 팀원 추가가 404로 거부된다")
+    void addMemberRejectsTeamDisbandedDuringIdentityLookup() {
+        // Given: 추가 가능한 팀과 Identity 조회 중 팀을 해체하는 응답
+        Long cohortId = fixture.createCohort("해체 레이스 기수");
+        TeamTestFixture.Member master = fixture.createActiveMember(cohortId);
+        TeamTestFixture.Member target = fixture.createActiveMember(cohortId);
+        Long teamId = teamService.create(cohortId, "해체 레이스 팀", master.userId()).teamId();
 
-        Throwable thrown = transactionTemplate.execute(status -> {
-            // 버그가 있던 방식: 락 전에 Team을 엔티티로 미리 읽는다.
-            accessSupport.loadActiveTeam(teamId);
+        // getState는 사전 권한 검사 이후, 쓰기 작업이 팀 락을 잡기 직전의 결정적 주입 지점이다.
+        // addMember 바깥에는 트랜잭션이 없으므로 같은 스레드의 disband가 독립 트랜잭션으로 커밋된다.
+        willAnswer(invocation -> {
+            teamMasterService.disband(teamId, master.userId());
+            return IdentityAccountState.ACTIVE;
+        }).given(identityAccountClient).getState(target.userId());
 
-            // 이 트랜잭션이 열려 있는 동안 다른 트랜잭션이 해체하고 커밋한다.
-            disbandInSeparateTransaction(teamId);
+        // When & Then: 해체 이후 시작한 쓰기 작업이 요청을 거부
+        assertThatThrownBy(() ->
+                teamMemberService.addMember(teamId, target.userId(), master.userId()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(TeamErrorCode.TEAM_NOT_FOUND);
 
-            return catchThrowable(() -> accessSupport.lockActiveTeam(teamId));
-        });
-
-        // 1차 캐시 함정 때문에 예외가 발생하지 않는다 — TEAM_NOT_FOUND를 기대하면 이 테스트가 실패한다.
-        assertThat(thrown).isNull();
-    }
-
-    /**
-     * 새 스레드에서 실행해야 바깥 트랜잭션에 묶이지 않는다.
-     * 같은 스레드에서 REQUIRES_NEW로 열면 커넥션 두 개를 동시에 점유해
-     * 풀 크기에 따라 교착 위험이 있다.
-     */
-    private void disbandInSeparateTransaction(Long teamId) {
-        Thread other = new Thread(() -> transactionTemplate.executeWithoutResult(status -> {
-            Team target = teamJpaRepository.findById(teamId).orElseThrow();
-            target.disband();
-            teamJpaRepository.saveAndFlush(target);
-        }));
-        other.start();
-        try {
-            other.join();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException(e);
-        }
+        // Then: 해체된 팀에 대상 팀원 행이 남지 않음
+        assertThat(teamMemberRepository
+                .findByTeamIdAndCohortMembershipId(teamId, target.membershipId()))
+                .isEmpty();
+        assertThat(teamMemberRepository.countByTeamId(teamId)).isZero();
     }
 }

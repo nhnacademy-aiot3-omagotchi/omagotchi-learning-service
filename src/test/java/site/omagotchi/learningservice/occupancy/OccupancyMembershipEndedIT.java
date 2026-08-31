@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.occupancy;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,7 @@ import java.util.function.BooleanSupplier;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -73,6 +75,14 @@ class OccupancyMembershipEndedIT {
 
     @MockitoBean
     VacancyAlertSender vacancyAlertSender;
+
+    @BeforeEach
+    void stubSuccessfulSendByDefault() {
+        // sendVacancyAlert는 boolean을 반환하고 Mock 기본값은 false(건너뜀)이므로,
+        // 명시적으로 true(발송 성공)를 스텁한다 — 아니면 정리로 비워진 방의 공실 알림이
+        // 소진되지 않아 waitingAlertRows가 0이 되길 기다리는 awaitUntil이 타임아웃한다.
+        given(vacancyAlertSender.sendVacancyAlert(any())).willReturn(true);
+    }
 
     /**
      * 명세 06 §2 6항 — 점유 종료·참여자 마감이 함께 일어나야 한다. 상태만 바꾸고 참여자를

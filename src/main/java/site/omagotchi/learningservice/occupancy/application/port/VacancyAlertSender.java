@@ -6,9 +6,10 @@ import java.util.UUID;
 /**
  * 공실 알림의 실제 발송 경계 (MR-03).
  *
- * <p>{@link OccupancyReminderSender}와 계약이 같다 — 정상 반환은 <b>실제 발송 성공</b>을
- * 뜻하고 실패는 예외로 알린다. 구현이 없는 동안 신청은 소진되지 않으며, 그래야 나중에
- * 발송 수단이 붙었을 때 대기자가 그대로 남아 있다.</p>
+ * <p>{@link OccupancyReminderSender}와 계약이 같다 — {@code true} 반환은 <b>실제 발송
+ * 성공</b>을, {@code false}는 <b>수신자가 미연동이거나 알림을 꺼서 시도조차 하지 않았음</b>을
+ * 뜻한다. 어느 쪽도 아닌 전송 실패는 예외로 알린다. 구현이 없는 동안 신청은 소진되지
+ * 않으며, 그래야 나중에 발송 수단이 붙었을 때 대기자가 그대로 남아 있다.</p>
  *
  * <p><b>만료 임박 알림과 Port를 나눈 이유</b>는 수신자 결정 방식이 다르기 때문이다.
  * 저쪽은 점유자 한 명이 대상이라 발송 단위가 곧 점유지만, 이쪽은 한 번의 공실에
@@ -17,13 +18,17 @@ import java.util.UUID;
  */
 public interface VacancyAlertSender {
 
-    void sendVacancyAlert(VacancyNotice notice);
+    /**
+     * @return 실제로 발송했으면 {@code true}, 수신자가 미연동이거나 알림을 꺼서 건너뛰었으면
+     *         {@code false}
+     */
+    boolean sendVacancyAlert(VacancyNotice notice);
 
     /**
      * 공간 비활성화로 신청이 삭제됐음을 알린다 (RM-15).
      *
      * <p>같은 Port에 둔 이유는 채널도 수신자 개념도 같기 때문이다 — 둘 다 "신청자에게
-     * 그 신청에 관해" 보낸다. 발송 수단이 없으면 둘 다 나가지 않는 것도 같다.</p>
+     * 그 신청에 관해" 보낸다.</p>
      *
      * <p><b>전달 보장은 다르다.</b> 공실 알림은 실패해도 신청이 대기로 남아 다음 공실에
      * 다시 잡히지만(at-least-once), 이 통보는 대상 행을 <b>지운 뒤</b>에 보내므로 실패하면

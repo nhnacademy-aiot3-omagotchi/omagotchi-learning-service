@@ -36,6 +36,11 @@ public enum StudyRecordErrorCode implements ErrorCode {
             ErrorType.CONFLICT,
             "STUDY_RECORD_WRITE_LOCK_TIMEOUT",
             "공부 기록 요청 타임아웃"
+    ),
+    INVALID_PATTERN_PERIOD(
+            ErrorType.INVALID_INPUT,
+            "STUDY_PATTERN_INVALID_PERIOD",
+                    "학습 패턴 조회 기간은 1일에서 90일 사이여야 합니다."
     );
 
     private final ErrorType type;

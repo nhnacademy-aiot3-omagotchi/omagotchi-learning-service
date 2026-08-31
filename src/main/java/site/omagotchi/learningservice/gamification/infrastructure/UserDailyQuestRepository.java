@@ -20,8 +20,6 @@ public interface UserDailyQuestRepository extends JpaRepository<UserDailyQuest, 
 
     List<UserDailyQuest> findByUserIdAndQuestDateOrderByIdAsc(UUID userId, LocalDate questDate);
 
-    List<UserDailyQuest> findByQuestDateBefore(LocalDate questDate);
-
     Optional<UserDailyQuest> findByUserIdAndQuestDateAndCode(UUID userId, LocalDate questDate, String code);
 
     List<UserDailyQuest> findByUserIdAndQuestDateBetweenAndCodeOrderByQuestDateAsc(

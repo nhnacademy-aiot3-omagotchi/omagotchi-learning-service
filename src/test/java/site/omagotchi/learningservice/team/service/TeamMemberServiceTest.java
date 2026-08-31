@@ -3,23 +3,22 @@ package site.omagotchi.learningservice.team.service;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
-import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
-import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
-import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.team.application.TeamAccessSupport;
+import site.omagotchi.learningservice.team.application.TeamErrorCode;
+import site.omagotchi.learningservice.team.application.TeamMemberAddition;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamMembership;
-import site.omagotchi.learningservice.team.domain.Team;
-import site.omagotchi.learningservice.team.application.TeamErrorCode;
-import site.omagotchi.learningservice.team.domain.TeamMember;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
+import site.omagotchi.learningservice.team.domain.Team;
+import site.omagotchi.learningservice.team.domain.TeamMember;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -28,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -41,10 +41,10 @@ class TeamMemberServiceTest {
     TeamMemberRepository teamMemberRepository;
 
     @Mock
-    CohortMembershipQueryService cohortMembershipQueryService;
+    IdentityAccountClient identityAccountClient;
 
     @Mock
-    IdentityAccountClient identityAccountClient;
+    TeamMemberAddition teamMemberAddition;
 
     @InjectMocks
     TeamMemberService teamMemberService;
@@ -99,45 +99,50 @@ class TeamMemberServiceTest {
     @Test
     @DisplayName("정상 요청이면 팀원이 추가된다.")
     void addsMemberOnValidRequest() {
+        // Given: 현재 MASTER와 추가 가능한 활성 계정
         UUID targetUserId = UUID.randomUUID();
-        CohortMembershipView targetMembership = new CohortMembershipView(20L, 1L, targetUserId);
 
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(identityAccountClient.getState(targetUserId)).willReturn(IdentityAccountState.ACTIVE);
-        given(cohortMembershipQueryService.findActiveMembership(1L, targetUserId)).willReturn(Optional.of(targetMembership));
-        given(accessSupport.lockActiveTeam(1L)).willReturn(team);
-        given(teamMemberRepository.countByTeamId(1L)).willReturn(3L);
 
+        // When: 팀원 추가
         teamMemberService.addMember(1L, targetUserId, userId);
 
-        ArgumentCaptor<TeamMember> captor = ArgumentCaptor.forClass(TeamMember.class);
-        verify(teamMemberRepository).save(captor.capture());
-        assertThat(captor.getValue().getCohortMembershipId()).isEqualTo(20L);
-        assertThat(captor.getValue().isMaster()).isFalse();
+        // Then: Identity 조회 전 접근 제어와 계정 조회 이후 쓰기 트랜잭션 실행
+        InOrder order = inOrder(accessSupport, identityAccountClient, teamMemberAddition);
+        order.verify(accessSupport).requireActiveTeamCohortId(1L);
+        order.verify(accessSupport).requireActiveMembership(1L, userId);
+        order.verify(accessSupport).requireMaster(1L, 10L);
+        order.verify(identityAccountClient).getState(targetUserId);
+        order.verify(teamMemberAddition).add(1L, targetUserId, userId);
     }
 
     @Test
-    @DisplayName("대상이 팀의 기수에 속해 있지 않으면 거부한다.")
-    void rejectsAddWhenTargetNotInTeamCohort() {
+    @DisplayName("마스터가 아닌 요청은 Identity 계정을 조회하지 않는다.")
+    void nonMasterRequestDoesNotQueryIdentity() {
+        // Given: 활성 멤버십은 있지만 MASTER가 아닌 요청자
         UUID targetUserId = UUID.randomUUID();
 
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
-        given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
-        given(identityAccountClient.getState(targetUserId)).willReturn(IdentityAccountState.ACTIVE);
-        given(cohortMembershipQueryService.findActiveMembership(1L, targetUserId)).willReturn(Optional.empty());
+        given(accessSupport.requireMaster(1L, 10L))
+                .willThrow(new BusinessException(TeamErrorCode.MASTER_REQUIRED));
 
+        // When & Then: MASTER 권한 오류 반환
         assertThatThrownBy(() -> teamMemberService.addMember(1L, targetUserId, userId))
-                .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.TARGET_NOT_IN_COHORT);
+                .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.MASTER_REQUIRED);
 
-        verify(teamMemberRepository, never()).save(any());
+        // Then: Identity 조회와 쓰기 트랜잭션 실행 안 함
+        verify(identityAccountClient, never()).getState(any());
+        verify(teamMemberAddition, never()).add(any(), any(), any());
     }
 
     @Test
     @DisplayName("탈퇴한 계정은 팀원으로 추가할 수 없다.")
     void cannotAddWithdrawnAccountAsMember() {
+        // Given: 현재 MASTER와 탈퇴한 대상 계정
         UUID targetUserId = UUID.randomUUID();
 
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
@@ -145,15 +150,18 @@ class TeamMemberServiceTest {
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
         given(identityAccountClient.getState(targetUserId)).willReturn(IdentityAccountState.WITHDRAWN);
 
+        // When & Then: 탈퇴 계정 오류 반환
         assertThatThrownBy(() -> teamMemberService.addMember(1L, targetUserId, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.ACCOUNT_WITHDRAWN);
 
-        verify(teamMemberRepository, never()).save(any());
+        // Then: 쓰기 트랜잭션 실행 안 함
+        verify(teamMemberAddition, never()).add(any(), any(), any());
     }
 
     @Test
     @DisplayName("존재하지 않는 계정은 팀원으로 추가할 수 없다.")
     void cannotAddNonExistentAccountAsMember() {
+        // Given: 현재 MASTER와 존재하지 않는 대상 계정
         UUID targetUserId = UUID.randomUUID();
 
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
@@ -162,30 +170,12 @@ class TeamMemberServiceTest {
         given(identityAccountClient.getState(targetUserId))
                 .willThrow(new BusinessException(TeamErrorCode.ACCOUNT_NOT_FOUND));
 
+        // When & Then: 계정 미존재 오류 반환
         assertThatThrownBy(() -> teamMemberService.addMember(1L, targetUserId, userId))
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.ACCOUNT_NOT_FOUND);
 
-        verify(teamMemberRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("정원이 가득 차면 팀원을 추가할 수 없다.")
-    void cannotAddMemberWhenTeamIsFull() {
-        UUID targetUserId = UUID.randomUUID();
-        CohortMembershipView targetMembership = new CohortMembershipView(20L, 1L, targetUserId);
-
-        given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
-        given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
-        given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
-        given(identityAccountClient.getState(targetUserId)).willReturn(IdentityAccountState.ACTIVE);
-        given(cohortMembershipQueryService.findActiveMembership(1L, targetUserId)).willReturn(Optional.of(targetMembership));
-        given(accessSupport.lockActiveTeam(1L)).willReturn(team);
-        given(teamMemberRepository.countByTeamId(1L)).willReturn(8L);
-
-        assertThatThrownBy(() -> teamMemberService.addMember(1L, targetUserId, userId))
-                .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.CAPACITY_EXCEEDED);
-
-        verify(teamMemberRepository, never()).save(any());
+        // Then: 쓰기 트랜잭션 실행 안 함
+        verify(teamMemberAddition, never()).add(any(), any(), any());
     }
 
     @Test

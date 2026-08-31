@@ -18,9 +18,9 @@ import site.omagotchi.learningservice.global.security.SecurityErrorResponseHandl
 import site.omagotchi.learningservice.global.security.SecurityConfig;
 import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 import site.omagotchi.learningservice.global.security.basic.ServiceCredentialAuthenticationProviderFactory;
-import site.omagotchi.learningservice.rule.application.ThresholdRuleService;
-import site.omagotchi.learningservice.rule.presentation.InternalThresholdRuleController;
-import site.omagotchi.learningservice.rule.presentation.ThresholdRuleController;
+import site.omagotchi.learningservice.sensor.application.ThresholdRuleService;
+import site.omagotchi.learningservice.sensor.presentation.InternalThresholdRuleController;
+import site.omagotchi.learningservice.sensor.presentation.ThresholdRuleController;
 
 import java.util.List;
 

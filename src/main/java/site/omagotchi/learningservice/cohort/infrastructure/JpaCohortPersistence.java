@@ -9,6 +9,7 @@ import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,6 +28,11 @@ public class JpaCohortPersistence implements CohortPersistence {
     @Override
     public List<Cohort> findAll() {
         return repository.findAll();
+    }
+
+    @Override
+    public List<Cohort> findAllById(Collection<Long> cohortIds) {
+        return repository.findAllById(cohortIds);
     }
 
     @Override

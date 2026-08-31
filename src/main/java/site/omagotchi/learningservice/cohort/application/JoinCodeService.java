@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.command.IssueJoinCodeCommand;
+import site.omagotchi.learningservice.cohort.application.port.JoinCodePersistence;
 import site.omagotchi.learningservice.cohort.application.result.IssuedJoinCodeResponse;
 import site.omagotchi.learningservice.cohort.application.result.JoinCodeResponse;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
@@ -11,7 +12,6 @@ import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortJoinCode;
 import site.omagotchi.learningservice.cohort.domain.CohortJoinCodeStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortJoinCodeRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
@@ -29,27 +29,27 @@ public class JoinCodeService {
     private static final HexFormat HEX_FORMAT = HexFormat.of();
 
     private final CohortRepository cohortRepository;
-    private final CohortJoinCodeRepository joinCodeRepository;
+    private final JoinCodePersistence joinCodePersistence;
     private final CohortAccessService accessService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     /**
-     * 특정 기수의 현재 ACTIVE 가입 코드 메타데이터를 조회한다.
+     * 특정 기수에서 가장 최근에 발급한 가입 코드 메타데이터를 조회한다.
      * 원문 코드는 저장하지 않으므로 응답에도 포함하지 않는다.
      */
-    public JoinCodeResponse getActiveJoinCode(Long cohortId, UUID actorUserId) {
+    public JoinCodeResponse getLatestJoinCode(Long cohortId, UUID actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
-        CohortJoinCode joinCode = joinCodeRepository
-                .findFirstByCohortIdAndStatusOrderByIssuedAtDesc(cohortId, CohortJoinCodeStatus.ACTIVE)
+        CohortJoinCode joinCode = joinCodePersistence
+                .findLatestByCohortId(cohortId)
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.JOIN_CODE_NOT_FOUND));
 
         return JoinCodeResponse.from(joinCode);
     }
 
     /**
-     * 가입 코드를 발급하거나 재발급한다.
-     * 기존 ACTIVE 코드는 폐기하고, 새 원문 코드는 이 응답에서만 1회 반환한다.
+     * 활성 코드가 없거나 기존 코드가 만료된 경우에만 가입 코드를 발급한다.
+     * 새 원문 코드는 이 응답에서만 1회 반환한다.
      */
     @Transactional
     public IssuedJoinCodeResponse issue(Long cohortId, IssueJoinCodeCommand command, UUID issuedByUserId) {
@@ -58,10 +58,18 @@ public class JoinCodeService {
         Cohort cohort = getCohortOrThrow(cohortId);
         validateIssuable(cohort, command.expiresAt());
 
-        joinCodeRepository.findFirstByCohortIdAndStatusOrderByIssuedAtDesc(
-                cohortId,
-                CohortJoinCodeStatus.ACTIVE
-        ).ifPresent(CohortJoinCode::revoke);
+        OffsetDateTime now = OffsetDateTime.now();
+        joinCodePersistence
+                .findLatestByCohortId(cohortId)
+                .ifPresent(existingJoinCode -> {
+                    if (existingJoinCode.getExpiresAt().isAfter(now)) {
+                        throw new BusinessException(CohortErrorCode.JOIN_CODE_ALREADY_EXISTS);
+                    }
+                    if (existingJoinCode.getStatus() == CohortJoinCodeStatus.ACTIVE) {
+                        existingJoinCode.revoke();
+                        joinCodePersistence.saveRevoked(existingJoinCode);
+                    }
+                });
 
         String rawCode = generateRawCode();
         CohortJoinCode joinCode = CohortJoinCode.issue(
@@ -71,7 +79,7 @@ public class JoinCodeService {
                 issuedByUserId
         );
 
-        CohortJoinCode savedJoinCode = joinCodeRepository.save(joinCode);
+        CohortJoinCode savedJoinCode = joinCodePersistence.saveIssued(joinCode);
         return IssuedJoinCodeResponse.from(savedJoinCode, rawCode);
     }
 
@@ -83,11 +91,12 @@ public class JoinCodeService {
     public JoinCodeResponse revoke(Long cohortId, UUID actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
-        CohortJoinCode joinCode = joinCodeRepository
-                .findFirstByCohortIdAndStatusOrderByIssuedAtDesc(cohortId, CohortJoinCodeStatus.ACTIVE)
+        CohortJoinCode joinCode = joinCodePersistence
+                .findActiveByCohortId(cohortId)
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.JOIN_CODE_NOT_FOUND));
 
         joinCode.revoke();
+        joinCodePersistence.saveRevoked(joinCode);
         return JoinCodeResponse.from(joinCode);
     }
 

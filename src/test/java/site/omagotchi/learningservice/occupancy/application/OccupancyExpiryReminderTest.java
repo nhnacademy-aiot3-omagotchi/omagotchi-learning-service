@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -67,6 +68,7 @@ class OccupancyExpiryReminderTest {
         RoomOccupancyRepository.ExpiringOccupancy candidate = candidate(occupancy);
         given(occupancyRepository.lockById(OCCUPANCY_ID)).willReturn(Optional.of(occupancy));
         given(spaceNameQueryService.findName(SPACE_ID)).willReturn(Optional.empty());
+        given(sender.sendExpiryReminder(any())).willReturn(true);
 
         assertThat(expiryReminder.send(candidate, sender)).isTrue();
 
@@ -81,12 +83,31 @@ class OccupancyExpiryReminderTest {
         RoomOccupancyRepository.ExpiringOccupancy candidate = candidate(occupancy);
         given(occupancyRepository.lockById(OCCUPANCY_ID)).willReturn(Optional.of(occupancy));
         given(spaceNameQueryService.findName(SPACE_ID)).willReturn(Optional.of(SPACE_NAME));
+        given(sender.sendExpiryReminder(any())).willReturn(true);
 
         assertThat(expiryReminder.send(candidate, sender)).isTrue();
 
         verify(sender).sendExpiryReminder(new OccupancyReminderSender.ExpiryReminder(
                 OCCUPANCY_ID, SPACE_ID, SPACE_NAME, USER_ID, NOW.plusMinutes(10)));
         assertThat(occupancy.getReminderSentAt()).isEqualTo(NOW);
+    }
+
+    /**
+     * 수신자가 미연동이거나 알림을 꺼서 sender가 {@code false}를 돌려준 경우다. 여기서
+     * 기록하면 다음 스케줄러 주기에 재시도되지 않아, 나중에 연동해도 이미 놓친 알림이 된다.
+     */
+    @Test
+    @DisplayName("수신자가 건너뛰어졌으면 reminderSentAt을 기록하지 않는다.")
+    void doesNotMarkReminderWhenRecipientSkipped() {
+        RoomOccupancy occupancy = occupancy(NOW.plusMinutes(10));
+        RoomOccupancyRepository.ExpiringOccupancy candidate = candidate(occupancy);
+        given(occupancyRepository.lockById(OCCUPANCY_ID)).willReturn(Optional.of(occupancy));
+        given(spaceNameQueryService.findName(SPACE_ID)).willReturn(Optional.of(SPACE_NAME));
+        given(sender.sendExpiryReminder(any())).willReturn(false);
+
+        assertThat(expiryReminder.send(candidate, sender)).isFalse();
+
+        assertThat(occupancy.getReminderSentAt()).isNull();
     }
 
     @Test
@@ -113,7 +134,7 @@ class OccupancyExpiryReminderTest {
         given(occupancyRepository.lockById(OCCUPANCY_ID)).willReturn(Optional.of(occupancy));
         given(spaceNameQueryService.findName(SPACE_ID)).willReturn(Optional.of(SPACE_NAME));
         doThrow(new IllegalStateException("첫 발송 실패"))
-                .doNothing()
+                .doReturn(true)
                 .when(sender).sendExpiryReminder(any());
 
         assertThatThrownBy(() -> expiryReminder.send(candidate, sender))
@@ -132,6 +153,7 @@ class OccupancyExpiryReminderTest {
         RoomOccupancyRepository.ExpiringOccupancy candidate = candidate(occupancy);
         given(occupancyRepository.lockById(OCCUPANCY_ID)).willReturn(Optional.of(occupancy));
         given(spaceNameQueryService.findName(SPACE_ID)).willReturn(Optional.of(SPACE_NAME));
+        given(sender.sendExpiryReminder(any())).willReturn(true);
 
         assertThat(expiryReminder.send(candidate, sender)).isTrue();
         assertThat(expiryReminder.send(candidate, sender)).isFalse();

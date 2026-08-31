@@ -54,15 +54,20 @@ public class OccupancyExpiryReminder {
         String spaceName = spaceNameQueryService.findName(occupancy.getSpaceId())
                 .orElse("공간 " + occupancy.getSpaceId());
 
-        sender.sendExpiryReminder(new OccupancyReminderSender.ExpiryReminder(
+        boolean sent = sender.sendExpiryReminder(new OccupancyReminderSender.ExpiryReminder(
                 occupancy.getId(),
                 occupancy.getSpaceId(),
                 spaceName,
                 occupancy.getOccupierUserId(),
                 occupancy.getExpiresAt()
         ));
+        if (!sent) {
+            // 수신자가 미연동이거나 알림을 꺼서 건너뛴 경우다. 기록하지 않아야 다음
+            // 스케줄러 주기에 다시 시도된다 — 여기서 소진하면 나중에 연동해도 못 받는다.
+            return false;
+        }
 
-        // sender가 실제 성공을 뜻하는 정상 반환을 한 경우에만 기록한다.
+        // sender가 실제 성공을 뜻하는 true를 반환한 경우에만 기록한다.
         occupancy.markExpiryReminderSent(now);
         return true;
     }

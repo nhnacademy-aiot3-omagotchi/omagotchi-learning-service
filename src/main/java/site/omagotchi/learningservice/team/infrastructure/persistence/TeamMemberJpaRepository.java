@@ -56,18 +56,6 @@ public interface TeamMemberJpaRepository extends JpaRepository<TeamMember, Long>
     Optional<TeamMember> findByTeamIdAndCohortMembershipId(Long teamId, Long cohortMembershipId);
 
     /**
-     * 이 멤버십이 이 팀의 MASTER인가. 값(boolean)으로만 확인한다.
-     *
-     * <p>{@code exists} 파생 쿼리는 엔티티를 만들지 않아 영속성 컨텍스트에 아무것도
-     * 올리지 않는다 — {@link #findByTeamIdAndCohortMembershipId}로 같은 것을 확인하면
-     * 안 되는 이유가 여기 있다. 같은 트랜잭션에서 그 메서드로 이미 이 멤버십의
-     * {@code TeamMember}를 읽었다면, 뒤이은 재확인도 영속성 컨텍스트에 캐시된 그
-     * 인스턴스를 그대로 돌려줘 그 사이 커밋된 위임(role 변경)을 보지 못한다.</p>
-     */
-    boolean existsByTeamIdAndCohortMembershipIdAndRole(
-            Long teamId, Long cohortMembershipId, TeamMemberRole role);
-
-    /**
      * 이 멤버십이 속한 팀 식별자만 읽는다 (GR-16).
      *
      * <p>엔티티가 아니라 스칼라인 것이 요점이다. {@code TeamMember}를 읽으면 1차 캐시에

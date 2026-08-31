@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.repository.query.Param;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 
 import java.time.LocalDate;
@@ -17,6 +18,16 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
     Optional<AttendanceRecord> findByCohortMembershipIdAndAttendanceDate(
             Long cohortMembershipId,
             LocalDate attendanceDate
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select record
+            from AttendanceRecord record
+            where record.id = :attendanceId
+            """)
+    Optional<AttendanceRecord> findByIdForUpdate(
+            @Param("attendanceId") Long attendanceId
     );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

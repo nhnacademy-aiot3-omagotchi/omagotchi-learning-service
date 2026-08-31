@@ -181,6 +181,11 @@ class SpaceManagementLifecycleIT {
     // ────────────────────────────── 헬퍼 ──────────────────────────────
 
     private void activate(Long cohortId) {
+        fixture.createLab(
+                cohortId,
+                "공간생애-활성화-실습실-" + cohortId,
+                1
+        );
         cohortService.changeStatus(cohortId,
                 new ChangeCohortStatusCommand(CohortStatus.ACTIVE), GlobalRole.SYSTEM_ADMIN);
     }

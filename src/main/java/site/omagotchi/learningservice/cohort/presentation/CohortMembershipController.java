@@ -21,9 +21,9 @@ public class CohortMembershipController {
 
     private final CohortMembershipService membershipService;
 
-    @PatchMapping("/{membershipId}/approve")
+    @PatchMapping("/{membership-id}/approve")
     public CohortMembershipResponse approve(
-            @PathVariable Long membershipId,
+            @PathVariable("membership-id") Long membershipId,
             JwtAuthenticationToken authentication,
             @Valid @RequestBody ApproveMembershipRequest request
     ) {
@@ -36,9 +36,9 @@ public class CohortMembershipController {
         );
     }
 
-    @PatchMapping("/{membershipId}/reject")
+    @PatchMapping("/{membership-id}/reject")
     public CohortMembershipResponse reject(
-            @PathVariable Long membershipId,
+            @PathVariable("membership-id") Long membershipId,
             JwtAuthenticationToken authentication,
             @Valid @RequestBody RejectMembershipRequest request
     ) {

@@ -13,7 +13,7 @@ import site.omagotchi.learningservice.prediction.presentation.response.StudyTime
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/cohorts/{cohortId}/predictions")
+@RequestMapping("/api/v1/cohorts/{cohort-id}/predictions")
 public class PredictionController {
 
     private final StudyTimePredictionService predictionService;
@@ -21,7 +21,7 @@ public class PredictionController {
     @PostMapping("/study-time")
     public StudyTimePredictionResponse predictStudyTime(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             @RequestHeader(value = "X-Request-ID", required = false) String requestId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);

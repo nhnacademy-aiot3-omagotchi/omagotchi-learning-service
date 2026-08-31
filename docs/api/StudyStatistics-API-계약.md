@@ -5,7 +5,7 @@
 - 상태: 검토 중
 - 최종 변경일: 2026-08-12
 - 범위: 기수 관리자용 확정 학습 기록 통계 조회
-- base path: `/api/v1/cohorts/{cohortId}/study-statistics`
+- base path: `/api/v1/cohorts/{cohort-id}/study-statistics`
 
 이 문서는 현재 `StudyStatisticsController`와 response record를 기준으로 한 외부 HTTP 계약이다.
 
@@ -14,7 +14,7 @@
 ### 인증과 권한
 
 - 모든 요청에 `Authorization: Bearer {JWT}`가 필요하다.
-- 인증 사용자는 `{cohortId}` 기수의 활성 `MANAGER` membership이어야 한다.
+- 인증 사용자는 `{cohort-id}` 기수의 활성 `MANAGER` membership이어야 한다.
 - 활성 기수 소속이 없으면 기수의 존재를 숨기기 위해 `404 COHORT_NOT_FOUND`를 반환한다.
 - 활성 소속은 있지만 `MANAGER`가 아니면 `403 COHORT_MANAGER_REQUIRED`를 반환한다.
 - 수강생 상세 대상은 같은 기수의 활성 `STUDENT` membership이어야 한다. 다른 기수, 비활성 membership 또는 비학생 대상은 모두 `404 MEMBERSHIP_NOT_FOUND`로 처리한다.
@@ -47,11 +47,11 @@
 
 | 목적 | Method | Path |
 | --- | --- | --- |
-| 오늘 요약 | GET | `/api/v1/cohorts/{cohortId}/study-statistics/today` |
-| 기간 추이 | GET | `/api/v1/cohorts/{cohortId}/study-statistics/trend?window={N}d` |
-| 수강생 통계 page | GET | `/api/v1/cohorts/{cohortId}/study-statistics/members?window={N}d&page=0&size=20&sort=periodStudySeconds,desc` |
-| 수강생 기간 상세 | GET | `/api/v1/cohorts/{cohortId}/study-statistics/members/{cohortMembershipId}/overview?window={N}d` |
-| 수강생 일별 기록 | GET | `/api/v1/cohorts/{cohortId}/study-statistics/members/{cohortMembershipId}/records?date=yyyy-MM-dd` |
+| 오늘 요약 | GET | `/api/v1/cohorts/{cohort-id}/study-statistics/today` |
+| 기간 추이 | GET | `/api/v1/cohorts/{cohort-id}/study-statistics/trend?window={N}d` |
+| 수강생 통계 page | GET | `/api/v1/cohorts/{cohort-id}/study-statistics/members?window={N}d&page=0&size=20&sort=periodStudySeconds,desc` |
+| 수강생 기간 상세 | GET | `/api/v1/cohorts/{cohort-id}/study-statistics/members/{cohort-membership-id}/overview?window={N}d` |
+| 수강생 일별 기록 | GET | `/api/v1/cohorts/{cohort-id}/study-statistics/members/{cohort-membership-id}/records?date=yyyy-MM-dd` |
 
 ## 1. 오늘 학습 통계
 
@@ -243,7 +243,7 @@ Authorization: Bearer {JWT}
 
 | 이름 | 위치 | 필수 | 제약 |
 | --- | --- | --- | --- |
-| `cohortMembershipId` | path | 예 | 같은 기수의 활성 STUDENT membership ID |
+| `cohort-membership-id` | path | 예 | 같은 기수의 활성 STUDENT membership ID |
 | `window` | query | 예 | `{N}d`, N=7~60 |
 
 성공 응답: `200 OK`
@@ -289,7 +289,7 @@ Authorization: Bearer {JWT}
 
 | 이름 | 위치 | 필수 | 제약 |
 | --- | --- | --- | --- |
-| `cohortMembershipId` | path | 예 | 같은 기수의 활성 STUDENT membership ID |
+| `cohort-membership-id` | path | 예 | 같은 기수의 활성 STUDENT membership ID |
 | `date` | query | 예 | 집계일 `yyyy-MM-dd`, 현재 집계일보다 미래일 수 없음 |
 
 과거 날짜에는 별도의 60일 하한을 적용하지 않는다.

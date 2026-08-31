@@ -153,10 +153,10 @@ teamScore = sum(currentMember.studySeconds)
 ### 팀 내부 개인 랭킹
 
 ```http
-GET /api/v1/cohorts/{cohortId}/teams/{teamId}/study-rankings/today?maxRank={N}
-GET /api/v1/cohorts/{cohortId}/teams/{teamId}/study-rankings/daily/{date}?maxRank={N}
-GET /api/v1/cohorts/{cohortId}/teams/{teamId}/study-rankings/weekly/{weekStartDate}?maxRank={N}
-GET /api/v1/cohorts/{cohortId}/teams/{teamId}/study-rankings/monthly/{month}?maxRank={N}
+GET /api/v1/cohorts/{cohort-id}/teams/{team-id}/study-rankings/today?maxRank={N}
+GET /api/v1/cohorts/{cohort-id}/teams/{team-id}/study-rankings/daily/{date}?maxRank={N}
+GET /api/v1/cohorts/{cohort-id}/teams/{team-id}/study-rankings/weekly/{week-start-date}?maxRank={N}
+GET /api/v1/cohorts/{cohort-id}/teams/{team-id}/study-rankings/monthly/{month}?maxRank={N}
 ```
 
 - 응답 구조는 기존 개인 랭킹을 재사용한다.
@@ -166,10 +166,10 @@ GET /api/v1/cohorts/{cohortId}/teams/{teamId}/study-rankings/monthly/{month}?max
 ### 팀 간 랭킹
 
 ```http
-GET /api/v1/cohorts/{cohortId}/study-rankings/teams/today?maxRank={N}
-GET /api/v1/cohorts/{cohortId}/study-rankings/teams/daily/{date}?maxRank={N}
-GET /api/v1/cohorts/{cohortId}/study-rankings/teams/weekly/{weekStartDate}?maxRank={N}
-GET /api/v1/cohorts/{cohortId}/study-rankings/teams/monthly/{month}?maxRank={N}
+GET /api/v1/cohorts/{cohort-id}/study-rankings/teams/today?maxRank={N}
+GET /api/v1/cohorts/{cohort-id}/study-rankings/teams/daily/{date}?maxRank={N}
+GET /api/v1/cohorts/{cohort-id}/study-rankings/teams/weekly/{week-start-date}?maxRank={N}
+GET /api/v1/cohorts/{cohort-id}/study-rankings/teams/monthly/{month}?maxRank={N}
 ```
 
 오늘 응답:

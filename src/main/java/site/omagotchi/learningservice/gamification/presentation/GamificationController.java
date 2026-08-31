@@ -84,9 +84,9 @@ public class GamificationController {
         ));
     }
 
-    @PostMapping("/quests/{userDailyQuestId}/claim")
+    @PostMapping("/quests/{user-daily-quest-id}/claim")
     public DailyQuestResponse claim(
-            @PathVariable Long userDailyQuestId,
+            @PathVariable("user-daily-quest-id") Long userDailyQuestId,
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);

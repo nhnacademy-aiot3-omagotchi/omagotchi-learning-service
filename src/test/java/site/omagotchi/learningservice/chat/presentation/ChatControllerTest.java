@@ -16,6 +16,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import reactor.core.publisher.Flux;
 import site.omagotchi.learningservice.global.security.*;
 
+import java.util.Map;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -133,6 +135,7 @@ class ChatControllerTest {
 
         given(chatClient.prompt()).willReturn(requestSpec);
         given(requestSpec.user(anyString())).willReturn(requestSpec);
+        given(requestSpec.toolContext(anyMap())).willReturn(requestSpec);
         given(requestSpec.advisors(any(Consumer.class))).willReturn(requestSpec);
         given(requestSpec.stream()).willReturn(streamResponseSpec);
         given(streamResponseSpec.content()).willReturn(Flux.just("흐리고 33도입니다."));
@@ -194,6 +197,20 @@ class ChatControllerTest {
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(this.geminiChatClient, this.ollamaChatClient);
+    }
+
+    @Test
+    @DisplayName("toolContext에 JWT의 사용자 ID를 전달한다")
+    void passesAuthenticatedUserIdToToolContext() throws Exception {
+        ChatClient.ChatClientRequestSpec requestSpec = stubChatClientChain(this.geminiChatClient);
+
+        this.mockMvc.perform(get("/api/v1/chat")
+                        .param("question", "서울 날씨 알려줘")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andReturn();
+
+        // Tool이 받는 userId는 요청 파라미터가 아니라 JWT에서 온 값이어야 한다 (사칭 방지)
+        verify(requestSpec).toolContext(Map.of("userId", UUID.fromString(TestJwtKeyConfig.USER_ID)));
     }
 
     private static String bearerToken() {

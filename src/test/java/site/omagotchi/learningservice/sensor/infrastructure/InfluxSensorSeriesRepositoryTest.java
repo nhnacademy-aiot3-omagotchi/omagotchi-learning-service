@@ -14,6 +14,8 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.sensor.application.query.SensorSeriesQuery;
 import site.omagotchi.learningservice.sensor.domain.SeriesPoint;
 import site.omagotchi.learningservice.sensor.domain.SeriesWindow;
+import site.omagotchi.learningservice.sensor.infrastructure.influx.InfluxSensorSeriesRepository;
+import site.omagotchi.learningservice.sensor.infrastructure.influx.SensorInfluxProperties;
 
 import java.time.Instant;
 import java.time.ZoneId;

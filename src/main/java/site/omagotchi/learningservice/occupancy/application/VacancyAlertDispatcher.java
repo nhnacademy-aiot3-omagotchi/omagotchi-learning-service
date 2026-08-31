@@ -12,7 +12,6 @@ import site.omagotchi.learningservice.space.application.SpaceNameQueryService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -46,16 +45,12 @@ public class VacancyAlertDispatcher {
     private final VacancyAlertDelivery alertDelivery;
     private final StaleVacancyAlertDiscarder staleAlertDiscarder;
 
-    /**
-     * 발송 수단. 비어 있는 것은 정상 상태이며(아직 발송 수단이 없다) 그때는 신청을
-     * 소진시키지 않는다.
-     */
-    private final Optional<VacancyAlertSender> sender;
+    private final VacancyAlertSender sender;
 
     /**
-     * <b>{@code List}로 받아야 한다.</b> 0개를 허용해야 하므로 단건 주입은 쓸 수 없고,
-     * {@code Optional}로 받으면 후보가 둘이어도 {@code @Primary} 하나가 모호성을 없애 버려
-     * <b>나머지가 조용히 무시된다.</b> {@code List}만 후보 전부를 보여 준다.
+     * <b>{@code List}로 받아야 한다.</b> {@code Optional}이나 단건으로 받으면 후보가 둘이어도
+     * {@code @Primary} 하나가 모호성을 없애 버려 <b>나머지가 조용히 무시된다.</b>
+     * {@code List}만 후보 전부를 보여 준다.
      */
     public VacancyAlertDispatcher(
             VacancyAlertRepository alertRepository,
@@ -71,11 +66,11 @@ public class VacancyAlertDispatcher {
         this.alertDelivery = alertDelivery;
         this.staleAlertDiscarder = staleAlertDiscarder;
         // 어느 발송의 성공을 완료로 볼지 정할 수 없는 설정이므로, 방이 비는 순간이 아니라
-        // 기동 시점에 멈춘다.
-        if (senders.size() > 1) {
-            throw new IllegalStateException("공실 알림 sender는 하나만 등록할 수 있습니다: " + senders);
+        // 기동 시점에 멈춘다. 0개도 오류다 — 발송 수단 없이 이 서비스가 할 일은 없다.
+        if (senders.size() != 1) {
+            throw new IllegalStateException("공실 알림 sender는 정확히 하나여야 합니다: " + senders);
         }
-        this.sender = senders.stream().findFirst();
+        this.sender = senders.getFirst();
     }
 
     /**
@@ -131,13 +126,6 @@ public class VacancyAlertDispatcher {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int dispatch(Long spaceId, OffsetDateTime vacatedAt) {
 
-        // sender가 없으면 후보를 소진시키지 않고 그대로 둔다. no-op으로 넘기면 발송 수단이
-        // 붙기 전에 신청이 전부 사라져, 정작 알림이 가능해졌을 때 대기자가 없다.
-        if (sender.isEmpty()) {
-            log.debug("공실 알림 sender가 없어 발송을 건너뜁니다. spaceId={}", spaceId);
-            return 0;
-        }
-
         List<VacancyAlertRepository.WaitingAlert> candidates =
                 alertRepository.findWaitingBySpaceId(spaceId);
         if (candidates.isEmpty()) {
@@ -175,7 +163,7 @@ public class VacancyAlertDispatcher {
 
             try {
                 if (alertDelivery.send(candidate.alertId(), spaceId, spaceName,
-                        recipientUserId, vacatedAt, sender.get())) {
+                        recipientUserId, vacatedAt, sender)) {
                     sent++;
                 }
             } catch (Exception exception) {

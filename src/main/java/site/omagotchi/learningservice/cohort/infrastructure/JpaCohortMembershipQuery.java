@@ -25,6 +25,11 @@ public class JpaCohortMembershipQuery implements CohortMembershipQuery {
     private final CohortMembershipRepository repository;
 
     @Override
+    public List<CohortMembership> findByUserIdOrderByRequestedAtDesc(UUID userId) {
+        return repository.findByUserIdOrderByRequestedAtDesc(userId);
+    }
+
+    @Override
     public List<CohortMembershipSummaryResult> findAllAdminSummaries() {
         Map<Long, Long> memberCounts = repository.countActiveMembershipsByCohort().stream()
                 .collect(java.util.stream.Collectors.toMap(
@@ -71,4 +76,13 @@ public class JpaCohortMembershipQuery implements CohortMembershipQuery {
     @Override public Map<Long,UUID> findUserIds(Collection<Long> ids) { return repository.findAllById(ids).stream().collect(java.util.stream.Collectors.toMap(CohortMembership::getId,CohortMembership::getUserId)); }
     @Override public Map<Long,Long> findCohortIds(Collection<Long> ids) { return repository.findAllById(ids).stream().collect(java.util.stream.Collectors.toMap(CohortMembership::getId,CohortMembership::getCohortId)); }
     @Override public Set<Long> findInactiveIds(Collection<Long> ids) { return repository.findAllById(ids).stream().filter(m->m.getStatus()!=CohortMembershipStatus.ACTIVE).map(CohortMembership::getId).collect(java.util.stream.Collectors.toUnmodifiableSet()); }
+
+    @Override
+    public boolean existsActiveManagerByUserId(UUID userId) {
+        return repository.existsByUserIdAndRoleAndStatusAndEndedAtIsNull(
+                userId,
+                CohortMembershipRole.MANAGER,
+                CohortMembershipStatus.ACTIVE
+        );
+    }
 }

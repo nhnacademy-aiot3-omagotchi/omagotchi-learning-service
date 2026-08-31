@@ -15,6 +15,8 @@ import site.omagotchi.learningservice.sensor.application.query.SpaceSeriesQuery;
 import site.omagotchi.learningservice.sensor.application.result.SpaceSeries;
 import site.omagotchi.learningservice.sensor.domain.SeriesWindow;
 import site.omagotchi.learningservice.sensor.domain.SpaceSeriesPoint;
+import site.omagotchi.learningservice.sensor.infrastructure.influx.InfluxSpaceSeriesRepository;
+import site.omagotchi.learningservice.sensor.infrastructure.influx.SensorInfluxProperties;
 
 import java.time.Instant;
 import java.time.ZoneId;

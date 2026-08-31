@@ -133,16 +133,16 @@ prediction:
 telegram:
   bot:
     username: ${TELEGRAM_BOT_USERNAME}
-    token: ${TELEGRAM_BOT_TOKEN:}
-    max-threads: ${TELEGRAM_BOT_MAX_THREADS:4}
+    token: ${TELEGRAM_BOT_TOKEN}
+    max-threads: 8
     timeout:
       connection-request: ${TELEGRAM_CONNECTION_REQUEST_TIMEOUT:PT5S}
       connect: ${TELEGRAM_CONNECT_TIMEOUT:PT5S}
       read: ${TELEGRAM_READ_TIMEOUT:PT10S}
+  webhook:
+    secret: ${TELEGRAM_WEBHOOK_SECRET}
   link-token:
     ttl: ${TELEGRAM_LINK_TOKEN_TTL}
-  notification:
-    enabled: ${TELEGRAM_NOTIFICATION_ENABLED:false}
 
 community:
   attachments:
@@ -168,6 +168,7 @@ environment:
     capacity: 1000
     retention: P7D
   cooldown: PT5M
+  notify-deadline: PT5S
   iot:
     request-timeout: PT3S
     secret: ${IOT_SECRET:}
@@ -188,6 +189,9 @@ clients:
   identity:
     username: ${LEARNING_IDENTITY_USERNAME}
     password: ${LEARNING_IDENTITY_PASSWORD}
+  prediction:
+    username: ${LEARNING_PREDICTION_USERNAME}
+    password: ${LEARNING_PREDICTION_PASSWORD}
 
 sensor:
   series:

@@ -56,6 +56,13 @@ public interface SpringDataSpaceRepository
     );
 
     @Query("""
+                SELECT space.cohortId FROM SpaceJpaEntity space
+                 WHERE space.id = :spaceId
+                   AND space.deletedAt IS NULL
+            """)
+    Optional<Long> findCohortIdById(@Param("spaceId") Long spaceId);
+
+    @Query("""
                 SELECT space.name FROM SpaceJpaEntity space
                  WHERE space.id = :spaceId
                    AND space.deletedAt IS NULL

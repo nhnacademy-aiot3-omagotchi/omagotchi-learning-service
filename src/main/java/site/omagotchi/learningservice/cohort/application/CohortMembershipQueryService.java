@@ -3,8 +3,8 @@ package site.omagotchi.learningservice.cohort.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.cohort.application.port.CohortMembershipQuery;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 
 import java.util.Collection;
 import java.util.List;
@@ -203,6 +203,41 @@ public class CohortMembershipQueryService {
             return Set.of();
         }
         return membershipQuery.findInactiveIds(membershipIds);
+    }
+
+    /**
+     * 이 계정이 <b>어느 기수에서든</b> 활성 매니저인가.
+     *
+     * <p>봇의 {@code /status}가 소비처다. "조치 알림을 받는 사람인가"만 알면 되므로
+     * 매니저 목록을 훑는 대신 한 사람으로 좁혀 묻는다.</p>
+     *
+     * <p><b>역할 열거형 대신 boolean으로 좁히는 것이 의도다.</b> {@code CohortMembershipRole}을
+     * 넘기면 상대 Feature가 기수 domain에 컴파일 의존을 갖게 된다
+     * ({@code CohortMembershipView} javadoc과 같은 이유).</p>
+     */
+    public boolean isActiveManager(UUID userId){
+        if (userId == null) {
+            return false;
+        }
+
+        return membershipQuery.existsActiveManagerByUserId(userId);
+    }
+
+    /**
+     * <b>한 기수</b>의 매니저 UUID를 반환한다.
+     *
+     * <p>조치 알림이 소비처다. 매니저는 자기 기수의 일만 봐야 하므로 알림 수신자도 그
+     * 기수로 좁힌다 — 전체 매니저에게 보내면 남의 기수 실습실 이야기가 섞인다.</p>
+     *
+     * <p>{@code cohortId}가 {@code null}이면 빈 목록이다. 담당 기수를 말할 수 없는 상태라
+     * "전원"으로 넓히면 좁혀 둔 의미가 사라진다.</p>
+     */
+    public List<UUID> findActiveManagerUserIds(Long cohortId){
+        if (cohortId == null) {
+            return List.of();
+        }
+
+        return membershipQuery.findAllActiveManagerUserIds(cohortId);
     }
 
 }

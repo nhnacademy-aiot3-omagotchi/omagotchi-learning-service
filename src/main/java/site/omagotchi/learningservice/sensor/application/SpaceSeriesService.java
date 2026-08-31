@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
-import site.omagotchi.learningservice.rule.application.SensorDeviceService;
 import site.omagotchi.learningservice.sensor.application.port.SpaceSeriesRepository;
 import site.omagotchi.learningservice.sensor.application.query.SpaceSeriesQuery;
 import site.omagotchi.learningservice.sensor.application.result.SensorRef;

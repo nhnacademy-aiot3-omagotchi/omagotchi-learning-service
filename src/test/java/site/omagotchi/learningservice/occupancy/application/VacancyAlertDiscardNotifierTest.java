@@ -178,21 +178,6 @@ class VacancyAlertDiscardNotifierTest {
                 argThat(notice -> ("공간 " + SPACE_ID).equals(notice.spaceName())));
     }
 
-    /**
-     * 발송 쪽은 sender가 없으면 신청을 소진시키지 않고 보존하지만, 여기는 보존할 것이
-     * 없다 — 통보가 그대로 사라지는 것이 at-most-once 계약이다. 조회조차 하지 않는 것은
-     * 아무에게도 보내지 않을 일에 기수 조회를 쓰지 않기 위해서다.
-     */
-    @Test
-    @DisplayName("sender가 없으면 수신자를 조회하지 않고 끝낸다.")
-    void doesNothingWithoutSender() {
-        assertThat(withSender(null).notifyDiscarded(
-                SPACE_ID, List.of(MEMBERSHIP_A), DISCARDED_AT)).isZero();
-
-        verify(cohortMembershipQueryService, never()).findUserIds(anyCollection());
-        verify(spaceNameQueryService, never()).findName(anyLong());
-    }
-
     @Test
     @DisplayName("대상이 비어 있으면 수신자를 조회하지 않는다.")
     void doesNothingWithoutRecipients() {
@@ -202,10 +187,21 @@ class VacancyAlertDiscardNotifierTest {
     }
 
     /**
-     * {@code Optional} 주입으로 되돌리면 이 방어가 사라진다 — {@code @Primary}가 붙은
-     * 후보 하나만 조용히 선택되고 나머지는 무시된다. 생성자가 {@code List}를 받는 이유다
-     * ({@code VacancyAlertDispatcher}와 같은 규약).
+     * 발송 수단이 <b>정확히 하나</b>가 아니면 기동을 멈춘다. 0개는 보낼 방법이 없는 것이고,
+     * 둘 이상은 어느 발송의 성공을 완료로 볼지 정할 수 없다.
+     *
+     * <p>주입을 {@code Optional}이나 단건으로 되돌리면 후자의 방어가 사라진다 —
+     * {@code @Primary}가 붙은 후보 하나만 조용히 선택되고 나머지는 무시된다.
+     * 생성자가 {@code List}를 받는 이유다.</p>
      */
+    @Test
+    @DisplayName("sender가 없으면 생성 시점에 실패한다.")
+    void failsToCreateWithoutSender() {
+        assertThatThrownBy(() -> withSender(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("정확히 하나여야 합니다");
+    }
+
     @Test
     @DisplayName("sender가 둘 이상이면 생성 시점에 실패한다.")
     void failsToCreateWithMultipleSenders() {
@@ -216,7 +212,7 @@ class VacancyAlertDiscardNotifierTest {
                 spaceNameQueryService,
                 List.of(sender, another)
         )).isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("하나만 등록할 수 있습니다");
+                .hasMessageContaining("정확히 하나여야 합니다");
     }
 
     // ────────────────────────────── 헬퍼 ──────────────────────────────

@@ -16,6 +16,8 @@ import reactor.core.publisher.Flux;
 import site.omagotchi.learningservice.chat.presentation.request.ChatModelType;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 
+import java.util.Map;
+
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/chat")
@@ -37,11 +39,14 @@ public class ChatController {
         // 질문은 자유 텍스트라 개인정보가 섞일 수 있어 INFO에 남기지 않는다
         // Tool 호출 판단을 봐야 하는 로컬에서만 DEBUG로 확인한다 (application-local.yaml)
         // 이 스택에는 엑세스 로그, 프록시가 없어 질문이 기록되는 지점은 아래 debug 한 줄 뿐임
-        log.info("[ChatController] userId = {}, model = {}", user.userId(), model);
+        // 내부 사용자 UUID는 로그에 남기지 않는다. 추적용으로 앞 8자만 남긴다
+        String maskedUserId = user.userId().toString().substring(0, 8);
+        log.info("[ChatController] userId(masked) = {}, model = {}", maskedUserId, model);
         log.debug("[ChatController] 질문 = {}", question);
 
         return this.resolveChatClient(model).prompt()
                 .user(question)
+                .toolContext(Map.of("userId", user.userId()))
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                 .stream()
                 .content()

@@ -13,6 +13,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 /**
@@ -56,7 +57,11 @@ public class CohortJoinCode {
             OffsetDateTime expiresAt,
             UUID issuedByUserId
     ) {
-        if (expiresAt == null || !expiresAt.isAfter(OffsetDateTime.now())) {
+        OffsetDateTime issuedAt = nowAtDatabasePrecision();
+        OffsetDateTime normalizedExpiresAt = expiresAt == null
+                ? null
+                : expiresAt.truncatedTo(ChronoUnit.MICROS);
+        if (normalizedExpiresAt == null || !normalizedExpiresAt.isAfter(issuedAt)) {
             throw new IllegalArgumentException("가입 코드 만료 시각은 현재보다 이후여야 합니다.");
         }
 
@@ -64,9 +69,9 @@ public class CohortJoinCode {
         joinCode.cohortId = cohortId;
         joinCode.codeHash = requireText(codeHash, "codeHash");
         joinCode.status = CohortJoinCodeStatus.ACTIVE;
-        joinCode.expiresAt = expiresAt;
+        joinCode.expiresAt = normalizedExpiresAt;
         joinCode.issuedByUserId = issuedByUserId;
-        joinCode.issuedAt = OffsetDateTime.now();
+        joinCode.issuedAt = issuedAt;
         return joinCode;
     }
 
@@ -76,7 +81,7 @@ public class CohortJoinCode {
         }
 
         this.status = CohortJoinCodeStatus.REVOKED;
-        this.revokedAt = OffsetDateTime.now();
+        this.revokedAt = nowAtDatabasePrecision();
     }
 
     public boolean isUsableAt(OffsetDateTime now) {
@@ -88,5 +93,9 @@ public class CohortJoinCode {
             throw new IllegalArgumentException(fieldName + "은 필수입니다.");
         }
         return value;
+    }
+
+    private static OffsetDateTime nowAtDatabasePrecision() {
+        return OffsetDateTime.now().truncatedTo(ChronoUnit.MICROS);
     }
 }

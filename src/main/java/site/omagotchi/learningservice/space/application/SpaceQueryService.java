@@ -8,6 +8,7 @@ import site.omagotchi.learningservice.occupancy.application.OccupancyQueryServic
 import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.application.result.SpaceListResult;
+import site.omagotchi.learningservice.space.application.result.SpaceNameResult;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceUsageStatus;
 
@@ -43,6 +44,13 @@ public class SpaceQueryService {
     private final OccupancyQueryService occupancyQueryService;
     private final CohortAccessService cohortAccessService;
     private final Clock clock;
+
+    /** 다른 Feature가 삭제되지 않은 공간의 표시용 식별자와 이름을 일괄 조회한다. */
+    public List<SpaceNameResult> findAllSpaceNames() {
+        return spaceRepository.findAllNotDeleted().stream()
+                .map(space -> new SpaceNameResult(space.getId(), space.getName()))
+                .toList();
+    }
 
     /**
      * 삭제되지 않은 전체 공간과 현재 사용 상태를 조회한다.

@@ -41,6 +41,8 @@ public enum OccupancyErrorCode implements ErrorCode {
             "재실 상태인 사용자만 참여자로 추가할 수 있습니다."),                     // MR-19
     NOT_OCCUPIER(ErrorType.AUTHORIZATION, "OCCUPANCY_NOT_OCCUPIER",
             "점유자만 참여자를 관리할 수 있습니다."),                                 // MR-29, MR-31
+    PARTICIPANT_ACCESS_DENIED(ErrorType.AUTHORIZATION, "OCCUPANCY_PARTICIPANT_ACCESS_DENIED",
+            "현재 회의 참여자만 참여자 목록을 볼 수 있습니다."),
     ALERT_COHORT_ACCESS_DENIED(ErrorType.AUTHORIZATION, "OCCUPANCY_ALERT_COHORT_ACCESS_DENIED",
             "해당 기수의 활성 소속이 아닙니다."),                                     // MR-02
     NOT_COHORT_MANAGER(ErrorType.AUTHORIZATION, "OCCUPANCY_NOT_COHORT_MANAGER",

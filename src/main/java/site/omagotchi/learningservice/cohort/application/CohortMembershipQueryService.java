@@ -5,12 +5,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.port.CohortMembershipQuery;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
-import site.omagotchi.learningservice.cohort.domain.CohortMembership;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * 다른 Feature가 기수 소속을 조회하는 공개 계약.
@@ -32,7 +33,6 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class CohortMembershipQueryService {
 
-    private final CohortMembershipRepository membershipRepository;
     private final CohortMembershipQuery membershipQuery;
 
     /**
@@ -44,9 +44,15 @@ public class CohortMembershipQueryService {
         if (cohortId == null) {
             return List.of();
         }
-        return membershipRepository.findActiveStudents(cohortId).stream()
-                .map(CohortMembershipView::from)
-                .toList();
+        return membershipQuery.findActiveStudents(cohortId);
+    }
+
+    /** 특정 기수의 역할을 가리지 않는 ACTIVE 소속 전체를 조회한다. */
+    public List<CohortMembershipView> findActiveMemberships(Long cohortId) {
+        if (cohortId == null) {
+            return List.of();
+        }
+        return membershipQuery.findActiveByCohortId(cohortId);
     }
 
     /**
@@ -62,9 +68,7 @@ public class CohortMembershipQueryService {
         if (membershipId == null) {
             return Optional.empty();
         }
-        return membershipRepository
-                .findByIdAndStatus(membershipId, CohortMembershipStatus.ACTIVE)
-                .map(CohortMembershipView::from);
+        return membershipQuery.findByIdAndActive(membershipId);
     }
 
     /**
@@ -82,10 +86,18 @@ public class CohortMembershipQueryService {
         if (cohortId == null || userId == null) {
             return Optional.empty();
         }
-        return membershipRepository
-                .findFirstByCohortIdAndUserIdAndStatusOrderByRequestedAtDesc(
-                        cohortId, userId, CohortMembershipStatus.ACTIVE)
-                .map(CohortMembershipView::from);
+        return membershipQuery.findByCohortIdAndUserIdAndActive(cohortId, userId);
+    }
+
+    /** 같은 기수의 ACTIVE 소속을 계정별로 일괄 조회한다. */
+    public Map<UUID, CohortMembershipView> findActiveMemberships(
+            Long cohortId,
+            Collection<UUID> userIds
+    ) {
+        if (cohortId == null || userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        return membershipQuery.findActiveByCohortIdAndUserIds(cohortId, userIds);
     }
 
     /**
@@ -103,10 +115,7 @@ public class CohortMembershipQueryService {
         if (userId == null) {
             return List.of();
         }
-        return membershipRepository.findByUserIdOrderByRequestedAtDesc(userId).stream()
-                .filter(membership -> membership.getStatus() == CohortMembershipStatus.ACTIVE)
-                .map(CohortMembershipView::from)
-                .toList();
+        return membershipQuery.findActiveByUserId(userId);
     }
 
     /**
@@ -121,9 +130,7 @@ public class CohortMembershipQueryService {
         if (cohortId == null) {
             return List.of();
         }
-        return membershipRepository.findByCohortId(cohortId).stream()
-                .map(CohortMembership::getId)
-                .toList();
+        return membershipQuery.findIdsByCohortId(cohortId);
     }
 
     /**
@@ -142,8 +149,7 @@ public class CohortMembershipQueryService {
         if (membershipIds == null || membershipIds.isEmpty()) {
             return Map.of();
         }
-        return membershipRepository.findAllById(membershipIds).stream()
-                .collect(Collectors.toMap(CohortMembership::getId, CohortMembership::getUserId));
+        return membershipQuery.findUserIds(membershipIds);
     }
 
     /**
@@ -166,8 +172,7 @@ public class CohortMembershipQueryService {
         if (membershipIds == null || membershipIds.isEmpty()) {
             return Map.of();
         }
-        return membershipRepository.findAllById(membershipIds).stream()
-                .collect(Collectors.toMap(CohortMembership::getId, CohortMembership::getCohortId));
+        return membershipQuery.findCohortIds(membershipIds);
     }
 
     /**
@@ -197,10 +202,7 @@ public class CohortMembershipQueryService {
         if (membershipIds == null || membershipIds.isEmpty()) {
             return Set.of();
         }
-        return membershipRepository.findAllById(membershipIds).stream()
-                .filter(membership -> membership.getStatus() != CohortMembershipStatus.ACTIVE)
-                .map(CohortMembership::getId)
-                .collect(Collectors.toUnmodifiableSet());
+        return membershipQuery.findInactiveIds(membershipIds);
     }
 
     /**

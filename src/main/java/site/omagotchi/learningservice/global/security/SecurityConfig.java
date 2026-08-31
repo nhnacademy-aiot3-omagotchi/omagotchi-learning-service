@@ -53,7 +53,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/cohorts",
-                                "/api/v1/cohorts/*/managers"
+                                "/api/v1/cohorts/*/managers",
+                                "/api/v1/cohorts/managers/search"
                         ).hasRole("SYSTEM_ADMIN")
                         .requestMatchers(
                                 HttpMethod.PATCH,

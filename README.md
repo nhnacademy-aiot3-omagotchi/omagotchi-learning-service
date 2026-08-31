@@ -131,9 +131,10 @@ echo "누락된 키:"; comm -23 /tmp/req.txt /tmp/have.txt
 주요 Resource:
 
 - `/api/v1/cohorts/**`: 기수·소속·출결 정책
-- `/api/v1/cohorts/{cohortId}/attendance-records/**`: 출결
-- `/api/v1/cohorts/{cohortId}/timer/**`: 학습 타이머
-- `/api/v1/cohorts/{cohortId}/study-statistics/**`: 학습 통계
+- `POST /api/v1/cohorts/managers/search`: 사용자 묶음의 기수 운영 권한(MANAGER) 일괄 조회, `SYSTEM_ADMIN` 전용, 요청당 최대 100명
+- `/api/v1/cohorts/{cohort-id}/attendance-records/**`: 출결
+- `/api/v1/cohorts/{cohort-id}/timer/**`: 학습 타이머
+- `/api/v1/cohorts/{cohort-id}/study-statistics/**`: 학습 통계
 - `/api/v1/spaces/**`: 공간·점유
 - `/api/v1/teams/**`: 팀·팀원
 - `/api/v1/community/posts/**`: 커뮤니티

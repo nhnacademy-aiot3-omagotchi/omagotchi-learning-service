@@ -109,7 +109,7 @@ class TeamStudyRankingControllerTest {
             ));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/teams/{teamId}/study-rankings/today",
+                            "/api/v1/cohorts/{cohort-id}/teams/{team-id}/study-rankings/today",
                             COHORT_ID,
                             TEAM_ID
                     ).queryParam("maxRank", "2")
@@ -145,7 +145,7 @@ class TeamStudyRankingControllerTest {
             ));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/teams/{teamId}"
+                            "/api/v1/cohorts/{cohort-id}/teams/{team-id}"
                                     + "/study-rankings/monthly/{month}",
                             COHORT_ID,
                             TEAM_ID,
@@ -192,7 +192,7 @@ class TeamStudyRankingControllerTest {
             ));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}/study-rankings/teams/today",
+                            "/api/v1/cohorts/{cohort-id}/study-rankings/teams/today",
                             COHORT_ID
                     ).queryParam("maxRank", "1")
                     .principal(authentication()))
@@ -233,7 +233,7 @@ class TeamStudyRankingControllerTest {
             ));
 
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}"
+                            "/api/v1/cohorts/{cohort-id}"
                                     + "/study-rankings/teams/daily/{date}",
                             COHORT_ID,
                             date
@@ -249,7 +249,7 @@ class TeamStudyRankingControllerTest {
         @DisplayName("일간 날짜 형식 오류 요청 거부")
         void rejectsInvalidDailyDateFormat() throws Exception {
             mockMvc.perform(get(
-                            "/api/v1/cohorts/{cohortId}"
+                            "/api/v1/cohorts/{cohort-id}"
                                     + "/study-rankings/teams/daily/{date}",
                             COHORT_ID,
                             "not-a-date"

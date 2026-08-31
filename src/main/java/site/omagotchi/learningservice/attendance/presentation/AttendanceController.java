@@ -27,14 +27,14 @@ import java.time.LocalDate;
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/cohorts/{cohortId}/attendance-records")
+@RequestMapping("/api/v1/cohorts/{cohort-id}/attendance-records")
 public class AttendanceController {
 
     private final AttendanceService attendanceService;
     // 입실
     @PostMapping("/check-in")
     public AttendanceRecordResponse checkIn(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
@@ -43,7 +43,7 @@ public class AttendanceController {
     // 퇴실
     @PostMapping("/check-out")
     public AttendanceRecordResponse checkOut(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
@@ -52,7 +52,7 @@ public class AttendanceController {
     // 나
     @GetMapping("/me")
     public AttendanceRecordPageResponse getMyRecords(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -69,7 +69,7 @@ public class AttendanceController {
     // 기수 Id
     @GetMapping
     public AttendanceRecordPageResponse getDailyRecords(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) Integer page,
@@ -86,7 +86,7 @@ public class AttendanceController {
     // 변경된 최종 상태
     @PatchMapping("/{attendance-id}/status")
     public ResponseEntity<Void> changeFinalStatus(
-            @PathVariable Long cohortId,
+            @PathVariable("cohort-id") Long cohortId,
             @PathVariable("attendance-id") Long attendanceId,
             JwtAuthenticationToken authentication,
             @Valid @RequestBody ChangeAttendanceStatusRequest request

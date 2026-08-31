@@ -186,6 +186,7 @@ class OccupancyQueryServiceTest {
     /** occupancyId를 spaceId에서 파생시켜 두 식별자가 뒤바뀌면 테스트가 깨지게 한다. */
     private ActiveSpaceOccupancy occupancy(Long spaceId) {
         return new ActiveSpaceOccupancy(
-                spaceId * 5, spaceId, NOW.plusHours(1), MEMBERSHIP_ID, OCCUPIER_ID);
+                spaceId * 5, spaceId, NOW.minusHours(1), NOW.plusHours(1),
+                MEMBERSHIP_ID, OCCUPIER_ID);
     }
 }

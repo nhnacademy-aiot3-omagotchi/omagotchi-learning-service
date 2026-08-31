@@ -279,7 +279,8 @@ class SpaceQueryServiceTest {
 
     private static SpaceOccupancyView occupancy(Long occupierCohortId) {
         return new SpaceOccupancyView(
-                5L, 1L, EXPIRES_AT, occupierCohortId, 77L, OCCUPIER_ID,
+                5L, 1L, EXPIRES_AT.minusHours(1), EXPIRES_AT,
+                occupierCohortId, 77L, OCCUPIER_ID,
                 List.of(PARTICIPANT_ID)
         );
     }

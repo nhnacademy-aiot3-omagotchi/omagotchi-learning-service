@@ -20,7 +20,7 @@ import java.time.YearMonth;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/cohorts/{cohortId}/teams/{teamId}/study-rankings")
+@RequestMapping("/api/v1/cohorts/{cohort-id}/teams/{team-id}/study-rankings")
 public class TeamMemberStudyRankingController {
 
     private final StudyRankingQueryService studyRankingQueryService;
@@ -29,8 +29,8 @@ public class TeamMemberStudyRankingController {
     @GetMapping("/today")
     public TodayMemberStudyRankingResponse getTodayRanking(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
-            @PathVariable Long teamId,
+            @PathVariable("cohort-id") Long cohortId,
+            @PathVariable("team-id") Long teamId,
             @RequestParam(required = false) Integer maxRank
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
@@ -48,8 +48,8 @@ public class TeamMemberStudyRankingController {
     @GetMapping("/daily/{date}")
     public MemberStudyRankingResponse getDailyRanking(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
-            @PathVariable Long teamId,
+            @PathVariable("cohort-id") Long cohortId,
+            @PathVariable("team-id") Long teamId,
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) Integer maxRank
     ) {
@@ -63,12 +63,12 @@ public class TeamMemberStudyRankingController {
     }
 
     // 특정 팀의 현재 구성원만 대상으로 요청 주간의 개인 공부 순위를 반환한다.
-    @GetMapping("/weekly/{weekStartDate}")
+    @GetMapping("/weekly/{week-start-date}")
     public MemberStudyRankingResponse getWeeklyRanking(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
-            @PathVariable Long teamId,
-            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            @PathVariable("cohort-id") Long cohortId,
+            @PathVariable("team-id") Long teamId,
+            @PathVariable("week-start-date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
             LocalDate weekStartDate,
             @RequestParam(required = false) Integer maxRank
     ) {
@@ -85,8 +85,8 @@ public class TeamMemberStudyRankingController {
     @GetMapping("/monthly/{month}")
     public MemberStudyRankingResponse getMonthlyRanking(
             JwtAuthenticationToken authentication,
-            @PathVariable Long cohortId,
-            @PathVariable Long teamId,
+            @PathVariable("cohort-id") Long cohortId,
+            @PathVariable("team-id") Long teamId,
             @PathVariable @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
             @RequestParam(required = false) Integer maxRank
     ) {

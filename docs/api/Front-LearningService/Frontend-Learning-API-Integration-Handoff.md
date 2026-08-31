@@ -178,23 +178,23 @@ Prototype용 `404 → null` fallback은 연동 완료 후 제거한다. `401`, `
 | `GET /bff/v1/cohorts` | `GET /api/v1/cohorts` | 기수 목록 |
 | `GET /bff/v1/cohorts/applications/me` | `GET /api/v1/cohorts/join-requests/me` | 내 신청/소속 목록 |
 | `POST /bff/v1/cohorts/applications` | `POST /api/v1/cohorts/applications` | 가입 코드 신청 |
-| `GET /bff/v1/attendance/history` | `GET /api/v1/cohorts/{approvedCohortId}/attendance-records/me` | BFF가 기수 ID 결정 |
+| `GET /bff/v1/attendance/history` | `GET /api/v1/cohorts/{cohort-id}/attendance-records/me` | BFF가 기수 ID 결정 |
 | `GET /bff/v1/attendance/today` | 같은 `/attendance-records/me` 응답에서 오늘 기록 선택 | 전용 downstream API 없음 |
-| `POST /bff/v1/attendance/check-in` | `POST /api/v1/cohorts/{approvedCohortId}/attendance-records/check-in` | BFF가 기수 ID 결정 |
-| `POST /bff/v1/attendance/check-out` | `POST /api/v1/cohorts/{approvedCohortId}/attendance-records/check-out` | BFF가 기수 ID 결정 |
+| `POST /bff/v1/attendance/check-in` | `POST /api/v1/cohorts/{cohort-id}/attendance-records/check-in` | BFF가 기수 ID 결정 |
+| `POST /bff/v1/attendance/check-out` | `POST /api/v1/cohorts/{cohort-id}/attendance-records/check-out` | BFF가 기수 ID 결정 |
 | `GET /bff/v1/community/posts` | `GET /api/v1/community/posts` | Query String 유지 |
-| `GET /bff/v1/community/posts/{postId}` | `GET /api/v1/community/posts/{postId}` | 상세 |
+| `GET /bff/v1/community/posts/{post-id}` | `GET /api/v1/community/posts/{post-id}` | 상세 |
 | `POST /bff/v1/community/posts` | `POST /api/v1/community/posts` | JSON 또는 multipart |
-| `PATCH /bff/v1/community/posts/{postId}` | `PATCH /api/v1/community/posts/{postId}` | JSON 또는 multipart |
-| `DELETE /bff/v1/community/posts/{postId}` | `DELETE /api/v1/community/posts/{postId}` | `204` |
+| `PATCH /bff/v1/community/posts/{post-id}` | `PATCH /api/v1/community/posts/{post-id}` | JSON 또는 multipart |
+| `DELETE /bff/v1/community/posts/{post-id}` | `DELETE /api/v1/community/posts/{post-id}` | `204` |
 | `GET /bff/v1/gamification/characters` | `GET /api/v1/gamification/characters` | 캐릭터 마스터 |
 | `POST /bff/v1/gamification/characters/representative` | 같은 경로의 `/api/v1` | 최초 대표 캐릭터 생성 |
 | `GET /bff/v1/gamification/home` | `GET /api/v1/gamification/home` | 성장 + 일일 퀘스트 |
 | `GET /bff/v1/gamification/quests/daily` | 같은 경로의 `/api/v1` | 일일 퀘스트 |
-| `POST /bff/v1/gamification/quests/{id}/claim` | 같은 경로의 `/api/v1` | 보상 수령 |
+| `POST /bff/v1/gamification/quests/{user-daily-quest-id}/claim` | 같은 경로의 `/api/v1` | 보상 수령 |
 | `GET /bff/v1/gamification/progression` | `GET /api/v1/gamification/progression` | `cohortId`, `aggregationDate` |
-| `GET /bff/v1/cohorts/{cohortId}/study-rankings` | 같은 경로의 `/api/v1` | 학생용 목록 + 내 순위 |
-| `GET /bff/v1/cohorts/{cohortId}/study-rankings/me` | 같은 경로의 `/api/v1` | 내 순위만 |
+| `GET /bff/v1/cohorts/{cohort-id}/study-rankings` | 같은 경로의 `/api/v1` | 학생용 목록 + 내 순위 |
+| `GET /bff/v1/cohorts/{cohort-id}/study-rankings/me` | 같은 경로의 `/api/v1` | 내 순위만 |
 | `GET /bff/v1/presence` | `GET /api/v1/cohorts/me/presence` | 초기 Snapshot |
 
 ### 5.2 관리자 화면
@@ -202,25 +202,25 @@ Prototype용 `404 → null` fallback은 연동 완료 후 제거한다. `401`, `
 | Browser → Frontend BFF | Frontend BFF → Gateway | 권한 |
 |---|---|---|
 | `POST /bff/v1/admin/cohorts` | `POST /api/v1/cohorts` | `SYSTEM_ADMIN` |
-| `PATCH /bff/v1/admin/cohorts/{cohortId}` | `PATCH /api/v1/cohorts/{cohortId}` | 기수 `MANAGER` |
-| `PATCH /bff/v1/admin/cohorts/{cohortId}/status` | `PATCH /api/v1/cohorts/{cohortId}/status` | `SYSTEM_ADMIN` |
-| `GET /bff/v1/admin/cohorts/{cohortId}/members` | `GET /api/v1/cohorts/{cohortId}/members` | 기수 `MANAGER` |
-| `GET /bff/v1/admin/cohorts/{cohortId}/applications` | `GET /api/v1/cohorts/{cohortId}/join-requests` | 기수 `MANAGER` |
-| `POST /bff/v1/admin/cohorts/{cohortId}/managers` | `POST /api/v1/cohorts/{cohortId}/managers` | `SYSTEM_ADMIN` |
-| `PATCH /bff/v1/admin/cohorts/{cohortId}/members/{userId}/role` | `PATCH /api/v1/cohorts/{cohortId}/members/{userId}/role` | 관리자 역할이 관여하면 `SYSTEM_ADMIN`, 그 외 기수 `MANAGER` |
-| `PATCH /bff/v1/admin/memberships/{id}/approve` | `PATCH /api/v1/cohort-memberships/{id}/approve` | 관리자 역할 승인 시 `SYSTEM_ADMIN` |
-| `PATCH /bff/v1/admin/memberships/{id}/reject` | `PATCH /api/v1/cohort-memberships/{id}/reject` | 기수 `MANAGER` |
-| `GET /bff/v1/admin/cohorts/{cohortId}/join-code` | `GET /api/v1/cohorts/{cohortId}/join-code` | 기수 `MANAGER` |
-| `POST /bff/v1/admin/cohorts/{cohortId}/join-code` | `POST /api/v1/cohorts/{cohortId}/join-code` | 기수 `MANAGER` |
-| `PATCH /bff/v1/admin/cohorts/{cohortId}/join-code/revoke` | 같은 경로의 `/api/v1` | 기수 `MANAGER` |
-| `GET /bff/v1/admin/cohorts/{cohortId}/attendance-policy` | 같은 경로의 `/api/v1` | 기수 `MANAGER` |
-| `PUT /bff/v1/admin/cohorts/{cohortId}/attendance-policy` | 같은 경로의 `/api/v1` | 기수 `MANAGER` |
-| `GET /bff/v1/admin/cohorts/{cohortId}/attendance-records?date=...` | `GET /api/v1/cohorts/{cohortId}/attendance-records?date=...` | 기수 `MANAGER` |
-| `PATCH /bff/v1/admin/cohorts/{cohortId}/attendance-records/{id}/status` | 같은 경로의 `/api/v1` | 기수 `MANAGER`, 응답 `204` |
-| `GET /bff/v1/admin/cohorts/{cohortId}/study-rankings` | `GET /api/v1/cohorts/{cohortId}/study-rankings/management` | 기수 `MANAGER` |
-| `PATCH /bff/v1/admin/community/posts/{postId}/pin` | `PATCH /api/v1/community/posts/{postId}/pin` | `SYSTEM_ADMIN` |
+| `PATCH /bff/v1/admin/cohorts/{cohort-id}` | `PATCH /api/v1/cohorts/{cohort-id}` | 기수 `MANAGER` |
+| `PATCH /bff/v1/admin/cohorts/{cohort-id}/status` | `PATCH /api/v1/cohorts/{cohort-id}/status` | `SYSTEM_ADMIN` |
+| `GET /bff/v1/admin/cohorts/{cohort-id}/members` | `GET /api/v1/cohorts/{cohort-id}/members` | 기수 `MANAGER` |
+| `GET /bff/v1/admin/cohorts/{cohort-id}/applications` | `GET /api/v1/cohorts/{cohort-id}/join-requests` | 기수 `MANAGER` |
+| `POST /bff/v1/admin/cohorts/{cohort-id}/managers` | `POST /api/v1/cohorts/{cohort-id}/managers` | `SYSTEM_ADMIN` |
+| `PATCH /bff/v1/admin/cohorts/{cohort-id}/members/{member-user-id}/role` | `PATCH /api/v1/cohorts/{cohort-id}/members/{member-user-id}/role` | 관리자 역할이 관여하면 `SYSTEM_ADMIN`, 그 외 기수 `MANAGER` |
+| `PATCH /bff/v1/admin/memberships/{membership-id}/approve` | `PATCH /api/v1/cohort-memberships/{membership-id}/approve` | 관리자 역할 승인 시 `SYSTEM_ADMIN` |
+| `PATCH /bff/v1/admin/memberships/{membership-id}/reject` | `PATCH /api/v1/cohort-memberships/{membership-id}/reject` | 기수 `MANAGER` |
+| `GET /bff/v1/admin/cohorts/{cohort-id}/join-code` | `GET /api/v1/cohorts/{cohort-id}/join-code` | 기수 `MANAGER` |
+| `POST /bff/v1/admin/cohorts/{cohort-id}/join-code` | `POST /api/v1/cohorts/{cohort-id}/join-code` | 기수 `MANAGER` |
+| `PATCH /bff/v1/admin/cohorts/{cohort-id}/join-code/revoke` | 같은 경로의 `/api/v1` | 기수 `MANAGER` |
+| `GET /bff/v1/admin/cohorts/{cohort-id}/attendance-policy` | 같은 경로의 `/api/v1` | 기수 `MANAGER` |
+| `PUT /bff/v1/admin/cohorts/{cohort-id}/attendance-policy` | 같은 경로의 `/api/v1` | 기수 `MANAGER` |
+| `GET /bff/v1/admin/cohorts/{cohort-id}/attendance-records?date=...` | `GET /api/v1/cohorts/{cohort-id}/attendance-records?date=...` | 기수 `MANAGER` |
+| `PATCH /bff/v1/admin/cohorts/{cohort-id}/attendance-records/{attendance-id}/status` | 같은 경로의 `/api/v1` | 기수 `MANAGER`, 응답 `204` |
+| `GET /bff/v1/admin/cohorts/{cohort-id}/study-rankings` | `GET /api/v1/cohorts/{cohort-id}/study-rankings/management` | 기수 `MANAGER` |
+| `PATCH /bff/v1/admin/community/posts/{post-id}/pin` | `PATCH /api/v1/community/posts/{post-id}/pin` | `SYSTEM_ADMIN` |
 
-현재 `GET /api/v1/cohorts/{cohortId}/audit-logs` API는 없다. Frontend에서 호출하지 않는다.
+현재 `GET /api/v1/cohorts/{cohort-id}/audit-logs` API는 없다. Frontend에서 호출하지 않는다.
 
 ## 6. User Profile 계약
 
@@ -294,9 +294,9 @@ Content-Type: application/json
 ```http
 POST  /api/v1/cohorts
 GET   /api/v1/cohorts
-GET   /api/v1/cohorts/{cohortId}
-PATCH /api/v1/cohorts/{cohortId}
-PATCH /api/v1/cohorts/{cohortId}/status
+GET   /api/v1/cohorts/{cohort-id}
+PATCH /api/v1/cohorts/{cohort-id}
+PATCH /api/v1/cohorts/{cohort-id}/status
 ```
 
 생성·수정 요청:
@@ -337,18 +337,18 @@ PATCH /api/v1/cohorts/{cohortId}/status
 ### 7.2 가입 코드·신청·소속
 
 ```http
-GET   /api/v1/cohorts/{cohortId}/join-code
-POST  /api/v1/cohorts/{cohortId}/join-code
-PATCH /api/v1/cohorts/{cohortId}/join-code/revoke
+GET   /api/v1/cohorts/{cohort-id}/join-code
+POST  /api/v1/cohorts/{cohort-id}/join-code
+PATCH /api/v1/cohorts/{cohort-id}/join-code/revoke
 POST  /api/v1/cohorts/join-requests
 POST  /api/v1/cohorts/applications
 GET   /api/v1/cohorts/join-requests/me
-GET   /api/v1/cohorts/{cohortId}/join-requests
-GET   /api/v1/cohorts/{cohortId}/members
-PATCH /api/v1/cohort-memberships/{membershipId}/approve
-PATCH /api/v1/cohort-memberships/{membershipId}/reject
-POST  /api/v1/cohorts/{cohortId}/managers
-PATCH /api/v1/cohorts/{cohortId}/members/{memberUserId}/role
+GET   /api/v1/cohorts/{cohort-id}/join-requests
+GET   /api/v1/cohorts/{cohort-id}/members
+PATCH /api/v1/cohort-memberships/{membership-id}/approve
+PATCH /api/v1/cohort-memberships/{membership-id}/reject
+POST  /api/v1/cohorts/{cohort-id}/managers
+PATCH /api/v1/cohorts/{cohort-id}/members/{member-user-id}/role
 ```
 
 `POST /join-requests`와 `POST /applications`는 현재 같은 동작의 alias다. Frontend는
@@ -416,8 +416,8 @@ PATCH /api/v1/cohorts/{cohortId}/members/{memberUserId}/role
 ### 7.3 출결 정책
 
 ```http
-GET /api/v1/cohorts/{cohortId}/attendance-policy
-PUT /api/v1/cohorts/{cohortId}/attendance-policy
+GET /api/v1/cohorts/{cohort-id}/attendance-policy
+PUT /api/v1/cohorts/{cohort-id}/attendance-policy
 ```
 
 ```json
@@ -435,11 +435,11 @@ PUT /api/v1/cohorts/{cohortId}/attendance-policy
 ## 8. Attendance 계약
 
 ```http
-POST  /api/v1/cohorts/{cohortId}/attendance-records/check-in
-POST  /api/v1/cohorts/{cohortId}/attendance-records/check-out
-GET   /api/v1/cohorts/{cohortId}/attendance-records/me?from=2026-08-01&to=2026-08-31&page=0&size=20
-GET   /api/v1/cohorts/{cohortId}/attendance-records?date=2026-08-20&page=0&size=20
-PATCH /api/v1/cohorts/{cohortId}/attendance-records/{attendance-id}/status
+POST  /api/v1/cohorts/{cohort-id}/attendance-records/check-in
+POST  /api/v1/cohorts/{cohort-id}/attendance-records/check-out
+GET   /api/v1/cohorts/{cohort-id}/attendance-records/me?from=2026-08-01&to=2026-08-31&page=0&size=20
+GET   /api/v1/cohorts/{cohort-id}/attendance-records?date=2026-08-20&page=0&size=20
+PATCH /api/v1/cohorts/{cohort-id}/attendance-records/{attendance-id}/status
 ```
 
 - `/me`: `from`, `to`는 inclusive이며 생략 가능하다. 날짜 내림차순으로 페이지를 반환한다.
@@ -486,12 +486,12 @@ PATCH /api/v1/cohorts/{cohortId}/attendance-records/{attendance-id}/status
 
 ```http
 GET    /api/v1/community/posts?page=0&size=20&type=NOTICE&search=공지
-GET    /api/v1/community/posts/{postId}
-GET    /api/v1/community/posts/{postId}/attachments/{attachmentId}
+GET    /api/v1/community/posts/{post-id}
+GET    /api/v1/community/posts/{post-id}/attachments/{attachment-id}
 POST   /api/v1/community/posts
-PATCH  /api/v1/community/posts/{postId}
-DELETE /api/v1/community/posts/{postId}
-PATCH  /api/v1/community/posts/{postId}/pin
+PATCH  /api/v1/community/posts/{post-id}
+DELETE /api/v1/community/posts/{post-id}
+PATCH  /api/v1/community/posts/{post-id}/pin
 ```
 
 목록 기본값은 `page=0`, `size=20`이며 `size` 범위는 1~100이다. 정렬은 고정글 우선,
@@ -599,7 +599,7 @@ POST /api/v1/gamification/characters/representative
 GET  /api/v1/gamification/home
 GET  /api/v1/gamification/quests/daily
 GET  /api/v1/gamification/progression?cohortId=1&aggregationDate=2026-08-20
-POST /api/v1/gamification/quests/{userDailyQuestId}/claim
+POST /api/v1/gamification/quests/{user-daily-quest-id}/claim
 ```
 
 캐릭터 목록:
@@ -715,19 +715,19 @@ Frontend가 별도의 재시도 API를 호출할 필요는 없다.
 학생 목록 + 내 순위:
 
 ```http
-GET /api/v1/cohorts/{cohortId}/study-rankings?period=WEEKLY&maxRank=100
+GET /api/v1/cohorts/{cohort-id}/study-rankings?period=WEEKLY&maxRank=100
 ```
 
 내 순위만:
 
 ```http
-GET /api/v1/cohorts/{cohortId}/study-rankings/me?period=WEEKLY
+GET /api/v1/cohorts/{cohort-id}/study-rankings/me?period=WEEKLY
 ```
 
 관리자 목록:
 
 ```http
-GET /api/v1/cohorts/{cohortId}/study-rankings/management?period=WEEKLY&maxRank=100
+GET /api/v1/cohorts/{cohort-id}/study-rankings/management?period=WEEKLY&maxRank=100
 ```
 
 - `period`: `DAILY`, `WEEKLY`, `MONTHLY`
@@ -804,7 +804,7 @@ GET /api/v1/cohorts/me/presence
 Handshake endpoint: /ws
 STOMP CONNECT Header: Authorization: Bearer <access-token>
 SEND: /app/presence/heartbeat
-SUBSCRIBE: /topic/cohorts/{cohortId}/presence
+SUBSCRIBE: /topic/cohorts/{cohort-id}/presence
 SUBSCRIBE: /user/queue/notifications
 Status: ONLINE, AWAY, OFFLINE
 ```
@@ -818,7 +818,7 @@ Frontend에서 현재 사용하는 EventSource 구조를 유지하려면 다음 
 Browser EventSource
   GET /bff/v1/presence/stream
     → Frontend BFF가 Session Access Token으로 Gateway/Learning STOMP CONNECT
-    → /topic/cohorts/{cohortId}/presence 구독
+    → /topic/cohorts/{cohort-id}/presence 구독
     → Snapshot을 SSE data로 Browser에 중계
     → 연결 동안 /app/presence/heartbeat 주기 전송
 ```
@@ -898,7 +898,7 @@ PresenceStatus: ONLINE, AWAY, OFFLINE
    - BFF에서 Identity 사용자 정보와 조합하거나 Backend Projection을 추가해야 한다.
 
 2. 감사 로그
-   - 과거 문서의 `/cohorts/{cohortId}/audit-logs`는 현재 구현되어 있지 않다.
+   - 과거 문서의 `/cohorts/{cohort-id}/audit-logs`는 현재 구현되어 있지 않다.
 
 ## 16. 연동 권장 순서
 

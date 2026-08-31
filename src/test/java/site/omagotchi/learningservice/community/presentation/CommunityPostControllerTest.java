@@ -162,7 +162,7 @@ class CommunityPostControllerTest {
                         new ByteArrayResource(new byte[]{1, 2, 3})
                 ));
 
-        mockMvc.perform(get("/api/v1/community/posts/{postId}/attachments/{attachmentId}", 10L, 20L)
+        mockMvc.perform(get("/api/v1/community/posts/{post-id}/attachments/{attachment-id}", 10L, 20L)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()

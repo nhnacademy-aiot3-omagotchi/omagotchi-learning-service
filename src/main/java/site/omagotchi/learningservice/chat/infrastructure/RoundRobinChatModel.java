@@ -24,6 +24,9 @@ public class RoundRobinChatModel implements ChatModel {
 
     private static final int QUOTA_EXCEEDED_STATUS = 429;
 
+    // nextIndex()가 "지금 쓸 수 있는 키가 하나도 없다"를 알리는 값
+    private static final int NO_AVAILABLE_KEY = -1;
+
     // 분당 요청 한도에 맞춘 값. 하루 한도가 바닥난 키는 60초 뒤 한 번 더 맞고 다시 쉰다
     private static final long COOLDOWN_MILLIS = 60_000L;
 
@@ -51,6 +54,10 @@ public class RoundRobinChatModel implements ChatModel {
         for (int attempt = 0; attempt < this.delegates.size(); attempt++) {
             int index = this.nextIndex();                           // ① 쓸 키를 고른다
 
+            if (index == NO_AVAILABLE_KEY) {
+                break;
+            }
+
             try {
                 return this.delegates.get(index).call(prompt);      // ② 그 키로 물어본다. 성공하면 여기서 끝
             } catch (RuntimeException e) {
@@ -63,14 +70,22 @@ public class RoundRobinChatModel implements ChatModel {
             }
         }
 
-        log.error("[RoundRobinChatModel] 키 {}개가 모두 할당량 초과입니다", this.delegates.size());
+        if (Objects.nonNull(lastError)) {
+            throw lastError;                                        // ⑤ 이번 요청에서 429를 맞았다면 그 원인을 그대로 전달
+        }
 
-        throw lastError;                                            // ⑤ 키를 다 써봤는데도 안 되면 마지막 에러를 던진다
+        throw this.allKeysExhausted();                              // ⑥ 한 번도 호출하지 못한 경우 (전부 쿨다운 중)
     }
 
     @Override
     public Flux<ChatResponse> stream(Prompt prompt) {
-        return this.streamWithFailover(prompt, 0);
+        int index = this.nextIndex();
+
+        if (index == NO_AVAILABLE_KEY) {
+            return Flux.error(this.allKeysExhausted());
+        }
+
+        return this.streamWithFailover(prompt, 0, index);
     }
 
     /**
@@ -94,10 +109,20 @@ public class RoundRobinChatModel implements ChatModel {
     }
 
     /**
+     * 모든 키가 쿨다운이라 호출조차 하지 못한 경우의 예외
+     * 원인이 된 429는 이전 요청에서 발생했으므로 여기서 넘겨줄 cause가 없다
+     */
+    private IllegalStateException allKeysExhausted() {
+        log.error("[RoundRobinChatModel] Gemini 키 {}개가 모두 쿨다운 상태입니다. 호출하지 않고 즉시 실패시킵니다",
+                this.delegates.size());
+
+        return new IllegalStateException("Gemini 키가 모두 할당량 초과 상태입니다.");
+    }
+
+    /**
      * attempt는 지금까지 몇 개의 키로 시도했는지. 키 개수를 넘으면 포기한다
      */
-    private Flux<ChatResponse> streamWithFailover(Prompt prompt, int attempt) {
-        int index = this.nextIndex();
+    private Flux<ChatResponse> streamWithFailover(Prompt prompt, int attempt, int index) {
 
         // 이 호출이 사용자에게 조각을 이미 내보냈는지 표시한다
         AtomicBoolean emitted = new AtomicBoolean(false);
@@ -127,9 +152,17 @@ public class RoundRobinChatModel implements ChatModel {
             return Flux.error(error);
         }
 
+        int nextIndex = this.nextIndex();
+
+        if (nextIndex == NO_AVAILABLE_KEY) {
+            log.error("[RoundRobinChatModel] 남은 Gemini 키가 없습니다");
+
+            return Flux.error(error);
+        }
+
         log.warn("[RoundRobinChatModel] {}번 키 할당량 초과. 다음 키로 재시도합니다 ({}번째 시도)", index, attempt + 2);
-        // 다음 키로 재시도
-        return this.streamWithFailover(prompt, attempt + 1);
+
+        return this.streamWithFailover(prompt, attempt + 1, nextIndex);
     }
 
     /**
@@ -147,9 +180,7 @@ public class RoundRobinChatModel implements ChatModel {
             }
         }
 
-        log.warn("[RoundRobinChatModel] 모든 Gemini 키가 할당량 초과 상태입니다");
-
-        return Math.floorMod(this.counter.getAndIncrement(), this.delegates.size());
+        return NO_AVAILABLE_KEY;
     }
 
     /**

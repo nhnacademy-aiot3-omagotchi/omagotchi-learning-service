@@ -138,6 +138,29 @@ class RoundRobinChatModelTest {
     }
 
     @Test
+    @DisplayName("모든 키가 쿨다운이면 모델을 호출하지 않고 즉시 실패한다")
+    void failsFastWhenEveryKeyIsCoolingDown() {
+        StubChatModel first = StubChatModel.failing(quotaExceeded());
+        StubChatModel second = StubChatModel.failing(quotaExceeded());
+
+        RoundRobinChatModel chatModel = new RoundRobinChatModel(List.of(first, second));
+
+        // 첫 요청에서 두 키가 모두 429를 맞고 쿨다운에 들어간다
+        assertThatThrownBy(() -> chatModel.call(new Prompt("첫 질문")))
+                .hasRootCauseInstanceOf(ClientException.class);
+
+        assertThat(first.callCount()).isEqualTo(1);
+        assertThat(second.callCount()).isEqualTo(1);
+
+        // 두 번째 요청은 실패할 게 뻔한 호출을 하지 않아야 한다
+        assertThatThrownBy(() -> chatModel.call(new Prompt("두 번째 질문")))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(first.callCount()).isEqualTo(1);   // 늘어나지 않는다
+        assertThat(second.callCount()).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("getOptions는 첫 번째 모델의 옵션을 그대로 돌려준다")
     void delegatesOptions() {
         RoundRobinChatModel chatModel = new RoundRobinChatModel(

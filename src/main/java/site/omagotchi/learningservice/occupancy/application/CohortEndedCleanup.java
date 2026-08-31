@@ -88,6 +88,11 @@ public class CohortEndedCleanup {
 
         // 4단계 — 센서 회수 (CE-05). 5단계보다 반드시 먼저다 — 공간의 cohort_id가 지워진
         // 뒤에는 대상 센서를 특정할 수 없고, 회수되지 못한 센서는 룰을 계속 발화시킨다.
+        //
+        // 실패해도 5단계를 건너뛰지 않는다. cohort_id가 남으면 SensorDeviceService#claim의
+        // 고아 판정(findCohortId().isEmpty())을 통과하지 못해 다음 기수가 인계할 수 없고,
+        // 이 기수의 멤버십은 이미 종료되어 아무도 손댈 수 없는 상태가 된다. CE-04에는 재시도
+        // 수단이 없다 (CohortClosedListener javadoc). 회수 대상 EUI는 CE-05가 미리 남긴다.
         try {
             sensorCleanup.deactivateSensors(endedCohortId);
         } catch (Exception exception) {

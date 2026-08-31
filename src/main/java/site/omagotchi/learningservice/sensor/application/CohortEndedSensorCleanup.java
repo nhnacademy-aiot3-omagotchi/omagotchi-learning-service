@@ -38,15 +38,23 @@ public class CohortEndedSensorCleanup {
         List<Long> spaceIds = spaceCohortQueryService.findSpaceIdsByCohortId(endedCohortId);
         List<SensorDevice> devices = sensorDeviceRepository.findActiveBySpaceIds(spaceIds);
 
+        if (devices.isEmpty()) {
+            return 0;
+        }
+
+        // 회수 전에 대상을 남긴다. 이 단계가 실패해도 다음 단계(CE-04)는 공간의 cohort_id를
+        // 지우고, 그 뒤에는 어느 센서가 대상이었는지 되짚을 수단이 없다 — 기수로도 공간으로도
+        // 찾을 수 없게 된다. 로그가 유일한 복구 단서다.
+        List<String> targets = devices.stream().map(SensorDevice::getDeviceEui).toList();
+        log.info("기수 종료로 센서를 회수합니다. cohortId={}, 대상={}대, deviceEuis={}",
+                endedCohortId, targets.size(), targets);
+
         for (SensorDevice device : devices) {
             device.changeActive(false);
             sensorDeviceRepository.save(device);
         }
 
-        if (!devices.isEmpty()) {
-            log.info("기수 종료로 센서를 회수했습니다. cohortId={}, 회수={}대",
-                    endedCohortId, devices.size());
-        }
+        log.info("기수 종료 센서 회수 완료. cohortId={}, 회수={}대", endedCohortId, devices.size());
         return devices.size();
     }
 }

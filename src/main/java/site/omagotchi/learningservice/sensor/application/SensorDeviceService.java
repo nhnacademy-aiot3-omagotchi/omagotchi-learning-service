@@ -146,9 +146,15 @@ public class SensorDeviceService {
                 .map(SensorDevice::getSpaceId);
     }
 
-    /** 기수 범위 기기 마스터 목록. 모델·설치 위치가 그대로 나가는 운영 화면용이라 매니저만. */
+    /**
+     * 기수 범위 기기 목록.
+     *
+     * <p><b>읽기는 소속이면 된다.</b> 보안 경계는 기수이고, 그 안에서 자기 기수 센서가
+     * 어디에 몇 대 있는지는 학생도 볼 수 있어야 대시보드가 그려진다. 경계는 쓰기에 있다
+     * — 등록·수정·비활성화는 매니저만이다.</p>
+     */
     public List<SensorDeviceResult> findAll(Long cohortId, UUID requesterId) {
-        cohortAccessService.requireManager(cohortId, requesterId);
+        cohortAccessService.requireActiveMembershipId(cohortId, requesterId);
         List<Long> spaceIds = spaceCohortQueryService.findSpaceIdsByCohortId(cohortId);
         return sensorDeviceRepository.findBySpaceIds(spaceIds).stream()
                 .map(SensorDeviceResult::from)

@@ -31,11 +31,11 @@ public class SensorSeriesService {
     private final Clock clock;
 
     /**
-     * 공간 평균 시계열. <b>이 Feature에서 소속이면 되는 유일한 경로다.</b>
+     * 공간 평균 시계열.
      *
-     * <p>학생이 보는 것은 "지금 이 공간의 공기가 어떤가"이지 어떤 기기가 몇 대 있는지가
-     * 아니다. 응답은 공간 단위 평균이고 기기 마스터·임계치는 담기지 않는다. 그 조건이
-     * 깨지면 인가 기준도 같이 매니저로 올려야 한다.</p>
+     * <p>집계에 쓴 기기 명단을 함께 돌려준다 — 화면이 최소·최대가 어느 센서 값인지
+     * 짚어 준다. 같은 기수 안에서는 기기 목록 자체가 열려 있으므로
+     * ({@link SensorDeviceService#findAll}) 여기서만 가리는 것은 의미가 없다.</p>
      */
     public SpaceSeries getSpaceSeries(
             Long cohortId,

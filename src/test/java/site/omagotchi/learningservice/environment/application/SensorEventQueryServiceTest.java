@@ -9,6 +9,9 @@ import site.omagotchi.learningservice.environment.application.port.SensorEventSt
 import site.omagotchi.learningservice.environment.domain.SensorDetection;
 import site.omagotchi.learningservice.environment.domain.SensorEvent;
 import site.omagotchi.learningservice.environment.domain.SensorEventType;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.sensor.application.SensorDeviceService;
 import site.omagotchi.learningservice.sensor.application.result.SensorDeviceResult;
 
@@ -19,7 +22,10 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,6 +45,9 @@ class SensorEventQueryServiceTest {
     @Mock
     private SensorDeviceService sensorDeviceService;
 
+    @Mock
+    private CohortAccessService cohortAccessService;
+
     private SensorEventQueryService sensorEventQueryService;
 
     @BeforeEach
@@ -46,6 +55,7 @@ class SensorEventQueryServiceTest {
         sensorEventQueryService = new SensorEventQueryService(
                 sensorEventStore,
                 sensorDeviceService,
+                cohortAccessService,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }
@@ -85,6 +95,23 @@ class SensorEventQueryServiceTest {
         assertThat(result.items().getFirst().deviceDisplayName())
                 .isEqualTo("실습실 센서");
         verify(sensorDeviceService).findAll(COHORT_ID, REQUESTER_ID);
+    }
+
+    @Test
+    void rejectsAlertLogWhenRequesterIsNotManager() {
+        // findAll은 소속이면 통과한다. 알림 로그의 매니저 경계는 이 서비스가 직접 걸어야 한다
+        doThrow(new BusinessException(CohortErrorCode.COHORT_MANAGER_REQUIRED))
+                .when(cohortAccessService)
+                .requireManager(COHORT_ID, REQUESTER_ID);
+
+        BusinessException thrown = catchThrowableOfType(BusinessException.class, () ->
+                sensorEventQueryService.getEvents(
+                        COHORT_ID, REQUESTER_ID, null, null, null, null, 0, 20)
+        );
+
+        assertThat(thrown.getErrorCode())
+                .isEqualTo(CohortErrorCode.COHORT_MANAGER_REQUIRED);
+        verifyNoInteractions(sensorDeviceService, sensorEventStore);
     }
 
     private SensorEvent event(String deviceEui) {

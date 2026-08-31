@@ -137,7 +137,7 @@ class ThresholdRuleServiceTest {
                 REQUESTER_ID
         );
 
-        // 임계치 읽기는 소속이 아니라 매니저다
+        // 임계치는 읽기도 매니저다 — 사용자 화면에 나가지 않는다
         verify(cohortAccessService).requireManager(COHORT_ID, REQUESTER_ID);
         assertThat(result).containsExactly(rule);
     }

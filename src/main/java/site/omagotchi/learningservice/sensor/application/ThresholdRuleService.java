@@ -137,7 +137,7 @@ public class ThresholdRuleService {
         return thresholdRuleRepository.findAll();
     }
 
-    /** 임계치는 rule-service 판정을 바꾸는 운영 설정이다. 읽기도 매니저만. */
+    /** 임계치는 rule-service 판정을 바꾸는 운영 설정이다. 사용자 화면에 쓰이지 않으므로 매니저만. */
     public List<ThresholdRule> findAllByCohort(Long cohortId, UUID requesterId) {
         cohortAccessService.requireManager(cohortId, requesterId);
         List<SensorDevice> devices = findDevicesByCohortId(cohortId);

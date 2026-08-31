@@ -116,7 +116,7 @@ class SensorDeviceServiceTest {
     }
 
     @Test
-    void scopesListToCohortSpacesAfterManagerCheck() {
+    void scopesListToCohortSpacesAfterMembershipCheck() {
         SensorDevice device = device(SPACE_ID);
         when(spaceCohortQueryService.findSpaceIdsByCohortId(COHORT_ID))
                 .thenReturn(List.of(SPACE_ID));
@@ -125,25 +125,26 @@ class SensorDeviceServiceTest {
 
         var results = sensorDeviceService.findAll(COHORT_ID, REQUESTER_ID);
 
-        // 기기 마스터는 소속이 아니라 매니저다 — 소속으로 되돌아가면 여기서 걸린다
-        verify(cohortAccessService).requireManager(COHORT_ID, REQUESTER_ID);
+        // 읽기는 소속이면 된다. 매니저로 올리면 여기서 걸린다
+        verify(cohortAccessService).requireActiveMembershipId(COHORT_ID, REQUESTER_ID);
         assertThat(results)
                 .extracting(result -> result.deviceEui())
                 .containsExactly(DEVICE_EUI);
     }
 
     @Test
-    void rejectsListingSensorMasterWhenRequesterIsNotManager() {
-        doThrow(new BusinessException(CohortErrorCode.COHORT_MANAGER_REQUIRED))
+    void rejectsListingSensorsWhenRequesterIsNotMember() {
+        doThrow(new BusinessException(CohortErrorCode.COHORT_NOT_FOUND))
                 .when(cohortAccessService)
-                .requireManager(COHORT_ID, REQUESTER_ID);
+                .requireActiveMembershipId(COHORT_ID, REQUESTER_ID);
 
         BusinessException thrown = catchThrowableOfType(BusinessException.class, () ->
                 sensorDeviceService.findAll(COHORT_ID, REQUESTER_ID)
         );
 
+        // 소속이 아니면 기수 존재 자체를 숨긴다 — 403이 아니라 404다
         assertThat(thrown.getErrorCode())
-                .isEqualTo(CohortErrorCode.COHORT_MANAGER_REQUIRED);
+                .isEqualTo(CohortErrorCode.COHORT_NOT_FOUND);
         verifyNoInteractions(sensorDeviceRepository, spaceCohortQueryService);
     }
 

@@ -8,6 +8,7 @@ import site.omagotchi.learningservice.environment.application.query.SensorEventP
 import site.omagotchi.learningservice.environment.application.query.SensorEventQuery;
 import site.omagotchi.learningservice.environment.domain.SensorEvent;
 import site.omagotchi.learningservice.environment.domain.SensorEventType;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.sensor.application.SensorDeviceService;
 import site.omagotchi.learningservice.sensor.application.result.SensorDeviceResult;
 
@@ -28,6 +29,7 @@ public class SensorEventQueryService {
 
     private final SensorEventStore sensorEventStore;
     private final SensorDeviceService sensorDeviceService;
+    private final CohortAccessService cohortAccessService;
     private final Clock clock;
 
     /** 기수에 속한 센서 이벤트를 페이지 단위로 조회하고 표시명을 결합한다. 매니저만. */
@@ -41,7 +43,11 @@ public class SensorEventQueryService {
             Integer page,
             Integer size
     ) {
-        // 인가는 findAll이 건다 — 기기 마스터와 같은 급의 매니저 전용이다
+        // 알림 로그는 매니저만 본다. findAll은 소속이면 통과하므로 그것에 기대면 안 된다
+        // — 이 경계는 여기서 직접 건다.
+        cohortAccessService.requireManager(cohortId, requesterId);
+
+        // 기수 범위 기기 목록이 곧 허용 EUI 명단이다
         List<SensorDeviceResult> devices = sensorDeviceService.findAll(cohortId, requesterId);
         Set<String> allowedDeviceEuis = new HashSet<>();
         Map<String, String> displayNames = new HashMap<>();

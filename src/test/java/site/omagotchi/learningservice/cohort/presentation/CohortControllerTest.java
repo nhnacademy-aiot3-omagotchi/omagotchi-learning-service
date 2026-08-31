@@ -13,6 +13,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.cohort.application.CohortAttendancePolicyService;
+import site.omagotchi.learningservice.cohort.application.CohortManagerLookupService;
 import site.omagotchi.learningservice.cohort.application.CohortManagerService;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
 import site.omagotchi.learningservice.cohort.application.CohortService;
@@ -24,6 +25,9 @@ import site.omagotchi.learningservice.cohort.application.result.CohortAttendance
 import site.omagotchi.learningservice.cohort.application.result.CohortAccessSummary;
 import site.omagotchi.learningservice.cohort.application.result.UserAccessContextResult;
 import site.omagotchi.learningservice.cohort.application.result.UserAccessType;
+import site.omagotchi.learningservice.cohort.application.result.UserManagedCohortsResult;
+import site.omagotchi.learningservice.cohort.application.result.ManagedCohortResult;
+import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
@@ -84,6 +88,9 @@ class CohortControllerTest {
 
     @MockitoBean
     private CohortManagerService managerService;
+
+    @MockitoBean
+    private CohortManagerLookupService managerLookupService;
 
     @MockitoBean
     private CohortAttendancePolicyService attendancePolicyService;
@@ -240,5 +247,53 @@ class CohortControllerTest {
                 USER_ID,
                 OffsetDateTime.parse("2026-08-10T09:00:00+09:00")
         );
+    }
+
+    @Test
+    @DisplayName("SYSTEM_ADMIN은 사용자별 기수 운영 권한을 일괄 조회한다")
+    void searchesManagedCohortsForSystemAdmin() throws Exception {
+        given(managerLookupService.findManagedCohorts(any(), eq(GlobalRole.SYSTEM_ADMIN)))
+                .willReturn(List.of(new UserManagedCohortsResult(
+                        USER_ID,
+                        List.of(new ManagedCohortResult(
+                                COHORT_ID, "1기", CohortMembershipRole.MANAGER))
+                )));
+
+        mockMvc.perform(post("/api/v1/cohorts/managers/search")
+                        .header(HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue("SYSTEM_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"userIds": ["%s"]}
+                                """.formatted(USER_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].userId").value(USER_ID.toString()))
+                .andExpect(jsonPath("$[0].cohorts[0].cohortName").value("1기"))
+                .andExpect(jsonPath("$[0].cohorts[0].role").value("MANAGER"));
+    }
+
+    @Test
+    @DisplayName("일반 사용자의 기수 운영 권한 조회는 403이다")
+    void rejectsManagedCohortSearchForNonAdmin() throws Exception {
+        mockMvc.perform(post("/api/v1/cohorts/managers/search")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"userIds": ["%s"]}
+                                """.formatted(USER_ID)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("빈 userIds 요청은 400이다")
+    void rejectsEmptyUserIds() throws Exception {
+        mockMvc.perform(post("/api/v1/cohorts/managers/search")
+                        .header(HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue("SYSTEM_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"userIds": []}
+                                """))
+                .andExpect(status().isBadRequest());
     }
 }

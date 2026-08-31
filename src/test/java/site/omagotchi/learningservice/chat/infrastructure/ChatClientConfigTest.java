@@ -42,7 +42,7 @@ class ChatClientConfigTest {
             .withUserConfiguration(ChatMemoryConfig.class, ChatClientConfig.class)
             .withPropertyValues(
                     "spring.ai.google.genai.api-key=dummy-api-key",
-                    "spring.ai.google.genai.chat.model=gemini-2.5-flash",
+                    "spring.ai.google.genai.chat.model=gemini-3.6-flash",
                     "spring.ai.ollama.base-url=http://localhost:11434",
                     "spring.ai.ollama.chat.model=qwen2.5:latest"
             );

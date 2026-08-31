@@ -34,6 +34,7 @@ import java.util.UUID;
 public record SpaceOccupancyView(
         Long occupancyId,
         Long spaceId,
+        OffsetDateTime startedAt,
         OffsetDateTime expiresAt,
         Long occupierCohortId,
         Long occupierMembershipId,
@@ -58,6 +59,7 @@ public record SpaceOccupancyView(
         return new SpaceOccupancyView(
                 occupancy.occupancyId(),
                 occupancy.spaceId(),
+                occupancy.startedAt(),
                 occupancy.expiresAt(),
                 occupierCohortId,
                 occupancy.occupierMembershipId(),

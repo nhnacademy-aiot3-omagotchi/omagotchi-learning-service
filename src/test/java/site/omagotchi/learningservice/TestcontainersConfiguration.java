@@ -49,7 +49,7 @@ public class TestcontainersConfiguration {
             }
 
             @Override
-            public List<IdentityAccountView> search(String query) {
+            public List<IdentityAccountView> search(String query, Collection<UUID> candidateIds) {
                 return List.of();
             }
         };

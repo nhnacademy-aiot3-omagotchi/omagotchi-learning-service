@@ -24,6 +24,6 @@ public interface IdentityAccountClient {
      */
     Map<UUID, String> findDisplayNames(Collection<UUID> userIds);
 
-    /** 이름 또는 이메일로 계정을 제한 검색한다. */
-    List<IdentityAccountView> search(String query);
+    /** Learning이 확정한 후보 계정 범위 안에서 이름 또는 이메일로 최대 20개를 검색한다. */
+    List<IdentityAccountView> search(String query, Collection<UUID> candidateIds);
 }

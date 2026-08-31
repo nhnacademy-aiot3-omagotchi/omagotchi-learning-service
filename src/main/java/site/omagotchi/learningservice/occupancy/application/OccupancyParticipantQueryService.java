@@ -2,10 +2,10 @@ package site.omagotchi.learningservice.occupancy.application;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.AttendancePresenceQueryService;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
@@ -22,12 +22,12 @@ import site.omagotchi.learningservice.team.application.port.IdentityAccountView;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class OccupancyParticipantQueryService {
 
     private static final int MAX_QUERY_LENGTH = 100;
@@ -35,6 +35,7 @@ public class OccupancyParticipantQueryService {
     private final RoomOccupancyRepository occupancyRepository;
     private final OccupancyParticipantRepository participantRepository;
     private final CohortMembershipQueryService cohortMembershipQueryService;
+    private final CohortAccessService cohortAccessService;
     private final AttendancePresenceQueryService presenceQueryService;
     private final IdentityAccountClient identityAccountClient;
     private final Clock clock;
@@ -51,7 +52,25 @@ public class OccupancyParticipantQueryService {
 
         String normalizedQuery = normalizeQuery(query);
         Long cohortId = requireOccupierMembership(occupancy).cohortId();
-        List<IdentityAccountView> accounts = identityAccountClient.search(normalizedQuery).stream()
+        List<CohortMembershipView> activeMemberships =
+                cohortMembershipQueryService.findActiveMemberships(cohortId);
+        Map<UUID, CohortMembershipView> memberships = activeMemberships.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        CohortMembershipView::userId,
+                        membership -> membership,
+                        (first, ignored) -> first,
+                        LinkedHashMap::new));
+        Map<UUID, OpenPresenceView> presences =
+                presenceQueryService.findOpenPresences(memberships.keySet());
+        List<UUID> candidateIds = memberships.keySet().stream()
+                .filter(userId -> isPresentThroughActiveMembership(
+                        memberships.get(userId), presences.get(userId)))
+                .toList();
+        if (candidateIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<IdentityAccountView> accounts = identityAccountClient.search(normalizedQuery, candidateIds).stream()
                 .filter(account -> account.status() == IdentityAccountState.ACTIVE)
                 .toList();
         if (accounts.isEmpty()) {
@@ -59,17 +78,10 @@ public class OccupancyParticipantQueryService {
         }
 
         List<UUID> accountIds = accounts.stream().map(IdentityAccountView::accountId).toList();
-        Map<UUID, CohortMembershipView> memberships =
-                cohortMembershipQueryService.findActiveMemberships(cohortId, accountIds);
-        Map<UUID, OpenPresenceView> presences = presenceQueryService.findOpenPresences(accountIds);
         Map<UUID, Long> activeOccupancies =
                 participantRepository.findActiveOccupancyIdsByUserIds(accountIds);
 
         return accounts.stream()
-                .filter(account -> isPresentThroughActiveMembership(
-                        memberships.get(account.accountId()),
-                        presences.get(account.accountId())
-                ))
                 .map(account -> new ParticipantCandidateResult(
                         account.accountId(),
                         account.displayName(),
@@ -85,7 +97,14 @@ public class OccupancyParticipantQueryService {
                 .findActiveUserIdsByOccupancyIds(List.of(occupancy.getId()))
                 .getOrDefault(occupancy.getId(), List.of());
         if (!participantIds.contains(requesterUserId)) {
-            throw new BusinessException(OccupancyErrorCode.PARTICIPANT_ACCESS_DENIED);
+            boolean manager = cohortMembershipQueryService
+                    .findActiveMembership(occupancy.getOccupierMembershipId())
+                    .map(membership -> cohortAccessService.isManager(
+                            membership.cohortId(), requesterUserId))
+                    .orElse(false);
+            if (!manager) {
+                throw new BusinessException(OccupancyErrorCode.PARTICIPANT_ACCESS_DENIED);
+            }
         }
 
         Map<UUID, String> displayNames = identityAccountClient.findDisplayNames(participantIds);

@@ -10,6 +10,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.attendance.application.AttendancePresenceQueryService;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
@@ -25,9 +26,11 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -53,6 +56,7 @@ class OccupancyParticipantQueryServiceTest {
     @Mock RoomOccupancyRepository occupancyRepository;
     @Mock OccupancyParticipantRepository participantRepository;
     @Mock CohortMembershipQueryService membershipQueryService;
+    @Mock CohortAccessService cohortAccessService;
     @Mock AttendancePresenceQueryService presenceQueryService;
     @Mock IdentityAccountClient identityAccountClient;
 
@@ -64,6 +68,7 @@ class OccupancyParticipantQueryServiceTest {
                 occupancyRepository,
                 participantRepository,
                 membershipQueryService,
+                cohortAccessService,
                 presenceQueryService,
                 identityAccountClient,
                 Clock.fixed(NOW, ZoneOffset.UTC)
@@ -80,31 +85,30 @@ class OccupancyParticipantQueryServiceTest {
 
         List<IdentityAccountView> accounts = List.of(
                 account(AVAILABLE_ID), account(CURRENT_ID), account(OTHER_ROOM_ID),
-                account(INACTIVE_ID), account(ABSENT_ID)
+                new IdentityAccountView(INACTIVE_ID, "비활성 사용자", "inactive@example.com",
+                        IdentityAccountState.DISABLED)
         );
-        given(identityAccountClient.search("검색어")).willReturn(accounts);
 
         CohortMembershipView availableMembership = membership(101L, AVAILABLE_ID);
         CohortMembershipView currentMembership = membership(102L, CURRENT_ID);
         CohortMembershipView otherMembership = membership(103L, OTHER_ROOM_ID);
+        CohortMembershipView inactiveMembership = membership(104L, INACTIVE_ID);
         CohortMembershipView absentMembership = membership(105L, ABSENT_ID);
-        given(membershipQueryService.findActiveMemberships(
-                COHORT_ID, accounts.stream().map(IdentityAccountView::accountId).toList()))
-                .willReturn(Map.of(
-                        AVAILABLE_ID, availableMembership,
-                        CURRENT_ID, currentMembership,
-                        OTHER_ROOM_ID, otherMembership,
-                        ABSENT_ID, absentMembership
-                ));
+        given(membershipQueryService.findActiveMemberships(COHORT_ID)).willReturn(List.of(
+                availableMembership, currentMembership, otherMembership, inactiveMembership, absentMembership));
         given(presenceQueryService.findOpenPresences(
-                accounts.stream().map(IdentityAccountView::accountId).toList()))
+                new LinkedHashSet<>(List.of(
+                        AVAILABLE_ID, CURRENT_ID, OTHER_ROOM_ID, INACTIVE_ID, ABSENT_ID))))
                 .willReturn(Map.of(
                         AVAILABLE_ID, presence(availableMembership),
                         CURRENT_ID, presence(currentMembership),
-                        OTHER_ROOM_ID, presence(otherMembership)
+                        OTHER_ROOM_ID, presence(otherMembership),
+                        INACTIVE_ID, presence(inactiveMembership)
                 ));
+        given(identityAccountClient.search("검색어",
+                List.of(AVAILABLE_ID, CURRENT_ID, OTHER_ROOM_ID, INACTIVE_ID))).willReturn(accounts);
         given(participantRepository.findActiveOccupancyIdsByUserIds(
-                accounts.stream().map(IdentityAccountView::accountId).toList()))
+                List.of(AVAILABLE_ID, CURRENT_ID, OTHER_ROOM_ID)))
                 .willReturn(Map.of(CURRENT_ID, OCCUPANCY_ID, OTHER_ROOM_ID, 999L));
 
         var results = service.searchCandidates(SPACE_ID, "  검색어  ", OCCUPIER_ID);
@@ -120,6 +124,38 @@ class OccupancyParticipantQueryServiceTest {
     }
 
     @Test
+    @DisplayName("앞 20개 검색 일치 계정이 탈락해도 21번째 재실 후보를 Identity 검색 범위에 포함한다")
+    void searchesWithinEligibleCandidateIdsBeforeApplyingSearchLimit() {
+        RoomOccupancy occupancy = activeOccupancy(NOW.plusSeconds(600));
+        UUID eligibleId = UUID.randomUUID();
+        List<UUID> ineligibleIds = IntStream.range(0, 20)
+                .mapToObj(ignored -> UUID.randomUUID())
+                .toList();
+        List<CohortMembershipView> memberships = new java.util.ArrayList<>();
+        for (int index = 0; index < ineligibleIds.size(); index++) {
+            memberships.add(membership(100L + index, ineligibleIds.get(index)));
+        }
+        CohortMembershipView eligibleMembership = membership(200L, eligibleId);
+        memberships.add(eligibleMembership);
+
+        given(occupancyRepository.findActiveBySpaceId(SPACE_ID)).willReturn(Optional.of(occupancy));
+        given(membershipQueryService.findActiveMembership(OCCUPIER_MEMBERSHIP_ID))
+                .willReturn(Optional.of(membership(OCCUPIER_MEMBERSHIP_ID, OCCUPIER_ID)));
+        given(membershipQueryService.findActiveMemberships(COHORT_ID)).willReturn(memberships);
+        given(presenceQueryService.findOpenPresences(new LinkedHashSet<>(memberships.stream()
+                .map(CohortMembershipView::userId).toList())))
+                .willReturn(Map.of(eligibleId, presence(eligibleMembership)));
+        given(identityAccountClient.search("동일 이름", List.of(eligibleId)))
+                .willReturn(List.of(account(eligibleId)));
+        given(participantRepository.findActiveOccupancyIdsByUserIds(List.of(eligibleId)))
+                .willReturn(Map.of());
+
+        var results = service.searchCandidates(SPACE_ID, "동일 이름", OCCUPIER_ID);
+
+        assertThat(results).extracting(result -> result.userId()).containsExactly(eligibleId);
+    }
+
+    @Test
     @DisplayName("점유자가 아니면 후보 검색을 차단한다")
     void rejectsCandidateSearchByNonOccupier() {
         given(occupancyRepository.findActiveBySpaceId(SPACE_ID))
@@ -127,7 +163,8 @@ class OccupancyParticipantQueryServiceTest {
 
         assertError(OccupancyErrorCode.NOT_OCCUPIER,
                 () -> service.searchCandidates(SPACE_ID, "검색어", UUID.randomUUID()));
-        verify(identityAccountClient, never()).search("검색어");
+        verify(identityAccountClient, never()).search(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyCollection());
     }
 
     @Test
@@ -169,6 +206,26 @@ class OccupancyParticipantQueryServiceTest {
         assertError(OccupancyErrorCode.PARTICIPANT_ACCESS_DENIED,
                 () -> service.getParticipants(SPACE_ID, UUID.randomUUID()));
         verify(identityAccountClient, never()).findDisplayNames(List.of(OCCUPIER_ID));
+    }
+
+    @Test
+    @DisplayName("점유자 기수 관리자는 기존 참여자 목록을 조회할 수 있다")
+    void allowsOccupierCohortManagerToGetParticipants() {
+        UUID managerId = UUID.randomUUID();
+        given(occupancyRepository.findActiveBySpaceId(SPACE_ID))
+                .willReturn(Optional.of(activeOccupancy(NOW.plusSeconds(600))));
+        given(participantRepository.findActiveUserIdsByOccupancyIds(List.of(OCCUPANCY_ID)))
+                .willReturn(Map.of(OCCUPANCY_ID, List.of(OCCUPIER_ID, CURRENT_ID)));
+        given(membershipQueryService.findActiveMembership(OCCUPIER_MEMBERSHIP_ID))
+                .willReturn(Optional.of(membership(OCCUPIER_MEMBERSHIP_ID, OCCUPIER_ID)));
+        given(cohortAccessService.isManager(COHORT_ID, managerId)).willReturn(true);
+        given(identityAccountClient.findDisplayNames(List.of(OCCUPIER_ID, CURRENT_ID)))
+                .willReturn(Map.of(OCCUPIER_ID, "점유자", CURRENT_ID, "참여자"));
+
+        var results = service.getParticipants(SPACE_ID, managerId);
+
+        assertThat(results).extracting(result -> result.displayName())
+                .containsExactly("점유자", "참여자");
     }
 
     private static RoomOccupancy activeOccupancy(Instant expiresAt) {

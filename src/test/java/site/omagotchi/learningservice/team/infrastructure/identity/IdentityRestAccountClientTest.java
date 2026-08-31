@@ -13,18 +13,24 @@ import site.omagotchi.learningservice.global.http.RestClientCallExecutor;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
 import site.omagotchi.learningservice.team.infrastructure.identity.request.IdentityAccountBatchRequest;
+import site.omagotchi.learningservice.team.infrastructure.identity.request.IdentityAccountSearchRequest;
 import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountResponse;
 import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountSearchResponse;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.willAnswer;
+import static org.mockito.ArgumentMatchers.argThat;
 
 class IdentityRestAccountClientTest {
 
@@ -97,10 +103,55 @@ class IdentityRestAccountClientTest {
     }
 
     @Test
+    @DisplayName("표시 이름 일괄 조회는 Identity의 100건 요청 상한으로 분할한다")
+    void splitsDisplayNameLookupIntoBatchesOfAtMostOneHundred() {
+        List<UUID> accountIds = IntStream.range(0, 201).mapToObj(ignored -> UUID.randomUUID()).toList();
+        willAnswer(invocation -> {
+            IdentityAccountBatchRequest request = invocation.getArgument(0);
+            return ResponseEntity.ok(request.accountIds().stream()
+                    .map(id -> new IdentityAccountResponse(id, id.toString(), IdentityAccountState.ACTIVE))
+                    .toList());
+        }).given(httpService).getAccounts(any());
+
+        Map<UUID, String> result = accountClient.findDisplayNames(accountIds);
+
+        assertThat(result).hasSize(201);
+        verify(httpService, times(3)).getAccounts(any());
+    }
+
+    @Test
+    void sendsExactlyOneBatchForOneHundredAccounts() {
+        List<UUID> ids = IntStream.range(0, 100).mapToObj(ignored -> UUID.randomUUID()).toList();
+        stubDisplayNameBatches();
+        assertThat(accountClient.findDisplayNames(ids)).hasSize(100);
+        verify(httpService, times(1)).getAccounts(argThat(request -> request.accountIds().size() == 100));
+    }
+
+    @Test
+    void splitsOneHundredOneAccountsIntoOneHundredAndOne() {
+        List<UUID> ids = IntStream.range(0, 101).mapToObj(ignored -> UUID.randomUUID()).toList();
+        stubDisplayNameBatches();
+        assertThat(accountClient.findDisplayNames(ids)).hasSize(101);
+        verify(httpService).getAccounts(argThat(request -> request.accountIds().size() == 100));
+        verify(httpService).getAccounts(argThat(request -> request.accountIds().size() == 1));
+    }
+
+    private void stubDisplayNameBatches() {
+        willAnswer(invocation -> {
+            IdentityAccountBatchRequest request = invocation.getArgument(0);
+            return ResponseEntity.ok(request.accountIds().stream()
+                    .map(id -> new IdentityAccountResponse(id, id.toString(), IdentityAccountState.ACTIVE))
+                    .toList());
+        }).given(httpService).getAccounts(any());
+    }
+
+    @Test
     @DisplayName("Identity 이름 이메일 검색 응답을 Application 값으로 변환")
     void searchesAccounts() {
         UUID accountId = UUID.randomUUID();
-        given(httpService.searchAccounts("사용자")).willReturn(ResponseEntity.ok(List.of(
+        IdentityAccountSearchRequest expectedRequest = new IdentityAccountSearchRequest(
+                "사용자", List.of(accountId));
+        given(httpService.searchAccounts(expectedRequest)).willReturn(ResponseEntity.ok(List.of(
                 new IdentityAccountSearchResponse(
                         accountId,
                         "검색 사용자",
@@ -109,12 +160,13 @@ class IdentityRestAccountClientTest {
                 )
         )));
 
-        assertThat(accountClient.search("사용자")).singleElement().satisfies(account -> {
+        assertThat(accountClient.search("사용자", List.of(accountId))).singleElement().satisfies(account -> {
             assertThat(account.accountId()).isEqualTo(accountId);
             assertThat(account.displayName()).isEqualTo("검색 사용자");
             assertThat(account.email()).isEqualTo("search@example.com");
             assertThat(account.status()).isEqualTo(IdentityAccountState.ACTIVE);
         });
+        verify(httpService).searchAccounts(expectedRequest);
     }
 
     @Test

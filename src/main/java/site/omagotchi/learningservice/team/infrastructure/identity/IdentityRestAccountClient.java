@@ -12,6 +12,7 @@ import site.omagotchi.learningservice.team.application.port.IdentityAccountClien
 import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountView;
 import site.omagotchi.learningservice.team.infrastructure.identity.request.IdentityAccountBatchRequest;
+import site.omagotchi.learningservice.team.infrastructure.identity.request.IdentityAccountSearchRequest;
 import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountResponse;
 import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountSearchResponse;
 
@@ -27,6 +28,8 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class IdentityRestAccountClient implements IdentityAccountClient {
+
+    private static final int ACCOUNT_BATCH_SIZE = 100;
 
     private final IdentityAccountHttpService httpService;
     private final RestClientCallExecutor callExecutor;
@@ -50,17 +53,37 @@ public class IdentityRestAccountClient implements IdentityAccountClient {
         }
 
         return callExecutor.execute(
-                () -> fetchDisplayNames(requestedIds),
+                () -> fetchDisplayNamesInBatches(requestedIds),
                 exception -> {
                     throw errorResolver.resolveBatchLookupError(exception);
                 }
         );
     }
 
+    private Map<UUID, String> fetchDisplayNamesInBatches(Set<UUID> requestedIds) {
+        List<UUID> ids = List.copyOf(requestedIds);
+        Map<UUID, String> displayNames = new HashMap<>();
+        for (int start = 0; start < ids.size(); start += ACCOUNT_BATCH_SIZE) {
+            Set<UUID> batchIds = new LinkedHashSet<>(ids.subList(
+                    start, Math.min(start + ACCOUNT_BATCH_SIZE, ids.size())));
+            Map<UUID, String> batch = fetchDisplayNames(batchIds);
+            batch.forEach((accountId, displayName) -> {
+                if (displayNames.put(accountId, displayName) != null) {
+                    throw invalidResponse("일괄 조회 응답의 accountId 중복");
+                }
+            });
+        }
+        return Map.copyOf(displayNames);
+    }
+
     @Override
-    public List<IdentityAccountView> search(String query) {
+    public List<IdentityAccountView> search(String query, Collection<UUID> candidateIds) {
+        Set<UUID> requestedIds = new LinkedHashSet<>(candidateIds);
+        if (requestedIds.isEmpty()) {
+            return List.of();
+        }
         return callExecutor.execute(
-                () -> fetchSearchResults(query),
+                () -> fetchSearchResults(query, requestedIds),
                 exception -> {
                     throw errorResolver.resolveBatchLookupError(exception);
                 }
@@ -120,9 +143,10 @@ public class IdentityRestAccountClient implements IdentityAccountClient {
         return Map.copyOf(displayNames);
     }
 
-    private List<IdentityAccountView> fetchSearchResults(String query) {
+    private List<IdentityAccountView> fetchSearchResults(String query, Set<UUID> requestedIds) {
         ResponseEntity<List<IdentityAccountSearchResponse>> response =
-                httpService.searchAccounts(query);
+                httpService.searchAccounts(new IdentityAccountSearchRequest(
+                        query, List.copyOf(requestedIds)));
         if (response.getStatusCode().value() != HttpStatus.OK.value()) {
             throw invalidResponse(
                     "검색 성공 응답 Status 불일치 expected=200, actual="
@@ -138,6 +162,7 @@ public class IdentityRestAccountClient implements IdentityAccountClient {
         return accounts.stream().map(account -> {
             if (account == null
                     || account.accountId() == null
+                    || !requestedIds.contains(account.accountId())
                     || !accountIds.add(account.accountId())
                     || !StringUtils.hasText(account.displayName())
                     || !StringUtils.hasText(account.email())

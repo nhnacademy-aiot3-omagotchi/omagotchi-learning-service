@@ -3,11 +3,11 @@ package site.omagotchi.learningservice.team.infrastructure.identity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.service.annotation.GetExchange;
 import org.springframework.web.service.annotation.HttpExchange;
 import org.springframework.web.service.annotation.PostExchange;
 import site.omagotchi.learningservice.team.infrastructure.identity.request.IdentityAccountBatchRequest;
+import site.omagotchi.learningservice.team.infrastructure.identity.request.IdentityAccountSearchRequest;
 import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountResponse;
 import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountSearchResponse;
 
@@ -28,8 +28,8 @@ public interface IdentityAccountHttpService {
             @RequestBody IdentityAccountBatchRequest request
     );
 
-    @GetExchange("/search")
+    @PostExchange("/search")
     ResponseEntity<List<IdentityAccountSearchResponse>> searchAccounts(
-            @RequestParam String query
+            @RequestBody IdentityAccountSearchRequest request
     );
 }

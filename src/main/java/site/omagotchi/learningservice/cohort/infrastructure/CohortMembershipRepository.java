@@ -32,6 +32,16 @@ public interface CohortMembershipRepository extends
         UUID getUserId();
     }
 
+    interface CohortManagerAssignmentProjection {
+        UUID getUserId();
+
+        Long getCohortId();
+
+        String getCohortName();
+
+        CohortMembershipRole getRole();
+    }
+
     boolean existsByCohortIdAndUserIdAndStatusIn(
             Long cohortId,
             UUID userId,
@@ -112,6 +122,31 @@ public interface CohortMembershipRepository extends
             order by membership.cohortId asc, membership.requestedAt asc
             """)
     List<CohortManagerProjection> findAllActiveManagersByCohort();
+
+    /**
+     * 사용자 묶음의 활성 기수 매니저 소속을 기수 이름과 함께 조회한다.
+     *
+     * <p>운영 권한(MANAGER)만 대상으로 한다. cohort는 연관 관계가 아니라 식별자만
+     * 보관하므로 이름을 얻으려면 명시적 join이 필요하다.</p>
+     *
+     * <p>정렬을 고정해 같은 요청이 항상 같은 순서를 반환하게 한다 — 화면의 배지 순서가
+     * 요청마다 흔들리지 않게 하기 위한 계약이다.</p>
+     */
+    @Query("""
+            select membership.userId as userId,
+                   cohort.id as cohortId,
+                   cohort.name as cohortName,
+                   membership.role as role
+            from CohortMembership membership
+            join Cohort cohort on cohort.id = membership.cohortId
+            where membership.userId in :userIds
+              and membership.role = site.omagotchi.learningservice.cohort.domain.CohortMembershipRole.MANAGER
+              and membership.status = site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus.ACTIVE
+            order by membership.userId asc, cohort.id asc
+            """)
+    List<CohortManagerAssignmentProjection> findActiveManagerAssignments(
+            @Param("userIds") Collection<UUID> userIds
+    );
 
     boolean existsByCohortIdAndRoleAndStatus(
             Long cohortId,

@@ -41,6 +41,11 @@ public class JpaCohortPersistence implements CohortPersistence {
     }
 
     @Override
+    public Optional<Cohort> findByIdForUpdate(Long cohortId) {
+        return repository.findByIdForUpdate(cohortId);
+    }
+
+    @Override
     public void delete(Cohort cohort) {
         try {
             repository.delete(cohort);

@@ -63,6 +63,37 @@ public interface SpringDataSpaceRepository
     Optional<Long> findCohortIdById(@Param("spaceId") Long spaceId);
 
     @Query("""
+                SELECT (COUNT(space) > 0)
+                  FROM SpaceJpaEntity space
+                 WHERE space.cohortId = :cohortId
+                   AND space.spaceType = site.omagotchi.learningservice.space.domain.SpaceType.LAB
+                   AND space.operationalStatus = site.omagotchi.learningservice.space.domain.SpaceOperationalStatus.ACTIVE
+                   AND space.deletedAt IS NULL
+            """)
+    boolean existsActiveLabByCohortId(@Param("cohortId") Long cohortId);
+
+    @Query("""
+                SELECT space
+                  FROM SpaceJpaEntity space
+                 WHERE space.cohortId = :cohortId
+                   AND space.spaceType = site.omagotchi.learningservice.space.domain.SpaceType.LAB
+                   AND space.operationalStatus = site.omagotchi.learningservice.space.domain.SpaceOperationalStatus.ACTIVE
+                   AND space.deletedAt IS NULL
+                 ORDER BY space.id ASC
+            """)
+    List<SpaceJpaEntity> findActiveLabsByCohortId(@Param("cohortId") Long cohortId);
+
+    @Query("""
+                SELECT COUNT(space)
+                  FROM SpaceJpaEntity space
+                 WHERE space.cohortId = :cohortId
+                   AND space.spaceType = site.omagotchi.learningservice.space.domain.SpaceType.LAB
+                   AND space.operationalStatus = site.omagotchi.learningservice.space.domain.SpaceOperationalStatus.ACTIVE
+                   AND space.deletedAt IS NULL
+            """)
+    long countActiveLabsByCohortId(@Param("cohortId") Long cohortId);
+
+    @Query("""
                 SELECT space.name FROM SpaceJpaEntity space
                  WHERE space.id = :spaceId
                    AND space.deletedAt IS NULL

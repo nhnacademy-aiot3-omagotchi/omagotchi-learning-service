@@ -16,6 +16,12 @@ public interface SpaceRepository {
 
     Optional<Space> findByIdForUpdate(Long spaceId);
 
+    /** 기수에 배정된 삭제되지 않은 활성 LAB을 ID 오름차순으로 조회한다. */
+    List<Space> findActiveLabsByCohortId(Long cohortId);
+
+    /** 기수에 배정된 삭제되지 않은 활성 LAB 수를 조회한다. */
+    long countActiveLabsByCohortId(Long cohortId);
+
     /**
      * 삭제되지 않은 전체 공간을 {@code id} 오름차순으로 읽는다 (RM-07).
      *

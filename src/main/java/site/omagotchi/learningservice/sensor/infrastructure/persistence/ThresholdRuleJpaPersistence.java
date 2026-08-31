@@ -4,8 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Repository;
-import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.sensor.domain.SensorErrorCode;
+import site.omagotchi.learningservice.sensor.application.port.SensorPersistenceException;
+import site.omagotchi.learningservice.sensor.application.port.SensorPersistenceException.Reason;
 import site.omagotchi.learningservice.sensor.application.port.ThresholdRuleRepository;
 import site.omagotchi.learningservice.sensor.domain.ThresholdRule;
 
@@ -25,7 +25,11 @@ public class ThresholdRuleJpaPersistence implements ThresholdRuleRepository {
         try {
             return thresholdRuleJpaRepository.saveAndFlush(rule);
         } catch (DataIntegrityViolationException e) {
-            throw new BusinessException(SensorErrorCode.RULE_ALREADY_EXISTS, e.getMessage(), e);
+            throw new SensorPersistenceException(
+                    Reason.RULE_ALREADY_EXISTS,
+                    e.getMessage(),
+                    e
+            );
         }
     }
 
@@ -34,7 +38,11 @@ public class ThresholdRuleJpaPersistence implements ThresholdRuleRepository {
         try {
             thresholdRuleJpaRepository.saveAndFlush(rule);
         } catch (ObjectOptimisticLockingFailureException e) {
-            throw new BusinessException(SensorErrorCode.RULE_VERSION_CONFLICT, e.getMessage(), e);
+            throw new SensorPersistenceException(
+                    Reason.RULE_VERSION_CONFLICT,
+                    e.getMessage(),
+                    e
+            );
         }
     }
 
@@ -64,6 +72,9 @@ public class ThresholdRuleJpaPersistence implements ThresholdRuleRepository {
      */
     @Override
     public List<ThresholdRule> findByDeviceEuiIn(Collection<String> deviceEuis) {
+        if (deviceEuis == null || deviceEuis.isEmpty()) {
+            return List.of();
+        }
         return thresholdRuleJpaRepository.findByDeviceEuiInOrderByDeviceEuiAsc(deviceEuis);
     }
 }

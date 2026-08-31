@@ -3,12 +3,13 @@ package site.omagotchi.learningservice.sensor.infrastructure.persistence;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
-import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.sensor.domain.SensorErrorCode;
 import site.omagotchi.learningservice.sensor.application.port.SensorDeviceRepository;
+import site.omagotchi.learningservice.sensor.application.port.SensorPersistenceException;
+import site.omagotchi.learningservice.sensor.application.port.SensorPersistenceException.Reason;
 import site.omagotchi.learningservice.sensor.domain.SensorDevice;
 
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -45,13 +46,19 @@ public class SensorDeviceJpaPersistence implements SensorDeviceRepository {
         String sqlState = sqlStateOf(exception);
 
         if (DUPLICATE_KEY.equals(sqlState)) {
-            return new BusinessException(
-                    SensorErrorCode.DEVICE_ALREADY_EXISTS, exception.getMessage(), exception);
+            return new SensorPersistenceException(
+                    Reason.DEVICE_EUI_ALREADY_EXISTS,
+                    exception.getMessage(),
+                    exception
+            );
         }
 
         if (FOREIGN_KEY_VIOLATION.equals(sqlState)) {
-            return new BusinessException(
-                    SensorErrorCode.DEVICE_SPACE_NOT_FOUND, exception.getMessage(), exception);
+            return new SensorPersistenceException(
+                    Reason.DEVICE_SPACE_NOT_FOUND,
+                    exception.getMessage(),
+                    exception
+            );
         }
 
         // CHECK·NOT NULL 위반은 우리 코드나 스키마의 문제다. 500 으로 드러나야 한다
@@ -69,27 +76,25 @@ public class SensorDeviceJpaPersistence implements SensorDeviceRepository {
     }
 
     @Override
-    public List<SensorDevice> findAll() {
-        return sensorDeviceJpaRepository.findAll();
-    }
-
-    @Override
     public Optional<SensorDevice> findByDeviceEui(String deviceEui) {
         return sensorDeviceJpaRepository.findById(deviceEui);
     }
 
     @Override
-    public List<SensorDevice> findAllActive() {
-        return sensorDeviceJpaRepository.findByActiveTrue();
+    public List<SensorDevice> findBySpaceIds(Collection<Long> spaceIds) {
+        if (spaceIds == null || spaceIds.isEmpty()) {
+            return List.of();
+        }
+        return sensorDeviceJpaRepository
+                .findBySpaceIdInOrderBySpaceIdAscDeviceEuiAsc(spaceIds);
     }
 
     @Override
-    public List<SensorDevice> findBySpaceId(Long spaceId) {
-        return sensorDeviceJpaRepository.findBySpaceId(spaceId);
-    }
-
-    @Override
-    public List<SensorDevice> findAllWithSpace() {
-        return sensorDeviceJpaRepository.findBySpaceIdIsNotNullOrderBySpaceIdAsc();
+    public List<SensorDevice> findActiveBySpaceIds(Collection<Long> spaceIds) {
+        if (spaceIds == null || spaceIds.isEmpty()) {
+            return List.of();
+        }
+        return sensorDeviceJpaRepository
+                .findByActiveTrueAndSpaceIdInOrderBySpaceIdAscDeviceEuiAsc(spaceIds);
     }
 }

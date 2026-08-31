@@ -55,12 +55,23 @@ public interface SpringDataSpaceRepository
             @Param("spaceId") Long spaceId
     );
 
+    /** 공간아이디를 통해 기수 아이디 조회 */
     @Query("""
                 SELECT space.cohortId FROM SpaceJpaEntity space
                  WHERE space.id = :spaceId
                    AND space.deletedAt IS NULL
             """)
     Optional<Long> findCohortIdById(@Param("spaceId") Long spaceId);
+
+    /** 삭제되지않은 기수에 해당하는 공간 목록 조회 */
+    @Query("""
+            SELECT space.id
+              FROM SpaceJpaEntity space
+             WHERE space.cohortId = :cohortId
+               AND space.deletedAt IS NULL
+             ORDER BY space.id
+            """)
+    List<Long> findIdsByCohortId(@Param("cohortId") Long cohortId);
 
     @Query("""
                 SELECT space.name FROM SpaceJpaEntity space
@@ -74,8 +85,8 @@ public interface SpringDataSpaceRepository
     /** 관리 주체 일괄 해제 (CE-04). 유형을 가리지 않는다 — Port javadoc 참고. */
     @Modifying
     @Query("""
-                UPDATE SpaceJpaEntity space
-                   SET space.cohortId = NULL
-                 WHERE space.cohortId = :cohortId""")
+            UPDATE SpaceJpaEntity space
+               SET space.cohortId = NULL
+             WHERE space.cohortId = :cohortId""")
     int unassignByCohort(@Param("cohortId") Long cohortId);
 }

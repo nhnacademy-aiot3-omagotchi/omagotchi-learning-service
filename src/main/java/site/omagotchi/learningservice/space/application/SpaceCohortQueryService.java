@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.space.application.port.SpaceCohortQueryPort;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -26,5 +27,11 @@ public class SpaceCohortQueryService {
             return Optional.empty();
         }
         return spaceCohortQueryPort.findCohortId(spaceId);
+    }
+
+    public List<Long> findSpaceIdsByCohortId(Long cohortId) {
+        return spaceCohortQueryPort.findSpaceIdsByCohortId(
+                Objects.requireNonNull(cohortId, "cohortId")
+        );
     }
 }

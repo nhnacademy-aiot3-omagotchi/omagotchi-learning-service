@@ -4,12 +4,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.sensor.application.command.ApplySpaceThresholdCommand;
 import site.omagotchi.learningservice.sensor.application.command.ApplySpaceThresholdCommand.MetricCondition;
 import site.omagotchi.learningservice.sensor.application.command.CreateThresholdRuleCommand;
 import site.omagotchi.learningservice.sensor.application.command.UpdateThresholdRuleCommand;
 import site.omagotchi.learningservice.sensor.application.port.SensorDeviceRepository;
+import site.omagotchi.learningservice.sensor.application.port.SensorPersistenceException;
 import site.omagotchi.learningservice.sensor.application.port.ThresholdRuleEventPublisher;
 import site.omagotchi.learningservice.sensor.application.port.ThresholdRuleHistoryRepository;
 import site.omagotchi.learningservice.sensor.application.port.ThresholdRuleRepository;
@@ -18,6 +20,7 @@ import site.omagotchi.learningservice.sensor.application.result.SpaceThresholdRe
 import site.omagotchi.learningservice.sensor.application.result.SpaceThresholdResult.MetricThresholdResult;
 import site.omagotchi.learningservice.sensor.application.result.UpdateThresholdRuleResult;
 import site.omagotchi.learningservice.sensor.domain.*;
+import site.omagotchi.learningservice.space.application.SpaceCohortQueryService;
 
 import java.util.*;
 
@@ -31,38 +34,47 @@ public class ThresholdRuleService {
     private final ThresholdRuleRepository thresholdRuleRepository;
     private final ThresholdRuleHistoryRepository thresholdRuleHistoryRepository;
     private final ThresholdRuleEventPublisher eventPublisher;
+    private final CohortAccessService cohortAccessService;
+    private final SpaceCohortQueryService spaceCohortQueryService;
 
     @Transactional
-    public Long create(CreateThresholdRuleCommand command){
+    public Long create(
+            Long cohortId,
+            UUID requesterId,
+            String requestId,
+            CreateThresholdRuleCommand command
+    ) {
+        cohortAccessService.requireManager(cohortId, requesterId);
+        requireDeviceInCohort(command.deviceEui(), cohortId, SensorErrorCode.DEVICE_NOT_FOUND);
+
         ThresholdRule thresholdRule;
-        try{
+        try {
             thresholdRule = ThresholdRule.create(
                     command.deviceEui(),
                     command.metric(),
                     command.operator(),
                     command.threshold(),
-                    command.requesterId()
+                    requesterId
             );
-        }catch (IllegalArgumentException e){
+        } catch (IllegalArgumentException e) {
             throw new BusinessException(SensorErrorCode.RULE_INVALID_CONDITION, e.getMessage(), e);
         }
 
-        if (!sensorDeviceRepository.existsByDeviceEui(thresholdRule.getDeviceEui())) {
-            throw new BusinessException(SensorErrorCode.DEVICE_NOT_FOUND);
-        }
-
-        if(thresholdRuleRepository.existsByDeviceEuiAndMetric(thresholdRule.getDeviceEui(), thresholdRule.getMetric())){
+        if (thresholdRuleRepository.existsByDeviceEuiAndMetric(
+                thresholdRule.getDeviceEui(),
+                thresholdRule.getMetric()
+        )) {
             throw new BusinessException(SensorErrorCode.RULE_ALREADY_EXISTS);
         }
 
         // 유니크 위반은 경계 안에서 RULE_ALREADY_EXISTS로 변환된다
-        thresholdRuleRepository.save(thresholdRule);
+        saveRule(thresholdRule);
 
         thresholdRuleHistoryRepository.save(ThresholdRuleHistory.record(
                 thresholdRule,
                 ChangeType.CREATED,
-                command.requesterId(),
-                command.requestId()
+                requesterId,
+                requestId
         ));
 
         eventPublisher.publishThresholdRuleChanged(thresholdRule);
@@ -72,34 +84,46 @@ public class ThresholdRuleService {
     }
 
     @Transactional
-    public UpdateThresholdRuleResult update(UpdateThresholdRuleCommand command){
-        ThresholdRule thresholdRule = thresholdRuleRepository.findById(command.ruleId()).orElseThrow(
+    public UpdateThresholdRuleResult update(
+            Long cohortId,
+            UUID requesterId,
+            String requestId,
+            Long ruleId,
+            UpdateThresholdRuleCommand command
+    ) {
+        cohortAccessService.requireManager(cohortId, requesterId);
+        ThresholdRule thresholdRule = thresholdRuleRepository.findById(ruleId).orElseThrow(
                 () -> new BusinessException(SensorErrorCode.RULE_NOT_FOUND));
+        requireDeviceInCohort(
+                thresholdRule.getDeviceEui(),
+                cohortId,
+                SensorErrorCode.RULE_NOT_FOUND
+        );
 
-        if(!thresholdRule.getVersion().equals(command.baseVersion())){
+        if (!thresholdRule.getVersion().equals(command.baseVersion())) {
             throw new BusinessException(SensorErrorCode.RULE_VERSION_CONFLICT);
         }
 
         boolean changed;
-        try{
+        try {
             changed = thresholdRule.changeCondition(
-                    command.operator(), command.threshold(), command.requesterId());
-        }catch (IllegalArgumentException e){
+                    command.operator(), command.threshold(), requesterId);
+        } catch (IllegalArgumentException e) {
             throw new BusinessException(SensorErrorCode.RULE_INVALID_CONDITION, e.getMessage(), e);
         }
 
-        if(!changed){
+        if (!changed) {
             return new UpdateThresholdRuleResult(false, thresholdRule.getVersion());
         }
 
         // 낙관적 락 충돌은 경계 안에서 RULE_VERSION_CONFLICT로 변환된다
-        thresholdRuleRepository.update(thresholdRule);
+        updateRule(thresholdRule);
 
         thresholdRuleHistoryRepository.save(ThresholdRuleHistory.record(
                 thresholdRule,
                 ChangeType.UPDATED,
-                command.requesterId(),
-                command.requestId()
+                requesterId,
+                requestId
         ));
 
         eventPublisher.publishThresholdRuleChanged(thresholdRule);
@@ -109,23 +133,40 @@ public class ThresholdRuleService {
 
     }
 
-    public List<ThresholdRule> readAll(){
+    public List<ThresholdRule> readAllForRuleEngine() {
         return thresholdRuleRepository.findAll();
     }
 
-    /** 공간별 현재 임계치. 화면이 이걸로 입력 폼을 그린다 */
-    public List<SpaceThresholdResult> findAllBySpace() {
+    /** 임계치는 rule-service 판정을 바꾸는 운영 설정이다. 읽기도 매니저만. */
+    public List<ThresholdRule> findAllByCohort(Long cohortId, UUID requesterId) {
+        cohortAccessService.requireManager(cohortId, requesterId);
+        List<SensorDevice> devices = findDevicesByCohortId(cohortId);
+        if (devices.isEmpty()) {
+            return List.of();
+        }
+        return thresholdRuleRepository.findByDeviceEuiIn(deviceEuisOf(devices));
+    }
+
+    /** 공간별 현재 임계치. 화면이 이걸로 입력 폼을 그린다 — 입력 폼이므로 매니저만. */
+    public List<SpaceThresholdResult> findAllBySpace(Long cohortId, UUID requesterId) {
+        cohortAccessService.requireManager(cohortId, requesterId);
         Map<Long, List<SensorDevice>> devicesBySpace = new LinkedHashMap<>();
 
-        for (SensorDevice device : sensorDeviceRepository.findAllWithSpace()) {
+        List<SensorDevice> devices = findDevicesByCohortId(cohortId);
+        for (SensorDevice device : devices) {
             devicesBySpace
                     .computeIfAbsent(device.getSpaceId(), key -> new ArrayList<>())
                     .add(device);
         }
 
+        Map<String, List<ThresholdRule>> rulesByDeviceEui = indexRulesByDeviceEui(devices);
         List<SpaceThresholdResult> results = new ArrayList<>();
         for (Map.Entry<Long, List<SensorDevice>> entry : devicesBySpace.entrySet()) {
-            results.add(summarize(entry.getKey(), entry.getValue()));
+            results.add(summarize(
+                    entry.getKey(),
+                    entry.getValue(),
+                    rulesByDeviceEui
+            ));
         }
 
         return results;
@@ -145,8 +186,16 @@ public class ThresholdRuleService {
      * 덮어쓰기이고, 대상이 N 건이라 클라이언트가 N 개의 버전을 들 수 없다.</p>
      */
     @Transactional
-    public ApplySpaceThresholdResult applyToSpace(ApplySpaceThresholdCommand command) {
-        List<SensorDevice> devices = sensorDeviceRepository.findBySpaceId(command.spaceId());
+    public ApplySpaceThresholdResult applyToSpace(
+            Long cohortId,
+            UUID requesterId,
+            String requestId,
+            Long spaceId,
+            ApplySpaceThresholdCommand command
+    ) {
+        cohortAccessService.requireManager(cohortId, requesterId);
+        requireSpaceInCohort(spaceId, cohortId);
+        List<SensorDevice> devices = sensorDeviceRepository.findBySpaceIds(List.of(spaceId));
 
         if (devices.isEmpty()) {
             throw new BusinessException(SensorErrorCode.SPACE_HAS_NO_DEVICE);
@@ -172,7 +221,7 @@ public class ThresholdRuleService {
                 boolean changed;
                 try {
                     changed = rule.changeCondition(
-                            condition.operator(), condition.threshold(), command.requesterId());
+                            condition.operator(), condition.threshold(), requesterId);
                 } catch (IllegalArgumentException e) {
                     throw new BusinessException(SensorErrorCode.RULE_INVALID_CONDITION, e.getMessage(), e);
                 }
@@ -182,10 +231,10 @@ public class ThresholdRuleService {
                     continue;
                 }
 
-                thresholdRuleRepository.update(rule);
+                updateRule(rule);
 
                 thresholdRuleHistoryRepository.save(ThresholdRuleHistory.record(
-                        rule, ChangeType.UPDATED, command.requesterId(), command.requestId()));
+                        rule, ChangeType.UPDATED, requesterId, requestId));
 
                 eventPublisher.publishThresholdRuleChanged(rule);
                 applied++;
@@ -193,19 +242,28 @@ public class ThresholdRuleService {
         }
 
         log.info("공간 임계치 일괄 적용: spaceId={}, 적용={}, 동일={}, 룰없음={}",
-                command.spaceId(), applied, unchanged, missing);
+                spaceId, applied, unchanged, missing);
 
         return new ApplySpaceThresholdResult(
-                command.spaceId(), devices.size(), applied, unchanged, missing);
+                spaceId, devices.size(), applied, unchanged, missing);
     }
 
-    /** 공간 하나의 metric 별 요약. 기기 수만큼 쿼리를 날리지 않는다 */
-    private SpaceThresholdResult summarize(Long spaceId, List<SensorDevice> devices) {
+    /** 공간 하나의 metric 별 요약. 전체 기수의 룰을 미리 읽었으므로 여기서는 쿼리하지 않는다. */
+    private SpaceThresholdResult summarize(
+            Long spaceId,
+            List<SensorDevice> devices,
+            Map<String, List<ThresholdRule>> rulesByDeviceEui
+    ) {
         Map<String, List<ThresholdRule>> rulesByMetric = new LinkedHashMap<>();
-        for (ThresholdRule rule : thresholdRuleRepository.findByDeviceEuiIn(deviceEuisOf(devices))) {
-            rulesByMetric
-                    .computeIfAbsent(rule.getMetric(), key -> new ArrayList<>())
-                    .add(rule);
+        for (SensorDevice device : devices) {
+            for (ThresholdRule rule : rulesByDeviceEui.getOrDefault(
+                    device.getDeviceEui(),
+                    List.of()
+            )) {
+                rulesByMetric
+                        .computeIfAbsent(rule.getMetric(), key -> new ArrayList<>())
+                        .add(rule);
+            }
         }
 
         List<MetricThresholdResult> metrics = new ArrayList<>();
@@ -214,6 +272,79 @@ public class ThresholdRuleService {
         }
 
         return new SpaceThresholdResult(spaceId, devices.size(), metrics);
+    }
+
+    private Map<String, List<ThresholdRule>> indexRulesByDeviceEui(List<SensorDevice> devices) {
+        Map<String, List<ThresholdRule>> rulesByDeviceEui = new HashMap<>();
+        if (devices.isEmpty()) {
+            return rulesByDeviceEui;
+        }
+
+        for (ThresholdRule rule : thresholdRuleRepository.findByDeviceEuiIn(deviceEuisOf(devices))) {
+            rulesByDeviceEui
+                    .computeIfAbsent(rule.getDeviceEui(), key -> new ArrayList<>())
+                    .add(rule);
+        }
+        return rulesByDeviceEui;
+    }
+
+    private List<SensorDevice> findDevicesByCohortId(Long cohortId) {
+        List<Long> spaceIds = spaceCohortQueryService.findSpaceIdsByCohortId(cohortId);
+        return sensorDeviceRepository.findBySpaceIds(spaceIds);
+    }
+
+    private SensorDevice requireDeviceInCohort(
+            String deviceEui,
+            Long cohortId,
+            SensorErrorCode errorCode
+    ) {
+        SensorDevice device = sensorDeviceRepository.findByDeviceEui(deviceEui)
+                .orElseThrow(() -> new BusinessException(errorCode));
+
+        boolean belongsToCohort = spaceCohortQueryService.findCohortId(device.getSpaceId())
+                .filter(cohortId::equals)
+                .isPresent();
+        if (!belongsToCohort) {
+            throw new BusinessException(errorCode);
+        }
+        return device;
+    }
+
+    private void requireSpaceInCohort(Long spaceId, Long cohortId) {
+        boolean belongsToCohort = spaceCohortQueryService.findCohortId(spaceId)
+                .filter(cohortId::equals)
+                .isPresent();
+        if (!belongsToCohort) {
+            throw new BusinessException(SensorErrorCode.DEVICE_SPACE_NOT_FOUND);
+        }
+    }
+
+    private ThresholdRule saveRule(ThresholdRule rule) {
+        try {
+            return thresholdRuleRepository.save(rule);
+        } catch (SensorPersistenceException exception) {
+            throw translatePersistenceException(exception);
+        }
+    }
+
+    private void updateRule(ThresholdRule rule) {
+        try {
+            thresholdRuleRepository.update(rule);
+        } catch (SensorPersistenceException exception) {
+            throw translatePersistenceException(exception);
+        }
+    }
+
+    private BusinessException translatePersistenceException(
+            SensorPersistenceException exception
+    ) {
+        SensorErrorCode errorCode = switch (exception.getReason()) {
+            case RULE_ALREADY_EXISTS -> SensorErrorCode.RULE_ALREADY_EXISTS;
+            case RULE_VERSION_CONFLICT -> SensorErrorCode.RULE_VERSION_CONFLICT;
+            default -> throw exception;
+        };
+        Throwable cause = exception.getCause() == null ? exception : exception.getCause();
+        return new BusinessException(errorCode, exception.getMessage(), cause);
     }
 
     /**

@@ -4,8 +4,6 @@ import jakarta.validation.constraints.*;
 import site.omagotchi.learningservice.sensor.application.command.CreateThresholdRuleCommand;
 import site.omagotchi.learningservice.sensor.domain.Operator;
 
-import java.util.UUID;
-
 public record CreateThresholdRuleRequest (
         @NotBlank
         @Pattern(regexp = "\\S+", message = "공백을 포함할 수 없습니다.")
@@ -23,7 +21,12 @@ public record CreateThresholdRuleRequest (
         @DecimalMax(value="1e9")
         Double threshold
 ){
-    public CreateThresholdRuleCommand toCommand(UUID requesterId, String requestId){
-        return new CreateThresholdRuleCommand(deviceEui, metric, operator, threshold, requesterId, requestId);
+    public CreateThresholdRuleCommand toCommand() {
+        return new CreateThresholdRuleCommand(
+                deviceEui,
+                metric,
+                operator,
+                threshold
+        );
     }
 }

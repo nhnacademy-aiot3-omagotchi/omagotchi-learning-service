@@ -4,18 +4,21 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.sensor.application.command.CreateSensorDeviceCommand;
 import site.omagotchi.learningservice.sensor.application.command.UpdateSensorDeviceCommand;
 import site.omagotchi.learningservice.sensor.application.port.SensorDeviceRepository;
+import site.omagotchi.learningservice.sensor.application.port.SensorPersistenceException;
 import site.omagotchi.learningservice.sensor.application.result.SensorDeviceResult;
 import site.omagotchi.learningservice.sensor.domain.SensorDevice;
-import site.omagotchi.learningservice.sensor.domain.SensorErrorCode;
-import site.omagotchi.learningservice.space.application.SpaceAccessService;
+import site.omagotchi.learningservice.space.application.SpaceCohortQueryService;
 
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-/** 센서 기기 마스터 조회. 다른 Feature는 이 서비스를 통해서만 접근한다. */
+/** 센서 기기 마스터 관리와 기수 범위 조회. 다른 Feature는 이 서비스를 통해서만 접근한다. */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -23,12 +26,16 @@ import java.util.*;
 public class SensorDeviceService {
 
     private final SensorDeviceRepository sensorDeviceRepository;
-    private final SpaceAccessService spaceAccessService;
+    private final CohortAccessService cohortAccessService;
+    private final SpaceCohortQueryService spaceCohortQueryService;
 
     @Transactional
-    public String create(CreateSensorDeviceCommand command){
+    public String create(Long cohortId, UUID requesterId, CreateSensorDeviceCommand command) {
+        cohortAccessService.requireManager(cohortId, requesterId);
+        requireSpaceInCohort(command.spaceId(), cohortId);
+
         SensorDevice device;
-        try{
+        try {
             device = SensorDevice.create(
                     command.deviceEui(),
                     command.spaceId(),
@@ -39,26 +46,30 @@ public class SensorDeviceService {
                     command.installedAt()
             );
 
-        }catch (IllegalArgumentException e){
+        } catch (IllegalArgumentException e) {
             throw new BusinessException(SensorErrorCode.DEVICE_INVALID_ATTRIBUTE, e.getMessage(), e);
         }
 
-        if(sensorDeviceRepository.existsByDeviceEui(device.getDeviceEui())){
+        if (sensorDeviceRepository.existsByDeviceEui(device.getDeviceEui())) {
             throw new BusinessException(SensorErrorCode.DEVICE_ALREADY_EXISTS);
         }
 
-        requireSpaceExists(device.getSpaceId());
-
-        sensorDeviceRepository.save(device);
+        save(device);
         return device.getDeviceEui();
     }
 
     @Transactional
-    public SensorDeviceResult update(UpdateSensorDeviceCommand command){
-        SensorDevice device = sensorDeviceRepository.findByDeviceEui(command.deviceEui())
-                .orElseThrow(() -> new BusinessException(SensorErrorCode.DEVICE_NOT_FOUND));
+    public SensorDeviceResult update(
+            Long cohortId,
+            UUID requesterId,
+            String deviceEui,
+            UpdateSensorDeviceCommand command
+    ) {
+        cohortAccessService.requireManager(cohortId, requesterId);
+        SensorDevice device = requireDeviceInCohort(deviceEui, cohortId);
+        requireSpaceInCohort(command.spaceId(), cohortId);
 
-        try{
+        try {
             device.update(
                     command.spaceId(),
                     command.displayName(),
@@ -66,91 +77,81 @@ public class SensorDeviceService {
                     command.expectedIntervalSeconds(),
                     command.installedAt()
             );
-        }catch (IllegalArgumentException e){
+        } catch (IllegalArgumentException e) {
             throw new BusinessException(SensorErrorCode.DEVICE_INVALID_ATTRIBUTE, e.getMessage(), e);
         }
 
-        requireSpaceExists(device.getSpaceId());
-
-        return SensorDeviceResult.from(sensorDeviceRepository.save(device));
+        return SensorDeviceResult.from(save(device));
     }
 
     @Transactional
-    public SensorDeviceResult changeActive(String deviceEui, boolean active){
-        SensorDevice device = sensorDeviceRepository.findByDeviceEui(deviceEui)
-                .orElseThrow(() -> new BusinessException(SensorErrorCode.DEVICE_NOT_FOUND));
+    public SensorDeviceResult changeActive(
+            Long cohortId,
+            UUID requesterId,
+            String deviceEui,
+            boolean active
+    ) {
+        cohortAccessService.requireManager(cohortId, requesterId);
+        SensorDevice device = requireDeviceInCohort(deviceEui, cohortId);
 
         device.changeActive(active);
-        return SensorDeviceResult.from(device);
+        return SensorDeviceResult.from(save(device));
     }
 
-
-    private void requireSpaceExists(Long spaceId){
-        if(Objects.isNull(spaceId)){
-            return;
-        }
-
-        if(spaceAccessService.find(spaceId).isEmpty()){
+    private void requireSpaceInCohort(Long spaceId, Long cohortId) {
+        boolean belongsToCohort = spaceCohortQueryService.findCohortId(spaceId)
+                .filter(cohortId::equals)
+                .isPresent();
+        if (!belongsToCohort) {
             throw new BusinessException(SensorErrorCode.DEVICE_SPACE_NOT_FOUND);
         }
     }
 
-    /**
-     * 이 기기가 설치된 공간. 조치 알림의 수신자 판정이 소비처다.
-     *
-     * <p>등록되지 않은 기기이거나 공간이 배정되지 않은 기기면 비어 있다. 소비처는 둘을
-     * 구분하지 않아도 된다 — 어느 쪽이든 "이 기기가 어느 공간 것인지 말할 수 없다"는
-     * 같은 결론이다.</p>
-     */
+    private SensorDevice requireDeviceInCohort(String deviceEui, Long cohortId) {
+        SensorDevice device = sensorDeviceRepository.findByDeviceEui(deviceEui)
+                .orElseThrow(() -> new BusinessException(SensorErrorCode.DEVICE_NOT_FOUND));
+
+        boolean belongsToCohort = spaceCohortQueryService.findCohortId(device.getSpaceId())
+                .filter(cohortId::equals)
+                .isPresent();
+        if (!belongsToCohort) {
+            throw new BusinessException(SensorErrorCode.DEVICE_NOT_FOUND);
+        }
+        return device;
+    }
+
+    private SensorDevice save(SensorDevice device) {
+        try {
+            return sensorDeviceRepository.save(device);
+        } catch (SensorPersistenceException exception) {
+            SensorErrorCode errorCode = switch (exception.getReason()) {
+                case DEVICE_EUI_ALREADY_EXISTS -> SensorErrorCode.DEVICE_ALREADY_EXISTS;
+                case DEVICE_SPACE_NOT_FOUND -> SensorErrorCode.DEVICE_SPACE_NOT_FOUND;
+                default -> throw exception;
+            };
+            throw new BusinessException(
+                    errorCode,
+                    exception.getMessage(),
+                    originalCauseOf(exception)
+            );
+        }
+    }
+
+    private Throwable originalCauseOf(SensorPersistenceException exception) {
+        return exception.getCause() == null ? exception : exception.getCause();
+    }
+
     public Optional<Long> findSpaceId(String deviceEui) {
         return sensorDeviceRepository.findByDeviceEui(deviceEui)
                 .map(SensorDevice::getSpaceId);
     }
 
-    /** 표시명. 등록되지 않은 기기면 비어 있다. */
-    public Optional<String> findDisplayName(String deviceEui) {
-        return sensorDeviceRepository.findByDeviceEui(deviceEui)
-                .map(SensorDevice::getDisplayName);
+    /** 기수 범위 기기 마스터 목록. 모델·설치 위치가 그대로 나가는 운영 화면용이라 매니저만. */
+    public List<SensorDeviceResult> findAll(Long cohortId, UUID requesterId) {
+        cohortAccessService.requireManager(cohortId, requesterId);
+        List<Long> spaceIds = spaceCohortQueryService.findSpaceIdsByCohortId(cohortId);
+        return sensorDeviceRepository.findBySpaceIds(spaceIds).stream()
+                .map(SensorDeviceResult::from)
+                .toList();
     }
-
-    public List<SensorDeviceResult> findAll(){
-        List<SensorDevice> sensorDevices = sensorDeviceRepository.findAll();
-
-        List<SensorDeviceResult> results = new ArrayList<>();
-        for(SensorDevice device : sensorDevices){
-            results.add(SensorDeviceResult.from(device));
-        }
-
-        return results;
-    }
-
-    public Map<String, String> findDisplayNames(){
-        List<SensorDevice> devices = sensorDeviceRepository.findAll();
-
-        Map<String, String> deviceMap = new HashMap<>();
-        for(SensorDevice device : devices){
-            String eui = device.getDeviceEui();
-            String displayName = device.getDisplayName();
-
-            if(Objects.isNull(displayName)){
-                continue;
-            }
-
-            deviceMap.put(eui, displayName);
-        }
-
-        return deviceMap;
-    }
-
-    /** 운영 중인 기기의 EUI 집합. 대시보드 집계와 룰 대상은 이 목록으로 제한한다. */
-    public Set<String> findActiveDeviceEuis() {
-        Set<String> euis = new HashSet<>();
-
-        for (SensorDevice device : sensorDeviceRepository.findAllActive()) {
-            euis.add(device.getDeviceEui());
-        }
-
-        return euis;
-    }
-
 }

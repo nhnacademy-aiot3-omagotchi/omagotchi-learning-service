@@ -6,8 +6,6 @@ import jakarta.validation.constraints.NotNull;
 import site.omagotchi.learningservice.sensor.application.command.UpdateThresholdRuleCommand;
 import site.omagotchi.learningservice.sensor.domain.Operator;
 
-import java.util.UUID;
-
 public record UpdateThresholdRuleRequest(
 
         @NotNull
@@ -21,7 +19,7 @@ public record UpdateThresholdRuleRequest(
         @DecimalMax(value="1e9")
         Double threshold
 ){
-    public UpdateThresholdRuleCommand toCommand(Long ruleId, UUID requesterId, String requestId){
-        return new UpdateThresholdRuleCommand(ruleId, baseVersion, operator, threshold, requesterId, requestId);
+    public UpdateThresholdRuleCommand toCommand() {
+        return new UpdateThresholdRuleCommand(baseVersion, operator, threshold);
     }
 }

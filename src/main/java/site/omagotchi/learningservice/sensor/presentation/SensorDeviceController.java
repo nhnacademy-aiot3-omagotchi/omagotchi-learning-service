@@ -3,7 +3,9 @@ package site.omagotchi.learningservice.sensor.presentation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
+import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.sensor.application.SensorDeviceService;
 import site.omagotchi.learningservice.sensor.application.result.SensorDeviceResult;
 import site.omagotchi.learningservice.sensor.presentation.request.CreateSensorDeviceRequest;
@@ -12,52 +14,81 @@ import site.omagotchi.learningservice.sensor.presentation.request.UpdateSensorDe
 import site.omagotchi.learningservice.sensor.presentation.response.CreateSensorDeviceResponse;
 import site.omagotchi.learningservice.sensor.presentation.response.SensorDeviceResponse;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/sensors")
+@RequestMapping("/api/v1/cohorts/{cohortId}/sensors")
 @RestController
 public class SensorDeviceController {
     private final SensorDeviceService sensorDeviceService;
 
-
     @GetMapping
-    public List<SensorDeviceResponse> getSensors(){
-        List<SensorDeviceResult> results = sensorDeviceService.findAll();
+    public List<SensorDeviceResponse> getSensors(
+            @PathVariable Long cohortId,
+            JwtAuthenticationToken authentication
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
 
-        List<SensorDeviceResponse> responses = new ArrayList<>();
-        for(SensorDeviceResult result : results){
-            responses.add(SensorDeviceResponse.from(result));
-        }
+        List<SensorDeviceResult> results = sensorDeviceService.findAll(
+                cohortId,
+                user.userId()
+        );
 
-        return responses;
+        return results.stream()
+                .map(SensorDeviceResponse::from)
+                .toList();
     }
 
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping
     public CreateSensorDeviceResponse create(
-            @Valid @RequestBody CreateSensorDeviceRequest request){
+            @PathVariable Long cohortId,
+            @Valid @RequestBody CreateSensorDeviceRequest request,
+            JwtAuthenticationToken authentication
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
 
         return new CreateSensorDeviceResponse(
-                sensorDeviceService.create(request.toCommand()));
+                sensorDeviceService.create  (
+                        cohortId,
+                        user.userId(),
+                        request.toCommand()
+                ));
     }
 
-    @PutMapping("/{device-eui}")
+    @PutMapping("/{deviceEui}")
     public SensorDeviceResponse update(
-            @PathVariable("device-eui") String deviceEui,
-            @Valid @RequestBody UpdateSensorDeviceRequest request){
+            @PathVariable Long cohortId,
+            @PathVariable String deviceEui,
+            @Valid @RequestBody UpdateSensorDeviceRequest request,
+            JwtAuthenticationToken authentication
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
 
         return SensorDeviceResponse.from(
-                sensorDeviceService.update(request.toCommand(deviceEui)));
+                sensorDeviceService.update(
+                        cohortId,
+                        user.userId(),
+                        deviceEui,
+                        request.toCommand()
+                ));
     }
 
-    @PatchMapping("/{device-eui}/active")
+    @PatchMapping("/{deviceEui}/active")
     public SensorDeviceResponse changeActive(
-            @PathVariable("device-eui") String deviceEui,
-            @Valid @RequestBody UpdateSensorActiveRequest request){
+            @PathVariable Long cohortId,
+            @PathVariable String deviceEui,
+            @Valid @RequestBody UpdateSensorActiveRequest request,
+            JwtAuthenticationToken authentication
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
 
         return SensorDeviceResponse.from(
-                sensorDeviceService.changeActive(deviceEui, request.active()));
+                sensorDeviceService.changeActive(
+                        cohortId,
+                        user.userId(),
+                        deviceEui,
+                        request.active()
+                ));
     }
 }

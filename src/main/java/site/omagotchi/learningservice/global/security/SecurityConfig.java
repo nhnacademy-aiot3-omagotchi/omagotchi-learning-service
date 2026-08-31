@@ -67,34 +67,6 @@ public class SecurityConfig {
                                 HttpMethod.DELETE,
                                 "/api/v1/cohorts/*"
                         ).hasRole("SYSTEM_ADMIN")
-                        .requestMatchers(
-                                HttpMethod.POST,
-                                "/api/v1/threshold-rules"
-                        ).hasRole("SYSTEM_ADMIN")
-                        .requestMatchers(
-                                HttpMethod.PATCH,
-                                "/api/v1/threshold-rules/**"
-                        ).hasRole("SYSTEM_ADMIN")
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/v1/threshold-rules/spaces"
-                        ).hasRole("SYSTEM_ADMIN")
-                        .requestMatchers(
-                                HttpMethod.POST,
-                                "/api/v1/sensors"
-                        ).hasRole("SYSTEM_ADMIN")
-                        .requestMatchers(
-                                HttpMethod.PUT,
-                                "/api/v1/sensors/*"
-                        ).hasRole("SYSTEM_ADMIN")
-                        .requestMatchers(
-                                HttpMethod.PATCH,
-                                "/api/v1/sensors/*/active"
-                        ).hasRole("SYSTEM_ADMIN")
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/v1/sensors/**")
-                        .hasRole("SYSTEM_ADMIN")
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2

@@ -36,6 +36,7 @@ public class TopLearnerPatternTools implements AiToolProvider {
             - top으로 시작하는 값들은 상위 그룹(topGroupSize명)의 익명 평균입니다.
               특정 개인의 기록이 아니며, 누가 상위권인지는 알 수 없고 답해서도 안 됩니다.
             - myPattern은 사용자 본인의 같은 기간 패턴입니다. top 값들과 비교해서 가장 차이가 큰 한두 가지(시작 시각, 세션 길이, 학습일 수)를 짚어 방향을 제안하세요.
+            - topAverageDailyMinutes는 상위 그룹이 "공부한 날" 하루 평균입니다. 사용자와 비교하려면 기간 전체가 아니라 myPattern의 totalStudyMinutes ÷ studyDayCount로 기준을 맞추세요. periodDays로 나누면 기준이 달라져 격차가 실제보다 크게 보입니다.
             - 상위 그룹은 기간 내 총 공부 시간이 많은 순으로 뽑힙니다. 밀도가 높은 순이 아니므로 topFocusDensityPercent가 사용자보다 항상 높지는 않습니다.
             - 차이를 짚을 때는 총 학습량과 몰입 밀도를 함께 보세요. 총 시간이 비슷한데 밀도가 다르면, 시간을 늘리라고 하지 말고 밀도 차이를 짚으세요.
             - 비교는 방향 제시용입니다. 뒤처졌다고 비난하지 말고, 따라 해볼 행동 하나를 권하세요.

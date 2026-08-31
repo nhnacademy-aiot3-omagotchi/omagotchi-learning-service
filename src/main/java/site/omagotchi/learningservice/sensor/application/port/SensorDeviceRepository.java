@@ -22,6 +22,9 @@ public interface SensorDeviceRepository {
     /** 특정 공간에 할당된 센서들 조회 - 활성, 비활성 모두 */
     List<SensorDevice> findBySpaceIds(Collection<Long> spaceIds);
 
+    /** 특정 공간에 배치된 센서 수. 공간 삭제 가능 여부 판정에 쓴다. */
+    long countBySpaceId(Long spaceId);
+
     /** 특정 공간에 할당된 센서들 조회 - 활성화된것만 */
     List<SensorDevice> findActiveBySpaceIds(Collection<Long> spaceIds);
 

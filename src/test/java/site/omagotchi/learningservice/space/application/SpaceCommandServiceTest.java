@@ -12,6 +12,7 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.space.application.port.SpaceReferenceQueryPort;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.occupancy.application.VacancyAlertService;
@@ -59,6 +60,9 @@ class SpaceCommandServiceTest {
     @Mock
     private CohortAccessService cohortAccessService;
 
+    @Mock
+    private SpaceReferenceQueryPort spaceReferenceQueryPort;
+
     private TestSpaceCommandService spaceCommandService;
 
     @BeforeEach
@@ -69,6 +73,7 @@ class SpaceCommandServiceTest {
                 occupancyQueryService,
                 vacancyAlertService,
                 cohortAccessService,
+                spaceReferenceQueryPort,
                 clock
         );
         spaceCommandService = new TestSpaceCommandService(delegate);
@@ -590,6 +595,20 @@ class SpaceCommandServiceTest {
                         any(Long.class),
                         any(OffsetDateTime.class)
                 );
+        verify(spaceRepository, never()).save(any(Space.class));
+    }
+
+    @Test
+    void rejectsDeletingSpaceWhenSensorIsPlaced() {
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(existingSpace()));
+        when(spaceReferenceQueryPort.countSensors(1L)).thenReturn(2L);
+
+        // 센서가 남은 채 삭제하면 그 센서는 어느 기수에서도 보이지 않게 된다
+        assertBusinessError(
+                SpaceErrorCode.SPACE_HAS_SENSOR_DELETE_NOT_ALLOWED,
+                () -> spaceCommandService.delete(1L)
+        );
         verify(spaceRepository, never()).save(any(Space.class));
     }
 

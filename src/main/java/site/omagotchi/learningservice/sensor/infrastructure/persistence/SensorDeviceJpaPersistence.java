@@ -81,6 +81,14 @@ public class SensorDeviceJpaPersistence implements SensorDeviceRepository {
     }
 
     @Override
+    public long countBySpaceId(Long spaceId) {
+        if (spaceId == null) {
+            return 0L;
+        }
+        return sensorDeviceJpaRepository.countBySpaceId(spaceId);
+    }
+
+    @Override
     public List<SensorDevice> findBySpaceIds(Collection<Long> spaceIds) {
         if (spaceIds == null || spaceIds.isEmpty()) {
             return List.of();

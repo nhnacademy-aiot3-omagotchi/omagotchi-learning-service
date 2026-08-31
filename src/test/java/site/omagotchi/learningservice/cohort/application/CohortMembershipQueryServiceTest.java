@@ -32,8 +32,8 @@ class CohortMembershipQueryServiceTest {
     }
     @Test void returnsEmptyWithoutCohortId() { assertThat(service.findActiveStudentMemberships(null)).isEmpty(); verify(membershipQuery, never()).findActiveStudents(null); }
     @Test void delegatesActiveMembershipQueries() {
-        given(membershipQuery.findActiveById(10L)).willReturn(Optional.of(VIEW));
-        given(membershipQuery.findActive(COHORT_ID, USER_ID)).willReturn(Optional.of(VIEW));
+        given(membershipQuery.findByIdAndActive(10L)).willReturn(Optional.of(VIEW));
+        given(membershipQuery.findByCohortIdAndUserIdAndActive(COHORT_ID, USER_ID)).willReturn(Optional.of(VIEW));
         assertThat(service.findActiveMembership(10L)).contains(VIEW);
         assertThat(service.findActiveMembership(COHORT_ID, USER_ID)).contains(VIEW);
     }

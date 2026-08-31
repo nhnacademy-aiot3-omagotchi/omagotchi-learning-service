@@ -68,7 +68,7 @@ public class CohortMembershipQueryService {
         if (membershipId == null) {
             return Optional.empty();
         }
-        return membershipQuery.findActiveById(membershipId);
+        return membershipQuery.findByIdAndActive(membershipId);
     }
 
     /**
@@ -86,7 +86,7 @@ public class CohortMembershipQueryService {
         if (cohortId == null || userId == null) {
             return Optional.empty();
         }
-        return membershipQuery.findActive(cohortId, userId);
+        return membershipQuery.findByCohortIdAndUserIdAndActive(cohortId, userId);
     }
 
     /** 같은 기수의 ACTIVE 소속을 계정별로 일괄 조회한다. */

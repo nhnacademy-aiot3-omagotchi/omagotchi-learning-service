@@ -9,17 +9,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
-import site.omagotchi.learningservice.space.application.port.SpaceRepository;
-import site.omagotchi.learningservice.space.domain.Space;
-import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
-import site.omagotchi.learningservice.space.domain.SpaceType;
-import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
+import site.omagotchi.learningservice.space.application.SpaceQueryService;
+import site.omagotchi.learningservice.space.application.result.SpaceNameResult;
+import site.omagotchi.learningservice.team.application.IdentityDisplayNameQueryService;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -35,18 +32,18 @@ class AdminOccupancyQueryServiceTest {
     private static final UUID OCCUPIER_ID = UUID.randomUUID();
     private static final UUID PARTICIPANT_ID = UUID.randomUUID();
 
-    @Mock SpaceRepository spaceRepository;
+    @Mock SpaceQueryService spaceQueryService;
     @Mock OccupancyQueryService occupancyQueryService;
     @Mock CohortAccessService cohortAccessService;
-    @Mock IdentityAccountClient identityAccountClient;
+    @Mock IdentityDisplayNameQueryService identityDisplayNameQueryService;
 
     private AdminOccupancyQueryService service;
 
     @BeforeEach
     void setUp() {
         service = new AdminOccupancyQueryService(
-                spaceRepository, occupancyQueryService, cohortAccessService,
-                identityAccountClient, Clock.fixed(NOW, ZoneOffset.UTC));
+                spaceQueryService, occupancyQueryService, cohortAccessService,
+                identityDisplayNameQueryService, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @Test
@@ -54,10 +51,10 @@ class AdminOccupancyQueryServiceTest {
     void returnsManagedActiveOccupanciesWithDisplayNameAndParticipantCount() {
         OffsetDateTime now = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
         given(cohortAccessService.findActiveManagedCohortIds(MANAGER_ID)).willReturn(List.of(20L));
-        given(spaceRepository.findAllNotDeleted()).willReturn(List.of(room(1L, "회의실 A")));
+        given(spaceQueryService.findAllSpaceNames()).willReturn(List.of(new SpaceNameResult(1L, "회의실 A")));
         given(occupancyQueryService.findActiveBySpaceIds(List.of(1L), now))
                 .willReturn(Map.of(1L, occupancy(1L, 10L, 20L, now)));
-        given(identityAccountClient.findDisplayNames(List.of(OCCUPIER_ID)))
+        given(identityDisplayNameQueryService.findDisplayNames(List.of(OCCUPIER_ID)))
                 .willReturn(Map.of(OCCUPIER_ID, "점유자 이름"));
 
         var results = service.getActiveOccupancies(MANAGER_ID);
@@ -77,10 +74,10 @@ class AdminOccupancyQueryServiceTest {
     void excludesOccupanciesOfOtherCohorts() {
         OffsetDateTime now = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
         given(cohortAccessService.findActiveManagedCohortIds(MANAGER_ID)).willReturn(List.of(20L));
-        given(spaceRepository.findAllNotDeleted()).willReturn(List.of(room(1L, "회의실 A")));
+        given(spaceQueryService.findAllSpaceNames()).willReturn(List.of(new SpaceNameResult(1L, "회의실 A")));
         given(occupancyQueryService.findActiveBySpaceIds(List.of(1L), now))
                 .willReturn(Map.of(1L, occupancy(1L, 10L, 99L, now)));
-        given(identityAccountClient.findDisplayNames(List.of())).willReturn(Map.of());
+        given(identityDisplayNameQueryService.findDisplayNames(List.of())).willReturn(Map.of());
 
         assertThat(service.getActiveOccupancies(MANAGER_ID)).isEmpty();
     }
@@ -92,10 +89,4 @@ class AdminOccupancyQueryServiceTest {
                 30L, OCCUPIER_ID, List.of(OCCUPIER_ID, PARTICIPANT_ID));
     }
 
-    private static Space room(Long id, String name) {
-        ZonedDateTime now = ZonedDateTime.ofInstant(NOW, ZoneOffset.UTC);
-        return Space.restore(
-                id, null, name, SpaceType.MEETING, 8, SpaceOperationalStatus.ACTIVE,
-                null, now, now, null);
-    }
 }

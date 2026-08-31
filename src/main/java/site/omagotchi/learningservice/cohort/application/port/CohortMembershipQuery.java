@@ -20,8 +20,8 @@ public interface CohortMembershipQuery {
     boolean existsActiveManagerByUserId(UUID userId);
     List<CohortMembershipView> findActiveStudents(Long cohortId);
     List<CohortMembershipView> findActiveByCohortId(Long cohortId);
-    Optional<CohortMembershipView> findActiveById(Long membershipId);
-    Optional<CohortMembershipView> findActive(Long cohortId, UUID userId);
+    Optional<CohortMembershipView> findByIdAndActive(Long membershipId);
+    Optional<CohortMembershipView> findByCohortIdAndUserIdAndActive(Long cohortId, UUID userId);
     Map<UUID, CohortMembershipView> findActiveByCohortIdAndUserIds(Long cohortId, Collection<UUID> userIds);
     List<CohortMembershipView> findActiveByUserId(UUID userId);
     List<Long> findIdsByCohortId(Long cohortId);

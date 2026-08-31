@@ -68,8 +68,8 @@ public class JpaCohortMembershipQuery implements CohortMembershipQuery {
 
     @Override public List<CohortMembershipView> findActiveStudents(Long id) { return repository.findActiveStudents(id).stream().map(CohortMembershipView::from).toList(); }
     @Override public List<CohortMembershipView> findActiveByCohortId(Long id) { return repository.findByCohortIdAndStatusOrderByRequestedAtAsc(id, CohortMembershipStatus.ACTIVE).stream().map(CohortMembershipView::from).toList(); }
-    @Override public Optional<CohortMembershipView> findActiveById(Long id) { return repository.findByIdAndStatus(id, CohortMembershipStatus.ACTIVE).map(CohortMembershipView::from); }
-    @Override public Optional<CohortMembershipView> findActive(Long cohortId, UUID userId) { return repository.findFirstByCohortIdAndUserIdAndStatusOrderByRequestedAtDesc(cohortId,userId,CohortMembershipStatus.ACTIVE).map(CohortMembershipView::from); }
+    @Override public Optional<CohortMembershipView> findByIdAndActive(Long id) { return repository.findByIdAndStatus(id, CohortMembershipStatus.ACTIVE).map(CohortMembershipView::from); }
+    @Override public Optional<CohortMembershipView> findByCohortIdAndUserIdAndActive(Long cohortId, UUID userId) { return repository.findFirstByCohortIdAndUserIdAndStatusOrderByRequestedAtDesc(cohortId,userId,CohortMembershipStatus.ACTIVE).map(CohortMembershipView::from); }
     @Override public Map<UUID,CohortMembershipView> findActiveByCohortIdAndUserIds(Long id, Collection<UUID> ids) { return repository.findByCohortIdAndUserIdInAndStatus(id,ids,CohortMembershipStatus.ACTIVE).stream().map(CohortMembershipView::from).collect(java.util.stream.Collectors.toMap(CohortMembershipView::userId,v->v)); }
     @Override public List<CohortMembershipView> findActiveByUserId(UUID id) { return repository.findByUserIdOrderByRequestedAtDesc(id).stream().filter(m->m.getStatus()==CohortMembershipStatus.ACTIVE).map(CohortMembershipView::from).toList(); }
     @Override public List<Long> findIdsByCohortId(Long id) { return repository.findByCohortId(id).stream().map(CohortMembership::getId).toList(); }

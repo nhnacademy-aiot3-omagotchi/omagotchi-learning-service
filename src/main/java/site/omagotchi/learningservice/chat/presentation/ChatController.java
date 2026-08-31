@@ -50,7 +50,8 @@ public class ChatController {
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                 .stream()
                 .content()
-                .doOnError(e -> log.error("[ChatController] 스트리밍 에러 - model = {}", model, e));
+                .doOnError(e -> log.error("[ChatController] 스트리밍 에러 - model = {}", model, e))
+                .onErrorResume(e -> Flux.just("\n\n(지금은 답변을 만들 수 없습니다. 잠시 후 다시 질문해 주세요.)"));
     }
 
     // 의도적으로 default를 두지 않았음. 나중에 모델을 추가하면 컴파일 에러가 나서 여기를 고치도록 강제됨

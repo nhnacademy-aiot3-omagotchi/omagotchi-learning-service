@@ -1,14 +1,20 @@
 server:
   port: ${SERVER_PORT}
 
+gemini:
+  api-keys: ${GEMINI_API_KEYS}
+
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.model.google.genai.autoconfigure.chat.GoogleGenAiChatAutoConfiguration
   ai:
     google:
       genai:
-        api-key: ${GEMINI_API_KEY}
         chat:
-          model: gemini-2.5-flash # 변경 가능
+          model: gemini-3.6-flash # 변경 가능
           temperature: 0.7
+          thinking-level: MINIMAL
     ollama:
       base-url: ${OLLAMA_BASE_URL}
       chat:

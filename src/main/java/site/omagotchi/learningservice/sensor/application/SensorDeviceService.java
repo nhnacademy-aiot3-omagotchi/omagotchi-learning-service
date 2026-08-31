@@ -13,6 +13,7 @@ import site.omagotchi.learningservice.sensor.application.port.SensorPersistenceE
 import site.omagotchi.learningservice.sensor.application.result.SensorDeviceResult;
 import site.omagotchi.learningservice.sensor.domain.SensorDevice;
 import site.omagotchi.learningservice.space.application.SpaceCohortQueryService;
+import site.omagotchi.learningservice.space.application.SpaceCohortWriteGuard;
 
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +29,7 @@ public class SensorDeviceService {
     private final SensorDeviceRepository sensorDeviceRepository;
     private final CohortAccessService cohortAccessService;
     private final SpaceCohortQueryService spaceCohortQueryService;
+    private final SpaceCohortWriteGuard spaceCohortWriteGuard;
 
     @Transactional
     public String create(Long cohortId, UUID requesterId, CreateSensorDeviceCommand command) {
@@ -119,7 +121,9 @@ public class SensorDeviceService {
         cohortAccessService.requireManager(cohortId, requesterId);
         requireSpaceInCohort(spaceId, cohortId);
 
-        SensorDevice device = sensorDeviceRepository.findByDeviceEui(deviceEui)
+        // 고아 판정과 소유권 이전 사이에 다른 기수가 끼어들지 못하도록 행을 잠근 뒤 읽는다.
+        // 잠그지 않으면 두 기수가 모두 판정을 통과하고 나중 커밋이 이긴다.
+        SensorDevice device = sensorDeviceRepository.findByDeviceEuiForUpdate(deviceEui)
                 .orElseThrow(() -> new BusinessException(SensorErrorCode.DEVICE_NOT_FOUND));
 
         // 주인 없는 센서만 인계할 수 있다. 이 검사가 빠지면 남의 기수 센서를 가져오는
@@ -151,8 +155,18 @@ public class SensorDeviceService {
         return SensorDeviceResult.from(save(device));
     }
 
+    /**
+     * 센서를 배치하기 전에 공간을 확인한다. <b>공간 행을 잠근다.</b>
+     *
+     * <p>잠그지 않으면 삭제 트랜잭션이 "센서 0대"를 확인한 뒤 이 저장이 끼어들어,
+     * 소프트 삭제된 공간에 센서가 남는다 — 행이 살아 있어 FK 로는 막지 못하고, 그 센서는
+     * 어느 기수에서도 보이지 않게 된다. 공간 삭제도 같은 행을 잠그므로 둘은 직렬화된다.</p>
+     *
+     * <p>잠금 순서는 공간 → 센서다. {@code claim} 의 기기 잠금보다 먼저 호출해야 하며,
+     * {@code SpaceCommandService#delete} 도 같은 순서라 교착이 생기지 않는다.</p>
+     */
     private void requireSpaceInCohort(Long spaceId, Long cohortId) {
-        boolean belongsToCohort = spaceCohortQueryService.findCohortId(spaceId)
+        boolean belongsToCohort = spaceCohortWriteGuard.findCohortIdForUpdate(spaceId)
                 .filter(cohortId::equals)
                 .isPresent();
         if (!belongsToCohort) {

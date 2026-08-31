@@ -81,6 +81,11 @@ public class SensorDeviceJpaPersistence implements SensorDeviceRepository {
     }
 
     @Override
+    public Optional<SensorDevice> findByDeviceEuiForUpdate(String deviceEui) {
+        return sensorDeviceJpaRepository.findByDeviceEuiForUpdate(deviceEui);
+    }
+
+    @Override
     public long countBySpaceId(Long spaceId) {
         if (spaceId == null) {
             return 0L;

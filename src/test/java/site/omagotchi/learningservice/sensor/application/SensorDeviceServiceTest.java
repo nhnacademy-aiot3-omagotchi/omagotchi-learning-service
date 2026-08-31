@@ -14,6 +14,7 @@ import site.omagotchi.learningservice.sensor.application.command.UpdateSensorDev
 import site.omagotchi.learningservice.sensor.application.port.SensorDeviceRepository;
 import site.omagotchi.learningservice.sensor.domain.SensorDevice;
 import site.omagotchi.learningservice.space.application.SpaceCohortQueryService;
+import site.omagotchi.learningservice.space.application.SpaceCohortWriteGuard;
 
 import java.time.Instant;
 import java.util.List;
@@ -52,12 +53,16 @@ class SensorDeviceServiceTest {
     @Mock
     private SpaceCohortQueryService spaceCohortQueryService;
 
+    /** 센서를 배치하는 경로는 공간 행을 잠그고 확인한다 — 삭제와 직렬화되어야 한다. */
+    @Mock
+    private SpaceCohortWriteGuard spaceCohortWriteGuard;
+
     @InjectMocks
     private SensorDeviceService sensorDeviceService;
 
     @Test
     void createsSensorOnlyAfterManagerAndSpaceOwnershipChecks() {
-        when(spaceCohortQueryService.findCohortId(SPACE_ID))
+        when(spaceCohortWriteGuard.findCohortIdForUpdate(SPACE_ID))
                 .thenReturn(Optional.of(COHORT_ID));
         when(sensorDeviceRepository.save(any(SensorDevice.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -94,7 +99,8 @@ class SensorDeviceServiceTest {
 
         assertThat(thrown.getErrorCode())
                 .isEqualTo(CohortErrorCode.COHORT_MANAGER_REQUIRED);
-        verifyNoInteractions(sensorDeviceRepository, spaceCohortQueryService);
+        verifyNoInteractions(
+                sensorDeviceRepository, spaceCohortQueryService, spaceCohortWriteGuard);
     }
 
     @Test
@@ -156,8 +162,10 @@ class SensorDeviceServiceTest {
         // 이전 기수가 쓰다 회수된 센서 — 붙어 있던 공간은 기수가 풀렸다
         SensorDevice orphan = device(ORPHAN_SPACE_ID);
         orphan.changeActive(false);
-        when(spaceCohortQueryService.findCohortId(SPACE_ID)).thenReturn(Optional.of(COHORT_ID));
-        when(sensorDeviceRepository.findByDeviceEui(DEVICE_EUI)).thenReturn(Optional.of(orphan));
+        when(spaceCohortWriteGuard.findCohortIdForUpdate(SPACE_ID)).thenReturn(Optional.of(COHORT_ID));
+        // 인계는 잠금 조회를 쓴다 — 고아 판정과 소유권 이전 사이를 다른 기수가 끊지 못하게
+        when(sensorDeviceRepository.findByDeviceEuiForUpdate(DEVICE_EUI))
+                .thenReturn(Optional.of(orphan));
         when(spaceCohortQueryService.findCohortId(ORPHAN_SPACE_ID)).thenReturn(Optional.empty());
         when(sensorDeviceRepository.save(any(SensorDevice.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -175,8 +183,9 @@ class SensorDeviceServiceTest {
     @Test
     void rejectsClaimingSensorOwnedByAnotherCohort() {
         SensorDevice owned = device(OTHER_SPACE_ID);
-        when(spaceCohortQueryService.findCohortId(SPACE_ID)).thenReturn(Optional.of(COHORT_ID));
-        when(sensorDeviceRepository.findByDeviceEui(DEVICE_EUI)).thenReturn(Optional.of(owned));
+        when(spaceCohortWriteGuard.findCohortIdForUpdate(SPACE_ID)).thenReturn(Optional.of(COHORT_ID));
+        when(sensorDeviceRepository.findByDeviceEuiForUpdate(DEVICE_EUI))
+                .thenReturn(Optional.of(owned));
         when(spaceCohortQueryService.findCohortId(OTHER_SPACE_ID)).thenReturn(Optional.of(999L));
 
         BusinessException thrown = catchThrowableOfType(BusinessException.class, () ->
@@ -190,7 +199,7 @@ class SensorDeviceServiceTest {
 
     @Test
     void rejectsClaimIntoSpaceOfAnotherCohort() {
-        when(spaceCohortQueryService.findCohortId(SPACE_ID)).thenReturn(Optional.of(999L));
+        when(spaceCohortWriteGuard.findCohortIdForUpdate(SPACE_ID)).thenReturn(Optional.of(999L));
 
         BusinessException thrown = catchThrowableOfType(BusinessException.class, () ->
                 sensorDeviceService.claim(COHORT_ID, REQUESTER_ID, DEVICE_EUI, SPACE_ID)
@@ -198,7 +207,7 @@ class SensorDeviceServiceTest {
 
         assertThat(thrown.getErrorCode()).isEqualTo(SensorErrorCode.DEVICE_SPACE_NOT_FOUND);
         // 공간 검사가 기기 조회보다 먼저다 — 남의 기수 공간을 찍어 EUI 존재를 떠볼 수 없다
-        verify(sensorDeviceRepository, never()).findByDeviceEui(any());
+        verify(sensorDeviceRepository, never()).findByDeviceEuiForUpdate(any());
     }
 
     private CreateSensorDeviceCommand createCommand() {

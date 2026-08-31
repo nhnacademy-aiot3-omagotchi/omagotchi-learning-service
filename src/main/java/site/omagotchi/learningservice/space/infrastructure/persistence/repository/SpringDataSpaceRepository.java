@@ -63,6 +63,20 @@ public interface SpringDataSpaceRepository
             """)
     Optional<Long> findCohortIdById(@Param("spaceId") Long spaceId);
 
+    /**
+     * 삭제되지 않고 기수가 배정된 모든 공간 ID.
+     *
+     * <p>여기서 빠지는 공간이 곧 "주인 없는 공간"이고, 거기 붙은 센서가 고아다.</p>
+     */
+    @Query("""
+            SELECT space.id
+              FROM SpaceJpaEntity space
+             WHERE space.deletedAt IS NULL
+               AND space.cohortId IS NOT NULL
+             ORDER BY space.id
+            """)
+    List<Long> findAllAssignedSpaceIds();
+
     /** 삭제되지않은 기수에 해당하는 공간 목록 조회 */
     @Query("""
             SELECT space.id

@@ -136,15 +136,23 @@ public class ThresholdRuleService {
     /**
      * Rule Engine 적재용 — 기수를 가리지 않는다.
      *
-     * <p>다만 <b>회수된 기기의 룰은 내리지 않는다.</b> {@code active=false}는 "이 기기의
-     * 판정을 멈춘다"는 뜻인데, 그 뜻이 rule-service까지 전달되는 지점이 여기뿐이다.
-     * 기수가 끝나 회수된 센서가 계속 조치를 일으키는 것을 막는다.</p>
+     * <p>회수된 기기와 <b>주인 없는 기기</b>의 룰을 모두 뺀다. {@code active} 플래그만
+     * 보면 기수 종료 정리가 비활성화에 실패했을 때 고아 센서의 룰이 그대로 나간다 —
+     * 그 정리는 되돌릴 수단이 없는 한 번뿐인 훅이라, 실패를 룰 발화까지 번지게 두면
+     * 복구할 방법이 없어진다. 공간이 소프트 삭제되어 고아가 된 경로도 같이 닫힌다.</p>
      *
-     * <p>rule-service는 인메모리 캐시를 주기적으로 다시 적재하므로 회수가 반영되기까지
-     * 최대 한 주기가 걸린다.</p>
+     * <p>인계로 공간이 다시 붙는 순간 룰도 저절로 돌아온다 — 별도 복구 절차가 없다.</p>
+     *
+     * <p>rule-service는 인메모리 캐시를 주기적으로 다시 적재하므로 반영까지 최대 한
+     * 주기가 걸린다.</p>
      */
     public List<ThresholdRule> readAllForRuleEngine() {
-        return thresholdRuleRepository.findAllWithActiveDevice();
+        List<Long> assignedSpaceIds = spaceCohortQueryService.findAllAssignedSpaceIds();
+        List<SensorDevice> devices = sensorDeviceRepository.findActiveBySpaceIds(assignedSpaceIds);
+        if (devices.isEmpty()) {
+            return List.of();
+        }
+        return thresholdRuleRepository.findByDeviceEuiIn(deviceEuisOf(devices));
     }
 
     /** 임계치는 rule-service 판정을 바꾸는 운영 설정이다. 사용자 화면에 쓰이지 않으므로 매니저만. */

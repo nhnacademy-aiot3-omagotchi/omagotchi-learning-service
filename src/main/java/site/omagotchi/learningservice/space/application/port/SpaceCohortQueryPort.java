@@ -24,6 +24,14 @@ public interface SpaceCohortQueryPort {
      */
     Optional<Long> findCohortIdByIdForUpdate(Long spaceId);
 
+    /**
+     * 삭제되지 않고 기수가 배정된 <b>모든</b> 공간 ID.
+     *
+     * <p>Rule Engine 적재가 소비처다. 여기서 빠지는 공간의 센서는 주인이 없으므로,
+     * 회수 플래그와 무관하게 판정 대상에서 빠져야 한다.</p>
+     */
+    List<Long> findAllAssignedSpaceIds();
+
     /** 삭제되지 않고 해당 기수에 배정된 공간 ID를 오름차순으로 조회한다. */
     List<Long> findSpaceIdsByCohortId(Long cohortId);
 }

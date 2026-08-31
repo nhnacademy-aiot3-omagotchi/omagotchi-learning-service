@@ -143,11 +143,29 @@ class ThresholdRuleServiceTest {
     }
 
     @Test
-    void feedsRuleEngineOnlyWithRulesOfActiveDevices() {
-        thresholdRuleService.readAllForRuleEngine();
+    void feedsRuleEngineOnlyWithRulesOfSensorsInAssignedSpaces() {
+        SensorDevice device = device(DEVICE_EUI, SPACE_ID);
+        ThresholdRule rule = rule(DEVICE_EUI, "co2", 1000.0);
+        when(spaceCohortQueryService.findAllAssignedSpaceIds()).thenReturn(List.of(SPACE_ID));
+        when(sensorDeviceRepository.findActiveBySpaceIds(List.of(SPACE_ID)))
+                .thenReturn(List.of(device));
+        when(thresholdRuleRepository.findByDeviceEuiIn(List.of(DEVICE_EUI)))
+                .thenReturn(List.of(rule));
 
-        // 전수 조회로 되돌아가면 회수된 센서의 룰이 다시 나가 조치가 계속 일어난다
-        verify(thresholdRuleRepository).findAllWithActiveDevice();
+        assertThat(thresholdRuleService.readAllForRuleEngine()).containsExactly(rule);
+
+        // 기수가 배정된 공간에서 출발한다. active 플래그만 보면 회수가 실패했을 때
+        // 고아 센서의 룰이 그대로 나간다
+        verify(spaceCohortQueryService).findAllAssignedSpaceIds();
+    }
+
+    @Test
+    void feedsNothingWhenNoSpaceIsAssigned() {
+        when(spaceCohortQueryService.findAllAssignedSpaceIds()).thenReturn(List.of());
+        when(sensorDeviceRepository.findActiveBySpaceIds(List.of())).thenReturn(List.of());
+
+        assertThat(thresholdRuleService.readAllForRuleEngine()).isEmpty();
+        verify(thresholdRuleRepository, never()).findByDeviceEuiIn(any());
     }
 
     @Test

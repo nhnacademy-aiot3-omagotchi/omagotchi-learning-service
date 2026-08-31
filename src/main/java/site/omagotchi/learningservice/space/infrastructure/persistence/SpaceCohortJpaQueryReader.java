@@ -32,6 +32,11 @@ public class SpaceCohortJpaQueryReader implements SpaceCohortQueryPort {
     }
 
     @Override
+    public List<Long> findAllAssignedSpaceIds() {
+        return springDataSpaceRepository.findAllAssignedSpaceIds();
+    }
+
+    @Override
     public List<Long> findSpaceIdsByCohortId(Long cohortId) {
         return springDataSpaceRepository.findIdsByCohortId(cohortId);
     }

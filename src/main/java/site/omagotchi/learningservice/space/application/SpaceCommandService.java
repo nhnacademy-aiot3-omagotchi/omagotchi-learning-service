@@ -4,13 +4,19 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.attendance.application.PresenceSpaceQueryService;
+import site.omagotchi.learningservice.attendance.application.result.SpacePresenceSummary;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.cohort.application.CohortLockService;
+import site.omagotchi.learningservice.cohort.application.result.CohortLockView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.occupancy.application.VacancyAlertService;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
+import site.omagotchi.learningservice.space.application.port.SpaceLabReductionQueryPort;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
+import site.omagotchi.learningservice.space.application.result.SpaceLabReductionView;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceAttributes;
 import site.omagotchi.learningservice.space.domain.SpaceStateTransitionException;
@@ -20,6 +26,7 @@ import site.omagotchi.learningservice.space.domain.SpaceValidationException;
 import java.time.Clock;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Slf4j
@@ -29,9 +36,12 @@ import java.util.UUID;
 public class SpaceCommandService {
 
     private final SpaceRepository spaceRepository;
+    private final SpaceLabReductionQueryPort spaceLabReductionQueryPort;
     private final OccupancyQueryService occupancyQueryService;
     private final VacancyAlertService vacancyAlertService;
     private final CohortAccessService cohortAccessService;
+    private final CohortLockService cohortLockService;
+    private final PresenceSpaceQueryService presenceSpaceQueryService;
     private final Clock clock;
 
     public Space create(
@@ -155,7 +165,12 @@ public class SpaceCommandService {
             String reason,
             UUID actorUserId
     ) {
-        Space existingSpace = findSpaceForUpdate(spaceId);
+        LockedSpaceContext context = lockSpaceWithLabReductionCohort(
+                spaceId,
+                actorUserId,
+                true
+        );
+        Space existingSpace = context.space();
         ensureNotDeleted(existingSpace);
         requireSpaceManager(existingSpace, actorUserId, false);
         ZonedDateTime now = ZonedDateTime.now(clock);
@@ -170,7 +185,9 @@ public class SpaceCommandService {
             );
         }
 
+        ensureActiveLabRemains(existingSpace, context.cohort());
         ensureNoActiveOccupancy(spaceId, now);
+        ensureNoCurrentPresenceOrReturnReservation(existingSpace);
 
         Space deactivatedSpace = existingSpace.deactivate(reason, now);
         Space saved = spaceRepository.save(deactivatedSpace);
@@ -214,7 +231,12 @@ public class SpaceCommandService {
             Long spaceId,
             UUID actorUserId
     ) {
-        Space existingSpace = findSpaceForUpdate(spaceId);
+        LockedSpaceContext context = lockSpaceWithLabReductionCohort(
+                spaceId,
+                actorUserId,
+                false
+        );
+        Space existingSpace = context.space();
         ensureNotDeleted(existingSpace);
 
         if (existingSpace.getCohortId() == null) {
@@ -223,9 +245,54 @@ public class SpaceCommandService {
 
         requireCohortManager(existingSpace.getCohortId(), actorUserId);
 
+        ZonedDateTime now = ZonedDateTime.now(clock);
+        ensureActiveLabRemains(existingSpace, context.cohort());
+        // 체류 writer가 완전히 연동되기 전에도 진행 중 회의의 관리 주체가 사라지지 않게 한다.
+        // 연동 후에는 현재 체류 검사와 겹치지만, 점유 자체의 보존 계약을 독립적으로 지킨다.
+        ensureNoActiveOccupancy(spaceId, now);
+        ensureNoCurrentPresenceOrReturnReservation(existingSpace);
+
         return spaceRepository.save(existingSpace.unassignCohort(
-                ZonedDateTime.now(clock)
+                now
         ));
+    }
+
+    /**
+     * 활성 LAB을 줄이는 명령은 기수 행을 먼저, 공간 행을 나중에 잠근다.
+     *
+     * <p>첫 조회는 잠글 기수를 결정하는 스냅샷일 뿐이다. 공간 잠금 뒤 배정이 달라졌다면
+     * 역순 잠금을 시도하지 않고 409로 재시도를 요청한다.</p>
+     */
+    private LockedSpaceContext lockSpaceWithLabReductionCohort(
+            Long spaceId,
+            UUID actorUserId,
+            boolean requireManagerForUnassignedSpace
+    ) {
+        SpaceLabReductionView snapshot = spaceLabReductionQueryPort.find(spaceId)
+                .orElseThrow(() -> new BusinessException(SpaceErrorCode.NOT_FOUND));
+
+        // 권한이 없는 요청이 공간 전체가 공유하는 기수 행 잠금을 잡지 않게 먼저 거른다.
+        // 잠금 뒤 실제 공간의 권한을 다시 확인하므로 이 조회는 최종 인가 판정이 아니다.
+        if (snapshot.cohortId() != null) {
+            requireCohortManager(snapshot.cohortId(), actorUserId);
+        } else if (requireManagerForUnassignedSpace) {
+            requireAnyCohortManager(actorUserId);
+        }
+
+        CohortLockView cohort = snapshot.activeLab() && snapshot.cohortId() != null
+                ? cohortLockService.lock(snapshot.cohortId())
+                : null;
+
+        Space lockedSpace = findSpaceForUpdate(spaceId);
+        ensureNotDeleted(lockedSpace);
+
+        if (isAssignedActiveLab(lockedSpace)
+                && (cohort == null
+                || !Objects.equals(cohort.cohortId(), lockedSpace.getCohortId()))) {
+            throw new BusinessException(SpaceErrorCode.SPACE_STATE_CHANGED);
+        }
+
+        return new LockedSpaceContext(lockedSpace, cohort);
     }
 
     private Space findSpaceForUpdate(Long spaceId) {
@@ -252,6 +319,36 @@ public class SpaceCommandService {
                     SpaceErrorCode.ACTIVE_OCCUPANCY_EXISTS
             );
         }
+    }
+
+    private void ensureActiveLabRemains(
+            Space space,
+            CohortLockView cohort
+    ) {
+        if (!isAssignedActiveLab(space) || cohort == null || !cohort.active()) {
+            return;
+        }
+
+        if (spaceRepository.countActiveLabsByCohortId(space.getCohortId()) <= 1L) {
+            throw new BusinessException(SpaceErrorCode.LAST_ACTIVE_LAB_REQUIRED);
+        }
+    }
+
+    private void ensureNoCurrentPresenceOrReturnReservation(Space space) {
+        SpacePresenceSummary summary = presenceSpaceQueryService.summarize(space.getId());
+        if (summary.currentCount() > 0L) {
+            throw new BusinessException(SpaceErrorCode.SPACE_HAS_CURRENT_PRESENCE);
+        }
+        if (space.getSpaceType() == SpaceType.LAB
+                && summary.returnReservationCount() > 0L) {
+            throw new BusinessException(SpaceErrorCode.SPACE_HAS_RETURN_RESERVATION);
+        }
+    }
+
+    private boolean isAssignedActiveLab(Space space) {
+        return space.getCohortId() != null
+                && space.getSpaceType() == SpaceType.LAB
+                && space.isActive();
     }
 
     private void requireSpaceManager(
@@ -391,5 +488,11 @@ public class SpaceCommandService {
             };
             throw new BusinessException(errorCode, exception);
         }
+    }
+
+    private record LockedSpaceContext(
+            Space space,
+            CohortLockView cohort
+    ) {
     }
 }

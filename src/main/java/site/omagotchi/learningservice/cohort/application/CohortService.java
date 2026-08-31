@@ -8,6 +8,7 @@ import site.omagotchi.learningservice.cohort.application.command.CreateCohortCom
 import site.omagotchi.learningservice.cohort.application.command.UpdateCohortCommand;
 import site.omagotchi.learningservice.cohort.application.event.CohortClosedEvent;
 import site.omagotchi.learningservice.cohort.application.port.CohortEventPublisher;
+import site.omagotchi.learningservice.cohort.application.port.CohortActiveLabQuery;
 import site.omagotchi.learningservice.cohort.application.port.CohortMembershipQuery;
 import site.omagotchi.learningservice.cohort.application.port.CohortPersistence;
 import site.omagotchi.learningservice.cohort.application.result.CohortAdminSummaryResult;
@@ -36,6 +37,8 @@ public class CohortService {
     private final CohortEventPublisher eventPublisher;
     private final CohortManagerAssignmentPolicy managerAssignmentPolicy;
     private final CohortMembershipRepository membershipRepository;
+    private final CohortActiveLabQuery cohortActiveLabQuery;
+    private final CohortLockService cohortLockService;
 
     /**
      * 새 기수를 PREPARING 상태로 생성한다.
@@ -148,7 +151,7 @@ public class CohortService {
     ) {
         accessService.requireSystemAdmin(globalRole);
 
-        Cohort cohort = getCohortOrThrow(cohortId);
+        Cohort cohort = getCohortForUpdateOrThrow(cohortId);
 
         if (command.status() == CohortStatus.ACTIVE) {
             if (cohort.getStatus() != CohortStatus.PREPARING) {
@@ -156,6 +159,9 @@ public class CohortService {
             }
             if (!membershipQuery.existsActiveManager(cohortId)) {
                 throw new BusinessException(CohortErrorCode.COHORT_ACTIVE_MANAGER_REQUIRED);
+            }
+            if (!cohortActiveLabQuery.existsActiveLab(cohortId)) {
+                throw new BusinessException(CohortErrorCode.COHORT_ACTIVE_LAB_REQUIRED);
             }
 
             cohort.activate(true);
@@ -205,5 +211,9 @@ public class CohortService {
     private Cohort getCohortOrThrow(Long cohortId) {
         return cohortPersistence.findById(cohortId)
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
+    }
+
+    private Cohort getCohortForUpdateOrThrow(Long cohortId) {
+        return cohortLockService.lockCohort(cohortId);
     }
 }

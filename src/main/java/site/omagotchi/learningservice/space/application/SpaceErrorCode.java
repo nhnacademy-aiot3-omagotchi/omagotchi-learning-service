@@ -72,6 +72,26 @@ public enum SpaceErrorCode implements ErrorCode {
             "SPACE_ACTIVE_OCCUPANCY_EXISTS",
             "활성 점유가 존재하여 공간을 변경할 수 없습니다."
     ),
+    SPACE_HAS_CURRENT_PRESENCE(
+            ErrorType.CONFLICT,
+            "SPACE_HAS_CURRENT_PRESENCE",
+            "현재 체류 중인 사용자가 있어 공간을 변경할 수 없습니다."
+    ),
+    SPACE_HAS_RETURN_RESERVATION(
+            ErrorType.CONFLICT,
+            "SPACE_HAS_RETURN_RESERVATION",
+            "회의 종료 후 복귀할 사용자가 있어 실습실을 변경할 수 없습니다."
+    ),
+    LAST_ACTIVE_LAB_REQUIRED(
+            ErrorType.CONFLICT,
+            "LAST_ACTIVE_LAB_REQUIRED",
+            "활성 기수에는 활성 실습실이 최소 1개 필요합니다."
+    ),
+    SPACE_STATE_CHANGED(
+            ErrorType.CONFLICT,
+            "SPACE_STATE_CHANGED",
+            "공간 상태가 동시에 변경되었습니다. 다시 시도해 주세요."
+    ),
     ACTIVE_CAPACITY_REDUCTION_NOT_ALLOWED(
             ErrorType.CONFLICT,
             "SPACE_ACTIVE_CAPACITY_REDUCTION_NOT_ALLOWED",

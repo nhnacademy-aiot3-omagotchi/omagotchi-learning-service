@@ -51,6 +51,12 @@ public class RedisChatMemoryRepository implements ChatMemoryRepository {
      * 우리 Redis는 재실 상태·센서 이벤트와 함께 쓰므로 대화 키만 골라내려면 전체를 훑어야 하고, 그동안 다른 요청이 막힌다
      * 우리 서비스는 이 기능을 쓰지 않는데(인터페이스에 있어서 오버라이딩만 해 놓은것) 위험한 코드를 넣을 이유가 없어서 비워두었음
      */
+
+    /**
+     * 대화 ID 전체 조회는 현재 지원 X (따라서 List.of() 리턴)
+     * 우리 서비스는 ChatMemoryRepository의 조회/저장/삭제 만 사용하며, 대화 목록 조회 기능이나 호출처가 없음
+     * 차후에 목록 조회가 필요해지면 호출 빈도, Redis 키 규모, TTL 정합성을 고려하여 SCAN 또는 전용 인덱스 방식으로 별도 설계하려고 한다.
+     */
     @Override
     public List<String> findConversationIds() {
         return List.of();

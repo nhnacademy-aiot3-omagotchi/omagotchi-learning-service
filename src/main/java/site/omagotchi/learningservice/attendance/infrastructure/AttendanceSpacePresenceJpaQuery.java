@@ -40,9 +40,9 @@ public class AttendanceSpacePresenceJpaQuery implements AttendanceSpacePresenceQ
                 ON meeting.attendance_id = attendance.id
               JOIN LATERAL (
                     SELECT candidate.space_id
-                      FROM learning_service.presence_intervals candidate
+                     FROM learning_service.presence_intervals candidate
                      WHERE candidate.attendance_id = meeting.attendance_id
-                       AND candidate.started_at < meeting.started_at
+                       AND candidate.ended_at = meeting.started_at
                        AND candidate.state <> 'MEETING'
                      ORDER BY candidate.started_at DESC, candidate.id DESC
                      LIMIT 1

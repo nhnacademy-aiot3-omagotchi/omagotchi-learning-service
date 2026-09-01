@@ -13,7 +13,7 @@ import site.omagotchi.learningservice.attendance.application.command.ChangeAtten
 import site.omagotchi.learningservice.attendance.application.query.AttendancePageQuery;
 import site.omagotchi.learningservice.attendance.application.event.AttendanceCheckedInEvent;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceEventPublisher;
-import site.omagotchi.learningservice.attendance.application.port.AttendanceLabAccessPort;
+import site.omagotchi.learningservice.space.application.LabSelectionService;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceRecordQueryRepository;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
@@ -86,7 +86,7 @@ class AttendanceServiceTest {
     private PresenceTransitionService presenceTransitionService;
 
     @Mock
-    private AttendanceLabAccessPort attendanceLabAccessPort;
+    private LabSelectionService labSelectionService;
 
     @Mock
     private AttendanceEventPublisher attendanceEventPublisher;
@@ -124,7 +124,7 @@ class AttendanceServiceTest {
                 MEMBERSHIP_ID,
                 ATTENDANCE_DATE
         );
-        verifyNoInteractions(attendanceLabAccessPort, presenceTransitionService);
+        verifyNoInteractions(labSelectionService, presenceTransitionService);
         verify(attendanceEventPublisher).publishCheckedIn(new AttendanceCheckedInEvent(
                 USER_ID,
                 COHORT_ID,
@@ -233,8 +233,8 @@ class AttendanceServiceTest {
         var result = attendanceService.moveLab(COHORT_ID, USER_ID, LAB_SPACE_ID);
 
         assertEquals(1L, result.id());
-        InOrder order = inOrder(attendanceLabAccessPort, presenceTransitionService);
-        order.verify(attendanceLabAccessPort).requireSelectableLab(COHORT_ID, 1L, LAB_SPACE_ID);
+        InOrder order = inOrder(labSelectionService, presenceTransitionService);
+        order.verify(labSelectionService).requireSelectableLab(COHORT_ID, 1L, LAB_SPACE_ID);
         order.verify(presenceTransitionService).moveLab(1L, MEMBERSHIP_ID, LAB_SPACE_ID, moveAt);
     }
 
@@ -258,7 +258,7 @@ class AttendanceServiceTest {
         );
 
         assertSame(AttendanceErrorCode.PRESENCE_MEETING_EXIT_REQUIRED, exception.getErrorCode());
-        verifyNoInteractions(attendanceLabAccessPort, presenceTransitionService);
+        verifyNoInteractions(labSelectionService, presenceTransitionService);
     }
 
     @Test

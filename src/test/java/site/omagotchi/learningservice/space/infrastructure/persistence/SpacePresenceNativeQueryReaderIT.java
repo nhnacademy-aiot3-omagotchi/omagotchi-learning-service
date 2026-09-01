@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.attendance.infrastructure;
+package site.omagotchi.learningservice.space.infrastructure.persistence;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,12 +19,12 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@Import({TestcontainersConfiguration.class, QueryDslConfig.class, AttendanceSpacePresenceJpaQuery.class})
+@Import({TestcontainersConfiguration.class, QueryDslConfig.class, SpacePresenceNativeQueryReader.class})
 @ActiveProfiles("test")
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @DisplayName("공간별 현재 체류와 회의 후 복귀 예약 조회")
-class AttendanceSpacePresenceJpaQueryIT {
+class SpacePresenceNativeQueryReaderIT {
 
     private static final LocalDate CURRENT_ATTENDANCE_DATE = LocalDate.of(2026, 8, 31);
     private static final UUID ADMIN_ID = UUID.fromString(
@@ -35,7 +35,7 @@ class AttendanceSpacePresenceJpaQueryIT {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
-    private AttendanceSpacePresenceJpaQuery query;
+    private SpacePresenceNativeQueryReader query;
 
     @Test
     @DisplayName("현재 집계일의 미체크아웃 체류와 가장 최근 비회의 공간의 복귀 예약만 집계한다")

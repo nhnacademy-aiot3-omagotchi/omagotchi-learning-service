@@ -6,10 +6,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import site.omagotchi.learningservice.attendance.application.PresenceSpaceQueryService;
-import site.omagotchi.learningservice.attendance.application.result.SpacePresenceSummary;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
+import site.omagotchi.learningservice.space.application.result.SpacePresenceSummary;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
 import site.omagotchi.learningservice.space.domain.SpaceType;
@@ -32,23 +31,23 @@ class AttendanceLabAccessServiceTest {
     private SpaceRepository spaceRepository;
 
     @Mock
-    private PresenceSpaceQueryService presenceSpaceQueryService;
+    private SpacePresenceQueryService spacePresenceQueryService;
 
     @InjectMocks
-    private AttendanceLabAccessService service;
+    private LabSelectionService service;
 
     @Test
     @DisplayName("자기 기수 활성 LAB에 자리가 있으면 잠금 후 선택을 승인한다")
     void approvesSelectableLabAfterLock() {
         when(spaceRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(space(
                 10L, 42L, SpaceType.LAB, SpaceOperationalStatus.ACTIVE, 3, false)));
-        when(presenceSpaceQueryService.summarize(10L))
+        when(spacePresenceQueryService.summarize(10L))
                 .thenReturn(new SpacePresenceSummary(1L, 1L));
 
         service.requireSelectableLab(42L, 100L, 10L);
 
         verify(spaceRepository).findByIdForUpdate(10L);
-        verify(presenceSpaceQueryService).isReserved(10L, 100L);
+        verify(spacePresenceQueryService).isReserved(10L, 100L);
     }
 
     @Test
@@ -69,7 +68,7 @@ class AttendanceLabAccessServiceTest {
         assertError(SpaceErrorCode.LAB_NOT_SELECTABLE,
                 () -> service.requireSelectableLab(42L, 100L, 10L));
 
-        verify(presenceSpaceQueryService, never()).summarize(10L);
+        verify(spacePresenceQueryService, never()).summarize(10L);
     }
 
     @Test
@@ -87,9 +86,9 @@ class AttendanceLabAccessServiceTest {
     void rejectsFullLab() {
         when(spaceRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(space(
                 10L, 42L, SpaceType.LAB, SpaceOperationalStatus.ACTIVE, 2, false)));
-        when(presenceSpaceQueryService.summarize(10L))
+        when(spacePresenceQueryService.summarize(10L))
                 .thenReturn(new SpacePresenceSummary(1L, 1L));
-        when(presenceSpaceQueryService.isReserved(10L, 100L)).thenReturn(false);
+        when(spacePresenceQueryService.isReserved(10L, 100L)).thenReturn(false);
 
         assertError(SpaceErrorCode.LAB_CAPACITY_EXCEEDED,
                 () -> service.requireSelectableLab(42L, 100L, 10L));
@@ -100,9 +99,9 @@ class AttendanceLabAccessServiceTest {
     void allowsIdempotentSelectionWhenAlreadyReserved() {
         when(spaceRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(space(
                 10L, 42L, SpaceType.LAB, SpaceOperationalStatus.ACTIVE, 2, false)));
-        when(presenceSpaceQueryService.summarize(10L))
+        when(spacePresenceQueryService.summarize(10L))
                 .thenReturn(new SpacePresenceSummary(1L, 1L));
-        when(presenceSpaceQueryService.isReserved(10L, 100L)).thenReturn(true);
+        when(spacePresenceQueryService.isReserved(10L, 100L)).thenReturn(true);
 
         service.requireSelectableLab(42L, 100L, 10L);
     }

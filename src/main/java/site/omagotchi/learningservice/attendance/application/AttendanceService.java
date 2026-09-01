@@ -6,7 +6,6 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.command.ChangeAttendanceStatusCommand;
 import site.omagotchi.learningservice.attendance.application.event.AttendanceCheckedInEvent;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceEventPublisher;
-import site.omagotchi.learningservice.attendance.application.port.AttendanceLabAccessPort;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceRecordQueryRepository;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordResult;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordPageResult;
@@ -31,6 +30,7 @@ import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePoli
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.time.AggregationDateTime;
+import site.omagotchi.learningservice.space.application.LabSelectionService;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -55,7 +55,7 @@ public class AttendanceService {
     private final AttendanceChangeLogRepository attendanceChangeLogRepository;
     private final PresenceIntervalRepository presenceIntervalRepository;
     private final PresenceTransitionService presenceTransitionService;
-    private final AttendanceLabAccessPort attendanceLabAccessPort;
+    private final LabSelectionService labSelectionService;
     private final AttendanceEventPublisher attendanceEventPublisher;
     private final Clock clock;
 
@@ -149,7 +149,7 @@ public class AttendanceService {
             );
         }
 
-        attendanceLabAccessPort.requireSelectableLab(cohortId, record.getId(), spaceId);
+        labSelectionService.requireSelectableLab(cohortId, record.getId(), spaceId);
         presenceTransitionService.moveLab(record.getId(), membership.getId(), spaceId, now);
         return AttendanceRecordResult.from(record);
     }

@@ -1,10 +1,10 @@
-package site.omagotchi.learningservice.attendance.application;
+package site.omagotchi.learningservice.space.application;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.attendance.application.port.AttendanceSpacePresenceQuery;
-import site.omagotchi.learningservice.attendance.application.result.SpacePresenceSummary;
+import site.omagotchi.learningservice.space.application.port.SpacePresenceQueryPort;
+import site.omagotchi.learningservice.space.application.result.SpacePresenceSummary;
 import site.omagotchi.learningservice.global.time.AggregationDateTime;
 
 import java.time.Clock;
@@ -15,14 +15,17 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * attendance 기능이 소유한 체류 구간을 공간 정책에 제공하는 공개 조회 계약.
+ * 공간 정책이 쓰는 현재 재실·복귀 예약 집계.
+ *
+ * <p>집계 기준일을 여기서 한 번만 정한다. 공간 비활성화 가드와 실습실 정원 판단이 서로
+ * 다른 날짜를 보지 않도록 {@link AggregationDateTime}을 이 한 곳에서 적용한다.</p>
  */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class PresenceSpaceQueryService {
+public class SpacePresenceQueryService {
 
-    private final AttendanceSpacePresenceQuery attendanceSpacePresenceQuery;
+    private final SpacePresenceQueryPort spacePresenceQueryPort;
     private final Clock clock;
 
     public SpacePresenceSummary summarize(Long spaceId) {
@@ -45,7 +48,7 @@ public class PresenceSpaceQueryService {
         if (distinctSpaceIds.isEmpty()) {
             return Map.of();
         }
-        return attendanceSpacePresenceQuery.summarize(
+        return spacePresenceQueryPort.summarize(
                 distinctSpaceIds,
                 AggregationDateTime.aggregationDate(clock.instant())
         );
@@ -56,7 +59,7 @@ public class PresenceSpaceQueryService {
         if (spaceId == null || attendanceId == null) {
             return false;
         }
-        return attendanceSpacePresenceQuery.isReserved(
+        return spacePresenceQueryPort.isReserved(
                 spaceId,
                 attendanceId,
                 AggregationDateTime.aggregationDate(clock.instant())

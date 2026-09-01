@@ -1,11 +1,11 @@
-package site.omagotchi.learningservice.attendance.infrastructure;
+package site.omagotchi.learningservice.space.infrastructure.persistence;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
-import site.omagotchi.learningservice.attendance.application.port.AttendanceSpacePresenceQuery;
-import site.omagotchi.learningservice.attendance.application.result.SpacePresenceSummary;
+import site.omagotchi.learningservice.space.application.port.SpacePresenceQueryPort;
+import site.omagotchi.learningservice.space.application.result.SpacePresenceSummary;
 
 import java.time.LocalDate;
 import java.util.Collection;
@@ -14,11 +14,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 기존 presence_intervals만으로 현재 체류와 직전 실습실 복귀 예약을 계산한다.
+ * 스키마 변경 없이 {@code presence_intervals}만으로 현재 체류와 직전 실습실 복귀 예약을
+ * 계산한다.
+ *
+ * <p>이 Reader는 공간 기능이 소유하지만 출결 기능의 Table을 읽는다. 재실 집계를 공간
+ * 정책(비활성화 차단·정원)의 일부로 두기로 한 결정의 결과이며, 읽기 전용 Projection으로만
+ * 접근하고 출결 Entity를 매핑하지 않는다. 쓰기는 여전히 출결 기능만 한다.</p>
  */
 @Repository
 @RequiredArgsConstructor
-public class AttendanceSpacePresenceJpaQuery implements AttendanceSpacePresenceQuery {
+public class SpacePresenceNativeQueryReader implements SpacePresenceQueryPort {
 
     private static final String CURRENT_PRESENCE_QUERY = """
             SELECT presence.space_id, COUNT(DISTINCT presence.attendance_id)

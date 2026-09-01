@@ -13,4 +13,6 @@ public interface AttendanceSpacePresenceQuery {
             Collection<Long> spaceIds,
             LocalDate attendanceDate
     );
+
+    boolean isReserved(Long spaceId, Long attendanceId, LocalDate attendanceDate);
 }

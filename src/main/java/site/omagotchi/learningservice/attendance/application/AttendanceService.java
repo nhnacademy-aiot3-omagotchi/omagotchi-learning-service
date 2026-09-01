@@ -6,6 +6,8 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.command.ChangeAttendanceStatusCommand;
 import site.omagotchi.learningservice.attendance.application.event.AttendanceCheckedInEvent;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceEventPublisher;
+import site.omagotchi.learningservice.attendance.application.port.AttendanceActiveMeetingPort;
+import site.omagotchi.learningservice.attendance.application.port.AttendanceLabAccessPort;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceRecordQueryRepository;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordResult;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordPageResult;
@@ -17,7 +19,6 @@ import site.omagotchi.learningservice.attendance.application.AttendanceErrorCode
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
 import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
-import site.omagotchi.learningservice.attendance.domain.PresenceState;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceChangeLogRepository;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
 import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
@@ -54,6 +55,9 @@ public class AttendanceService {
     private final AttendanceRecordQueryRepository attendanceRecordQueryRepository;
     private final AttendanceChangeLogRepository attendanceChangeLogRepository;
     private final PresenceIntervalRepository presenceIntervalRepository;
+    private final PresenceTransitionService presenceTransitionService;
+    private final AttendanceLabAccessPort attendanceLabAccessPort;
+    private final AttendanceActiveMeetingPort attendanceActiveMeetingPort;
     private final AttendanceEventPublisher attendanceEventPublisher;
     private final Clock clock;
 
@@ -67,22 +71,17 @@ public class AttendanceService {
         LocalDate attendanceDate = AggregationDateTime.aggregationDate(now);
 
         AttendanceRecord record = attendanceRecordRepository
-                .findWithLockByCohortMembershipIdAndAttendanceDate(membership.getId(), attendanceDate)
+                .findByCohortMembershipIdAndAttendanceDate(membership.getId(), attendanceDate)
                 .orElseGet(() -> AttendanceRecord.start(membership.getId(), attendanceDate));
 
         if (record.getCheckedInAt() != null) {
             return AttendanceRecordResult.from(record);
         }
+
         AttendanceDecision decision = AttendanceDecisionPolicy.decideCheckIn(policy, now);
         record.checkIn(now, decision.status(), decision.lateMinutes());
 
         AttendanceRecord savedRecord = attendanceRecordRepository.save(record);
-        presenceIntervalRepository.save(PresenceInterval.start(
-                savedRecord.getId(),
-                PresenceState.PRESENT,
-                null,
-                now
-        ));
         attendanceEventPublisher.publishCheckedIn(new AttendanceCheckedInEvent(
                 userId,
                 cohortId,
@@ -110,8 +109,12 @@ public class AttendanceService {
         if (record.getCheckedOutAt() != null) {
             return AttendanceRecordResult.from(record);
         }
+        if (attendanceActiveMeetingPort.existsActiveParticipation(membership.getId())) {
+            throw new BusinessException(AttendanceErrorCode.ATTENDANCE_ACTIVE_MEETING_EXISTS);
+        }
 
         CohortAttendancePolicy policy = requirePolicy(cohortId);
+        presenceTransitionService.closeAttendance(record.getId(), now);
         List<PresenceInterval> intervals = presenceIntervalRepository.findByAttendanceIdOrderByStartedAtAsc(record.getId());
         AttendanceDecision decision = AttendanceDecisionPolicy.decide(
                 policy,
@@ -121,10 +124,36 @@ public class AttendanceService {
         );
         record.checkOut(now, decision.status(), decision.earlyLeaveMinutes());
         record.applyDecision(decision);
-        presenceIntervalRepository.findFirstByAttendanceIdAndEndedAtIsNullOrderByStartedAtDesc(record.getId())
-                .ifPresent(interval -> interval.end(now));
 
         return AttendanceRecordResult.from(attendanceRecordRepository.save(record));
+    }
+
+    /** 체크인 후 최초 LAB을 선택하거나 현재 LAB에서 자기 기수의 다른 활성 LAB으로 옮긴다. */
+    @Transactional
+    public AttendanceRecordResult moveLab(Long cohortId, UUID userId, Long spaceId) {
+        CohortMembership membership = cohortAccessService.requireActiveMembership(cohortId, userId);
+        lockActiveMembership(membership.getId());
+        Instant now = clock.instant();
+        LocalDate attendanceDate = AggregationDateTime.aggregationDate(now);
+
+        AttendanceRecord record = attendanceRecordRepository
+                .findByCohortMembershipIdAndAttendanceDate(membership.getId(), attendanceDate)
+                .orElseThrow(() -> new BusinessException(AttendanceErrorCode.ATTENDANCE_RECORD_NOT_FOUND));
+        if (record.getCheckedInAt() == null) {
+            throw new BusinessException(AttendanceErrorCode.ATTENDANCE_CHECK_IN_REQUIRED);
+        }
+        if (record.getCheckedOutAt() != null) {
+            throw new BusinessException(AttendanceErrorCode.PRESENCE_TRANSITION_NOT_ALLOWED);
+        }
+        if (attendanceActiveMeetingPort.existsActiveParticipation(membership.getId())) {
+            throw new BusinessException(
+                    AttendanceErrorCode.PRESENCE_MEETING_EXIT_REQUIRED
+            );
+        }
+
+        attendanceLabAccessPort.requireSelectableLab(cohortId, record.getId(), spaceId);
+        presenceTransitionService.moveLab(record.getId(), membership.getId(), spaceId, now);
+        return AttendanceRecordResult.from(record);
     }
 
     public AttendanceRecordPageResult getMyRecords(

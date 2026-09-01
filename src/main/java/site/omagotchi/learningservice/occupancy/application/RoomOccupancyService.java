@@ -58,6 +58,7 @@ public class RoomOccupancyService {
     private final AttendancePresenceQueryService attendancePresenceQueryService;
     private final RoomOccupancyRepository occupancyRepository;
     private final OccupancyParticipantRepository participantRepository;
+    private final MeetingPresenceCoordinator meetingPresenceCoordinator;
     private final OccupancyEventPublisher eventPublisher;
     private final Clock clock;
 
@@ -144,6 +145,7 @@ public class RoomOccupancyService {
                 userId,
                 now
         ));
+        meetingPresenceCoordinator.enter(presence, spaceId, now);
 
         return RoomOccupancyResult.of(occupancy, now);
     }
@@ -180,8 +182,11 @@ public class RoomOccupancyService {
      * 공간 기준 정리와 계정 기준 정리가 같은 점유를 가리킬 수 있어 필요한 성질이다.</p>
      */
     private void closeParticipants(List<RoomOccupancyRepository.ExpiredOccupancy> expired) {
-        expired.forEach(occupancy -> participantRepository
-                .closeAllActiveByOccupancyId(occupancy.occupancyId(), occupancy.endedAt()));
+        expired.forEach(occupancy -> meetingPresenceCoordinator.leaveAll(
+                occupancy.occupancyId(),
+                occupancy.spaceId(),
+                occupancy.endedAt()
+        ));
     }
 
     /**

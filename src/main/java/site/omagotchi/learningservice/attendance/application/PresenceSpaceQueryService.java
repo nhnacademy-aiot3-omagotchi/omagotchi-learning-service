@@ -50,4 +50,16 @@ public class PresenceSpaceQueryService {
                 AggregationDateTime.aggregationDate(clock.instant())
         );
     }
+
+    /** 대상 출결이 이미 이 LAB의 직접 체류 또는 회의 후 복귀 예약에 포함되는지 확인한다. */
+    public boolean isReserved(Long spaceId, Long attendanceId) {
+        if (spaceId == null || attendanceId == null) {
+            return false;
+        }
+        return attendanceSpacePresenceQuery.isReserved(
+                spaceId,
+                attendanceId,
+                AggregationDateTime.aggregationDate(clock.instant())
+        );
+    }
 }

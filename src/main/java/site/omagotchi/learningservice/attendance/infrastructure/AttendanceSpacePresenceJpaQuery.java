@@ -52,7 +52,34 @@ public class AttendanceSpacePresenceJpaQuery implements AttendanceSpacePresenceQ
                AND previous.space_id IN (:spaceIds)
                AND attendance.checked_out_at IS NULL
                AND attendance.attendance_date = :attendanceDate
-             GROUP BY previous.space_id
+            GROUP BY previous.space_id
+            """;
+
+    private static final String RESERVED_ATTENDANCE_QUERY = """
+            SELECT EXISTS (
+                SELECT 1
+                  FROM learning_service.attendance_records attendance
+                  JOIN learning_service.presence_intervals current_interval
+                    ON current_interval.attendance_id = attendance.id
+                 WHERE attendance.id = :attendanceId
+                   AND attendance.checked_out_at IS NULL
+                   AND attendance.attendance_date = :attendanceDate
+                   AND current_interval.ended_at IS NULL
+                   AND (
+                        (current_interval.state <> 'AWAY' AND current_interval.space_id = :spaceId)
+                        OR (
+                            current_interval.state = 'MEETING'
+                            AND EXISTS (
+                                SELECT 1
+                                  FROM learning_service.presence_intervals previous
+                                 WHERE previous.attendance_id = current_interval.attendance_id
+                                   AND previous.ended_at = current_interval.started_at
+                                   AND previous.state <> 'MEETING'
+                                   AND previous.space_id = :spaceId
+                            )
+                        )
+                   )
+            )
             """;
 
     private final EntityManager entityManager;
@@ -81,6 +108,16 @@ public class AttendanceSpacePresenceJpaQuery implements AttendanceSpacePresenceQ
             ));
         }
         return Map.copyOf(summaries);
+    }
+
+    @Override
+    public boolean isReserved(Long spaceId, Long attendanceId, LocalDate attendanceDate) {
+        Object result = entityManager.createNativeQuery(RESERVED_ATTENDANCE_QUERY)
+                .setParameter("spaceId", spaceId)
+                .setParameter("attendanceId", attendanceId)
+                .setParameter("attendanceDate", attendanceDate)
+                .getSingleResult();
+        return (Boolean) result;
     }
 
     private Map<Long, Long> counts(

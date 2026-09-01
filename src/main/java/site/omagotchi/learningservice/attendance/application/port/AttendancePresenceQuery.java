@@ -10,4 +10,9 @@ import java.util.UUID;
 public interface AttendancePresenceQuery {
     List<OpenPresenceView> findOpenPresences(UUID userId);
     List<OpenUserPresenceView> findOpenPresences(Collection<UUID> userIds);
+    List<OpenPresenceView> findOpenPresencesByMembershipIds(Collection<Long> membershipIds);
+    List<OpenPresenceView> findOpenMeetingPresencesByMembershipIds(
+            Collection<Long> membershipIds,
+            Long meetingSpaceId
+    );
 }

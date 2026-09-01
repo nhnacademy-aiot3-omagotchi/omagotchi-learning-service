@@ -36,6 +36,11 @@ public enum AttendanceErrorCode implements ErrorCode {
             "ATTENDANCE_CHECK_IN_REQUIRED",
             "입실 기록이 필요합니다."
     ),
+    ATTENDANCE_ACTIVE_MEETING_EXISTS(
+            ErrorType.CONFLICT,
+            "ATTENDANCE_ACTIVE_MEETING_EXISTS",
+            "회의실 사용을 먼저 종료해야 퇴실할 수 있습니다."
+    ),
     ATTENDANCE_CHANGE_REASON_REQUIRED(
             ErrorType.INVALID_INPUT,
             "ATTENDANCE_CHANGE_REASON_REQUIRED",
@@ -65,6 +70,11 @@ public enum AttendanceErrorCode implements ErrorCode {
             ErrorType.CONFLICT,
             "PRESENCE_STATE_MISMATCH",
             "현재 체류 상태 또는 공간이 요청과 일치하지 않습니다."
+    ),
+    PRESENCE_MEETING_EXIT_REQUIRED(
+            ErrorType.CONFLICT,
+            "PRESENCE_MEETING_EXIT_REQUIRED",
+            "회의실에서 먼저 이탈해야 실습실을 변경할 수 있습니다."
     ),
     PRESENCE_MEMBERSHIP_MISMATCH(
             ErrorType.CONFLICT,

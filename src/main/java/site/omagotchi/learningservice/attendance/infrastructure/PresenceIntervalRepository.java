@@ -22,8 +22,6 @@ import java.util.UUID;
  */
 public interface PresenceIntervalRepository extends JpaRepository<PresenceInterval, Long> {
 
-    Optional<PresenceInterval> findFirstByAttendanceIdAndEndedAtIsNullOrderByStartedAtDesc(Long attendanceId);
-
     /** 열린 구간 중복을 감지할 수 있도록 한 건으로 축약하지 않는다. */
     List<PresenceInterval> findByAttendanceIdAndEndedAtIsNullOrderByStartedAtAscIdAsc(
             Long attendanceId
@@ -85,4 +83,38 @@ public interface PresenceIntervalRepository extends JpaRepository<PresenceInterv
                    AND i.state <> site.omagotchi.learningservice.attendance.domain.PresenceState.AWAY
                  ORDER BY m.userId ASC, i.startedAt DESC, i.id DESC""")
     List<OpenUserPresenceView> findOpenPresences(@Param("userIds") Collection<UUID> userIds);
+
+    /** 점유 참여 행에 저장된 정확한 소속별 최신 열린 재실 구간을 조회한다. */
+    @Query("""
+                SELECT new site.omagotchi.learningservice.attendance.application.result.OpenPresenceView(
+                           r.id, r.cohortMembershipId, i.startedAt)
+                  FROM PresenceInterval i
+                  JOIN AttendanceRecord r ON r.id = i.attendanceId
+                 WHERE r.cohortMembershipId IN :membershipIds
+                   AND i.endedAt IS NULL
+                   AND i.state <> site.omagotchi.learningservice.attendance.domain.PresenceState.AWAY
+                 ORDER BY r.cohortMembershipId ASC, i.startedAt DESC, i.id DESC""")
+    List<OpenPresenceView> findOpenPresencesByMembershipIds(
+            @Param("membershipIds") Collection<Long> membershipIds
+    );
+
+    /**
+     * 회의 이탈용 조회. 최신 PRESENT가 아니라 실제로 닫아야 할 열린 MEETING을 찾는다.
+     * {@code meetingSpaceId}가 null인 경우는 소속 종료 정리처럼 점유 공간을 더 이상
+     * 신뢰할 수 없는 복구 경로이며, 상태와 소속만으로 찾는다.
+     */
+    @Query("""
+                SELECT new site.omagotchi.learningservice.attendance.application.result.OpenPresenceView(
+                           r.id, r.cohortMembershipId, i.startedAt)
+                  FROM PresenceInterval i
+                  JOIN AttendanceRecord r ON r.id = i.attendanceId
+                 WHERE r.cohortMembershipId IN :membershipIds
+                   AND i.endedAt IS NULL
+                   AND i.state = site.omagotchi.learningservice.attendance.domain.PresenceState.MEETING
+                   AND (:meetingSpaceId IS NULL OR i.spaceId = :meetingSpaceId)
+                 ORDER BY r.cohortMembershipId ASC, r.id ASC, i.id ASC""")
+    List<OpenPresenceView> findOpenMeetingPresencesByMembershipIds(
+            @Param("membershipIds") Collection<Long> membershipIds,
+            @Param("meetingSpaceId") Long meetingSpaceId
+    );
 }

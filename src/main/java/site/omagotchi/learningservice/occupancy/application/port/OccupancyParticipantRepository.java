@@ -71,11 +71,20 @@ public interface OccupancyParticipantRepository {
      */
     Optional<OccupancyParticipant> findByOccupancyIdAndUserId(Long occupancyId, UUID userId);
 
+    /** 종료 전 회의 체류를 함께 전환하기 위한 활성 참여자 목록. */
+    List<ActiveParticipant> findActiveParticipantsByOccupancyId(Long occupancyId);
+
+    /** 소속 종료 이벤트의 정확한 참여 행. 다기수 사용자의 다른 소속 참여를 닫지 않는다. */
+    Optional<OccupancyParticipant> findActiveByCohortMembershipId(Long cohortMembershipId);
+
 
     /**
      * 이 계정에게 열린 참여가 있는가.
      */
     boolean existsActiveParticipationByUserId(UUID userId);
+
+    /** 해당 기수 소속으로 열린 회의 참여가 있는가. 출결 체크아웃 가드에 사용한다. */
+    boolean existsActiveParticipationByCohortMembershipId(Long cohortMembershipId);
 
 
     /**
@@ -108,5 +117,8 @@ public interface OccupancyParticipantRepository {
 
     /** 스윕 후보 한 건. 소속 판정에 멤버십이, 정리에 계정이 필요하다. */
     record OpenParticipation(Long participantId, Long cohortMembershipId, UUID userId) {
+    }
+
+    record ActiveParticipant(Long cohortMembershipId, UUID userId) {
     }
 }

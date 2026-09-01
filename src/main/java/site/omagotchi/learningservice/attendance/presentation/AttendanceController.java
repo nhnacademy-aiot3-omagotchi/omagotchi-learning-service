@@ -16,8 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 import site.omagotchi.learningservice.attendance.application.query.AttendancePageQuery;
 import site.omagotchi.learningservice.attendance.application.AttendanceService;
 import site.omagotchi.learningservice.attendance.presentation.request.ChangeAttendanceStatusRequest;
+import site.omagotchi.learningservice.attendance.presentation.request.AttendanceSpaceRequest;
 import site.omagotchi.learningservice.attendance.presentation.response.AttendanceRecordPageResponse;
 import site.omagotchi.learningservice.attendance.presentation.response.AttendanceRecordResponse;
+import site.omagotchi.learningservice.attendance.presentation.response.AttendanceLabMoveResponse;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 
 import java.time.LocalDate;
@@ -38,7 +40,25 @@ public class AttendanceController {
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return AttendanceRecordResponse.from(attendanceService.checkIn(cohortId, user.userId()));
+        return AttendanceRecordResponse.from(attendanceService.checkIn(
+                cohortId,
+                user.userId()
+        ));
+    }
+
+    // 현재 출결의 실습실 이동
+    @PostMapping("/move-lab")
+    public AttendanceLabMoveResponse moveLab(
+            @PathVariable("cohort-id") Long cohortId,
+            JwtAuthenticationToken authentication,
+            @Valid @RequestBody AttendanceSpaceRequest request
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        return AttendanceLabMoveResponse.from(attendanceService.moveLab(
+                cohortId,
+                user.userId(),
+                request.spaceId()
+        ), request.spaceId());
     }
     // 퇴실
     @PostMapping("/check-out")

@@ -27,6 +27,11 @@ public enum SpaceErrorCode implements ErrorCode {
             "SPACE_INVALID_COHORT_ID",
             "공간 관리 주체 기수 ID가 올바르지 않습니다."
     ),
+    INVALID_SPACE_ID(
+            ErrorType.INVALID_INPUT,
+            "SPACE_INVALID_SPACE_ID",
+            "공간 ID가 올바르지 않습니다."
+    ),
     COHORT_ID_REQUIRED(
             ErrorType.INVALID_INPUT,
             "SPACE_COHORT_ID_REQUIRED",
@@ -81,6 +86,16 @@ public enum SpaceErrorCode implements ErrorCode {
             ErrorType.CONFLICT,
             "SPACE_HAS_RETURN_RESERVATION",
             "회의 종료 후 복귀할 사용자가 있어 실습실을 변경할 수 없습니다."
+    ),
+    LAB_NOT_SELECTABLE(
+            ErrorType.CONFLICT,
+            "LAB_NOT_SELECTABLE",
+            "자기 기수의 활성 실습실만 선택할 수 있습니다."
+    ),
+    LAB_CAPACITY_EXCEEDED(
+            ErrorType.CONFLICT,
+            "LAB_CAPACITY_EXCEEDED",
+            "실습실 정원이 가득 찼습니다."
     ),
     LAST_ACTIVE_LAB_REQUIRED(
             ErrorType.CONFLICT,

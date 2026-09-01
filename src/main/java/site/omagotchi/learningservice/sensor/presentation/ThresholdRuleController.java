@@ -20,7 +20,7 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/threshold-rules")
+@RequestMapping("/api/v1/cohorts/{cohortId}/threshold-rules")
 public class ThresholdRuleController {
 
     private final ThresholdRuleService thresholdRuleService;
@@ -28,19 +28,26 @@ public class ThresholdRuleController {
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping
     public CreateThresholdRuleResponse create(
+            @PathVariable Long cohortId,
             @Valid @RequestBody CreateThresholdRuleRequest request,
             JwtAuthenticationToken authentication,
             @RequestHeader(value = "X-Request-ID", required = false) String requestId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        Long ruleId = thresholdRuleService.create(request.toCommand(user.userId(), requestId));
+        Long ruleId = thresholdRuleService.create(
+                cohortId,
+                user.userId(),
+                requestId,
+                request.toCommand()
+        );
 
         return new CreateThresholdRuleResponse(ruleId);
     }
 
-    @PatchMapping("/{rule-id}")
+    @PatchMapping("/{ruleId}")
     public UpdateThresholdRuleResponse update(
-            @PathVariable("rule-id") Long ruleId,
+            @PathVariable Long cohortId,
+            @PathVariable Long ruleId,
             @Valid @RequestBody UpdateThresholdRuleRequest request,
             JwtAuthenticationToken authentication,
             @RequestHeader(value = "X-Request-ID", required = false) String requestId
@@ -48,25 +55,40 @@ public class ThresholdRuleController {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
 
         UpdateThresholdRuleResult result = thresholdRuleService.update(
-                request.toCommand(ruleId, user.userId(), requestId)
+                cohortId,
+                user.userId(),
+                requestId,
+                ruleId,
+                request.toCommand()
         );
 
         return new UpdateThresholdRuleResponse(result.changed(), result.ruleVersion());
     }
 
     @GetMapping
-    public List<ThresholdRuleResponse> findAll() {
-        return thresholdRuleService.readAll().stream()
+    public List<ThresholdRuleResponse> findAll(
+            @PathVariable Long cohortId,
+            JwtAuthenticationToken authentication
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        return thresholdRuleService.findAllByCohort(cohortId, user.userId()).stream()
                 .map(ThresholdRuleResponse::from)
                 .toList();
     }
 
     /** 공간별 현재 임계치. 화면이 이걸로 입력 폼을 그린다 */
     @GetMapping("/spaces")
-    public List<SpaceThresholdResponse> findBySpaces(){
+    public List<SpaceThresholdResponse> findBySpaces(
+            @PathVariable Long cohortId,
+            JwtAuthenticationToken authentication
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
         List<SpaceThresholdResponse> responses = new ArrayList<>();
 
-        for(SpaceThresholdResult result : thresholdRuleService.findAllBySpace()){
+        for (SpaceThresholdResult result : thresholdRuleService.findAllBySpace(
+                cohortId,
+                user.userId()
+        )) {
             responses.add(SpaceThresholdResponse.from(result));
         }
 
@@ -79,17 +101,23 @@ public class ThresholdRuleController {
      * <p>경로가 두 세그먼트라 PATCH /{rule-id} 와 충돌하지 않는다 —
      * 리터럴 /spaces 가 변수보다 먼저 매칭된다.</p>
      */
-    @PatchMapping("/spaces/{space-id}")
+    @PatchMapping("/spaces/{spaceId}")
     public ApplySpaceThresholdResponse applyToSpace(
-            @PathVariable("space-id") Long spaceId,
+            @PathVariable Long cohortId,
+            @PathVariable Long spaceId,
             @Valid @RequestBody ApplySpaceThresholdRequest request,
             JwtAuthenticationToken authentication,
-            @RequestHeader(value = "X-Request-ID", required = false) String requestId){
+            @RequestHeader(value = "X-Request-ID", required = false) String requestId
+    ) {
 
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
 
         ApplySpaceThresholdResult result = thresholdRuleService.applyToSpace(
-                request.toCommand(spaceId, user.userId(), requestId)
+                cohortId,
+                user.userId(),
+                requestId,
+                spaceId,
+                request.toCommand()
         );
 
         return ApplySpaceThresholdResponse.from(result);

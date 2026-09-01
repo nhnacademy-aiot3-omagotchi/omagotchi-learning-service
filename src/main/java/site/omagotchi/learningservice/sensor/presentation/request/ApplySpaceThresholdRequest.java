@@ -13,7 +13,6 @@ import site.omagotchi.learningservice.sensor.domain.Operator;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 공간 단위 임계치 일괄 적용 요청.
@@ -29,13 +28,13 @@ public record ApplySpaceThresholdRequest(
         List<MetricConditionRequest> rules
 ) {
 
-    public ApplySpaceThresholdCommand toCommand(Long spaceId, UUID requesterId, String requestId) {
+    public ApplySpaceThresholdCommand toCommand() {
         List<MetricCondition> conditions = new ArrayList<>();
         for (MetricConditionRequest rule : rules) {
             conditions.add(new MetricCondition(rule.metric(), rule.operator(), rule.threshold()));
         }
 
-        return new ApplySpaceThresholdCommand(spaceId, conditions, requesterId, requestId);
+        return new ApplySpaceThresholdCommand(conditions);
     }
 
     public record MetricConditionRequest(

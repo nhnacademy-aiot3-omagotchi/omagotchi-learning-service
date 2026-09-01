@@ -18,6 +18,8 @@ public interface CohortPersistence {
 
     Optional<Cohort> findById(Long cohortId);
 
+    Optional<Cohort> findByIdForUpdate(Long cohortId);
+
     void delete(Cohort cohort);
 
     boolean existsActiveManagerPeriodConflict(

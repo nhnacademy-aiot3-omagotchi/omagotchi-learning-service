@@ -4,13 +4,9 @@ import site.omagotchi.learningservice.sensor.domain.Operator;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 
 public record ApplySpaceThresholdCommand (
-        Long spaceId,
-        List<MetricCondition> conditions,
-        UUID requesterId,
-        String requestId
+        List<MetricCondition> conditions
 ){
     public record MetricCondition(
             String metric,

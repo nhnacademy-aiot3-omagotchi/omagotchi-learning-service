@@ -16,6 +16,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
+import java.util.Objects;
 
 /**
  * 출결 기록에 속한 체류 구간 entity
@@ -57,11 +58,14 @@ public class PresenceInterval {
             Long spaceId,
             Instant startedAt
     ) {
+        if (attendanceId == null || attendanceId <= 0L) {
+            throw new IllegalArgumentException("출결 기록 ID는 양수여야 합니다.");
+        }
         PresenceInterval interval = new PresenceInterval();
         interval.attendanceId = attendanceId;
-        interval.state = state;
+        interval.state = Objects.requireNonNull(state, "체류 상태는 필수입니다.");
         interval.spaceId = spaceId;
-        interval.startedAt = startedAt;
+        interval.startedAt = Objects.requireNonNull(startedAt, "체류 시작 시각은 필수입니다.");
         return interval;
     }
 
@@ -69,6 +73,15 @@ public class PresenceInterval {
         if (this.endedAt != null) {
             return;
         }
-        this.endedAt = endedAt;
+        Instant requiredEndedAt = Objects.requireNonNull(
+                endedAt,
+                "체류 종료 시각은 필수입니다."
+        );
+        if (requiredEndedAt.isBefore(startedAt)) {
+            throw new IllegalArgumentException(
+                    "체류 종료 시각은 시작 시각보다 빠를 수 없습니다."
+            );
+        }
+        this.endedAt = requiredEndedAt;
     }
 }

@@ -1,10 +1,12 @@
 package site.omagotchi.learningservice.sensor.presentation.request;
 
+import jakarta.validation.constraints.NotNull;
 import site.omagotchi.learningservice.sensor.application.command.UpdateSensorDeviceCommand;
 
 import java.time.Instant;
 
 public record UpdateSensorDeviceRequest(
+        @NotNull
         Long spaceId,
         String displayName,
         String installationPoint,
@@ -12,9 +14,8 @@ public record UpdateSensorDeviceRequest(
         Instant installedAt
 ) {
 
-    public UpdateSensorDeviceCommand toCommand(String deviceEui){
+    public UpdateSensorDeviceCommand toCommand() {
         return new UpdateSensorDeviceCommand(
-                deviceEui,
                 spaceId,
                 displayName,
                 installationPoint,

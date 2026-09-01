@@ -45,6 +45,46 @@ public enum AttendanceErrorCode implements ErrorCode {
             ErrorType.INVALID_INPUT,
             "ATTENDANCE_INVALID_PAGE_REQUEST",
             "출결 조회 조건이 올바르지 않습니다."
+    ),
+    PRESENCE_TRANSITION_NOT_ALLOWED(
+            ErrorType.CONFLICT,
+            "PRESENCE_TRANSITION_NOT_ALLOWED",
+            "현재 출결 상태에서는 체류 구간을 전환할 수 없습니다."
+    ),
+    PRESENCE_INTERVAL_INCONSISTENT(
+            ErrorType.CONFLICT,
+            "PRESENCE_INTERVAL_INCONSISTENT",
+            "열린 체류 구간이 중복되어 전환할 수 없습니다."
+    ),
+    PRESENCE_ACTIVE_INTERVAL_REQUIRED(
+            ErrorType.CONFLICT,
+            "PRESENCE_ACTIVE_INTERVAL_REQUIRED",
+            "현재 열린 체류 구간이 필요합니다."
+    ),
+    PRESENCE_STATE_MISMATCH(
+            ErrorType.CONFLICT,
+            "PRESENCE_STATE_MISMATCH",
+            "현재 체류 상태 또는 공간이 요청과 일치하지 않습니다."
+    ),
+    PRESENCE_MEMBERSHIP_MISMATCH(
+            ErrorType.CONFLICT,
+            "PRESENCE_MEMBERSHIP_MISMATCH",
+            "체류 전환 대상 소속이 출결 기록과 일치하지 않습니다."
+    ),
+    PRESENCE_RETURN_SPACE_NOT_FOUND(
+            ErrorType.CONFLICT,
+            "PRESENCE_RETURN_SPACE_NOT_FOUND",
+            "회의 종료 후 복귀할 공간을 찾을 수 없습니다."
+    ),
+    PRESENCE_INVALID_SPACE_ID(
+            ErrorType.INVALID_INPUT,
+            "PRESENCE_INVALID_SPACE_ID",
+            "체류 공간 ID가 올바르지 않습니다."
+    ),
+    PRESENCE_INVALID_TIME(
+            ErrorType.CONFLICT,
+            "PRESENCE_INVALID_TIME",
+            "체류 종료 시각은 시작 시각보다 빠를 수 없습니다."
     );
 
     private final ErrorType type;

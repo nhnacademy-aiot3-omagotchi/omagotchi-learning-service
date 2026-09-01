@@ -8,11 +8,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import site.omagotchi.learningservice.attendance.application.PresenceSpaceQueryService;
+import site.omagotchi.learningservice.attendance.application.result.SpacePresenceSummary;
+import site.omagotchi.learningservice.cohort.application.CohortLockService;
+import site.omagotchi.learningservice.cohort.application.result.CohortLockView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.space.application.port.SpaceReferenceQueryPort;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
+import site.omagotchi.learningservice.space.application.port.SpaceLabReductionQueryPort;
+import site.omagotchi.learningservice.space.application.result.SpaceLabReductionView;
 import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.occupancy.application.VacancyAlertService;
 import site.omagotchi.learningservice.space.domain.Space;
@@ -35,6 +42,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -51,6 +59,9 @@ class SpaceCommandServiceTest {
     private SpaceRepository spaceRepository;
 
     @Mock
+    private SpaceLabReductionQueryPort spaceLabReductionQueryPort;
+
+    @Mock
     private OccupancyQueryService occupancyQueryService;
 
     @Mock
@@ -59,6 +70,15 @@ class SpaceCommandServiceTest {
     @Mock
     private CohortAccessService cohortAccessService;
 
+    @Mock
+    private CohortLockService cohortLockService;
+
+    @Mock
+    private PresenceSpaceQueryService presenceSpaceQueryService;
+
+    @Mock
+    private SpaceReferenceQueryPort spaceReferenceQueryPort;
+
     private TestSpaceCommandService spaceCommandService;
 
     @BeforeEach
@@ -66,9 +86,13 @@ class SpaceCommandServiceTest {
         Clock clock = Clock.fixed(NOW, SEOUL);
         SpaceCommandService delegate = new SpaceCommandService(
                 spaceRepository,
+                spaceLabReductionQueryPort,
                 occupancyQueryService,
                 vacancyAlertService,
                 cohortAccessService,
+                spaceReferenceQueryPort,
+                cohortLockService,
+                presenceSpaceQueryService,
                 clock
         );
         spaceCommandService = new TestSpaceCommandService(delegate);
@@ -79,6 +103,14 @@ class SpaceCommandServiceTest {
                         any(UUID.class)
                 ))
                 .thenReturn(true);
+        lenient().when(spaceLabReductionQueryPort.find(anyLong()))
+                .thenAnswer(invocation -> Optional.of(new SpaceLabReductionView(
+                        invocation.getArgument(0),
+                        42L,
+                        false
+                )));
+        lenient().when(presenceSpaceQueryService.summarize(anyLong()))
+                .thenReturn(SpacePresenceSummary.empty());
     }
 
     @Test
@@ -424,7 +456,7 @@ class SpaceCommandServiceTest {
         assertThat(deactivated.getOperationalStatus())
                 .isEqualTo(SpaceOperationalStatus.INACTIVE);
         assertThat(deactivated.getInactiveReason()).isEqualTo("냉방 점검");
-        verify(cohortAccessService).isManager(42L, ACTOR_USER_ID);
+        verify(cohortAccessService, times(2)).isManager(42L, ACTOR_USER_ID);
         verify(spaceRepository).findByIdForUpdate(1L);
     }
 
@@ -472,6 +504,80 @@ class SpaceCommandServiceTest {
                 () -> spaceCommandService.deactivate(1L, "점검")
         );
         verify(spaceRepository, never()).save(any(Space.class));
+    }
+
+    @Test
+    @DisplayName("현재 체류자가 있으면 공간 비활성화를 거절한다")
+    void rejectsDeactivationWhenCurrentPresenceExists() {
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(space(
+                        SpaceOperationalStatus.ACTIVE,
+                        null,
+                        null
+                )));
+        when(presenceSpaceQueryService.summarize(1L))
+                .thenReturn(new SpacePresenceSummary(1L, 0L));
+
+        assertBusinessError(
+                SpaceErrorCode.SPACE_HAS_CURRENT_PRESENCE,
+                () -> spaceCommandService.deactivate(1L, "점검")
+        );
+        verify(spaceRepository, never()).save(any(Space.class));
+    }
+
+    @Test
+    @DisplayName("활성 기수의 마지막 활성 실습실은 비활성화할 수 없다")
+    void rejectsLastActiveLabDeactivationForActiveCohort() {
+        Space activeLab = activeLab();
+        when(spaceLabReductionQueryPort.find(1L))
+                .thenReturn(Optional.of(new SpaceLabReductionView(1L, 42L, true)));
+        when(cohortLockService.lock(42L))
+                .thenReturn(new CohortLockView(42L, true));
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(activeLab));
+        when(spaceRepository.countActiveLabsByCohortId(42L)).thenReturn(1L);
+
+        assertBusinessError(
+                SpaceErrorCode.LAST_ACTIVE_LAB_REQUIRED,
+                () -> spaceCommandService.deactivate(1L, "점검")
+        );
+        verify(spaceRepository, never()).save(any(Space.class));
+    }
+
+    @Test
+    @DisplayName("회의 종료 후 복귀 예약이 있으면 실습실 비활성화를 거절한다")
+    void rejectsLabDeactivationWhenReturnReservationExists() {
+        Space activeLab = activeLab();
+        when(spaceLabReductionQueryPort.find(1L))
+                .thenReturn(Optional.of(new SpaceLabReductionView(1L, 42L, true)));
+        when(cohortLockService.lock(42L))
+                .thenReturn(new CohortLockView(42L, true));
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(activeLab));
+        when(spaceRepository.countActiveLabsByCohortId(42L)).thenReturn(2L);
+        when(presenceSpaceQueryService.summarize(1L))
+                .thenReturn(new SpacePresenceSummary(0L, 1L));
+
+        assertBusinessError(
+                SpaceErrorCode.SPACE_HAS_RETURN_RESERVATION,
+                () -> spaceCommandService.deactivate(1L, "점검")
+        );
+    }
+
+    @Test
+    @DisplayName("권한 없는 실습실 비활성화 요청은 기수 잠금 전에 거절한다")
+    void rejectsUnauthorizedLabDeactivationBeforeCohortLock() {
+        when(spaceLabReductionQueryPort.find(1L))
+                .thenReturn(Optional.of(new SpaceLabReductionView(1L, 42L, true)));
+        when(cohortAccessService.isManager(42L, ACTOR_USER_ID)).thenReturn(false);
+
+        assertBusinessError(
+                SpaceErrorCode.ACCESS_DENIED,
+                () -> spaceCommandService.deactivate(1L, "점검")
+        );
+
+        verify(cohortLockService, never()).lock(anyLong());
+        verify(spaceRepository, never()).findByIdForUpdate(anyLong());
     }
 
     @Test
@@ -590,6 +696,20 @@ class SpaceCommandServiceTest {
                         any(Long.class),
                         any(OffsetDateTime.class)
                 );
+        verify(spaceRepository, never()).save(any(Space.class));
+    }
+
+    @Test
+    void rejectsDeletingSpaceWhenSensorIsPlaced() {
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(existingSpace()));
+        when(spaceReferenceQueryPort.countSensors(1L)).thenReturn(2L);
+
+        // 센서가 남은 채 삭제하면 그 센서는 어느 기수에서도 보이지 않게 된다
+        assertBusinessError(
+                SpaceErrorCode.SPACE_HAS_SENSOR_DELETE_NOT_ALLOWED,
+                () -> spaceCommandService.delete(1L)
+        );
         verify(spaceRepository, never()).save(any(Space.class));
     }
 
@@ -855,6 +975,41 @@ class SpaceCommandServiceTest {
                 .isEqualTo(ZonedDateTime.ofInstant(NOW, SEOUL));
     }
 
+    @Test
+    @DisplayName("활성 점유가 있는 공간은 기수 배정을 해제할 수 없다")
+    void rejectsUnassigningSpaceWithActiveOccupancy() {
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(lab(42L, null)));
+        when(occupancyQueryService.existsActive(
+                eq(1L),
+                eq(ZonedDateTime.ofInstant(NOW, SEOUL).toOffsetDateTime())
+        )).thenReturn(true);
+
+        assertBusinessError(
+                SpaceErrorCode.ACTIVE_OCCUPANCY_EXISTS,
+                () -> spaceCommandService.unassignCohort(1L)
+        );
+        verify(spaceRepository, never()).save(any(Space.class));
+    }
+
+    @Test
+    @DisplayName("활성 기수의 마지막 활성 실습실은 기수 배정을 해제할 수 없다")
+    void rejectsUnassigningLastActiveLabForActiveCohort() {
+        when(spaceLabReductionQueryPort.find(1L))
+                .thenReturn(Optional.of(new SpaceLabReductionView(1L, 42L, true)));
+        when(cohortLockService.lock(42L))
+                .thenReturn(new CohortLockView(42L, true));
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(activeLab()));
+        when(spaceRepository.countActiveLabsByCohortId(42L)).thenReturn(1L);
+
+        assertBusinessError(
+                SpaceErrorCode.LAST_ACTIVE_LAB_REQUIRED,
+                () -> spaceCommandService.unassignCohort(1L)
+        );
+        verify(spaceRepository, never()).save(any(Space.class));
+    }
+
     private Space existingSpace() {
         return space(SpaceOperationalStatus.INACTIVE, null, null);
     }
@@ -928,6 +1083,22 @@ class SpaceCommandServiceTest {
                 now.minusDays(1),
                 now.minusHours(1),
                 deletedAt
+        );
+    }
+
+    private Space activeLab() {
+        ZonedDateTime now = ZonedDateTime.ofInstant(NOW, SEOUL);
+        return Space.restore(
+                1L,
+                42L,
+                "실습실 A",
+                SpaceType.LAB,
+                20,
+                SpaceOperationalStatus.ACTIVE,
+                null,
+                now.minusDays(1),
+                now.minusHours(1),
+                null
         );
     }
 

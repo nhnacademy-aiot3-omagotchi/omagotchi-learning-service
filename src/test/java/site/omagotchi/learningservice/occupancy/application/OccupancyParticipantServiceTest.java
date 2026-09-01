@@ -60,6 +60,7 @@ class OccupancyParticipantServiceTest {
     private static final Long COHORT_ID = 3L;
     private static final Long OTHER_COHORT_ID = 4L;
 
+    private static final Long TARGET_ATTENDANCE_ID = 5L;
     private static final Long OCCUPIER_MEMBERSHIP_ID = 10L;
     private static final Long TARGET_MEMBERSHIP_ID = 20L;
     private static final UUID OCCUPIER_USER_ID = UUID.randomUUID();
@@ -569,7 +570,11 @@ class OccupancyParticipantServiceTest {
 
     private void givenTargetPresent() {
         given(attendancePresenceQueryService.findOpenPresence(TARGET_USER_ID)).willReturn(
-                Optional.of(new OpenPresenceView(TARGET_MEMBERSHIP_ID, NOW)));
+                Optional.of(new OpenPresenceView(
+                        TARGET_ATTENDANCE_ID,
+                        TARGET_MEMBERSHIP_ID,
+                        NOW
+                )));
     }
 
     private void givenCohort(Long membershipId, Long cohortId) {

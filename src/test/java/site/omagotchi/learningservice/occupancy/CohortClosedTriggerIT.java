@@ -274,6 +274,11 @@ class CohortClosedTriggerIT {
     // ────────────────────────────── 헬퍼 ──────────────────────────────
 
     private void activate(Long cohortId) {
+        fixture.createLab(
+                cohortId,
+                "트리거-활성화-실습실-" + cohortId,
+                1
+        );
         cohortService.changeStatus(
                 cohortId, new ChangeCohortStatusCommand(CohortStatus.ACTIVE), GlobalRole.SYSTEM_ADMIN);
     }

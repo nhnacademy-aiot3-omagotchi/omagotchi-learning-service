@@ -16,7 +16,6 @@ public interface ThresholdRuleRepository {
 
     Optional<ThresholdRule> findById(Long ruleId);
 
-    List<ThresholdRule> findAll();
 
     List<ThresholdRule> findByDeviceEuiIn(Collection<String> deviceEui);
 

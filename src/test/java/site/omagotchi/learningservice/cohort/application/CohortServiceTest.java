@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.cohort.application;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
@@ -8,7 +9,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.command.UpdateCohortCommand;
+import site.omagotchi.learningservice.cohort.application.command.ChangeCohortStatusCommand;
+import site.omagotchi.learningservice.cohort.application.port.CohortActiveLabQuery;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
+import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.application.port.CohortMembershipQuery;
 import site.omagotchi.learningservice.cohort.application.port.CohortPersistence;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipSummaryResult;
@@ -46,6 +50,12 @@ class CohortServiceTest {
 
     @Mock
     private CohortManagerAssignmentPolicy managerAssignmentPolicy;
+
+    @Mock
+    private CohortActiveLabQuery cohortActiveLabQuery;
+
+    @Mock
+    private CohortLockService cohortLockService;
 
     @InjectMocks
     private CohortService service;
@@ -157,5 +167,56 @@ class CohortServiceTest {
                 .isInstanceOf(BusinessException.class);
 
         verify(cohortPersistence, never()).delete(cohort);
+    }
+
+    @Test
+    @DisplayName("활성 실습실이 없는 기수는 운영 상태로 전환할 수 없다")
+    void rejectsActivationWhenCohortHasNoActiveLab() {
+        Cohort cohort = preparingCohort();
+        when(cohortLockService.lockCohort(COHORT_ID)).thenReturn(cohort);
+        when(membershipQuery.existsActiveManager(COHORT_ID)).thenReturn(true);
+        when(cohortActiveLabQuery.existsActiveLab(COHORT_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.changeStatus(
+                COHORT_ID,
+                new ChangeCohortStatusCommand(CohortStatus.ACTIVE),
+                GlobalRole.SYSTEM_ADMIN
+        ))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(
+                        ((BusinessException) exception).getErrorCode()
+                ).isEqualTo(CohortErrorCode.COHORT_ACTIVE_LAB_REQUIRED));
+
+        assertThat(cohort.getStatus()).isEqualTo(CohortStatus.PREPARING);
+    }
+
+    @Test
+    @DisplayName("공통 기수 잠금 후 활성 실습실이 있으면 기수를 운영 상태로 전환한다")
+    void activatesCohortAfterCommonLockWhenActiveLabExists() {
+        Cohort cohort = preparingCohort();
+        when(cohortLockService.lockCohort(COHORT_ID)).thenReturn(cohort);
+        when(membershipQuery.existsActiveManager(COHORT_ID)).thenReturn(true);
+        when(cohortActiveLabQuery.existsActiveLab(COHORT_ID)).thenReturn(true);
+
+        var response = service.changeStatus(
+                COHORT_ID,
+                new ChangeCohortStatusCommand(CohortStatus.ACTIVE),
+                GlobalRole.SYSTEM_ADMIN
+        );
+
+        assertThat(response.status()).isEqualTo(CohortStatus.ACTIVE);
+        verify(cohortLockService).lockCohort(COHORT_ID);
+    }
+
+    private Cohort preparingCohort() {
+        Cohort cohort = Cohort.create(
+                "준비 기수",
+                "설명",
+                LocalDate.of(2027, 1, 1),
+                LocalDate.of(2027, 6, 30),
+                ACTOR_ID
+        );
+        ReflectionTestUtils.setField(cohort, "id", COHORT_ID);
+        return cohort;
     }
 }

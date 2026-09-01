@@ -56,7 +56,7 @@ class RuleInternalSecurityMvcTest {
     private static final String USERNAME = "rule-service";
     private static final String PASSWORD = "test-only-rule-learning-password";
     private static final String PATH = "/api/v1/internal/threshold-rules";
-    private static final String PUBLIC_PATH = "/api/v1/threshold-rules";
+    private static final String PUBLIC_PATH = "/api/v1/cohorts/1/threshold-rules";
 
     @Autowired
     private MockMvc mockMvc;
@@ -117,13 +117,13 @@ class RuleInternalSecurityMvcTest {
     @Test
     @DisplayName("Rule Credential의 임계치 기준 조회 허용")
     void allowsRuleToReadThresholdRules() throws Exception {
-        given(thresholdRuleService.readAll()).willReturn(List.of());
+        given(thresholdRuleService.readAllForRuleEngine()).willReturn(List.of());
 
         mockMvc.perform(get(PATH).with(httpBasic(USERNAME, PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
 
-        verify(thresholdRuleService).readAll();
+        verify(thresholdRuleService).readAllForRuleEngine();
     }
 
     @Test

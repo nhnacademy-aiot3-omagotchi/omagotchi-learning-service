@@ -13,7 +13,6 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.model.google.genai.autoconfigure.chat.GoogleGenAiChatAutoConfiguration;
 import org.springframework.ai.model.ollama.autoconfigure.OllamaApiAutoConfiguration;
 import org.springframework.ai.model.ollama.autoconfigure.OllamaChatAutoConfiguration;
 import org.springframework.ai.model.tool.autoconfigure.ToolCallingAutoConfiguration;
@@ -32,13 +31,13 @@ import static org.mockito.Mockito.mock;
 class ChatClientConfigTest {
 
     // 실제 호출은 하지 않으므로 연결 정보는 형식만 맞춘 더미 값을 쓴다
+    // GoogleGenAiChatAutoConfiguration은 운영과 똑같이 쓰지 않는다. Gemini 모델은 ChatClientConfig가 직접 만든다
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withInitializer(context -> context.getBeanFactory().setConversionService(
                     ApplicationConversionService.getSharedInstance()
             ))
             .withConfiguration(AutoConfigurations.of(
                     ToolCallingAutoConfiguration.class,
-                    GoogleGenAiChatAutoConfiguration.class,
                     OllamaApiAutoConfiguration.class,
                     OllamaChatAutoConfiguration.class
             ))
@@ -48,7 +47,7 @@ class ChatClientConfigTest {
             .withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
             .withBean(ObjectMapper.class, ObjectMapper::new)
             .withPropertyValues(
-                    "spring.ai.google.genai.api-key=dummy-api-key",
+                    "gemini.api-keys=dummy-key-1,dummy-key-2,dummy-key-3",
                     "spring.ai.google.genai.chat.model=gemini-3.6-flash",
                     "spring.ai.ollama.base-url=http://localhost:11434",
                     "spring.ai.ollama.chat.model=qwen2.5:latest"
@@ -60,12 +59,31 @@ class ChatClientConfigTest {
         this.contextRunner.run(context -> {
             assertThat(context).hasNotFailed();
 
-            assertThat(context).hasBean("googleGenAiChatModel");
+            assertThat(context).hasBean("geminiRoundRobinChatModel");
             assertThat(context).hasBean("ollamaChatModel");
 
             assertThat(context.getBean("geminiChatClient")).isInstanceOf(ChatClient.class);
             assertThat(context.getBean("ollamaChatClient")).isInstanceOf(ChatClient.class);
         });
+    }
+
+    @Test
+    @DisplayName("키 개수만큼 Gemini 모델을 만들어 라운드로빈으로 묶는다")
+    void buildsOneModelPerApiKey() {
+        this.contextRunner.run(context -> {
+            RoundRobinChatModel chatModel =
+                    context.getBean("geminiRoundRobinChatModel", RoundRobinChatModel.class);
+
+            assertThat(chatModel.size()).isEqualTo(3);
+        });
+    }
+
+    @Test
+    @DisplayName("gemini.api-keys가 비어 있으면 Context 시작에 실패한다")
+    void failsWithoutGeminiApiKeys() {
+        this.contextRunner
+                .withPropertyValues("gemini.api-keys=")
+                .run(context -> assertThat(context).hasFailed());
     }
 
     @Test

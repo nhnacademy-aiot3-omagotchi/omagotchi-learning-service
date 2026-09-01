@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 import site.omagotchi.learningservice.cohort.application.CohortAttendancePolicyService;
+import site.omagotchi.learningservice.cohort.application.CohortManagerLookupService;
 import site.omagotchi.learningservice.cohort.application.CohortManagerService;
 import site.omagotchi.learningservice.cohort.application.result.CohortAttendancePolicyResponse;
 import site.omagotchi.learningservice.cohort.application.result.CohortAdminSummaryResult;
@@ -18,6 +19,7 @@ import site.omagotchi.learningservice.cohort.application.result.JoinCodeResponse
 import site.omagotchi.learningservice.cohort.application.JoinCodeService;
 import site.omagotchi.learningservice.cohort.application.UserAccessContextService;
 import site.omagotchi.learningservice.cohort.application.result.UserAccessContextResult;
+import site.omagotchi.learningservice.cohort.application.result.UserManagedCohortsResult;
 import site.omagotchi.learningservice.cohort.presentation.dto.request.AssignCohortManagerRequest;
 import site.omagotchi.learningservice.cohort.presentation.dto.request.ChangeCohortMemberRoleRequest;
 import site.omagotchi.learningservice.cohort.presentation.dto.request.ChangeCohortStatusRequest;
@@ -25,6 +27,7 @@ import site.omagotchi.learningservice.cohort.presentation.dto.request.CreateCoho
 import site.omagotchi.learningservice.cohort.presentation.dto.request.CreateJoinRequest;
 import site.omagotchi.learningservice.cohort.presentation.dto.request.IssueJoinCodeRequest;
 import site.omagotchi.learningservice.cohort.presentation.dto.request.SaveAttendancePolicyRequest;
+import site.omagotchi.learningservice.cohort.presentation.dto.request.SearchCohortManagersRequest;
 import site.omagotchi.learningservice.cohort.presentation.dto.request.UpdateCohortRequest;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 
@@ -43,6 +46,7 @@ public class CohortController {
     private final JoinCodeService joinCodeService;
     private final CohortMembershipService membershipService;
     private final CohortManagerService managerService;
+    private final CohortManagerLookupService managerLookupService;
     private final CohortAttendancePolicyService attendancePolicyService;
     private final UserAccessContextService userAccessContextService;
 
@@ -181,6 +185,21 @@ public class CohortController {
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return membershipService.getMembers(cohortId, user.userId());
+    }
+
+    /*
+     * 전역 관리자 사용자 목록 화면의 "기수 운영 권한" 컬럼 조회
+     *
+     * 사용자 묶음이 최대 100개라 URL 길이 한계를 피하려고 GET이 아닌 POST를 쓴다.
+     * 경로를 /api/v1/cohorts 아래에 두어 기존 Gateway Route를 그대로 사용한다.
+     */
+    @PostMapping("/managers/search")
+    public List<UserManagedCohortsResult> searchManagedCohorts(
+            JwtAuthenticationToken authentication,
+            @Valid @RequestBody SearchCohortManagersRequest request
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        return managerLookupService.findManagedCohorts(request.userIds(), user.globalRole());
     }
 
     @PostMapping("/{cohort-id}/managers")

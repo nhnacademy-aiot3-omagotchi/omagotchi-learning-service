@@ -260,6 +260,8 @@ class OccupancyConcurrencyIT {
 
         assertThat(participantRows(spaceId, participantUserId)).isEqualTo(1);
         assertThat(activeParticipants(spaceId)).isEqualTo(2);
+        assertThat(meetingPresenceRows(participantUserId, spaceId)).isEqualTo(2);
+        assertThat(openMeetingPresenceRows(participantUserId, spaceId)).isEqualTo(1);
     }
 
     // ────────────────────────────── 반납 (MR-14, MR-32) ──────────────────────────────
@@ -308,6 +310,10 @@ class OccupancyConcurrencyIT {
         // 점유자 본인의 행도 함께 닫힌다 — 시작이 점유자를 참여자로 등록했으므로(MR-27).
         assertThat(allParticipantRows(spaceId)).isEqualTo(2);
         assertThat(openParticipantRows(spaceId)).isZero();
+        assertThat(openMeetingPresenceRows(occupierUserId, spaceId)).isZero();
+        assertThat(openMeetingPresenceRows(participantUserId, spaceId)).isZero();
+        assertThat(openPresenceState(occupierUserId)).isEqualTo("PRESENT");
+        assertThat(openPresenceState(participantUserId)).isEqualTo("PRESENT");
     }
 
     /** 반납한 사람은 참여 이력이 닫혔으므로 다른 회의실을 곧바로 점유할 수 있어야 한다. */
@@ -394,6 +400,8 @@ class OccupancyConcurrencyIT {
         assertThat(occupancyStatus(spaceId)).isEqualTo("ACTIVE");
         assertThat(occupancyEndedAt(spaceId)).isNull();
         assertThat(openParticipantRows(spaceId)).isEqualTo(2);
+        assertThat(openMeetingPresenceRows(occupierUserId, spaceId)).isEqualTo(1);
+        assertThat(openMeetingPresenceRows(participantUserId, spaceId)).isEqualTo(1);
     }
 
     // ────────────────────────────── 재실 검증 (MR-22, MR-19) ──────────────────────────────
@@ -606,6 +614,52 @@ class OccupancyConcurrencyIT {
                  WHERE o.space_id = ? AND o.status = 'ACTIVE' AND p.left_at IS NULL
                 """, Integer.class, spaceId);
         return count == null ? 0 : count;
+    }
+
+    private int meetingPresenceRows(UUID userId, Long spaceId) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT count(*)
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                  JOIN learning_service.cohort_memberships membership
+                    ON membership.id = attendance.cohort_membership_id
+                 WHERE membership.user_id = ?
+                   AND presence.space_id = ?
+                   AND presence.state = 'MEETING'
+                """, Integer.class, userId, spaceId);
+        return count == null ? 0 : count;
+    }
+
+    private int openMeetingPresenceRows(UUID userId, Long spaceId) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT count(*)
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                  JOIN learning_service.cohort_memberships membership
+                    ON membership.id = attendance.cohort_membership_id
+                 WHERE membership.user_id = ?
+                   AND presence.space_id = ?
+                   AND presence.state = 'MEETING'
+                   AND presence.ended_at IS NULL
+                """, Integer.class, userId, spaceId);
+        return count == null ? 0 : count;
+    }
+
+    private String openPresenceState(UUID userId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT presence.state
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                  JOIN learning_service.cohort_memberships membership
+                    ON membership.id = attendance.cohort_membership_id
+                 WHERE membership.user_id = ?
+                   AND presence.ended_at IS NULL
+                 ORDER BY presence.started_at DESC, presence.id DESC
+                 LIMIT 1
+                """, String.class, userId);
     }
 
     /** 이탈 여부와 무관한 이 점유의 전체 참여자 행 수. 반납이 행을 지우지 않는지 본다. */

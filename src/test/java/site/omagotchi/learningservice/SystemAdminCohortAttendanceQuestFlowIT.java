@@ -87,13 +87,13 @@ class SystemAdminCohortAttendanceQuestFlowIT {
                 MANAGER_ID
         );
         ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
-        spaceRepository.save(Space.create(
+        Long labSpaceId = spaceRepository.save(Space.create(
                 "출석흐름-활성화-실습실-" + cohort.id(),
                 SpaceType.LAB,
                 20,
                 cohort.id(),
                 now
-        ).activate(now));
+        ).activate(now)).getId();
         var activeCohort = cohortService.changeStatus(
                 cohort.id(),
                 new ChangeCohortStatusCommand(CohortStatus.ACTIVE),
@@ -125,6 +125,7 @@ class SystemAdminCohortAttendanceQuestFlowIT {
         var attendance = attendanceService.checkIn(cohort.id(), STUDENT_ID);
         assertNotNull(attendance.id());
         assertNotNull(attendance.checkedInAt());
+        attendanceService.moveLab(cohort.id(), STUDENT_ID, labSpaceId);
 
         DailyQuestResult attendanceQuest = waitForCompletedAttendanceQuest();
         assertEquals(DailyQuestService.ATTENDANCE_CODE, attendanceQuest.code());

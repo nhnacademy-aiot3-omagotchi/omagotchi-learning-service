@@ -112,7 +112,9 @@ class ActiveLabConcurrencyIT {
 
     private Scenario createScenario(String name) {
         Long cohortId = fixture.createCohort("실습실-" + name);
-        OccupancyTestFixture.Member manager = fixture.createActiveMember(cohortId);
+        // 이 시나리오는 두 LAB만 감소 대상으로 두어야 한다. createActiveMember는
+        // 출석용 LAB까지 하나 생성하므로 권한에 필요한 활성 멤버십만 만든다.
+        OccupancyTestFixture.Member manager = fixture.createAbsentMember(cohortId);
         Long firstLabId = fixture.createLab(cohortId, name + "-A-" + cohortId, 20);
         Long secondLabId = fixture.createLab(cohortId, name + "-B-" + cohortId, 20);
         cohortService.changeStatus(

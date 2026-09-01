@@ -13,6 +13,8 @@ import site.omagotchi.learningservice.attendance.application.command.ChangeAtten
 import site.omagotchi.learningservice.attendance.application.query.AttendancePageQuery;
 import site.omagotchi.learningservice.attendance.application.event.AttendanceCheckedInEvent;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceEventPublisher;
+import site.omagotchi.learningservice.attendance.application.port.AttendanceActiveMeetingPort;
+import site.omagotchi.learningservice.attendance.application.port.AttendanceLabAccessPort;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceRecordQueryRepository;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
@@ -52,6 +54,7 @@ class AttendanceServiceTest {
 
     private static final Long COHORT_ID = 10L;
     private static final Long MEMBERSHIP_ID = 100L;
+    private static final Long LAB_SPACE_ID = 200L;
     private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID MANAGER_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final LocalDate ATTENDANCE_DATE = LocalDate.of(2026, 7, 29);
@@ -81,6 +84,15 @@ class AttendanceServiceTest {
     private PresenceIntervalRepository presenceIntervalRepository;
 
     @Mock
+    private PresenceTransitionService presenceTransitionService;
+
+    @Mock
+    private AttendanceLabAccessPort attendanceLabAccessPort;
+
+    @Mock
+    private AttendanceActiveMeetingPort attendanceActiveMeetingPort;
+
+    @Mock
     private AttendanceEventPublisher attendanceEventPublisher;
 
     @Mock
@@ -96,7 +108,7 @@ class AttendanceServiceTest {
         givenActiveMembership();
         given(attendancePolicyRepository.findById(COHORT_ID)).willReturn(Optional.of(policy()));
         given(clock.instant()).willReturn(checkInAt);
-        given(attendanceRecordRepository.findWithLockByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
+        given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
                 .willReturn(Optional.empty());
         given(attendanceRecordRepository.save(any(AttendanceRecord.class)))
                 .willAnswer(invocation -> savedRecord(invocation.getArgument(0)));
@@ -112,11 +124,11 @@ class AttendanceServiceTest {
                 MEMBERSHIP_ID,
                 CohortMembershipStatus.ACTIVE
         );
-        inOrder.verify(attendanceRecordRepository).findWithLockByCohortMembershipIdAndAttendanceDate(
+        inOrder.verify(attendanceRecordRepository).findByCohortMembershipIdAndAttendanceDate(
                 MEMBERSHIP_ID,
                 ATTENDANCE_DATE
         );
-        verify(presenceIntervalRepository).save(any());
+        verifyNoInteractions(attendanceLabAccessPort, presenceTransitionService);
         verify(attendanceEventPublisher).publishCheckedIn(new AttendanceCheckedInEvent(
                 USER_ID,
                 COHORT_ID,
@@ -132,7 +144,7 @@ class AttendanceServiceTest {
         givenActiveMembership();
         given(attendancePolicyRepository.findById(COHORT_ID)).willReturn(Optional.of(policy()));
         given(clock.instant()).willReturn(checkInAt);
-        given(attendanceRecordRepository.findWithLockByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
+        given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
                 .willReturn(Optional.empty());
         given(attendanceRecordRepository.save(any(AttendanceRecord.class)))
                 .willAnswer(invocation -> savedRecord(invocation.getArgument(0)));
@@ -152,13 +164,13 @@ class AttendanceServiceTest {
         given(clock.instant()).willReturn(checkInAt);
         AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
         record.checkIn(checkInAt, AttendanceStatus.PENDING, 0);
-        given(attendanceRecordRepository.findWithLockByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
+        given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(MEMBERSHIP_ID, ATTENDANCE_DATE))
                 .willReturn(Optional.of(record));
 
         var result = attendanceService.checkIn(COHORT_ID, USER_ID);
 
         assertEquals(checkInAt, result.checkedInAt());
-        verify(attendanceRecordRepository).findWithLockByCohortMembershipIdAndAttendanceDate(
+        verify(attendanceRecordRepository).findByCohortMembershipIdAndAttendanceDate(
                 MEMBERSHIP_ID,
                 ATTENDANCE_DATE
         );
@@ -184,6 +196,73 @@ class AttendanceServiceTest {
 
         assertEquals(AttendanceStatus.PRESENT, result.autoStatus());
         assertEquals(checkOutAt, result.checkedOutAt());
+        verify(presenceTransitionService).closeAttendance(record.getId(), checkOutAt);
+    }
+
+    @Test
+    @DisplayName("활성 회의 참여 중에는 체크아웃을 거절한다")
+    void rejectsCheckOutDuringActiveMeeting() {
+        Instant checkInAt = Instant.parse("2026-07-29T00:00:00Z");
+        Instant checkOutAt = Instant.parse("2026-07-29T09:00:00Z");
+        AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
+        ReflectionTestUtils.setField(record, "id", 1L);
+        record.checkIn(checkInAt, AttendanceStatus.PENDING, 0);
+        givenActiveMembership();
+        given(clock.instant()).willReturn(checkOutAt);
+        given(attendanceRecordRepository.findWithLockByCohortMembershipIdAndAttendanceDate(
+                MEMBERSHIP_ID, ATTENDANCE_DATE)).willReturn(Optional.of(record));
+        given(attendanceActiveMeetingPort.existsActiveParticipation(MEMBERSHIP_ID)).willReturn(true);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> attendanceService.checkOut(COHORT_ID, USER_ID)
+        );
+
+        assertSame(AttendanceErrorCode.ATTENDANCE_ACTIVE_MEETING_EXISTS, exception.getErrorCode());
+        verifyNoInteractions(presenceTransitionService);
+    }
+
+    @Test
+    @DisplayName("실습실 이동은 대상 LAB 승인 후 체류 전환을 호출한다")
+    void movesToSelectableLab() {
+        Instant moveAt = Instant.parse("2026-07-29T02:00:00Z");
+        AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
+        ReflectionTestUtils.setField(record, "id", 1L);
+        record.checkIn(Instant.parse("2026-07-29T00:00:00Z"), AttendanceStatus.PENDING, 0);
+        givenActiveMembership();
+        given(clock.instant()).willReturn(moveAt);
+        given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(
+                MEMBERSHIP_ID, ATTENDANCE_DATE)).willReturn(Optional.of(record));
+
+        var result = attendanceService.moveLab(COHORT_ID, USER_ID, LAB_SPACE_ID);
+
+        assertEquals(1L, result.id());
+        InOrder order = inOrder(attendanceLabAccessPort, presenceTransitionService);
+        order.verify(attendanceLabAccessPort).requireSelectableLab(COHORT_ID, 1L, LAB_SPACE_ID);
+        order.verify(presenceTransitionService).moveLab(1L, MEMBERSHIP_ID, LAB_SPACE_ID, moveAt);
+    }
+
+    @Test
+    @DisplayName("같은 소속이 이전 집계일 출결로 회의 중이면 새 출결의 실습실 이동도 거절한다")
+    void rejectsLabMoveDuringMembershipMeeting() {
+        Instant moveAt = Instant.parse("2026-07-29T02:00:00Z");
+        AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
+        ReflectionTestUtils.setField(record, "id", 1L);
+        record.checkIn(Instant.parse("2026-07-29T00:00:00Z"), AttendanceStatus.PENDING, 0);
+        givenActiveMembership();
+        given(clock.instant()).willReturn(moveAt);
+        given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(
+                MEMBERSHIP_ID, ATTENDANCE_DATE)).willReturn(Optional.of(record));
+        given(attendanceActiveMeetingPort.existsActiveParticipation(MEMBERSHIP_ID))
+                .willReturn(true);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> attendanceService.moveLab(COHORT_ID, USER_ID, LAB_SPACE_ID)
+        );
+
+        assertSame(AttendanceErrorCode.PRESENCE_MEETING_EXIT_REQUIRED, exception.getErrorCode());
+        verifyNoInteractions(attendanceLabAccessPort, presenceTransitionService);
     }
 
     @Test

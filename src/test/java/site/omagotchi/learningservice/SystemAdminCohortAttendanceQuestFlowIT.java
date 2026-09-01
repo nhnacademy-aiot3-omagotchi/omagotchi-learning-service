@@ -84,7 +84,10 @@ class SystemAdminCohortAttendanceQuestFlowIT {
                 cohort.id(),
                 new SaveAttendancePolicyCommand("Asia/Seoul", LocalTime.of(9, 0), LocalTime.of(18, 0),
                         LocalTime.of(10, 0), 30),
-                MANAGER_ID
+                MANAGER_ID,
+                // 전역 관리자가 아니라 기수 매니저로 저장한다. SYSTEM_ADMIN을 넣으면
+                // 매니저 권한 경로를 건너뛰어 이 흐름이 검증하려던 것을 놓친다.
+                GlobalRole.USER
         );
         ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
         spaceRepository.save(Space.create(

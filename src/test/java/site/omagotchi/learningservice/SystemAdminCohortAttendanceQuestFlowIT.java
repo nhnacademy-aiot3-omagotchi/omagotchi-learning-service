@@ -42,6 +42,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
@@ -66,7 +67,7 @@ class SystemAdminCohortAttendanceQuestFlowIT {
     @Test
     @DisplayName("기수 생성·가입 승인 후 체크인이 기록되고 출석 퀘스트가 완료된다")
     void createsCohortChecksInAndCompletesAttendanceQuest() throws Exception {
-        LocalDate today = LocalDate.now();
+        LocalDate today = AggregationDateTime.today();
         var cohort = cohortService.create(
                 new CreateCohortCommand("검증 기수", "SYSTEM_ADMIN 전체 흐름 검증", today.minusDays(1), today.plusMonths(1)),
                 SYSTEM_ADMIN_ID,
@@ -84,7 +85,10 @@ class SystemAdminCohortAttendanceQuestFlowIT {
                 cohort.id(),
                 new SaveAttendancePolicyCommand("Asia/Seoul", LocalTime.of(9, 0), LocalTime.of(18, 0),
                         LocalTime.of(10, 0), 30),
-                MANAGER_ID
+                MANAGER_ID,
+                // 전역 관리자가 아니라 기수 매니저로 저장한다. SYSTEM_ADMIN을 넣으면
+                // 매니저 권한 경로를 건너뛰어 이 흐름이 검증하려던 것을 놓친다.
+                GlobalRole.USER
         );
         ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
         Long labSpaceId = spaceRepository.save(Space.create(

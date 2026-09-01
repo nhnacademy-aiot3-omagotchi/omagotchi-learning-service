@@ -40,7 +40,7 @@ public class LearningReportTools implements AiToolProvider {
               ① 이번 기간 요약 한 줄
               ② 잘한 점 하나
               ③ 직전 기간과 비교한 변화 (늘었는지 줄었는지, 대략 몇 % 인지)
-              ④ 상위권과 가장 차이 나는 것 하나 (총 학습량과 몰입 밀도를 함께 보고 고르세요)
+              ④ 상위권과 가장 차이 나는 것 하나 (공부한 날 기준 일평균 학습량과 몰입 밀도를 함께 보고 고르세요)
               ⑤ 다음 기간의 수행목표 하나.
             - 수행목표는 "합격하기" 같은 결과가 아니라 "매일 9시에 90분 블록 시작"처럼 실행할 행동으로 제안하세요.
             - thisPeriod의 status가 INSUFFICIENT_SAMPLE이면 상위권 비교(④)는 빼고 작성하고, myPattern의 status가 NO_DATA면 기록이 없다고 알린 뒤 시작을 권유하세요.

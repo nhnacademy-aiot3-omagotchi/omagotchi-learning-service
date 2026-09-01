@@ -172,6 +172,11 @@ public class RedisChatMemoryRepository implements ChatMemoryRepository {
             List<StoredToolCall> toolCalls,
             List<StoredToolResponse> toolResponses
     ) {
+        // toMessage()마다 방어하지 않고 컴팩트생성자에서 방어
+        StoredMessage {
+            toolCalls = Objects.requireNonNullElse(toolCalls, List.of());
+            toolResponses = Objects.requireNonNullElse(toolResponses, List.of());
+        }
     }
 
     record StoredToolCall(String id, String type, String name, String arguments) {

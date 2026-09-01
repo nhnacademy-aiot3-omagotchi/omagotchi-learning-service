@@ -151,6 +151,34 @@ class RedisChatMemoryRepositoryTest {
 
             assertThat(repository.findByConversationId(CONVERSATION_ID)).isEmpty();
         }
+
+        @Test
+        @DisplayName("Assistant 메시지에 toolCalls가 없으면 빈 목록으로 복원한다")
+        void restoresAssistantMessageWithMissingToolCalls() {
+            given(valueOperations.get(KEY)).willReturn(
+                    "[{\"type\":\"ASSISTANT\",\"text\":\"응답\",\"toolResponses\":[]}]"
+            );
+
+            List<Message> restored = repository.findByConversationId(CONVERSATION_ID);
+
+            assertThat(restored).hasSize(1);
+            assertThat(restored.getFirst()).isInstanceOf(AssistantMessage.class);
+            assertThat(((AssistantMessage) restored.getFirst()).getToolCalls()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Tool 메시지에 toolResponses가 없으면 빈 목록으로 복원한다")
+        void restoresToolMessageWithMissingToolResponses() {
+            given(valueOperations.get(KEY)).willReturn(
+                    "[{\"type\":\"TOOL\",\"text\":\"\",\"toolCalls\":[]}]"
+            );
+
+            List<Message> restored = repository.findByConversationId(CONVERSATION_ID);
+
+            assertThat(restored).hasSize(1);
+            assertThat(restored.getFirst()).isInstanceOf(ToolResponseMessage.class);
+            assertThat(((ToolResponseMessage) restored.getFirst()).getResponses()).isEmpty();
+        }
     }
 
     @Nested
@@ -173,7 +201,9 @@ class RedisChatMemoryRepositoryTest {
         }
     }
 
-    /** saveAll이 만든 JSON을 그대로 조회 결과로 돌려주도록 스텁한다. */
+    /**
+     * saveAll이 만든 JSON을 그대로 조회 결과로 돌려주도록 스텁한다.
+     */
     private void givenStored(List<Message> messages) {
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         repository.saveAll(CONVERSATION_ID, messages);

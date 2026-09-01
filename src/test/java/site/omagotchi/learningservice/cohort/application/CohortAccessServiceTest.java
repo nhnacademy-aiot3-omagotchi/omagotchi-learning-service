@@ -216,6 +216,52 @@ class CohortAccessServiceTest {
     }
 
     @Nested
+    @DisplayName("출결 정책 편집 권한 확인")
+    class RequireAttendancePolicyEditor {
+
+        @Test
+        @DisplayName("전역 관리자는 기수 소속 없이 통과한다")
+        void allowsSystemAdminWithoutMembership() {
+            when(cohortRepository.existsById(COHORT_ID)).thenReturn(true);
+
+            assertDoesNotThrow(() -> accessService.requireAttendancePolicyEditor(
+                    COHORT_ID, USER_ID, GlobalRole.SYSTEM_ADMIN));
+
+            verify(membershipRepository, never())
+                    .findActiveMembershipId(USER_ID, COHORT_ID);
+        }
+
+        @Test
+        @DisplayName("전역 관리자라도 없는 기수는 404")
+        void throwsNotFoundForSystemAdminWhenCohortMissing() {
+            when(cohortRepository.existsById(COHORT_ID)).thenReturn(false);
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> accessService.requireAttendancePolicyEditor(
+                            COHORT_ID, USER_ID, GlobalRole.SYSTEM_ADMIN)
+            );
+
+            assertSame(CohortErrorCode.COHORT_NOT_FOUND, exception.getErrorCode());
+        }
+
+        @Test
+        @DisplayName("일반 사용자는 기존 매니저 검사를 그대로 거친다")
+        void fallsBackToManagerCheckForNormalUser() {
+            when(membershipRepository.findActiveMembershipId(USER_ID, COHORT_ID))
+                    .thenReturn(Optional.empty());
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> accessService.requireAttendancePolicyEditor(
+                            COHORT_ID, USER_ID, GlobalRole.USER)
+            );
+
+            assertSame(CohortErrorCode.COHORT_NOT_FOUND, exception.getErrorCode());
+        }
+    }
+
+    @Nested
     @DisplayName("활성 학생 소속 식별자 확인")
     class RequireActiveStudentMembershipId {
 

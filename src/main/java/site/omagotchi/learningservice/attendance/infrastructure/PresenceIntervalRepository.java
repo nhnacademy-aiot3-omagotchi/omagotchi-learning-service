@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.attendance.application.result.OpenUserPresenceView;
+import site.omagotchi.learningservice.attendance.application.result.PresenceIntervalView;
 import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
 import site.omagotchi.learningservice.attendance.domain.PresenceState;
 
@@ -83,6 +84,38 @@ public interface PresenceIntervalRepository extends JpaRepository<PresenceInterv
                    AND i.state <> site.omagotchi.learningservice.attendance.domain.PresenceState.AWAY
                  ORDER BY m.userId ASC, i.startedAt DESC, i.id DESC""")
     List<OpenUserPresenceView> findOpenPresences(@Param("userIds") Collection<UUID> userIds);
+
+    /**
+     * 소속의 체류 구간을 기간으로 조회한다.
+     *
+     * <p>열린 구간만 보는 {@code findOpenPresences}와 달리 지나간 구간을 함께 돌려준다.
+     * 학습 기록에 "그 시각 어느 공간이었는가"를 붙이는 데 쓴다.</p>
+     *
+     * <p>조회 키가 {@code userId}가 아니라 {@code cohortMembershipId}인 것은 소비처가
+     * 기수 단위이기 때문이다. 학습 기록도 소속으로 쌓이므로 같은 키를 써야 다기수 담당자의
+     * 다른 기수 구간이 섞이지 않는다. 그래서 {@code cohort_memberships} 조인도 필요 없다.</p>
+     *
+     * <p>범위와 <b>겹치기만 하면</b> 포함한다 — 구간이 범위 안에 완전히 들어올 필요는 없다.
+     * 경계에 걸친 구간을 어디까지 인정할지는 받는 쪽이 정하도록 자르지 않고 그대로 돌려준다.
+     * 진행 중인 구간({@code ended_at IS NULL})도 같은 이유로 그대로 포함한다.</p>
+     *
+     * <p>{@code AWAY} 제외가 재실 판정이다 — {@code findOpenPresences}와 같은 기준을 쓴다.</p>
+     */
+    @Query("""
+                SELECT new site.omagotchi.learningservice.attendance.application.result.PresenceIntervalView(
+                           i.spaceId, i.state, i.startedAt, i.endedAt)
+                  FROM PresenceInterval i
+                  JOIN AttendanceRecord r ON r.id = i.attendanceId
+                 WHERE r.cohortMembershipId = :cohortMembershipId
+                   AND i.state <> site.omagotchi.learningservice.attendance.domain.PresenceState.AWAY
+                   AND i.startedAt < :toExclusive
+                   AND (i.endedAt IS NULL OR i.endedAt > :from)
+                 ORDER BY i.startedAt ASC, i.id ASC""")
+    List<PresenceIntervalView> findPresenceIntervals(
+            @Param("cohortMembershipId") Long cohortMembershipId,
+            @Param("from") Instant from,
+            @Param("toExclusive") Instant toExclusive
+    );
 
     /** 점유 참여 행에 저장된 정확한 소속별 최신 열린 재실 구간을 조회한다. */
     @Query("""

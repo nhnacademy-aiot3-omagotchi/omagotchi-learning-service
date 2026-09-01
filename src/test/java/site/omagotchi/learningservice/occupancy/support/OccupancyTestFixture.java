@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.UUID;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 
 /**
  * 점유 통합 테스트용 기수·멤버십·공간 픽스처.
@@ -51,8 +52,8 @@ public class OccupancyTestFixture {
         Cohort cohort = Cohort.create(
                 name,
                 "점유 테스트 기수",
-                LocalDate.now(),
-                LocalDate.now().plusMonths(6),
+                AggregationDateTime.today(),
+                AggregationDateTime.today().plusMonths(6),
                 UUID.randomUUID()
         );
         return cohortRepository.save(cohort).getId();

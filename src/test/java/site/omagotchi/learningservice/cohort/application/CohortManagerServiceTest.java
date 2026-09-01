@@ -29,6 +29,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 
 @ExtendWith(MockitoExtension.class)
 class CohortManagerServiceTest {
@@ -107,8 +108,8 @@ class CohortManagerServiceTest {
         Cohort cohort = Cohort.create(
                 "AIOT 3",
                 "test cohort",
-                LocalDate.now(),
-                LocalDate.now().plusDays(30),
+                AggregationDateTime.today(),
+                AggregationDateTime.today().plusDays(30),
                 PROCESSOR_USER_ID
         );
         ReflectionTestUtils.setField(cohort, "id", cohortId);

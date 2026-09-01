@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 
 @ExtendWith(MockitoExtension.class)
 class CohortMembershipServiceTest {
@@ -170,8 +171,8 @@ class CohortMembershipServiceTest {
         Cohort cohort = Cohort.create(
                 "AIOT 3",
                 "test cohort",
-                LocalDate.now(),
-                LocalDate.now().plusDays(30),
+                AggregationDateTime.today(),
+                AggregationDateTime.today().plusDays(30),
                 MANAGER_USER_ID
         );
         ReflectionTestUtils.setField(cohort, "id", cohortId);

@@ -240,7 +240,7 @@ public class CohortController {
             JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return attendancePolicyService.getPolicy(cohortId, user.userId());
+        return attendancePolicyService.getPolicy(cohortId, user.userId(), user.globalRole());
     }
 
     @PutMapping("/{cohort-id}/attendance-policy")
@@ -250,7 +250,8 @@ public class CohortController {
             @Valid @RequestBody SaveAttendancePolicyRequest request
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return attendancePolicyService.savePolicy(cohortId, request.toCommand(), user.userId());
+        return attendancePolicyService.savePolicy(
+                cohortId, request.toCommand(), user.userId(), user.globalRole());
     }
 
 }

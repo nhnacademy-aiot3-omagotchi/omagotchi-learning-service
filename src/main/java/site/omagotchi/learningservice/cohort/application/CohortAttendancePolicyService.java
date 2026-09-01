@@ -9,6 +9,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.util.UUID;
@@ -26,12 +27,18 @@ public class CohortAttendancePolicyService {
      * 특정 기수의 출결 정책을 조회
      * 출결/타이머 기능이 기수별 판정 기준을 가져갈 때 사용
      */
-    public CohortAttendancePolicyResponse getPolicy(Long cohortId, UUID actorUserId) {
-        accessService.requireManager(cohortId, actorUserId);
+    public CohortAttendancePolicyResponse getPolicy(
+            Long cohortId,
+            UUID actorUserId,
+            GlobalRole globalRole
+    ) {
+        accessService.requireAttendancePolicyEditor(cohortId, actorUserId, globalRole);
 
         return attendancePolicyRepository.findById(cohortId)
                 .map(CohortAttendancePolicyResponse::from)
-                .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
+                // 기수는 있는데 정책만 없는 상태다. COHORT_NOT_FOUND로 뭉개면 화면이
+                // "기수 없음"으로 오해하고 정책 입력 폼을 열지 못한다.
+                .orElseThrow(() -> new BusinessException(CohortErrorCode.ATTENDANCE_POLICY_NOT_FOUND));
     }
 
     /**
@@ -42,9 +49,10 @@ public class CohortAttendancePolicyService {
     public CohortAttendancePolicyResponse savePolicy(
             Long cohortId,
             SaveAttendancePolicyCommand command,
-            UUID updatedByUserId
+            UUID updatedByUserId,
+            GlobalRole globalRole
     ) {
-        accessService.requireManager(cohortId, updatedByUserId);
+        accessService.requireAttendancePolicyEditor(cohortId, updatedByUserId, globalRole);
 
         if (!cohortRepository.existsById(cohortId)) {
             throw new BusinessException(CohortErrorCode.COHORT_NOT_FOUND);

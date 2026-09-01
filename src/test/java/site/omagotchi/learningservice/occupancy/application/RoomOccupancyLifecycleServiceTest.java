@@ -67,6 +67,9 @@ class RoomOccupancyLifecycleServiceTest {
     private OccupancyParticipantRepository participantRepository;
 
     @Mock
+    private MeetingPresenceCoordinator meetingPresenceCoordinator;
+
+    @Mock
     private OccupancyEventPublisher eventPublisher;
 
     @Mock
@@ -95,7 +98,7 @@ class RoomOccupancyLifecycleServiceTest {
         clock = Clock.fixed(NOW, SEOUL);
         roomOccupancyLifecycleService = new RoomOccupancyLifecycleService(
                 occupancyRepository,
-                participantRepository,
+                meetingPresenceCoordinator,
                 eventPublisher,
                 occupancyExpiration,
                 occupancyExpiryReminder,
@@ -266,7 +269,7 @@ class RoomOccupancyLifecycleServiceTest {
 
         roomOccupancyLifecycleService.release(SPACE_ID, OCCUPIER_USER_ID);
 
-        verify(participantRepository).closeAllActiveByOccupancyId(OCCUPANCY_ID, now());
+        verify(meetingPresenceCoordinator).leaveAll(OCCUPANCY_ID, SPACE_ID, now());
     }
 
     @Test
@@ -296,8 +299,8 @@ class RoomOccupancyLifecycleServiceTest {
 
         roomOccupancyLifecycleService.release(SPACE_ID, OCCUPIER_USER_ID);
 
-        InOrder order = inOrder(participantRepository, eventPublisher);
-        order.verify(participantRepository).closeAllActiveByOccupancyId(eq(OCCUPANCY_ID), any());
+        InOrder order = inOrder(meetingPresenceCoordinator, eventPublisher);
+        order.verify(meetingPresenceCoordinator).leaveAll(eq(OCCUPANCY_ID), eq(SPACE_ID), any());
         order.verify(eventPublisher).publishRoomVacated(any(RoomVacatedEvent.class));
     }
 
@@ -311,7 +314,7 @@ class RoomOccupancyLifecycleServiceTest {
                 () -> roomOccupancyLifecycleService.release(SPACE_ID, STRANGER_USER_ID)
         );
 
-        verify(participantRepository, never()).closeAllActiveByOccupancyId(any(), any());
+        verify(meetingPresenceCoordinator, never()).leaveAll(any(), any(), any());
         verify(eventPublisher, never()).publishRoomVacated(any());
     }
 
@@ -493,7 +496,7 @@ class RoomOccupancyLifecycleServiceTest {
     void failsToCreateWithoutSender() {
         assertThatThrownBy(() -> new RoomOccupancyLifecycleService(
                 occupancyRepository,
-                participantRepository,
+                meetingPresenceCoordinator,
                 eventPublisher,
                 occupancyExpiration,
                 occupancyExpiryReminder,

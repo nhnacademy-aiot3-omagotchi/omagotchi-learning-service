@@ -7,7 +7,6 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
-import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyReminderSender;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
@@ -45,7 +44,7 @@ import java.util.UUID;
 public class RoomOccupancyLifecycleService {
 
     private final RoomOccupancyRepository occupancyRepository;
-    private final OccupancyParticipantRepository participantRepository;
+    private final MeetingPresenceCoordinator meetingPresenceCoordinator;
     private final OccupancyEventPublisher eventPublisher;
     private final OccupancyExpiration occupancyExpiration;
     private final OccupancyExpiryReminder occupancyExpiryReminder;
@@ -62,7 +61,7 @@ public class RoomOccupancyLifecycleService {
      */
     public RoomOccupancyLifecycleService(
             RoomOccupancyRepository occupancyRepository,
-            OccupancyParticipantRepository participantRepository,
+            MeetingPresenceCoordinator meetingPresenceCoordinator,
             OccupancyEventPublisher eventPublisher,
             OccupancyExpiration occupancyExpiration,
             OccupancyExpiryReminder occupancyExpiryReminder,
@@ -73,7 +72,7 @@ public class RoomOccupancyLifecycleService {
             Clock clock
     ) {
         this.occupancyRepository = occupancyRepository;
-        this.participantRepository = participantRepository;
+        this.meetingPresenceCoordinator = meetingPresenceCoordinator;
         this.eventPublisher = eventPublisher;
         this.occupancyExpiration = occupancyExpiration;
         this.occupancyExpiryReminder = occupancyExpiryReminder;
@@ -145,7 +144,7 @@ public class RoomOccupancyLifecycleService {
 
         // 점유자 본인의 참여 행도 여기서 함께 닫힌다 — 시작이 점유자를 참여자로
         // 등록했으므로(MR-27) 별도 처리가 필요 없다.
-        int closed = participantRepository.closeAllActiveByOccupancyId(occupancy.getId(), now);
+        int closed = meetingPresenceCoordinator.leaveAll(occupancy.getId(), spaceId, now);
         log.debug("반납으로 참여자 {}명을 마감했습니다. occupancyId={}", closed, occupancy.getId());
 
         // 발행은 상태 변경 뒤다. 리스너가 AFTER_COMMIT으로 받으므로 실제 발송은 커밋 후이며,
@@ -193,7 +192,7 @@ public class RoomOccupancyLifecycleService {
         OffsetDateTime now = OffsetDateTime.now(clock);
         occupancy.forceRelease(now);
 
-        int closed = participantRepository.closeAllActiveByOccupancyId(occupancy.getId(), now);
+        int closed = meetingPresenceCoordinator.leaveAll(occupancy.getId(), spaceId, now);
         // 지운 행의 멤버십이 돌아오지만 쓰지 않는다 — 강제 종료는 통보하지 않는 삭제다 (MR-21).
         int discarded = alertRepository.deleteWaitingBySpaceId(spaceId).size();
 

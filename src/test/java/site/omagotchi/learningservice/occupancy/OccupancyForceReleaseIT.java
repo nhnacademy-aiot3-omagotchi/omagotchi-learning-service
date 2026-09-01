@@ -94,6 +94,7 @@ class OccupancyForceReleaseIT {
         roomOccupancyService.start(roomId, occupier.userId());
         Long occupancyId = activeOccupancyId(roomId);
         vacancyAlertService.request(roomId, null, waiter.userId());
+        assertThat(openPresenceState(occupier.membershipId())).isEqualTo("MEETING");
 
         roomOccupancyLifecycleService.forceRelease(roomId, manager.userId());
 
@@ -101,6 +102,8 @@ class OccupancyForceReleaseIT {
         assertThat(occupancyEndedAt(occupancyId)).isNotNull();
         assertThat(openParticipantRows(occupancyId)).isZero();
         assertThat(waitingAlertRows(roomId)).isZero();
+        assertThat(openMeetingPresenceRows(occupier.membershipId(), roomId)).isZero();
+        assertThat(openPresenceState(occupier.membershipId())).isEqualTo("PRESENT");
     }
 
     /** 공간 회수가 목적이라 대기자에게 알리면 안 된다 (MR-21). */
@@ -290,6 +293,8 @@ class OccupancyForceReleaseIT {
         assertThat(occupancyEndedAt(occupancyId)).isNull();
         assertThat(openParticipantRows(occupancyId)).isEqualTo(1);
         assertThat(waitingAlertRows(roomId)).isEqualTo(1);
+        assertThat(openMeetingPresenceRows(occupier.membershipId(), roomId)).isEqualTo(1);
+        assertThat(openPresenceState(occupier.membershipId())).isEqualTo("MEETING");
     }
 
     // ────────────────────────────── 헬퍼 ──────────────────────────────
@@ -341,6 +346,33 @@ class OccupancyForceReleaseIT {
                 SELECT count(*) FROM learning_service.vacancy_alerts
                  WHERE space_id = ? AND notified_at IS NULL
                 """, spaceId);
+    }
+
+    private int openMeetingPresenceRows(Long membershipId, Long spaceId) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT count(*)
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                 WHERE attendance.cohort_membership_id = ?
+                   AND presence.space_id = ?
+                   AND presence.state = 'MEETING'
+                   AND presence.ended_at IS NULL
+                """, Integer.class, membershipId, spaceId);
+        return count == null ? 0 : count;
+    }
+
+    private String openPresenceState(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT presence.state
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                 WHERE attendance.cohort_membership_id = ?
+                   AND presence.ended_at IS NULL
+                 ORDER BY presence.started_at DESC, presence.id DESC
+                 LIMIT 1
+                """, String.class, membershipId);
     }
 
     private int allAlertRows(Long spaceId) {

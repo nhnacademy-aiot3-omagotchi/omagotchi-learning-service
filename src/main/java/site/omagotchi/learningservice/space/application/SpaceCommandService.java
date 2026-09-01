@@ -4,8 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.attendance.application.PresenceSpaceQueryService;
-import site.omagotchi.learningservice.attendance.application.result.SpacePresenceSummary;
+import site.omagotchi.learningservice.space.application.result.SpacePresenceSummary;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortLockService;
 import site.omagotchi.learningservice.cohort.application.result.CohortLockView;
@@ -43,7 +42,7 @@ public class SpaceCommandService {
     private final CohortAccessService cohortAccessService;
     private final SpaceReferenceQueryPort spaceReferenceQueryPort;
     private final CohortLockService cohortLockService;
-    private final PresenceSpaceQueryService presenceSpaceQueryService;
+    private final SpacePresenceQueryService spacePresenceQueryService;
     private final Clock clock;
 
     public Space create(
@@ -354,7 +353,7 @@ public class SpaceCommandService {
     }
 
     private void ensureNoCurrentPresenceOrReturnReservation(Space space) {
-        SpacePresenceSummary summary = presenceSpaceQueryService.summarize(space.getId());
+        SpacePresenceSummary summary = spacePresenceQueryService.summarize(space.getId());
         if (summary.currentCount() > 0L) {
             throw new BusinessException(SpaceErrorCode.SPACE_HAS_CURRENT_PRESENCE);
         }

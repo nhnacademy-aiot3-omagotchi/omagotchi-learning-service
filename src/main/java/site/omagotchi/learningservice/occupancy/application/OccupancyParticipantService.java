@@ -48,6 +48,7 @@ public class OccupancyParticipantService {
     private final CohortMembershipQueryService cohortMembershipQueryService;
     private final RoomOccupancyRepository occupancyRepository;
     private final OccupancyParticipantRepository participantRepository;
+    private final MeetingPresenceCoordinator meetingPresenceCoordinator;
     private final Clock clock;
 
     /**
@@ -118,10 +119,17 @@ public class OccupancyParticipantService {
         Optional<OccupancyParticipant> existing =
                 participantRepository.findByOccupancyIdAndUserId(locked.getId(), targetUserId);
 
-        // 이미 참여 중이면 좌석을 새로 쓰지 않는다. 결과 상태가 같으므로 멱등하게 끝낸다 —
-        // 이탈 재요청을 성공으로 두는 remove()와 같은 규약이다. 여기서 409를 주면
-        // 중복 클릭에 대해 클라이언트가 할 수 있는 일이 없다.
-        if (existing.filter(OccupancyParticipant::isActive).isPresent()) {
+        // 이미 참여 중이면 좌석을 새로 쓰지 않는다. 다만 참여 행만 남고 MEETING 구간이
+        // 유실된 부분 실패를 자가 복구하기 위해 체류 상태는 다시 맞춘다. 같은 회의에
+        // 이미 들어가 있으면 coordinator가 아무것도 하지 않으므로 멱등이다.
+        Optional<OccupancyParticipant> activeParticipant =
+                existing.filter(OccupancyParticipant::isActive);
+        if (activeParticipant.isPresent()) {
+            meetingPresenceCoordinator.ensureEntered(
+                    activeParticipant.get().getCohortMembershipId(),
+                    spaceId,
+                    now
+            );
             return;
         }
 
@@ -145,6 +153,7 @@ public class OccupancyParticipantService {
                         now
                 ))
         );
+        meetingPresenceCoordinator.enter(presence, spaceId, now);
     }
 
     /**
@@ -183,9 +192,13 @@ public class OccupancyParticipantService {
 
         // 이미 나간 사람에게 다시 요청이 와도 성공으로 둔다. 결과 상태가 같으므로
         // 재시도·중복 클릭에 409를 주면 클라이언트가 처리할 것이 없다.
-        if (!participant.leave(OffsetDateTime.now(clock))) {
+        if (!participant.isActive()) {
             log.debug("이미 이탈한 참여자입니다. occupancyId={}", locked.getId());
+            return;
         }
+
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        meetingPresenceCoordinator.leaveOne(participant, spaceId, now);
     }
 
     // ────────────────────────────── 내부 헬퍼 ──────────────────────────────

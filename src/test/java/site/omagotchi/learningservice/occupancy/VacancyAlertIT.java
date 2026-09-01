@@ -16,6 +16,7 @@ import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.OccupancyErrorCode;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
+import site.omagotchi.learningservice.occupancy.application.MeetingPresenceCoordinator;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
 import site.omagotchi.learningservice.occupancy.application.VacancyAlertDispatcher;
 import site.omagotchi.learningservice.occupancy.application.VacancyAlertService;
@@ -69,6 +70,9 @@ class VacancyAlertIT {
 
     @Autowired
     RoomOccupancyLifecycleService roomOccupancyLifecycleService;
+
+    @Autowired
+    MeetingPresenceCoordinator meetingPresenceCoordinator;
 
     @Autowired
     VacancyAlertService vacancyAlertService;
@@ -688,12 +692,22 @@ class VacancyAlertIT {
      * 반영되고, 발송을 트리거하지도 않는다.</p>
      */
     private void expireOccupancy(Long spaceId) {
+        Long occupancyId = jdbcTemplate.queryForObject("""
+                SELECT id
+                  FROM learning_service.room_occupancies
+                 WHERE space_id = ?
+                   AND status = 'ACTIVE'
+                """, Long.class, spaceId);
+        OffsetDateTime endedAt = OffsetDateTime.now();
+        meetingPresenceCoordinator.leaveAll(occupancyId, spaceId, endedAt);
         jdbcTemplate.update("""
                 UPDATE learning_service.room_occupancies
                    SET started_at = now() - interval '3 hours',
-                       expires_at = now() - interval '1 minute'
+                       expires_at = ?,
+                       status = 'EXPIRED',
+                       ended_at = ?
                  WHERE space_id = ? AND status = 'ACTIVE'
-                """, spaceId);
+                """, endedAt, endedAt, spaceId);
     }
 
     /** Mock에 쌓인 삭제 통보 호출 수. 비동기 발송이 끝났는지 기다리는 데 쓴다. */

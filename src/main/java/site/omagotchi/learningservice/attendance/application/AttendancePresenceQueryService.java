@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.attendance.application.result.OpenUserPresenceView;
 import site.omagotchi.learningservice.attendance.application.port.AttendancePresenceQuery;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.util.List;
 import java.util.Optional;
@@ -75,5 +76,50 @@ public class AttendancePresenceQueryService {
             latestByUserId.putIfAbsent(presence.userId(), presence.toPresenceView());
         }
         return Map.copyOf(latestByUserId);
+    }
+
+    /** 점유 참여에 기록된 소속별 최신 열린 구간을 결정적으로 선택한다. */
+    public Map<Long, OpenPresenceView> findOpenPresencesByMembershipIds(
+            Collection<Long> membershipIds
+    ) {
+        if (membershipIds == null || membershipIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, OpenPresenceView> latestByMembershipId = new LinkedHashMap<>();
+        for (OpenPresenceView presence
+                : attendancePresenceQuery.findOpenPresencesByMembershipIds(membershipIds)) {
+            latestByMembershipId.putIfAbsent(presence.cohortMembershipId(), presence);
+        }
+        return Map.copyOf(latestByMembershipId);
+    }
+
+    /**
+     * 회의 이탈·종료가 닫아야 할 열린 MEETING을 소속별로 조회한다.
+     * 최신 열린 구간을 고르지 않으며 같은 소속에 후보가 둘이면 정합성 오류로 중단한다.
+     */
+    public Map<Long, OpenPresenceView> findOpenMeetingPresencesByMembershipIds(
+            Collection<Long> membershipIds,
+            Long meetingSpaceId
+    ) {
+        if (membershipIds == null || membershipIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, OpenPresenceView> meetingByMembershipId = new LinkedHashMap<>();
+        for (OpenPresenceView presence
+                : attendancePresenceQuery.findOpenMeetingPresencesByMembershipIds(
+                        membershipIds,
+                        meetingSpaceId
+                )) {
+            OpenPresenceView duplicate = meetingByMembershipId.putIfAbsent(
+                    presence.cohortMembershipId(),
+                    presence
+            );
+            if (duplicate != null) {
+                throw new BusinessException(
+                        AttendanceErrorCode.PRESENCE_INTERVAL_INCONSISTENT
+                );
+            }
+        }
+        return Map.copyOf(meetingByMembershipId);
     }
 }

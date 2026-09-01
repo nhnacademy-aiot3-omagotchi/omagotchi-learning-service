@@ -20,4 +20,16 @@ public class AttendancePresenceJpaQuery implements AttendancePresenceQuery {
     @Override public List<OpenUserPresenceView> findOpenPresences(Collection<UUID> userIds) {
         return presenceIntervalRepository.findOpenPresences(userIds);
     }
+    @Override public List<OpenPresenceView> findOpenPresencesByMembershipIds(Collection<Long> membershipIds) {
+        return presenceIntervalRepository.findOpenPresencesByMembershipIds(membershipIds);
+    }
+    @Override public List<OpenPresenceView> findOpenMeetingPresencesByMembershipIds(
+            Collection<Long> membershipIds,
+            Long meetingSpaceId
+    ) {
+        return presenceIntervalRepository.findOpenMeetingPresencesByMembershipIds(
+                membershipIds,
+                meetingSpaceId
+        );
+    }
 }

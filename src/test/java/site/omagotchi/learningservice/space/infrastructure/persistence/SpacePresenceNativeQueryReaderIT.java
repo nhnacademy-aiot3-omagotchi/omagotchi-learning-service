@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.attendance.infrastructure;
+package site.omagotchi.learningservice.space.infrastructure.persistence;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,12 +19,12 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@Import({TestcontainersConfiguration.class, QueryDslConfig.class, AttendanceSpacePresenceJpaQuery.class})
+@Import({TestcontainersConfiguration.class, QueryDslConfig.class, SpacePresenceNativeQueryReader.class})
 @ActiveProfiles("test")
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @DisplayName("공간별 현재 체류와 회의 후 복귀 예약 조회")
-class AttendanceSpacePresenceJpaQueryIT {
+class SpacePresenceNativeQueryReaderIT {
 
     private static final LocalDate CURRENT_ATTENDANCE_DATE = LocalDate.of(2026, 8, 31);
     private static final UUID ADMIN_ID = UUID.fromString(
@@ -35,7 +35,7 @@ class AttendanceSpacePresenceJpaQueryIT {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
-    private AttendanceSpacePresenceJpaQuery query;
+    private SpacePresenceNativeQueryReader query;
 
     @Test
     @DisplayName("현재 집계일의 미체크아웃 체류와 가장 최근 비회의 공간의 복귀 예약만 집계한다")
@@ -87,6 +87,83 @@ class AttendanceSpacePresenceJpaQueryIT {
         assertThat(summaries.get(labId).returnReservationCount()).isEqualTo(1L);
         assertThat(summaries.get(meetingRoomId).currentCount()).isEqualTo(1L);
         assertThat(summaries.get(meetingRoomId).returnReservationCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("직접 체류와 회의 후 복귀 예약은 해당 출결의 실습실 예약으로 조회한다")
+    void findsDirectPresenceAndMeetingReturnReservation() {
+        Long cohortId = saveCohort();
+        Long labId = saveSpace(cohortId, "예약조회-실습실", "LAB");
+        Long otherLabId = saveSpace(cohortId, "예약조회-다른실습실", "LAB");
+        Long meetingRoomId = saveSpace(cohortId, "예약조회-회의실", "MEETING");
+
+        Long directAttendanceId = saveAttendance(
+                saveMembership(cohortId),
+                CURRENT_ATTENDANCE_DATE,
+                null
+        );
+        savePresence(directAttendanceId, "PRESENT", labId,
+                "2026-08-31T00:00:00Z", null);
+
+        Long meetingAttendanceId = saveAttendance(
+                saveMembership(cohortId),
+                CURRENT_ATTENDANCE_DATE,
+                null
+        );
+        savePresence(meetingAttendanceId, "PRESENT", labId,
+                "2026-08-31T00:10:00Z", "2026-08-31T01:00:00Z");
+        savePresence(meetingAttendanceId, "MEETING", meetingRoomId,
+                "2026-08-31T01:00:00Z", null);
+
+        assertThat(query.isReserved(
+                labId,
+                directAttendanceId,
+                CURRENT_ATTENDANCE_DATE
+        )).isTrue();
+        assertThat(query.isReserved(
+                labId,
+                meetingAttendanceId,
+                CURRENT_ATTENDANCE_DATE
+        )).isTrue();
+        assertThat(query.isReserved(
+                otherLabId,
+                meetingAttendanceId,
+                CURRENT_ATTENDANCE_DATE
+        )).isFalse();
+    }
+
+    @Test
+    @DisplayName("체크아웃했거나 다른 집계일인 출결은 실습실 예약에서 제외한다")
+    void excludesCheckedOutAndDifferentAttendanceDate() {
+        Long cohortId = saveCohort();
+        Long labId = saveSpace(cohortId, "예약제외-실습실", "LAB");
+
+        Long checkedOutAttendanceId = saveAttendance(
+                saveMembership(cohortId),
+                CURRENT_ATTENDANCE_DATE,
+                "2026-08-31T02:00:00Z"
+        );
+        savePresence(checkedOutAttendanceId, "PRESENT", labId,
+                "2026-08-31T00:00:00Z", null);
+
+        Long staleAttendanceId = saveAttendance(
+                saveMembership(cohortId),
+                CURRENT_ATTENDANCE_DATE.minusDays(1),
+                null
+        );
+        savePresence(staleAttendanceId, "PRESENT", labId,
+                "2026-08-30T00:00:00Z", null);
+
+        assertThat(query.isReserved(
+                labId,
+                checkedOutAttendanceId,
+                CURRENT_ATTENDANCE_DATE
+        )).isFalse();
+        assertThat(query.isReserved(
+                labId,
+                staleAttendanceId,
+                CURRENT_ATTENDANCE_DATE
+        )).isFalse();
     }
 
     private Long saveCohort() {

@@ -107,6 +107,13 @@ public enum SpaceErrorCode implements ErrorCode {
             "SPACE_ACTIVE_DELETE_NOT_ALLOWED",
             "활성 공간은 삭제할 수 없습니다."
     ),
+    // 센서가 남은 채 삭제하면 그 센서는 어느 기수에서도 보이지 않고, 기본키가 EUI라
+    // 재등록도 막힌다. 삭제를 막아 미아가 생기는 것 자체를 예방한다.
+    SPACE_HAS_SENSOR_DELETE_NOT_ALLOWED(
+            ErrorType.CONFLICT,
+            "SPACE_HAS_SENSOR_DELETE_NOT_ALLOWED",
+            "센서가 배치된 공간은 삭제할 수 없습니다. 센서를 다른 공간으로 옮긴 뒤 삭제하세요."
+    ),
     // 관리 주체가 없다는 것은 "이 요청자에게 권한이 없다"가 아니라 "누구에게도 없다"는 뜻이라
     // 상태가 아닌 권한 문제다 — 명세 01 §5 "관리 주체 없는 공간 삭제 → 403, 비활성화로 대체 안내".
     UNMANAGED_SPACE_DELETE_NOT_ALLOWED(

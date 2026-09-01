@@ -9,6 +9,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
+import site.omagotchi.learningservice.sensor.application.CohortEndedSensorCleanup;
 import site.omagotchi.learningservice.space.application.CohortEndedSpaceCleanup;
 import site.omagotchi.learningservice.team.application.CohortEndedTeamCleanup;
 
@@ -30,7 +31,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * 기수 종료 4단계의 순서와 실패 정책 (CE-01~05, 명세 08).
+ * 기수 종료 5단계의 순서와 실패 정책 (CE-01~05, 명세 08).
  *
  * <p><b>순서는 여기서만 결정적으로 검증된다.</b> 통합 테스트는 관찰 가능한 결과(누가 알림을
  * 받았는가)를 보는데, 순서가 뒤집혀도 CE-02의 삭제가 비동기 발송보다 빠르면 결과가 같아
@@ -59,6 +60,9 @@ class CohortEndedCleanupTest {
     private EndedMembershipOccupancyCleanup occupancyCleanup;
 
     @Mock
+    private CohortEndedSensorCleanup sensorCleanup;
+
+    @Mock
     private CohortEndedSpaceCleanup spaceCleanup;
 
     private CohortEndedCleanup cohortEndedCleanup;
@@ -71,6 +75,7 @@ class CohortEndedCleanupTest {
                 vacancyAlertService,
                 occupancyRepository,
                 occupancyCleanup,
+                sensorCleanup,
                 spaceCleanup,
                 Clock.fixed(Instant.parse("2026-07-24T01:00:00Z"), ZoneId.of("Asia/Seoul"))
         );
@@ -85,18 +90,33 @@ class CohortEndedCleanupTest {
      * 발송이 방금 종료된 기수의 신청을 대기 중으로 보고 그 학생들에게 알림을 보낸다.
      */
     @Test
-    @DisplayName("팀 정리 → 알림 삭제 → 점유 종료 → 공간 해제 순서를 지킨다.")
+    @DisplayName("팀 정리 → 알림 삭제 → 점유 종료 → 센서 회수 → 공간 해제 순서를 지킨다.")
     void keepsMandatedStepOrder() {
         givenOneActiveOccupancy();
 
         cohortEndedCleanup.cleanUp(COHORT_ID);
 
         InOrder order = inOrder(
-                teamCleanup, vacancyAlertService, occupancyRepository, spaceCleanup);
+                teamCleanup, vacancyAlertService, occupancyRepository, sensorCleanup, spaceCleanup);
         order.verify(teamCleanup).disbandAllByCohort(COHORT_ID);
         order.verify(vacancyAlertService).discardByMemberships(MEMBERSHIP_IDS);
         order.verify(occupancyRepository).findActiveSummariesByOccupierMembershipIds(MEMBERSHIP_IDS);
+        // 센서 회수가 공간 해제보다 먼저다. 뒤집히면 spaces.cohort_id가 이미 NULL이라
+        // 대상 센서를 하나도 찾지 못하고, 회수되지 못한 센서의 룰이 계속 발화한다.
+        order.verify(sensorCleanup).deactivateSensors(COHORT_ID);
         order.verify(spaceCleanup).unassignSpaces(COHORT_ID);
+    }
+
+    @Test
+    @DisplayName("센서 회수가 실패해도 공간 해제는 진행한다.")
+    void sensorCleanupFailureDoesNotBlockSpaceUnassign() {
+        givenOneActiveOccupancy();
+        willThrow(new IllegalStateException("boom"))
+                .given(sensorCleanup).deactivateSensors(COHORT_ID);
+
+        cohortEndedCleanup.cleanUp(COHORT_ID);
+
+        verify(spaceCleanup).unassignSpaces(COHORT_ID);
     }
 
     /**

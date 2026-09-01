@@ -4,25 +4,34 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.sensor.application.port.SensorSeriesRepository;
-import site.omagotchi.learningservice.sensor.application.result.SensorSeries;
-import site.omagotchi.learningservice.sensor.domain.SeriesPoint;
+import site.omagotchi.learningservice.sensor.application.port.SensorDeviceRepository;
+import site.omagotchi.learningservice.sensor.application.port.SpaceSeriesRepository;
+import site.omagotchi.learningservice.sensor.application.query.SpaceSeriesQuery;
+import site.omagotchi.learningservice.sensor.application.result.SensorRef;
+import site.omagotchi.learningservice.sensor.application.result.SpaceSeries;
+import site.omagotchi.learningservice.sensor.domain.SensorDevice;
 import site.omagotchi.learningservice.sensor.domain.SeriesWindow;
+import site.omagotchi.learningservice.sensor.domain.SpaceSeriesPoint;
+import site.omagotchi.learningservice.space.application.SpaceCohortQueryService;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,12 +41,23 @@ class SensorSeriesServiceTest {
     private static final Instant NOW = Instant.parse("2026-08-25T10:30:00Z");
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final String DEVICE_EUI = "0011223344556677";
+    private static final Long COHORT_ID = 1L;
+    private static final Long SPACE_ID = 10L;
+    private static final UUID REQUESTER_ID = UUID.fromString(
+            "00000000-0000-0000-0000-000000000001"
+    );
 
     @Mock
-    private SensorSeriesRepository seriesRepository;
+    private SensorDeviceRepository sensorDeviceRepository;
 
     @Mock
-    private SensorDeviceService sensorDeviceService;
+    private SpaceSeriesRepository spaceSeriesRepository;
+
+    @Mock
+    private CohortAccessService cohortAccessService;
+
+    @Mock
+    private SpaceCohortQueryService spaceCohortQueryService;
 
     private SensorSeriesService service;
 
@@ -45,54 +65,75 @@ class SensorSeriesServiceTest {
     void setUp() {
         SensorSeriesProperties properties = new SensorSeriesProperties(SEOUL);
         Clock fixedClock = Clock.fixed(NOW, SEOUL);
-        service = new SensorSeriesService(seriesRepository, sensorDeviceService, properties, fixedClock);
+        service = new SensorSeriesService(
+                sensorDeviceRepository,
+                spaceSeriesRepository,
+                cohortAccessService,
+                spaceCohortQueryService,
+                properties,
+                fixedClock
+        );
     }
 
     @Test
-    @DisplayName("저장소가 준 점들과 기기 표시명, 조회 범위를 묶어 돌려준다")
-    void assemblesSeriesFromRepositoryAndDeviceMaster() {
-        // given
-        List<SeriesPoint> points = List.of(
-                new SeriesPoint(Instant.parse("2026-08-25T09:00:00Z"), 23.5, false));
-        when(seriesRepository.findSeries(any())).thenReturn(points);
-        when(sensorDeviceService.findDisplayName(DEVICE_EUI)).thenReturn(Optional.of("강의실 온도계"));
+    @DisplayName("공간 시계열은 활성 기기만 조회하고 기기 마스터의 표시명을 채운다")
+    void assemblesSpaceSeriesFromActiveDevices() {
+        // given: 시계열 저장소에는 기기 마스터에 존재하는 센서와 없는 센서가 함께 있다
+        List<SensorRef> sensors = List.of(
+                new SensorRef(DEVICE_EUI, "window-side", null),
+                new SensorRef("8899aabbccddeeff", "door-side", null));
+        List<SpaceSeriesPoint> points = List.of(
+                SpaceSeriesPoint.empty(Instant.parse("2026-08-25T09:00:00Z"), false));
+        SpaceSeries fromRepository = new SpaceSeries(
+                "A강의실",
+                "co2",
+                SeriesWindow.DAY,
+                NOW.minus(Duration.ofDays(1)),
+                NOW,
+                sensors,
+                points
+        );
+        SensorDevice activeDevice = SensorDevice.create(
+                DEVICE_EUI, SPACE_ID, "CO2-01", "창가 CO2 센서", "window-side", 60, NOW);
+
+        when(spaceCohortQueryService.findSpaceIdsByCohortId(COHORT_ID))
+                .thenReturn(List.of(SPACE_ID));
+        when(sensorDeviceRepository.findActiveBySpaceIds(List.of(SPACE_ID)))
+                .thenReturn(List.of(activeDevice));
+        when(spaceSeriesRepository.findSpaceSeries(any())).thenReturn(fromRepository);
 
         // when
-        SensorSeries result = service.getSeries(DEVICE_EUI, "temperature", "day");
+        SpaceSeries result = service.getSpaceSeries(
+                COHORT_ID,
+                REQUESTER_ID,
+                "A강의실",
+                "co2",
+                "day"
+        );
 
         // then
-        assertEquals(DEVICE_EUI, result.deviceEui());
-        assertEquals("강의실 온도계", result.deviceDisplayName());
-        assertEquals("temperature", result.measurement());
+        assertEquals("A강의실", result.location());
+        assertEquals("co2", result.measurement());
         assertEquals(SeriesWindow.DAY, result.window());
-        assertEquals(NOW.minus(Duration.ofDays(1)), result.from());
-        assertEquals(NOW, result.to());
         assertEquals(points, result.points());
-    }
+        assertEquals(2, result.sensors().size());
+        assertEquals("창가 CO2 센서", result.sensors().get(0).displayName());
+        assertNull(result.sensors().get(1).displayName());
 
-    @Test
-    @DisplayName("기기 마스터에 표시명이 없으면 null로 둔다")
-    void leavesDisplayNameNullWhenUnknownDevice() {
-        // given
-        when(seriesRepository.findSeries(any())).thenReturn(List.of());
-        when(sensorDeviceService.findDisplayName(DEVICE_EUI)).thenReturn(Optional.empty());
-
-        // when
-        SensorSeries result = service.getSeries(DEVICE_EUI, "temperature", "WEEK");
-
-        // then
-        assertNull(result.deviceDisplayName());
-        assertEquals(SeriesWindow.WEEK, result.window());
+        ArgumentCaptor<SpaceSeriesQuery> queryCaptor = ArgumentCaptor.forClass(SpaceSeriesQuery.class);
+        verify(spaceSeriesRepository).findSpaceSeries(queryCaptor.capture());
+        assertEquals(Set.of(DEVICE_EUI), queryCaptor.getValue().includedDeviceEuis());
     }
 
     @Test
     @DisplayName("지원하지 않는 window 문자열이면 BusinessException이 발생한다")
     void rejectsUnknownWindow() {
-        try {
-            service.getSeries(DEVICE_EUI, "temperature", "YEAR");
-            fail("예외가 발생해야 하는데 발생하지 않았다");
-        } catch (BusinessException exception) {
-            // 예외가 터져서 여기로 들어오면 통과
-        }
+        assertThrows(BusinessException.class, () -> service.getSpaceSeries(
+                COHORT_ID,
+                REQUESTER_ID,
+                "A강의실",
+                "co2",
+                "YEAR"
+        ));
     }
 }

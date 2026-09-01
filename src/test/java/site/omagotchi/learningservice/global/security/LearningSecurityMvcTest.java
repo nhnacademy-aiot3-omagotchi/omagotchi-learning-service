@@ -17,6 +17,7 @@ import site.omagotchi.learningservice.space.application.SpaceQueryService;
 import site.omagotchi.learningservice.space.presentation.SpaceAdminController;
 import site.omagotchi.learningservice.space.presentation.SpaceQueryController;
 import site.omagotchi.learningservice.sensor.application.ThresholdRuleService;
+import site.omagotchi.learningservice.sensor.application.result.UpdateThresholdRuleResult;
 import site.omagotchi.learningservice.sensor.presentation.ThresholdRuleController;
 import site.omagotchi.learningservice.telegram.application.TelegramUserLinkService;
 import site.omagotchi.learningservice.telegram.application.TelegramWebhookService;
@@ -32,6 +33,8 @@ import java.util.UUID;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -215,47 +218,66 @@ class LearningSecurityMvcTest {
     }
 
     @Test
-    @DisplayName("USER의 임계치 룰 생성은 403")
-    void rejectsUserFromCreatingThresholdRule() throws Exception {
-        // 임계치 룰은 rule-service 판정 동작을 바꾸는 운영 설정이라 일반 사용자에게 열려 있으면 안 된다
+    @DisplayName("임계치 룰 생성은 JWT 사용자와 기수를 서비스에 전달")
+    void passesJwtActorAndCohortWhenCreatingThresholdRule() throws Exception {
         String userToken = TestJwtKeyConfig.issue("USER");
+        given(thresholdRuleService.create(eq(1L), eq(USER_ID), isNull(), any()))
+                .willReturn(10L);
 
-        mockMvc.perform(post("/api/v1/threshold-rules")
+        mockMvc.perform(post("/api/v1/cohorts/1/threshold-rules")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("AUTH_ACCESS_DENIED"));
+                        .content("""
+                                {
+                                  "deviceEui": "0011223344556677",
+                                  "metric": "co2",
+                                  "operator": "GT",
+                                  "threshold": 1000
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.ruleId").value(10));
 
-        verifyNoInteractions(thresholdRuleService);
+        verify(thresholdRuleService).create(eq(1L), eq(USER_ID), isNull(), any());
     }
 
     @Test
-    @DisplayName("USER의 임계치 룰 수정은 403")
-    void rejectsUserFromUpdatingThresholdRule() throws Exception {
+    @DisplayName("임계치 룰 수정은 JWT 사용자와 기수를 서비스에 전달")
+    void passesJwtActorAndCohortWhenUpdatingThresholdRule() throws Exception {
         String userToken = TestJwtKeyConfig.issue("USER");
+        given(thresholdRuleService.update(eq(1L), eq(USER_ID), isNull(), eq(5L), any()))
+                .willReturn(new UpdateThresholdRuleResult(true, 2L));
 
-        mockMvc.perform(patch("/api/v1/threshold-rules/1")
+        mockMvc.perform(patch("/api/v1/cohorts/1/threshold-rules/5")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("AUTH_ACCESS_DENIED"));
+                        .content("""
+                                {
+                                  "baseVersion": 1,
+                                  "operator": "GTE",
+                                  "threshold": 900
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.changed").value(true));
 
-        verifyNoInteractions(thresholdRuleService);
+        verify(thresholdRuleService)
+                .update(eq(1L), eq(USER_ID), isNull(), eq(5L), any());
     }
 
     @Test
-    @DisplayName("공개 임계치 룰 조회는 인증된 USER도 허용")
-    void allowsUserToReadThresholdRules() throws Exception {
-        given(thresholdRuleService.readAll()).willReturn(List.of());
+    // 매니저 여부는 경로 매처가 아니라 서비스가 판정한다 — JWT의 전역 역할로는
+    // 기수 소속을 알 수 없기 때문이다. 필터 체인은 인증까지만 책임진다.
+    @DisplayName("임계치 룰 조회는 인가 판정을 서비스에 위임한다")
+    void delegatesThresholdRuleReadAuthorizationToService() throws Exception {
+        given(thresholdRuleService.findAllByCohort(1L, USER_ID)).willReturn(List.of());
         String userToken = TestJwtKeyConfig.issue("USER");
 
-        mockMvc.perform(get("/api/v1/threshold-rules")
+        mockMvc.perform(get("/api/v1/cohorts/1/threshold-rules")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken))
                 .andExpect(status().isOk());
 
-        verify(thresholdRuleService).readAll();
+        verify(thresholdRuleService).findAllByCohort(1L, USER_ID);
     }
 
     private TelegramUserLinkResult linkResponse(UUID userId) {

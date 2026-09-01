@@ -15,6 +15,7 @@ import site.omagotchi.learningservice.occupancy.application.VacancyAlertService;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.application.command.UpdateSpaceCommand;
 import site.omagotchi.learningservice.space.application.port.SpaceLabReductionQueryPort;
+import site.omagotchi.learningservice.space.application.port.SpaceReferenceQueryPort;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.application.result.SpaceLabReductionView;
 import site.omagotchi.learningservice.space.domain.Space;
@@ -40,6 +41,7 @@ public class SpaceCommandService {
     private final OccupancyQueryService occupancyQueryService;
     private final VacancyAlertService vacancyAlertService;
     private final CohortAccessService cohortAccessService;
+    private final SpaceReferenceQueryPort spaceReferenceQueryPort;
     private final CohortLockService cohortLockService;
     private final PresenceSpaceQueryService presenceSpaceQueryService;
     private final Clock clock;
@@ -137,6 +139,7 @@ public class SpaceCommandService {
         }
 
         ensureNoActiveOccupancy(spaceId, now);
+        ensureNoSensorPlaced(spaceId);
 
         Space deletedSpace =
                 existingSpace.delete(now);
@@ -307,6 +310,22 @@ public class SpaceCommandService {
         if (space.isDeleted()) {
             log.info("삭제된 공간에 대한 명령 요청 spaceId={}", space.getId());
             throw new BusinessException(SpaceErrorCode.NOT_FOUND);
+        }
+    }
+
+    /**
+     * 센서가 배치된 공간은 삭제하지 않는다.
+     *
+     * <p>소프트 삭제여도 {@code findCohortIdById}가 삭제된 공간을 걸러내므로, 그 공간의
+     * 센서는 어느 기수에도 속하지 않게 된다. 그러면 목록에서 사라지고 수정·비활성화는
+     * 기수 검사에 막히며 device_eui가 기본키라 재등록도 409로 거절된다. 매니저 인계가
+     * 유일한 출구인데, 애초에 그 상태를 만들지 않는 편이 낫다.</p>
+     */
+    private void ensureNoSensorPlaced(Long spaceId) {
+        if (spaceReferenceQueryPort.countSensors(spaceId) > 0) {
+            throw new BusinessException(
+                    SpaceErrorCode.SPACE_HAS_SENSOR_DELETE_NOT_ALLOWED
+            );
         }
     }
 

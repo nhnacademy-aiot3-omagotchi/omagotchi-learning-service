@@ -117,4 +117,20 @@ public interface PresenceIntervalRepository extends JpaRepository<PresenceInterv
             @Param("membershipIds") Collection<Long> membershipIds,
             @Param("meetingSpaceId") Long meetingSpaceId
     );
+
+    /**
+     * 이 소속이 지금 회의 중인가.
+     *
+     * <p>출결 기록이 아니라 소속 단위로 보는 것이 중요하다. 회의가 집계일 경계를 넘으면
+     * 열린 {@code MEETING}은 이전 집계일 출결에 남고, 그 사이 새 출결로 체크인할 수 있다.
+     * 출결 단위로 보면 그때 "한 사람이 회의실과 실습실에 동시에 있는" 이력이 생긴다.</p>
+     */
+    @Query("""
+                SELECT (COUNT(i) > 0)
+                  FROM PresenceInterval i
+                  JOIN AttendanceRecord r ON r.id = i.attendanceId
+                 WHERE r.cohortMembershipId = :membershipId
+                   AND i.endedAt IS NULL
+                   AND i.state = site.omagotchi.learningservice.attendance.domain.PresenceState.MEETING""")
+    boolean existsOpenMeetingByMembershipId(@Param("membershipId") Long membershipId);
 }

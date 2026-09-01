@@ -112,7 +112,10 @@ public class AttendanceSpacePresenceJpaQuery implements AttendanceSpacePresenceQ
 
     @Override
     public boolean isReserved(Long spaceId, Long attendanceId, LocalDate attendanceDate) {
-        Object result = entityManager.createNativeQuery(RESERVED_ATTENDANCE_QUERY)
+        Object result = entityManager.createNativeQuery(
+                        RESERVED_ATTENDANCE_QUERY,
+                        Boolean.class
+                )
                 .setParameter("spaceId", spaceId)
                 .setParameter("attendanceId", attendanceId)
                 .setParameter("attendanceDate", attendanceDate)

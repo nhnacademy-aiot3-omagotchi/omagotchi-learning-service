@@ -63,13 +63,6 @@ public class OccupancyParticipantJpaPersistence implements OccupancyParticipantR
         return participantJpaRepository.existsByUserIdAndLeftAtIsNull(userId);
     }
 
-    @Override
-    public boolean existsActiveParticipationByCohortMembershipId(Long cohortMembershipId) {
-        return participantJpaRepository.existsByCohortMembershipIdAndLeftAtIsNull(
-                cohortMembershipId
-        );
-    }
-
     /**
      * {@inheritDoc}
      *

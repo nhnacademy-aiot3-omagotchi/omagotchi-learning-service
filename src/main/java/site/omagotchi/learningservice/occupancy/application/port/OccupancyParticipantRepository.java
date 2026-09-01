@@ -83,9 +83,6 @@ public interface OccupancyParticipantRepository {
      */
     boolean existsActiveParticipationByUserId(UUID userId);
 
-    /** 해당 기수 소속으로 열린 회의 참여가 있는가. 출결 체크아웃 가드에 사용한다. */
-    boolean existsActiveParticipationByCohortMembershipId(Long cohortMembershipId);
-
 
     /**
      * 열린 참여자 전원의 {@code left_at}을 종료 시각으로 일괄 마감한다 (MR-32).

@@ -13,7 +13,6 @@ import site.omagotchi.learningservice.attendance.application.command.ChangeAtten
 import site.omagotchi.learningservice.attendance.application.query.AttendancePageQuery;
 import site.omagotchi.learningservice.attendance.application.event.AttendanceCheckedInEvent;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceEventPublisher;
-import site.omagotchi.learningservice.attendance.application.port.AttendanceActiveMeetingPort;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceLabAccessPort;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceRecordQueryRepository;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
@@ -88,9 +87,6 @@ class AttendanceServiceTest {
 
     @Mock
     private AttendanceLabAccessPort attendanceLabAccessPort;
-
-    @Mock
-    private AttendanceActiveMeetingPort attendanceActiveMeetingPort;
 
     @Mock
     private AttendanceEventPublisher attendanceEventPublisher;
@@ -211,7 +207,7 @@ class AttendanceServiceTest {
         given(clock.instant()).willReturn(checkOutAt);
         given(attendanceRecordRepository.findWithLockByCohortMembershipIdAndAttendanceDate(
                 MEMBERSHIP_ID, ATTENDANCE_DATE)).willReturn(Optional.of(record));
-        given(attendanceActiveMeetingPort.existsActiveParticipation(MEMBERSHIP_ID)).willReturn(true);
+        given(presenceIntervalRepository.existsOpenMeetingByMembershipId(MEMBERSHIP_ID)).willReturn(true);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -253,7 +249,7 @@ class AttendanceServiceTest {
         given(clock.instant()).willReturn(moveAt);
         given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(
                 MEMBERSHIP_ID, ATTENDANCE_DATE)).willReturn(Optional.of(record));
-        given(attendanceActiveMeetingPort.existsActiveParticipation(MEMBERSHIP_ID))
+        given(presenceIntervalRepository.existsOpenMeetingByMembershipId(MEMBERSHIP_ID))
                 .willReturn(true);
 
         BusinessException exception = assertThrows(

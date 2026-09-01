@@ -6,7 +6,6 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.command.ChangeAttendanceStatusCommand;
 import site.omagotchi.learningservice.attendance.application.event.AttendanceCheckedInEvent;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceEventPublisher;
-import site.omagotchi.learningservice.attendance.application.port.AttendanceActiveMeetingPort;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceLabAccessPort;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceRecordQueryRepository;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordResult;
@@ -57,7 +56,6 @@ public class AttendanceService {
     private final PresenceIntervalRepository presenceIntervalRepository;
     private final PresenceTransitionService presenceTransitionService;
     private final AttendanceLabAccessPort attendanceLabAccessPort;
-    private final AttendanceActiveMeetingPort attendanceActiveMeetingPort;
     private final AttendanceEventPublisher attendanceEventPublisher;
     private final Clock clock;
 
@@ -109,7 +107,7 @@ public class AttendanceService {
         if (record.getCheckedOutAt() != null) {
             return AttendanceRecordResult.from(record);
         }
-        if (attendanceActiveMeetingPort.existsActiveParticipation(membership.getId())) {
+        if (isInMeeting(membership.getId())) {
             throw new BusinessException(AttendanceErrorCode.ATTENDANCE_ACTIVE_MEETING_EXISTS);
         }
 
@@ -145,7 +143,7 @@ public class AttendanceService {
         if (record.getCheckedOutAt() != null) {
             throw new BusinessException(AttendanceErrorCode.PRESENCE_TRANSITION_NOT_ALLOWED);
         }
-        if (attendanceActiveMeetingPort.existsActiveParticipation(membership.getId())) {
+        if (isInMeeting(membership.getId())) {
             throw new BusinessException(
                     AttendanceErrorCode.PRESENCE_MEETING_EXIT_REQUIRED
             );
@@ -249,5 +247,20 @@ public class AttendanceService {
     private void lockActiveMembership(Long membershipId) {
         membershipRepository.findWithLockByIdAndStatus(membershipId, CohortMembershipStatus.ACTIVE)
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_MEMBERSHIP_NOT_FOUND));
+    }
+
+    /**
+     * 이 소속이 지금 회의 중인가.
+     *
+     * <p>점유 기능에 참여 여부를 묻지 않는 것이 의도다. 참여 행과 체류 구간은 같은
+     * Transaction에서 함께 바뀌므로(계획 §8-3.2) 열린 {@code MEETING} 구간이 곧 그
+     * 소속의 회의 참여다. 출결이 자기 데이터로 답할 수 있는 질문에 Feature 경계를
+     * 넘지 않는다.</p>
+     *
+     * <p>계정이 아니라 소속으로 보는 것이 중요하다. 다기수 담당자가 다른 기수 소속으로
+     * 회의에 들어가 있어도 이 기수의 퇴실·이동은 그 회의를 건드리지 않는다.</p>
+     */
+    private boolean isInMeeting(Long membershipId) {
+        return presenceIntervalRepository.existsOpenMeetingByMembershipId(membershipId);
     }
 }

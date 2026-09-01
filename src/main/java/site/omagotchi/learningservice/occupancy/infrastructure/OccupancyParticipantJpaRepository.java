@@ -45,8 +45,6 @@ public interface OccupancyParticipantJpaRepository extends JpaRepository<Occupan
      */
     boolean existsByUserIdAndLeftAtIsNull(UUID userId);
 
-    boolean existsByCohortMembershipIdAndLeftAtIsNull(Long cohortMembershipId);
-
     /**
      * 여러 점유의 현재 참여자를 배치로 읽는다 (공간 목록의 참여자 표시용).
      *

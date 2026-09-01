@@ -6,15 +6,44 @@ import org.springframework.data.repository.query.Param;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.attendance.application.result.OpenUserPresenceView;
 import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
+import site.omagotchi.learningservice.attendance.domain.PresenceState;
 
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.Collection;
 
+/**
+ * 체류 구간 저장소.
+ *
+ * <p>체류 이력은 업무 코드에서 삭제하지 않는다. 전환과 체크아웃은 기존 행의
+ * {@code ended_at}을 채우고 다음 구간을 새 행으로 보존한다.</p>
+ */
 public interface PresenceIntervalRepository extends JpaRepository<PresenceInterval, Long> {
 
     Optional<PresenceInterval> findFirstByAttendanceIdAndEndedAtIsNullOrderByStartedAtDesc(Long attendanceId);
+
+    /** 열린 구간 중복을 감지할 수 있도록 한 건으로 축약하지 않는다. */
+    List<PresenceInterval> findByAttendanceIdAndEndedAtIsNullOrderByStartedAtAscIdAsc(
+            Long attendanceId
+    );
+
+    /** 현재 회의 시작 시각과 맞닿은 가장 최근 비회의 구간을 조회한다. */
+    Optional<PresenceInterval>
+    findFirstByAttendanceIdAndStateNotAndEndedAtOrderByStartedAtDescIdDesc(
+            Long attendanceId,
+            PresenceState excludedState,
+            Instant endedAt
+    );
+
+    /** 성공한 회의 이탈 명령의 멱등 재요청인지 판정할 최근 회의 구간을 조회한다. */
+    Optional<PresenceInterval>
+    findFirstByAttendanceIdAndStateAndEndedAtOrderByStartedAtDescIdDesc(
+            Long attendanceId,
+            PresenceState state,
+            Instant endedAt
+    );
 
     List<PresenceInterval> findByAttendanceIdOrderByStartedAtAsc(Long attendanceId);
 
@@ -35,25 +64,25 @@ public interface PresenceIntervalRepository extends JpaRepository<PresenceInterv
      */
     @Query("""
                 SELECT new site.omagotchi.learningservice.attendance.application.result.OpenPresenceView(
-                           r.cohortMembershipId, i.startedAt)
+                           r.id, r.cohortMembershipId, i.startedAt)
                   FROM PresenceInterval i
                   JOIN AttendanceRecord r ON r.id = i.attendanceId
                   JOIN CohortMembership m ON m.id = r.cohortMembershipId
                  WHERE m.userId = :userId
                    AND i.endedAt IS NULL
                    AND i.state <> site.omagotchi.learningservice.attendance.domain.PresenceState.AWAY
-                 ORDER BY i.startedAt DESC""")
+                 ORDER BY i.startedAt DESC, i.id DESC""")
     List<OpenPresenceView> findOpenPresences(@Param("userId") UUID userId);
 
     @Query("""
                 SELECT new site.omagotchi.learningservice.attendance.application.result.OpenUserPresenceView(
-                           m.userId, r.cohortMembershipId, i.startedAt)
+                           m.userId, r.id, r.cohortMembershipId, i.startedAt)
                   FROM PresenceInterval i
                   JOIN AttendanceRecord r ON r.id = i.attendanceId
                   JOIN CohortMembership m ON m.id = r.cohortMembershipId
                  WHERE m.userId IN :userIds
                    AND i.endedAt IS NULL
                    AND i.state <> site.omagotchi.learningservice.attendance.domain.PresenceState.AWAY
-                 ORDER BY m.userId ASC, i.startedAt DESC""")
+                 ORDER BY m.userId ASC, i.startedAt DESC, i.id DESC""")
     List<OpenUserPresenceView> findOpenPresences(@Param("userIds") Collection<UUID> userIds);
 }

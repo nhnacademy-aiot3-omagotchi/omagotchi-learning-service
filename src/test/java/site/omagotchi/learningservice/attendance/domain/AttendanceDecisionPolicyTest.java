@@ -187,6 +187,27 @@ class AttendanceDecisionPolicyTest {
         );
     }
 
+    @Test
+    @DisplayName("실습실과 회의실 위치 구간은 출석 판정 결과를 바꾸지 않는다")
+    void ignoresPresentAndMeetingLocationsWhenDecidingAttendance() {
+        AttendanceDecision decision = AttendanceDecisionPolicy.decide(
+                policy(60),
+                time("08:50"),
+                time("18:10"),
+                List.of(
+                        interval(PresenceState.PRESENT, 10L, "08:50", "12:00"),
+                        interval(PresenceState.MEETING, 20L, "12:00", "13:00"),
+                        interval(PresenceState.PRESENT, 30L, "13:00", "18:10")
+                )
+        );
+
+        assertAll(
+                () -> assertEquals(AttendanceStatus.PRESENT, decision.status()),
+                () -> assertEquals(0, decision.lateMinutes()),
+                () -> assertEquals(0, decision.earlyLeaveMinutes())
+        );
+    }
+
     private CohortAttendancePolicy policy(int allowedAwayMinutes) {
         return CohortAttendancePolicy.create(
                 1L,
@@ -200,10 +221,19 @@ class AttendanceDecisionPolicyTest {
     }
 
     private PresenceInterval away(String startedAt, String endedAt) {
+        return interval(PresenceState.AWAY, null, startedAt, endedAt);
+    }
+
+    private PresenceInterval interval(
+            PresenceState state,
+            Long spaceId,
+            String startedAt,
+            String endedAt
+    ) {
         PresenceInterval interval = PresenceInterval.start(
                 1L,
-                PresenceState.AWAY,
-                null,
+                state,
+                spaceId,
                 time(startedAt)
         );
         interval.end(time(endedAt));

@@ -106,3 +106,7 @@ omagotchi:
     # 실패 원인이 테스트 코드와 무관한 곳에 생긴다. 정리 동작 자체는
     # OccupancyExpiryIT가 서비스를 직접 호출해 검증한다
     enabled: false
+
+gemini:
+  # 더미 값
+  api-keys: test-key-1,test-key-2,test-key-3

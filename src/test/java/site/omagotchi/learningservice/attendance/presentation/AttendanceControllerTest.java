@@ -33,6 +33,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -58,6 +59,36 @@ class AttendanceControllerTest {
 
     @MockitoBean
     private AttendanceService attendanceService;
+
+    @Test
+    @DisplayName("체크인은 기존처럼 요청 본문 없이 출결을 기록한다")
+    void checksInWithoutRequestBody() throws Exception {
+        given(attendanceService.checkIn(COHORT_ID, USER_ID)).willReturn(record());
+
+        mockMvc.perform(post("/api/v1/cohorts/{cohort-id}/attendance-records/check-in", COHORT_ID)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(10))
+                .andExpect(jsonPath("$.spaceId").doesNotExist());
+
+        verify(attendanceService).checkIn(COHORT_ID, USER_ID);
+    }
+
+    @Test
+    @DisplayName("실습실 이동은 선택한 실습실 ID를 출결 서비스에 전달한다")
+    void movesToSelectedLab() throws Exception {
+        given(attendanceService.moveLab(COHORT_ID, USER_ID, 102L)).willReturn(record());
+
+        mockMvc.perform(post("/api/v1/cohorts/{cohort-id}/attendance-records/move-lab", COHORT_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .contentType("application/json")
+                .content("{\"spaceId\":102}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(10))
+                .andExpect(jsonPath("$.spaceId").value(102));
+
+        verify(attendanceService).moveLab(COHORT_ID, USER_ID, 102L);
+    }
 
     @Test
     @DisplayName("내 출결 목록은 JWT subject의 기록을 반환한다")

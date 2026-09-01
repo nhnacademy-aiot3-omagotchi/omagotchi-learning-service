@@ -19,7 +19,7 @@ public class InternalThresholdRuleController {
 
     @GetMapping
     public List<ThresholdRuleResponse> findAll() {
-        return thresholdRuleService.readAll().stream()
+        return thresholdRuleService.readAllForRuleEngine().stream()
                 .map(ThresholdRuleResponse::from)
                 .toList();
     }

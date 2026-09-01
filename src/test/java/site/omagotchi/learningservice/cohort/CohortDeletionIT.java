@@ -10,8 +10,10 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.cohort.application.CohortLockService;
 import site.omagotchi.learningservice.cohort.application.CohortManagerAssignmentPolicy;
 import site.omagotchi.learningservice.cohort.application.CohortService;
+import site.omagotchi.learningservice.cohort.application.port.CohortActiveLabQuery;
 import site.omagotchi.learningservice.cohort.application.port.CohortEventPublisher;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
@@ -63,6 +65,12 @@ class CohortDeletionIT {
 
     @MockitoBean
     private CohortEventPublisher eventPublisher;
+
+    @MockitoBean
+    private CohortActiveLabQuery cohortActiveLabQuery;
+
+    @MockitoBean
+    private CohortLockService cohortLockService;
 
     @Test
     void deletesPreparingCohortAndCascadesItsMemberships() {

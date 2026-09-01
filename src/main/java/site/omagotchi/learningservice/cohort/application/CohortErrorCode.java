@@ -87,6 +87,11 @@ public enum CohortErrorCode implements ErrorCode {
             "COHORT_ACTIVE_MANAGER_REQUIRED",
             "운영 전환을 위해 활성 관리자 소속이 필요합니다."
     ),
+    COHORT_ACTIVE_LAB_REQUIRED(
+            ErrorType.CONFLICT,
+            "ACTIVE_LAB_REQUIRED",
+            "운영 전환을 위해 활성 실습실이 최소 1개 필요합니다."
+    ),
     COHORT_MANAGER_PERIOD_CONFLICT(
             ErrorType.CONFLICT,
             "COHORT_MANAGER_PERIOD_CONFLICT",

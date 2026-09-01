@@ -36,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -60,6 +61,7 @@ class OccupancyParticipantServiceTest {
     private static final Long COHORT_ID = 3L;
     private static final Long OTHER_COHORT_ID = 4L;
 
+    private static final Long TARGET_ATTENDANCE_ID = 5L;
     private static final Long OCCUPIER_MEMBERSHIP_ID = 10L;
     private static final Long TARGET_MEMBERSHIP_ID = 20L;
     private static final UUID OCCUPIER_USER_ID = UUID.randomUUID();
@@ -81,6 +83,9 @@ class OccupancyParticipantServiceTest {
     @Mock
     private OccupancyParticipantRepository participantRepository;
 
+    @Mock
+    private MeetingPresenceCoordinator meetingPresenceCoordinator;
+
     private Clock clock;
     private OccupancyParticipantService occupancyParticipantService;
 
@@ -93,8 +98,14 @@ class OccupancyParticipantServiceTest {
                 cohortMembershipQueryService,
                 occupancyRepository,
                 participantRepository,
+                meetingPresenceCoordinator,
                 clock
         );
+        lenient().doAnswer(invocation -> {
+            OccupancyParticipant participant = invocation.getArgument(0);
+            OffsetDateTime at = invocation.getArgument(2);
+            return participant.leave(at);
+        }).when(meetingPresenceCoordinator).leaveOne(any(), any(), any());
     }
 
     // ────────────────────────────── 추가 ──────────────────────────────
@@ -340,6 +351,8 @@ class OccupancyParticipantServiceTest {
         // 좌석을 소비하지 않으므로 정원을 세지도 않는다.
         verify(participantRepository, never()).countActiveByOccupancyId(any());
         verify(participantRepository, never()).save(any(OccupancyParticipant.class));
+        verify(meetingPresenceCoordinator)
+                .ensureEntered(TARGET_MEMBERSHIP_ID, SPACE_ID, now());
     }
 
     /**
@@ -522,6 +535,7 @@ class OccupancyParticipantServiceTest {
         occupancyParticipantService.remove(SPACE_ID, TARGET_USER_ID, TARGET_USER_ID);
 
         assertThat(participant.getLeftAt()).isEqualTo(firstLeftAt);
+        verify(meetingPresenceCoordinator, never()).leaveOne(any(), any(), any());
     }
 
     @Test
@@ -569,7 +583,11 @@ class OccupancyParticipantServiceTest {
 
     private void givenTargetPresent() {
         given(attendancePresenceQueryService.findOpenPresence(TARGET_USER_ID)).willReturn(
-                Optional.of(new OpenPresenceView(TARGET_MEMBERSHIP_ID, NOW)));
+                Optional.of(new OpenPresenceView(
+                        TARGET_ATTENDANCE_ID,
+                        TARGET_MEMBERSHIP_ID,
+                        NOW
+                )));
     }
 
     private void givenCohort(Long membershipId, Long cohortId) {

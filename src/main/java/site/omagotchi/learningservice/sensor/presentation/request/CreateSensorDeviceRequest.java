@@ -14,6 +14,7 @@ public record CreateSensorDeviceRequest(
         @Size(max = 32)
         String deviceEui,
 
+        @NotNull
         Long spaceId,
 
         @NotBlank
@@ -34,10 +35,10 @@ public record CreateSensorDeviceRequest(
         Instant installedAt
 ) {
 
-    public CreateSensorDeviceCommand toCommand(){
+    public CreateSensorDeviceCommand toCommand() {
         return new CreateSensorDeviceCommand(
-                deviceEui,
                 spaceId,
+                deviceEui,
                 model,
                 displayName,
                 installationPoint,

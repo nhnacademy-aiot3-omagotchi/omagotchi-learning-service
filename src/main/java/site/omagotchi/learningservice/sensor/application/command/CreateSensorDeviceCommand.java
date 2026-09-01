@@ -3,8 +3,8 @@ package site.omagotchi.learningservice.sensor.application.command;
 import java.time.Instant;
 
 public record CreateSensorDeviceCommand(
-        String deviceEui,
         Long spaceId,
+        String deviceEui,
         String model,
         String displayName,
         String installationPoint,

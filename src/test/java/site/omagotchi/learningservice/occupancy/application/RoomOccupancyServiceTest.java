@@ -56,6 +56,7 @@ class RoomOccupancyServiceTest {
 
     private static final Long SPACE_ID = 1L;
     private static final Long OTHER_SPACE_ID = 2L;
+    private static final Long ATTENDANCE_ID = 5L;
     private static final Long MEMBERSHIP_ID = 10L;
     private static final Long OCCUPANCY_ID = 100L;
     private static final UUID USER_ID = UUID.randomUUID();
@@ -75,6 +76,9 @@ class RoomOccupancyServiceTest {
     @Mock
     private OccupancyEventPublisher eventPublisher;
 
+    @Mock
+    private MeetingPresenceCoordinator meetingPresenceCoordinator;
+
     private Clock clock;
     private RoomOccupancyService roomOccupancyService;
 
@@ -86,6 +90,7 @@ class RoomOccupancyServiceTest {
                 attendancePresenceQueryService,
                 occupancyRepository,
                 participantRepository,
+                meetingPresenceCoordinator,
                 eventPublisher,
                 clock
         );
@@ -335,8 +340,8 @@ class RoomOccupancyServiceTest {
 
         roomOccupancyService.start(SPACE_ID, USER_ID);
 
-        verify(participantRepository).closeAllActiveByOccupancyId(7L, endedAt);
-        verify(participantRepository).closeAllActiveByOccupancyId(8L, endedAt);
+        verify(meetingPresenceCoordinator).leaveAll(7L, SPACE_ID, endedAt);
+        verify(meetingPresenceCoordinator).leaveAll(8L, OTHER_SPACE_ID, endedAt);
     }
 
     /**
@@ -354,8 +359,8 @@ class RoomOccupancyServiceTest {
 
         roomOccupancyService.start(SPACE_ID, USER_ID);
 
-        verify(participantRepository).closeAllActiveByOccupancyId(7L, endedAt);
-        verify(participantRepository, never()).closeAllActiveByOccupancyId(7L, now());
+        verify(meetingPresenceCoordinator).leaveAll(7L, SPACE_ID, endedAt);
+        verify(meetingPresenceCoordinator, never()).leaveAll(7L, SPACE_ID, now());
     }
 
     /**
@@ -404,7 +409,11 @@ class RoomOccupancyServiceTest {
 
     private void givenPresent() {
         given(attendancePresenceQueryService.findOpenPresence(USER_ID))
-                .willReturn(Optional.of(new OpenPresenceView(MEMBERSHIP_ID, NOW)));
+                .willReturn(Optional.of(new OpenPresenceView(
+                        ATTENDANCE_ID,
+                        MEMBERSHIP_ID,
+                        NOW
+                )));
     }
 
     /** 락까지 통과하는 회의실. 활성 점유 선검사는 기본값(false)에 맡긴다. */

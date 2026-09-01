@@ -28,10 +28,15 @@ import site.omagotchi.learningservice.gamification.application.command.CreateUse
 import site.omagotchi.learningservice.gamification.application.result.DailyQuestResult;
 import site.omagotchi.learningservice.gamification.domain.QuestStatus;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
+import site.omagotchi.learningservice.space.application.port.SpaceRepository;
+import site.omagotchi.learningservice.space.domain.Space;
+import site.omagotchi.learningservice.space.domain.SpaceType;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -56,6 +61,7 @@ class SystemAdminCohortAttendanceQuestFlowIT {
     @Autowired AttendanceService attendanceService;
     @Autowired DailyQuestService dailyQuestService;
     @Autowired CharacterOnboardingService characterOnboardingService;
+    @Autowired SpaceRepository spaceRepository;
 
     @Test
     @DisplayName("기수 생성·가입 승인 후 체크인이 기록되고 출석 퀘스트가 완료된다")
@@ -80,6 +86,14 @@ class SystemAdminCohortAttendanceQuestFlowIT {
                         LocalTime.of(10, 0), 30),
                 MANAGER_ID
         );
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
+        Long labSpaceId = spaceRepository.save(Space.create(
+                "출석흐름-활성화-실습실-" + cohort.id(),
+                SpaceType.LAB,
+                20,
+                cohort.id(),
+                now
+        ).activate(now)).getId();
         var activeCohort = cohortService.changeStatus(
                 cohort.id(),
                 new ChangeCohortStatusCommand(CohortStatus.ACTIVE),
@@ -111,6 +125,7 @@ class SystemAdminCohortAttendanceQuestFlowIT {
         var attendance = attendanceService.checkIn(cohort.id(), STUDENT_ID);
         assertNotNull(attendance.id());
         assertNotNull(attendance.checkedInAt());
+        attendanceService.moveLab(cohort.id(), STUDENT_ID, labSpaceId);
 
         DailyQuestResult attendanceQuest = waitForCompletedAttendanceQuest();
         assertEquals(DailyQuestService.ATTENDANCE_CODE, attendanceQuest.code());

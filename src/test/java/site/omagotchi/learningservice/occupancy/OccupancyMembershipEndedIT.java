@@ -22,6 +22,7 @@ import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 import org.mockito.ArgumentCaptor;
 import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSender.VacancyNotice;
 
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.function.BooleanSupplier;
 
@@ -73,6 +74,9 @@ class OccupancyMembershipEndedIT {
     @Autowired
     JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    Clock clock;
+
     @MockitoBean
     VacancyAlertSender vacancyAlertSender;
 
@@ -100,7 +104,7 @@ class OccupancyMembershipEndedIT {
         participantService.add(roomId, participant.userId(), occupier.userId());
         Long occupancyId = activeOccupancyId(roomId);
 
-        occupancyCleanup.cleanUp(occupier.membershipId(), occupier.userId(), OffsetDateTime.now());
+        occupancyCleanup.cleanUp(occupier.membershipId(), occupier.userId(), now());
 
         assertThat(occupancyStatus(occupancyId)).isEqualTo("RELEASED");
         assertThat(openParticipantRows(occupancyId)).isZero();
@@ -124,7 +128,7 @@ class OccupancyMembershipEndedIT {
         roomOccupancyService.start(roomId, occupier.userId());
         participantService.add(roomId, participant.userId(), occupier.userId());
 
-        occupancyCleanup.cleanUp(occupier.membershipId(), occupier.userId(), OffsetDateTime.now());
+        occupancyCleanup.cleanUp(occupier.membershipId(), occupier.userId(), now());
 
         assertThatCode(() -> roomOccupancyService.start(otherRoomId, participant.userId()))
                 .doesNotThrowAnyException();
@@ -143,7 +147,7 @@ class OccupancyMembershipEndedIT {
         participantService.add(roomId, participant.userId(), occupier.userId());
         Long occupancyId = activeOccupancyId(roomId);
 
-        occupancyCleanup.cleanUp(participant.membershipId(), participant.userId(), OffsetDateTime.now());
+        occupancyCleanup.cleanUp(participant.membershipId(), participant.userId(), now());
 
         assertThat(occupancyStatus(occupancyId)).isEqualTo("ACTIVE");
         assertThat(openParticipantRows(occupancyId)).isEqualTo(1);
@@ -167,7 +171,7 @@ class OccupancyMembershipEndedIT {
         endMembership(occupier.membershipId());
 
         assertThat(occupancyCleanup.cleanUp(
-                occupier.membershipId(), occupier.userId(), OffsetDateTime.now())).isTrue();
+                occupier.membershipId(), occupier.userId(), now())).isTrue();
         assertThat(occupancyStatus(occupancyId)).isEqualTo("RELEASED");
     }
 
@@ -183,7 +187,7 @@ class OccupancyMembershipEndedIT {
         roomOccupancyService.start(roomId, occupier.userId());
         vacancyAlertService.request(roomId, null, waiter.userId());
 
-        occupancyCleanup.cleanUp(occupier.membershipId(), occupier.userId(), OffsetDateTime.now());
+        occupancyCleanup.cleanUp(occupier.membershipId(), occupier.userId(), now());
 
         awaitUntil(() -> waitingAlertRows(roomId) == 0,
                 "정리로 비워진 방의 공실 알림이 발송되지 않았습니다");
@@ -207,7 +211,7 @@ class OccupancyMembershipEndedIT {
         roomOccupancyService.start(roomId, occupier.userId());
         vacancyAlertService.request(roomId, null, waiter.userId());
 
-        occupancyCleanup.cleanUp(waiter.membershipId(), waiter.userId(), OffsetDateTime.now());
+        occupancyCleanup.cleanUp(waiter.membershipId(), waiter.userId(), now());
 
         assertThat(waitingAlertRows(roomId)).isZero();
     }
@@ -230,9 +234,9 @@ class OccupancyMembershipEndedIT {
         vacancyAlertService.request(roomId, null, endedWaiter.userId());
         vacancyAlertService.request(roomId, null, survivingWaiter.userId());
 
-        occupancyCleanup.cleanUp(endedWaiter.membershipId(), endedWaiter.userId(), OffsetDateTime.now());
+        occupancyCleanup.cleanUp(endedWaiter.membershipId(), endedWaiter.userId(), now());
         // 신청자가 아니라 점유자가 나가서 방이 빈다 — 공실 발송 경로를 실제로 태운다.
-        occupancyCleanup.cleanUp(occupier.membershipId(), occupier.userId(), OffsetDateTime.now());
+        occupancyCleanup.cleanUp(occupier.membershipId(), occupier.userId(), now());
 
         // 완료 신호는 생존 신청자에게 실제로 발송된 것 — 이것이 관찰되면 발송 경로가
         // 이 방에 대해 끝까지 돌았다는 뜻이다.
@@ -256,11 +260,11 @@ class OccupancyMembershipEndedIT {
         Long occupancyId = activeOccupancyId(roomId);
 
         assertThat(occupancyCleanup.cleanUp(
-                occupier.membershipId(), occupier.userId(), OffsetDateTime.now())).isTrue();
+                occupier.membershipId(), occupier.userId(), now())).isTrue();
         Object endedAt = occupancyEndedAt(occupancyId);
 
         assertThat(occupancyCleanup.cleanUp(
-                occupier.membershipId(), occupier.userId(), OffsetDateTime.now())).isFalse();
+                occupier.membershipId(), occupier.userId(), now())).isFalse();
         assertThat(occupancyEndedAt(occupancyId)).isEqualTo(endedAt);
     }
 
@@ -318,10 +322,11 @@ class OccupancyMembershipEndedIT {
     @DisplayName("점유자가 아닌 참여자의 고아 행도 스윕이 마감한다.")
     void sweepClosesOrphanParticipationOfNonOccupier() {
         Long cohortId = fixture.createCohort("스윕-참여");
+        Long nextCohortId = fixture.createCohort("스윕-참여-복귀");
         OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
         OccupancyTestFixture.Member participant = fixture.createActiveMember(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "스윕-참여-1", 8);
-        Long otherRoomId = fixture.createMeetingRoom(cohortId, "스윕-참여-2", 8);
+        Long otherRoomId = fixture.createMeetingRoom(nextCohortId, "스윕-참여-2", 8);
 
         roomOccupancyService.start(roomId, occupier.userId());
         participantService.add(roomId, participant.userId(), occupier.userId());
@@ -334,7 +339,9 @@ class OccupancyMembershipEndedIT {
         assertThat(occupancyStatus(occupancyId)).isEqualTo("ACTIVE");
         assertThat(openParticipantRows(occupancyId)).isEqualTo(1);
 
-        // 묶여 있던 계정이 풀렸는지는 "다시 점유되는가"로만 확인된다.
+        // 종료된 소속은 LAB으로 복귀시키지 않는다. 같은 계정이 다른 활성 소속으로
+        // 체크인한 뒤 다시 점유할 수 있으면 계정 단위 참여 잠금이 풀린 것이다.
+        fixture.createActiveMember(nextCohortId, participant.userId());
         assertThatCode(() -> roomOccupancyService.start(otherRoomId, participant.userId()))
                 .doesNotThrowAnyException();
     }
@@ -412,6 +419,10 @@ class OccupancyMembershipEndedIT {
             }
         }
         throw new AssertionError(message);
+    }
+
+    private OffsetDateTime now() {
+        return OffsetDateTime.now(clock);
     }
 
     /** 점유를 건드리지 않고 소속만 끝낸다. "이미 ENDED인 상태로 도착"을 재현할 때 쓴다. */

@@ -5,10 +5,11 @@ import java.util.UUID;
 
 public record OpenUserPresenceView(
         UUID userId,
+        Long attendanceId,
         Long cohortMembershipId,
         Instant startedAt
 ) {
     public OpenPresenceView toPresenceView() {
-        return new OpenPresenceView(cohortMembershipId, startedAt);
+        return new OpenPresenceView(attendanceId, cohortMembershipId, startedAt);
     }
 }

@@ -49,6 +49,16 @@ public class OccupancyParticipantJpaPersistence implements OccupancyParticipantR
     }
 
     @Override
+    public List<ActiveParticipant> findActiveParticipantsByOccupancyId(Long occupancyId) {
+        return participantJpaRepository.findActiveParticipantsByOccupancyId(occupancyId);
+    }
+
+    @Override
+    public Optional<OccupancyParticipant> findActiveByCohortMembershipId(Long cohortMembershipId) {
+        return participantJpaRepository.findByCohortMembershipIdAndLeftAtIsNull(cohortMembershipId);
+    }
+
+    @Override
     public boolean existsActiveParticipationByUserId(UUID userId) {
         return participantJpaRepository.existsByUserIdAndLeftAtIsNull(userId);
     }

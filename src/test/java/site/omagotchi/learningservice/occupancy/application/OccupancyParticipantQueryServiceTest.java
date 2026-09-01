@@ -44,6 +44,7 @@ class OccupancyParticipantQueryServiceTest {
     private static final Long SPACE_ID = 1L;
     private static final Long OCCUPANCY_ID = 10L;
     private static final Long COHORT_ID = 20L;
+    private static final Long ATTENDANCE_ID = 25L;
     private static final Long OCCUPIER_MEMBERSHIP_ID = 30L;
     private static final UUID OCCUPIER_ID = UUID.randomUUID();
     private static final UUID AVAILABLE_ID = UUID.randomUUID();
@@ -251,7 +252,11 @@ class OccupancyParticipantQueryServiceTest {
     }
 
     private static OpenPresenceView presence(CohortMembershipView membership) {
-        return new OpenPresenceView(membership.membershipId(), NOW.minusSeconds(30));
+        return new OpenPresenceView(
+                ATTENDANCE_ID,
+                membership.membershipId(),
+                NOW.minusSeconds(30)
+        );
     }
 
     private static void assertError(OccupancyErrorCode expected, Runnable action) {

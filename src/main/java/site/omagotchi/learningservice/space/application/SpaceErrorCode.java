@@ -27,6 +27,11 @@ public enum SpaceErrorCode implements ErrorCode {
             "SPACE_INVALID_COHORT_ID",
             "공간 관리 주체 기수 ID가 올바르지 않습니다."
     ),
+    INVALID_SPACE_ID(
+            ErrorType.INVALID_INPUT,
+            "SPACE_INVALID_SPACE_ID",
+            "공간 ID가 올바르지 않습니다."
+    ),
     COHORT_ID_REQUIRED(
             ErrorType.INVALID_INPUT,
             "SPACE_COHORT_ID_REQUIRED",
@@ -72,6 +77,36 @@ public enum SpaceErrorCode implements ErrorCode {
             "SPACE_ACTIVE_OCCUPANCY_EXISTS",
             "활성 점유가 존재하여 공간을 변경할 수 없습니다."
     ),
+    SPACE_HAS_CURRENT_PRESENCE(
+            ErrorType.CONFLICT,
+            "SPACE_HAS_CURRENT_PRESENCE",
+            "현재 체류 중인 사용자가 있어 공간을 변경할 수 없습니다."
+    ),
+    SPACE_HAS_RETURN_RESERVATION(
+            ErrorType.CONFLICT,
+            "SPACE_HAS_RETURN_RESERVATION",
+            "회의 종료 후 복귀할 사용자가 있어 실습실을 변경할 수 없습니다."
+    ),
+    LAB_NOT_SELECTABLE(
+            ErrorType.CONFLICT,
+            "LAB_NOT_SELECTABLE",
+            "자기 기수의 활성 실습실만 선택할 수 있습니다."
+    ),
+    LAB_CAPACITY_EXCEEDED(
+            ErrorType.CONFLICT,
+            "LAB_CAPACITY_EXCEEDED",
+            "실습실 정원이 가득 찼습니다."
+    ),
+    LAST_ACTIVE_LAB_REQUIRED(
+            ErrorType.CONFLICT,
+            "LAST_ACTIVE_LAB_REQUIRED",
+            "활성 기수에는 활성 실습실이 최소 1개 필요합니다."
+    ),
+    SPACE_STATE_CHANGED(
+            ErrorType.CONFLICT,
+            "SPACE_STATE_CHANGED",
+            "공간 상태가 동시에 변경되었습니다. 다시 시도해 주세요."
+    ),
     ACTIVE_CAPACITY_REDUCTION_NOT_ALLOWED(
             ErrorType.CONFLICT,
             "SPACE_ACTIVE_CAPACITY_REDUCTION_NOT_ALLOWED",
@@ -86,6 +121,13 @@ public enum SpaceErrorCode implements ErrorCode {
             ErrorType.CONFLICT,
             "SPACE_ACTIVE_DELETE_NOT_ALLOWED",
             "활성 공간은 삭제할 수 없습니다."
+    ),
+    // 센서가 남은 채 삭제하면 그 센서는 어느 기수에서도 보이지 않고, 기본키가 EUI라
+    // 재등록도 막힌다. 삭제를 막아 미아가 생기는 것 자체를 예방한다.
+    SPACE_HAS_SENSOR_DELETE_NOT_ALLOWED(
+            ErrorType.CONFLICT,
+            "SPACE_HAS_SENSOR_DELETE_NOT_ALLOWED",
+            "센서가 배치된 공간은 삭제할 수 없습니다. 센서를 다른 공간으로 옮긴 뒤 삭제하세요."
     ),
     // 관리 주체가 없다는 것은 "이 요청자에게 권한이 없다"가 아니라 "누구에게도 없다"는 뜻이라
     // 상태가 아닌 권한 문제다 — 명세 01 §5 "관리 주체 없는 공간 삭제 → 403, 비활성화로 대체 안내".

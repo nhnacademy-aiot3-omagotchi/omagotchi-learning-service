@@ -36,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -82,6 +83,9 @@ class OccupancyParticipantServiceTest {
     @Mock
     private OccupancyParticipantRepository participantRepository;
 
+    @Mock
+    private MeetingPresenceCoordinator meetingPresenceCoordinator;
+
     private Clock clock;
     private OccupancyParticipantService occupancyParticipantService;
 
@@ -94,8 +98,14 @@ class OccupancyParticipantServiceTest {
                 cohortMembershipQueryService,
                 occupancyRepository,
                 participantRepository,
+                meetingPresenceCoordinator,
                 clock
         );
+        lenient().doAnswer(invocation -> {
+            OccupancyParticipant participant = invocation.getArgument(0);
+            OffsetDateTime at = invocation.getArgument(2);
+            return participant.leave(at);
+        }).when(meetingPresenceCoordinator).leaveOne(any(), any(), any());
     }
 
     // ────────────────────────────── 추가 ──────────────────────────────
@@ -341,6 +351,8 @@ class OccupancyParticipantServiceTest {
         // 좌석을 소비하지 않으므로 정원을 세지도 않는다.
         verify(participantRepository, never()).countActiveByOccupancyId(any());
         verify(participantRepository, never()).save(any(OccupancyParticipant.class));
+        verify(meetingPresenceCoordinator)
+                .ensureEntered(TARGET_MEMBERSHIP_ID, SPACE_ID, now());
     }
 
     /**
@@ -523,6 +535,7 @@ class OccupancyParticipantServiceTest {
         occupancyParticipantService.remove(SPACE_ID, TARGET_USER_ID, TARGET_USER_ID);
 
         assertThat(participant.getLeftAt()).isEqualTo(firstLeftAt);
+        verify(meetingPresenceCoordinator, never()).leaveOne(any(), any(), any());
     }
 
     @Test

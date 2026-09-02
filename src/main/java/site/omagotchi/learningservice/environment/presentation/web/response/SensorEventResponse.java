@@ -5,9 +5,12 @@ import site.omagotchi.learningservice.environment.domain.*;
 
 import java.time.Instant;
 import java.util.Objects;
+import java.util.UUID;
 
 //SensorEvent
 public record SensorEventResponse (
+        UUID eventId,
+
         //SensorDetection
         SensorEventType type,
         String traceId,
@@ -38,6 +41,7 @@ public record SensorEventResponse (
         IotAction action = outcome.action();
 
         return new SensorEventResponse(
+                event.id(),
                 detection.type(),
                 detection.traceId(),
                 detection.deviceEui(),

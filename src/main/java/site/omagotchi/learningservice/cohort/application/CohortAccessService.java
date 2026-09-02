@@ -90,6 +90,31 @@ public class CohortAccessService {
     }
 
     /**
+     * 출결 정책 경계 전용 검사. 전역 관리자 또는 해당 기수 매니저를 허용한다.
+     *
+     * <p>{@link #requireManager}는 기수의 ACTIVE 소속을 먼저 요구하므로, 기수에 소속되지
+     * 않는 SYSTEM_ADMIN은 통과하지 못한다. 그런데 출결 정책은 기수 생성 직후 반드시
+     * 채워져야 하고 그 시점에는 매니저가 아직 없을 수 있어, 이 경계에서만 전역 관리자를
+     * 허용한다.</p>
+     *
+     * <p>{@link #requireManager}는 28곳에서 쓰이므로 건드리지 않는다. 이 메서드는
+     * {@link CohortAttendancePolicyService}에서만 호출한다. 다른 기수 기능의 권한 모델은
+     * 그대로다.</p>
+     *
+     * <p>전역 관리자라도 없는 기수는 통과시키지 않는다. 존재하지 않는 cohortId로 정책이
+     * 저장되면 FK 위반이 뒤늦게 터진다.</p>
+     */
+    public void requireAttendancePolicyEditor(Long cohortId, UUID userId, GlobalRole globalRole) {
+        if (globalRole == GlobalRole.SYSTEM_ADMIN) {
+            if (!cohortRepository.existsById(cohortId)) {
+                throw new BusinessException(CohortErrorCode.COHORT_NOT_FOUND);
+            }
+            return;
+        }
+        requireManager(cohortId, userId);
+    }
+
+    /**
      * 사용자가 해당 기수에서 MANAGER 역할의 ACTIVE 소속인지 boolean으로 확인
      * 예외를 던지지 않는 단순 조건 분기용
      *

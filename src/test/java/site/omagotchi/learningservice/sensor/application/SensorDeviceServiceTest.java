@@ -48,6 +48,9 @@ class SensorDeviceServiceTest {
     private SensorDeviceRepository sensorDeviceRepository;
 
     @Mock
+    private ThresholdRuleService thresholdRuleService;
+
+    @Mock
     private CohortAccessService cohortAccessService;
 
     @Mock
@@ -78,6 +81,8 @@ class SensorDeviceServiceTest {
         ArgumentCaptor<SensorDevice> saved = ArgumentCaptor.forClass(SensorDevice.class);
         verify(sensorDeviceRepository).save(saved.capture());
         assertThat(saved.getValue().getSpaceId()).isEqualTo(SPACE_ID);
+        verify(thresholdRuleService).synchronizeRequiredRulesForDevice(
+                saved.getValue(), REQUESTER_ID, "sensor-create:" + DEVICE_EUI);
     }
 
     @Test
@@ -100,7 +105,7 @@ class SensorDeviceServiceTest {
         assertThat(thrown.getErrorCode())
                 .isEqualTo(CohortErrorCode.COHORT_MANAGER_REQUIRED);
         verifyNoInteractions(
-                sensorDeviceRepository, spaceCohortQueryService, spaceCohortWriteGuard);
+                sensorDeviceRepository, thresholdRuleService, spaceCohortQueryService, spaceCohortWriteGuard);
     }
 
     @Test
@@ -178,6 +183,8 @@ class SensorDeviceServiceTest {
         assertThat(result.active()).isTrue();
         // 표시명·설치 지점은 이전 기수 값을 그대로 잇는다
         assertThat(result.displayName()).isEqualTo("실습실 센서");
+        verify(thresholdRuleService).synchronizeRequiredRulesForDevice(
+                orphan, REQUESTER_ID, "sensor-claim:" + DEVICE_EUI);
     }
 
     @Test

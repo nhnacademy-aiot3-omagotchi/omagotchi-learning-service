@@ -6,8 +6,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.attendance.application.result.OpenUserPresenceView;
+import site.omagotchi.learningservice.attendance.application.result.PresenceIntervalView;
 import site.omagotchi.learningservice.attendance.application.port.AttendancePresenceQuery;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -75,5 +78,78 @@ public class AttendancePresenceQueryService {
             latestByUserId.putIfAbsent(presence.userId(), presence.toPresenceView());
         }
         return Map.copyOf(latestByUserId);
+    }
+
+    /**
+     * 소속이 기간 동안 머문 공간 구간을 조회한다.
+     *
+     * <p>"지금 안에 있는가"를 묻는 위 두 메서드와 달리, 지나간 구간을 시간순으로 돌려준다.
+     * 첫 소비처는 학습 리포트다 — 공부 기록의 시각과 겹치는 구간을 찾아 "그때 어느 공간에
+     * 있었는가"를 붙인다.</p>
+     *
+     * <p>구간을 범위에 맞춰 자르지 않는다. 경계에 걸친 구간을 어디까지 인정할지는 분석하는
+     * 쪽의 판단이고, 여기서 미리 자르면 그 판단의 근거가 사라진다.</p>
+     *
+     * @param from        조회 시작 시각(포함)
+     * @param toExclusive 조회 종료 시각(제외)
+     * @return 시작 시각 오름차순. 인자가 비었거나 범위가 뒤집혔으면 빈 목록
+     */
+    public List<PresenceIntervalView> findPresenceIntervals(
+            Long cohortMembershipId,
+            Instant from,
+            Instant toExclusive
+    ) {
+        if (cohortMembershipId == null || from == null || toExclusive == null) {
+            return List.of();
+        }
+        if (!from.isBefore(toExclusive)) {
+            return List.of();
+        }
+        return attendancePresenceQuery.findPresenceIntervals(cohortMembershipId, from, toExclusive);
+    }
+
+    /** 점유 참여에 기록된 소속별 최신 열린 구간을 결정적으로 선택한다. */
+    public Map<Long, OpenPresenceView> findOpenPresencesByMembershipIds(
+            Collection<Long> membershipIds
+    ) {
+        if (membershipIds == null || membershipIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, OpenPresenceView> latestByMembershipId = new LinkedHashMap<>();
+        for (OpenPresenceView presence
+                : attendancePresenceQuery.findOpenPresencesByMembershipIds(membershipIds)) {
+            latestByMembershipId.putIfAbsent(presence.cohortMembershipId(), presence);
+        }
+        return Map.copyOf(latestByMembershipId);
+    }
+
+    /**
+     * 회의 이탈·종료가 닫아야 할 열린 MEETING을 소속별로 조회한다.
+     * 최신 열린 구간을 고르지 않으며 같은 소속에 후보가 둘이면 정합성 오류로 중단한다.
+     */
+    public Map<Long, OpenPresenceView> findOpenMeetingPresencesByMembershipIds(
+            Collection<Long> membershipIds,
+            Long meetingSpaceId
+    ) {
+        if (membershipIds == null || membershipIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, OpenPresenceView> meetingByMembershipId = new LinkedHashMap<>();
+        for (OpenPresenceView presence
+                : attendancePresenceQuery.findOpenMeetingPresencesByMembershipIds(
+                        membershipIds,
+                        meetingSpaceId
+                )) {
+            OpenPresenceView duplicate = meetingByMembershipId.putIfAbsent(
+                    presence.cohortMembershipId(),
+                    presence
+            );
+            if (duplicate != null) {
+                throw new BusinessException(
+                        AttendanceErrorCode.PRESENCE_INTERVAL_INCONSISTENT
+                );
+            }
+        }
+        return Map.copyOf(meetingByMembershipId);
     }
 }

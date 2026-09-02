@@ -8,8 +8,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import site.omagotchi.learningservice.attendance.application.PresenceSpaceQueryService;
-import site.omagotchi.learningservice.attendance.application.result.SpacePresenceSummary;
+import site.omagotchi.learningservice.space.application.result.SpacePresenceSummary;
 import site.omagotchi.learningservice.cohort.application.CohortLockService;
 import site.omagotchi.learningservice.cohort.application.result.CohortLockView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
@@ -74,7 +73,7 @@ class SpaceCommandServiceTest {
     private CohortLockService cohortLockService;
 
     @Mock
-    private PresenceSpaceQueryService presenceSpaceQueryService;
+    private SpacePresenceQueryService spacePresenceQueryService;
 
     @Mock
     private SpaceReferenceQueryPort spaceReferenceQueryPort;
@@ -92,7 +91,7 @@ class SpaceCommandServiceTest {
                 cohortAccessService,
                 spaceReferenceQueryPort,
                 cohortLockService,
-                presenceSpaceQueryService,
+                spacePresenceQueryService,
                 clock
         );
         spaceCommandService = new TestSpaceCommandService(delegate);
@@ -109,7 +108,7 @@ class SpaceCommandServiceTest {
                         42L,
                         false
                 )));
-        lenient().when(presenceSpaceQueryService.summarize(anyLong()))
+        lenient().when(spacePresenceQueryService.summarize(anyLong()))
                 .thenReturn(SpacePresenceSummary.empty());
     }
 
@@ -515,7 +514,7 @@ class SpaceCommandServiceTest {
                         null,
                         null
                 )));
-        when(presenceSpaceQueryService.summarize(1L))
+        when(spacePresenceQueryService.summarize(1L))
                 .thenReturn(new SpacePresenceSummary(1L, 0L));
 
         assertBusinessError(
@@ -555,7 +554,7 @@ class SpaceCommandServiceTest {
         when(spaceRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(activeLab));
         when(spaceRepository.countActiveLabsByCohortId(42L)).thenReturn(2L);
-        when(presenceSpaceQueryService.summarize(1L))
+        when(spacePresenceQueryService.summarize(1L))
                 .thenReturn(new SpacePresenceSummary(0L, 1L));
 
         assertBusinessError(

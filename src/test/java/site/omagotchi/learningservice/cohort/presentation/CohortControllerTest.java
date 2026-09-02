@@ -175,7 +175,7 @@ class CohortControllerTest {
     @Test
     @DisplayName("출결 정책 조회 요청을 현재 사용자로 서비스에 위임한다")
     void getsAttendancePolicy() throws Exception {
-        given(attendancePolicyService.getPolicy(COHORT_ID, USER_ID))
+        given(attendancePolicyService.getPolicy(COHORT_ID, USER_ID, GlobalRole.USER))
                 .willReturn(policyResponse());
 
         mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/attendance-policy", COHORT_ID)
@@ -189,7 +189,7 @@ class CohortControllerTest {
                 .andExpect(jsonPath("$.allowedAwayMinutes").value(30))
                 .andDo(document("cohort/get-attendance-policy"));
 
-        verify(attendancePolicyService).getPolicy(COHORT_ID, USER_ID);
+        verify(attendancePolicyService).getPolicy(COHORT_ID, USER_ID, GlobalRole.USER);
     }
 
     @Test
@@ -204,7 +204,8 @@ class CohortControllerTest {
                         LocalTime.of(10, 0),
                         30
                 )),
-                eq(USER_ID)
+                eq(USER_ID),
+                eq(GlobalRole.USER)
         )).willReturn(policyResponse());
 
         mockMvc.perform(put("/api/v1/cohorts/{cohort-id}/attendance-policy", COHORT_ID)
@@ -232,7 +233,8 @@ class CohortControllerTest {
                         LocalTime.of(10, 0),
                         30
                 ),
-                USER_ID
+                USER_ID,
+                GlobalRole.USER
         );
     }
 

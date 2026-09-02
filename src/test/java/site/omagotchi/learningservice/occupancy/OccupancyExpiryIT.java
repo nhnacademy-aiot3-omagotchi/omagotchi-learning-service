@@ -146,12 +146,15 @@ class OccupancyExpiryIT {
 
         roomOccupancyService.start(roomId, member.userId());
         expire(roomId);
+        assertThat(openPresenceState(member.membershipId())).isEqualTo("MEETING");
 
         roomOccupancyLifecycleService.expireAll();
 
         assertThat(activeOccupancyRows(roomId)).isZero();
         assertThat(openParticipantRows(roomId)).isZero();
         assertThat(participantRows(roomId)).isEqualTo(1);
+        assertThat(openMeetingPresenceRows(member.membershipId(), roomId)).isZero();
+        assertThat(openPresenceState(member.membershipId())).isEqualTo("PRESENT");
     }
 
     @Test
@@ -468,6 +471,34 @@ class OccupancyExpiryIT {
      * {@code ck_occupancy_participants_period}에 걸려, 프로덕션에 없는 이유로 테스트가 깨진다.</p>
      */
     private void expire(Long spaceId) {
+        // PR3부터 만료는 MEETING 체류도 expires_at에 닫는다. 점유 시각만 과거로 보내면
+        // 테스트 데이터의 MEETING 시작이 종료보다 뒤가 되므로, 실제 2시간 경과 상황처럼
+        // 직전 PRESENT 경계와 현재 MEETING 시작도 함께 과거로 옮긴다.
+        jdbcTemplate.update("""
+                UPDATE learning_service.presence_intervals
+                   SET started_at = now() - interval '3 hours'
+                 WHERE space_id = ?
+                   AND state = 'MEETING'
+                   AND ended_at IS NULL
+                """, spaceId);
+        jdbcTemplate.update("""
+                UPDATE learning_service.presence_intervals previous
+                   SET started_at = meeting.started_at - interval '1 hour',
+                       ended_at = meeting.started_at
+                  FROM learning_service.presence_intervals meeting,
+                       learning_service.attendance_records attendance,
+                       learning_service.occupancy_participants participant,
+                       learning_service.room_occupancies occupancy
+                 WHERE previous.attendance_id = meeting.attendance_id
+                   AND meeting.attendance_id = attendance.id
+                   AND attendance.cohort_membership_id = participant.cohort_membership_id
+                   AND participant.occupancy_id = occupancy.id
+                   AND occupancy.space_id = ?
+                   AND previous.state = 'PRESENT'
+                   AND previous.ended_at IS NOT NULL
+                   AND meeting.state = 'MEETING'
+                   AND meeting.ended_at IS NULL
+                """, spaceId);
         jdbcTemplate.update("""
                 UPDATE learning_service.occupancy_participants
                    SET joined_at = now() - interval '3 hours'
@@ -595,5 +626,32 @@ class OccupancyExpiryIT {
                  WHERE o.space_id = ? AND p.left_at IS NULL
                 """, Integer.class, spaceId);
         return count == null ? 0 : count;
+    }
+
+    private int openMeetingPresenceRows(Long membershipId, Long spaceId) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT count(*)
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                 WHERE attendance.cohort_membership_id = ?
+                   AND presence.space_id = ?
+                   AND presence.state = 'MEETING'
+                   AND presence.ended_at IS NULL
+                """, Integer.class, membershipId, spaceId);
+        return count == null ? 0 : count;
+    }
+
+    private String openPresenceState(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT presence.state
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                 WHERE attendance.cohort_membership_id = ?
+                   AND presence.ended_at IS NULL
+                 ORDER BY presence.started_at DESC, presence.id DESC
+                 LIMIT 1
+                """, String.class, membershipId);
     }
 }

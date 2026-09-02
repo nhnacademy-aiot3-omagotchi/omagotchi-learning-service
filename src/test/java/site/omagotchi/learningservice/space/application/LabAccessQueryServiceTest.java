@@ -6,8 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import site.omagotchi.learningservice.attendance.application.PresenceSpaceQueryService;
-import site.omagotchi.learningservice.attendance.application.result.SpacePresenceSummary;
+import site.omagotchi.learningservice.space.application.result.SpacePresenceSummary;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
@@ -38,7 +37,7 @@ class LabAccessQueryServiceTest {
     private SpaceRepository spaceRepository;
 
     @Mock
-    private PresenceSpaceQueryService presenceSpaceQueryService;
+    private SpacePresenceQueryService spacePresenceQueryService;
 
     @InjectMocks
     private LabAccessQueryService service;
@@ -50,7 +49,7 @@ class LabAccessQueryServiceTest {
         Space second = activeLab(20L, "실습실 B", 30);
         when(spaceRepository.findActiveLabsByCohortId(42L))
                 .thenReturn(List.of(first, second));
-        when(presenceSpaceQueryService.summarize(List.of(10L, 20L)))
+        when(spacePresenceQueryService.summarize(List.of(10L, 20L)))
                 .thenReturn(Map.of(
                         10L, new SpacePresenceSummary(3L, 2L),
                         20L, new SpacePresenceSummary(1L, 0L)

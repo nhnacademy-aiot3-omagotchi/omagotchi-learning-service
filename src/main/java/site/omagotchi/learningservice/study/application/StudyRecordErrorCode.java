@@ -37,6 +37,11 @@ public enum StudyRecordErrorCode implements ErrorCode {
             "STUDY_RECORD_WRITE_LOCK_TIMEOUT",
             "공부 기록 요청 타임아웃"
     ),
+    INVALID_ENVIRONMENT_PERIOD(
+            ErrorType.INVALID_INPUT,
+            "STUDY_ENVIRONMENT_INVALID_PERIOD",
+            "학습 환경 분석은 최근 1일에서 7일까지만 지원합니다."
+    ),
     INVALID_PATTERN_PERIOD(
             ErrorType.INVALID_INPUT,
             "STUDY_PATTERN_INVALID_PERIOD",

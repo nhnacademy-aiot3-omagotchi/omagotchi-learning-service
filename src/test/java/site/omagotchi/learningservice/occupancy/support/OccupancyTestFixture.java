@@ -14,15 +14,18 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceType;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.UUID;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 
 /**
  * 점유 통합 테스트용 기수·멤버십·공간 픽스처.
@@ -46,13 +49,15 @@ public class OccupancyTestFixture {
     private final SpaceRepository spaceRepository;
     private final AttendanceRecordRepository attendanceRecordRepository;
     private final PresenceIntervalRepository presenceIntervalRepository;
+    private final Clock clock;
 
     public Long createCohort(String name) {
+        LocalDate today = LocalDate.ofInstant(clock.instant(), SEOUL);
         Cohort cohort = Cohort.create(
                 name,
                 "점유 테스트 기수",
-                LocalDate.now(),
-                LocalDate.now().plusMonths(6),
+                today,
+                today.plusMonths(6),
                 UUID.randomUUID()
         );
         return cohortRepository.save(cohort).getId();
@@ -86,12 +91,22 @@ public class OccupancyTestFixture {
      * "열린 구간이 있다"는 사실뿐이라 정책까지 세팅하지 않는다.</p>
      */
     public void checkIn(Long membershipId) {
-        AttendanceRecord record = AttendanceRecord.start(membershipId, LocalDate.now(SEOUL));
-        record.checkIn(Instant.now(), AttendanceStatus.PRESENT, 0);
+        CohortMembership membership = membershipRepository.findById(membershipId).orElseThrow();
+        Long labSpaceId = createLab(
+                membership.getCohortId(),
+                "점유-체크인-실습실-" + UUID.randomUUID(),
+                100
+        );
+        Instant now = clock.instant();
+        AttendanceRecord record = AttendanceRecord.start(
+                membershipId,
+                AggregationDateTime.aggregationDate(now)
+        );
+        record.checkIn(now, AttendanceStatus.PRESENT, 0);
         Long attendanceId = attendanceRecordRepository.save(record).getId();
 
         presenceIntervalRepository.save(PresenceInterval.start(
-                attendanceId, PresenceState.PRESENT, null, Instant.now()));
+                attendanceId, PresenceState.PRESENT, labSpaceId, now));
     }
 
     /**
@@ -101,12 +116,18 @@ public class OccupancyTestFixture {
      * 아니라 조회한 엔티티가 곧바로 준영속이 되고, 그러면 변경 감지가 동작하지 않는다.</p>
      */
     public void checkOut(Long membershipId) {
+        Instant now = clock.instant();
         attendanceRecordRepository
-                .findByCohortMembershipIdAndAttendanceDate(membershipId, LocalDate.now(SEOUL))
+                .findByCohortMembershipIdAndAttendanceDate(
+                        membershipId,
+                        AggregationDateTime.aggregationDate(now)
+                )
                 .flatMap(record -> presenceIntervalRepository
-                        .findFirstByAttendanceIdAndEndedAtIsNullOrderByStartedAtDesc(record.getId()))
+                        .findByAttendanceIdAndEndedAtIsNullOrderByStartedAtAscIdAsc(record.getId())
+                        .stream()
+                        .findFirst())
                 .ifPresent(interval -> {
-                    interval.end(Instant.now());
+                    interval.end(now);
                     presenceIntervalRepository.save(interval);
                 });
     }
@@ -155,21 +176,21 @@ public class OccupancyTestFixture {
      * 비활성 공간은 점유가 400으로 거부된다(RM-13).</p>
      */
     public Long createMeetingRoom(Long cohortId, String name, int capacity) {
-        ZonedDateTime now = ZonedDateTime.now(SEOUL);
+        ZonedDateTime now = ZonedDateTime.ofInstant(clock.instant(), SEOUL);
         Space space = Space.create(name, SpaceType.MEETING, capacity, cohortId, now).activate(now);
         return spaceRepository.save(space).getId();
     }
 
     /** 회의실이 아닌 공간. 유형 검증(MR-20)에 쓴다. */
     public Long createLab(Long cohortId, String name, int capacity) {
-        ZonedDateTime now = ZonedDateTime.now(SEOUL);
+        ZonedDateTime now = ZonedDateTime.ofInstant(clock.instant(), SEOUL);
         Space space = Space.create(name, SpaceType.LAB, capacity, cohortId, now).activate(now);
         return spaceRepository.save(space).getId();
     }
 
     /** 독서실. 점유 대상이 아니며 관리 주체 순환(CE-04) 검증에 쓴다. */
     public Long createStudyRoom(Long cohortId, String name, int capacity) {
-        ZonedDateTime now = ZonedDateTime.now(SEOUL);
+        ZonedDateTime now = ZonedDateTime.ofInstant(clock.instant(), SEOUL);
         Space space = Space.create(name, SpaceType.STUDY, capacity, cohortId, now).activate(now);
         return spaceRepository.save(space).getId();
     }

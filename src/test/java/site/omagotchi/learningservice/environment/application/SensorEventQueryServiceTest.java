@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
@@ -95,6 +96,45 @@ class SensorEventQueryServiceTest {
         assertThat(result.items().getFirst().deviceDisplayName())
                 .isEqualTo("실습실 센서");
         verify(sensorDeviceService).findAll(COHORT_ID, REQUESTER_ID);
+    }
+
+    @Test
+    void returnsOnlyTheRequestedPageWhenEventsShareATraceId() {
+        when(sensorDeviceService.findAll(COHORT_ID, REQUESTER_ID))
+                .thenReturn(List.of(new SensorDeviceResult(
+                        ALLOWED_EUI,
+                        10L,
+                        "실습실 센서",
+                        "AM103",
+                        null,
+                        60,
+                        true
+                )));
+        List<SensorEvent> events = IntStream.range(0, 13)
+                .mapToObj(index -> event(ALLOWED_EUI))
+                .toList();
+        when(sensorEventStore.findByReceivedAt(
+                NOW.minusSeconds(24 * 60 * 60),
+                NOW
+        )).thenReturn(events);
+
+        var result = sensorEventQueryService.getEvents(
+                COHORT_ID,
+                REQUESTER_ID,
+                null,
+                null,
+                null,
+                null,
+                1,
+                8
+        );
+
+        assertThat(result.page()).isEqualTo(1);
+        assertThat(result.totalElements()).isEqualTo(13);
+        assertThat(result.totalPages()).isEqualTo(2);
+        assertThat(result.items())
+                .extracting(item -> item.event().id())
+                .containsExactlyElementsOf(events.subList(8, 13).stream().map(SensorEvent::id).toList());
     }
 
     @Test

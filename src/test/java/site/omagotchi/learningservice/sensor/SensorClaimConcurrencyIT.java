@@ -143,6 +143,17 @@ class SensorClaimConcurrencyIT {
     }
 
     private void cleanUp() {
+        // 센서 인계가 필수 룰과 변경 이력을 함께 생성하므로 FK 의존성 역순으로 지운다.
+        jdbcTemplate.update("""
+                DELETE FROM learning_service.threshold_rule_histories
+                WHERE rule_id IN (
+                    SELECT id
+                    FROM learning_service.threshold_rules
+                    WHERE device_eui = ?
+                )
+                """, ORPHAN_EUI);
+        jdbcTemplate.update(
+                "DELETE FROM learning_service.threshold_rules WHERE device_eui = ?", ORPHAN_EUI);
         jdbcTemplate.update("DELETE FROM learning_service.sensor_devices WHERE device_eui = ?", ORPHAN_EUI);
         jdbcTemplate.update("DELETE FROM learning_service.spaces WHERE id IN (?, ?, ?)",
                 SPACE_A, SPACE_B, ORPHAN_SPACE);

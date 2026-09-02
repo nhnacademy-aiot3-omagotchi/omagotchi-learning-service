@@ -3,8 +3,7 @@ package site.omagotchi.learningservice.space.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import site.omagotchi.learningservice.attendance.application.PresenceSpaceQueryService;
-import site.omagotchi.learningservice.attendance.application.result.SpacePresenceSummary;
+import site.omagotchi.learningservice.space.application.result.SpacePresenceSummary;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.application.result.SelectableLabView;
@@ -22,7 +21,7 @@ public class LabAccessQueryService {
 
     private final CohortAccessService cohortAccessService;
     private final SpaceRepository spaceRepository;
-    private final PresenceSpaceQueryService presenceSpaceQueryService;
+    private final SpacePresenceQueryService spacePresenceQueryService;
 
     public List<SelectableLabView> findSelectableLabs(Long cohortId, UUID userId) {
         cohortAccessService.requireActiveStudentMembershipId(cohortId, userId);
@@ -32,7 +31,7 @@ public class LabAccessQueryService {
             return List.of();
         }
 
-        Map<Long, SpacePresenceSummary> summaries = presenceSpaceQueryService.summarize(
+        Map<Long, SpacePresenceSummary> summaries = spacePresenceQueryService.summarize(
                 labs.stream().map(Space::getId).toList()
         );
 

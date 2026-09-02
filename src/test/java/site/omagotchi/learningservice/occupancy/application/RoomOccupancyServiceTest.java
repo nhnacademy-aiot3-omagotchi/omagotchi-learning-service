@@ -76,6 +76,9 @@ class RoomOccupancyServiceTest {
     @Mock
     private OccupancyEventPublisher eventPublisher;
 
+    @Mock
+    private MeetingPresenceCoordinator meetingPresenceCoordinator;
+
     private Clock clock;
     private RoomOccupancyService roomOccupancyService;
 
@@ -87,6 +90,7 @@ class RoomOccupancyServiceTest {
                 attendancePresenceQueryService,
                 occupancyRepository,
                 participantRepository,
+                meetingPresenceCoordinator,
                 eventPublisher,
                 clock
         );
@@ -336,8 +340,8 @@ class RoomOccupancyServiceTest {
 
         roomOccupancyService.start(SPACE_ID, USER_ID);
 
-        verify(participantRepository).closeAllActiveByOccupancyId(7L, endedAt);
-        verify(participantRepository).closeAllActiveByOccupancyId(8L, endedAt);
+        verify(meetingPresenceCoordinator).leaveAll(7L, SPACE_ID, endedAt);
+        verify(meetingPresenceCoordinator).leaveAll(8L, OTHER_SPACE_ID, endedAt);
     }
 
     /**
@@ -355,8 +359,8 @@ class RoomOccupancyServiceTest {
 
         roomOccupancyService.start(SPACE_ID, USER_ID);
 
-        verify(participantRepository).closeAllActiveByOccupancyId(7L, endedAt);
-        verify(participantRepository, never()).closeAllActiveByOccupancyId(7L, now());
+        verify(meetingPresenceCoordinator).leaveAll(7L, SPACE_ID, endedAt);
+        verify(meetingPresenceCoordinator, never()).leaveAll(7L, SPACE_ID, now());
     }
 
     /**

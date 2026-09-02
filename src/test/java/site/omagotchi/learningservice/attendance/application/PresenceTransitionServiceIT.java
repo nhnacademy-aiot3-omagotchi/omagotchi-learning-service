@@ -41,7 +41,50 @@ class PresenceTransitionServiceIT {
     private PresenceTransitionService service;
 
     @Autowired
+    private AttendancePresenceQueryService presenceQueryService;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Test
+    @DisplayName("집계일이 바뀌어 더 최신 PRESENT가 생겨도 이탈은 이전 출결의 열린 MEETING을 선택한다")
+    void selectsPreviousAttendanceMeetingAcrossAggregationDateBoundary() {
+        Scenario scenario = saveScenario(false);
+        Instant enteredMeetingAt = Instant.parse("2026-08-31T02:00:00Z");
+        Instant nextDaySelectedAt = Instant.parse("2026-09-01T00:00:00Z");
+
+        service.moveLab(
+                scenario.attendanceId(),
+                scenario.membershipId(),
+                scenario.firstLabId(),
+                STARTED_AT
+        );
+        service.enterMeeting(
+                scenario.attendanceId(),
+                scenario.membershipId(),
+                scenario.meetingId(),
+                enteredMeetingAt
+        );
+        Long nextAttendanceId = saveAttendance(
+                scenario.membershipId(),
+                ATTENDANCE_DATE.plusDays(1),
+                nextDaySelectedAt
+        );
+        service.moveLab(
+                nextAttendanceId,
+                scenario.membershipId(),
+                scenario.secondLabId(),
+                nextDaySelectedAt
+        );
+
+        var meeting = presenceQueryService.findOpenMeetingPresencesByMembershipIds(
+                List.of(scenario.membershipId()),
+                scenario.meetingId()
+        ).get(scenario.membershipId());
+
+        assertThat(meeting.attendanceId()).isEqualTo(scenario.attendanceId());
+        assertThat(openIntervalCount(nextAttendanceId)).isEqualTo(1L);
+    }
 
     @Test
     @DisplayName("실습실 이동과 회의 입퇴실은 시각이 맞닿은 행을 남기고 반복 요청은 행을 늘리지 않는다")
@@ -52,9 +95,15 @@ class PresenceTransitionServiceIT {
         Instant leftMeetingAt = Instant.parse("2026-08-31T03:00:00Z");
         Instant closedAt = Instant.parse("2026-08-31T04:00:00Z");
 
-        service.startAttendance(scenario.attendanceId(), scenario.firstLabId(), STARTED_AT);
-        service.startAttendance(
+        service.moveLab(
                 scenario.attendanceId(),
+                scenario.membershipId(),
+                scenario.firstLabId(),
+                STARTED_AT
+        );
+        service.moveLab(
+                scenario.attendanceId(),
+                scenario.membershipId(),
                 scenario.firstLabId(),
                 STARTED_AT.plusSeconds(30)
         );
@@ -173,7 +222,12 @@ class PresenceTransitionServiceIT {
     @DisplayName("같은 출결의 동시 실습실 이동은 출결 행 잠금으로 직렬화되어 열린 구간이 하나만 남는다")
     void serializesConcurrentLabMovesByAttendanceLock() throws Exception {
         Scenario scenario = saveScenario(false);
-        service.startAttendance(scenario.attendanceId(), scenario.firstLabId(), STARTED_AT);
+        service.moveLab(
+                scenario.attendanceId(),
+                scenario.membershipId(),
+                scenario.firstLabId(),
+                STARTED_AT
+        );
         Instant movedAt = STARTED_AT.plusSeconds(60);
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
@@ -313,6 +367,21 @@ class PresenceTransitionServiceIT {
                 ATTENDANCE_DATE,
                 STARTED_AT.atOffset(ZoneOffset.UTC),
                 checkedOutAt
+        );
+    }
+
+    private Long saveAttendance(Long membershipId, LocalDate date, Instant checkedInAt) {
+        return jdbcTemplate.queryForObject("""
+                        INSERT INTO learning_service.attendance_records (
+                            cohort_membership_id, attendance_date,
+                            checked_in_at, auto_status, final_status
+                        ) VALUES (?, ?, ?, 'PRESENT', 'PRESENT')
+                        RETURNING id
+                        """,
+                Long.class,
+                membershipId,
+                date,
+                checkedInAt.atOffset(ZoneOffset.UTC)
         );
     }
 

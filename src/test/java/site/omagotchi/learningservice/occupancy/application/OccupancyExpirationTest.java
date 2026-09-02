@@ -8,7 +8,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
-import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 
 import java.time.OffsetDateTime;
@@ -39,7 +38,7 @@ class OccupancyExpirationTest {
     private RoomOccupancyRepository occupancyRepository;
 
     @Mock
-    private OccupancyParticipantRepository participantRepository;
+    private MeetingPresenceCoordinator meetingPresenceCoordinator;
 
     @Mock
     private OccupancyEventPublisher eventPublisher;
@@ -55,7 +54,7 @@ class OccupancyExpirationTest {
 
         assertThat(occupancyExpiration.expire(candidate(endedAt), NOW)).isTrue();
 
-        verify(participantRepository).closeAllActiveByOccupancyId(OCCUPANCY_ID, endedAt);
+        verify(meetingPresenceCoordinator).leaveAll(OCCUPANCY_ID, SPACE_ID, endedAt);
         verify(eventPublisher).publishRoomVacated(
                 new RoomVacatedEvent(SPACE_ID, OCCUPANCY_ID, endedAt));
     }
@@ -73,7 +72,7 @@ class OccupancyExpirationTest {
 
         assertThat(occupancyExpiration.expire(candidate(NOW.minusMinutes(5)), NOW)).isFalse();
 
-        verify(participantRepository, never()).closeAllActiveByOccupancyId(any(), any());
+        verify(meetingPresenceCoordinator, never()).leaveAll(any(), any(), any());
         verify(eventPublisher, never()).publishRoomVacated(any());
     }
 
@@ -90,7 +89,7 @@ class OccupancyExpirationTest {
 
         occupancyExpiration.expire(candidate(endedAt), NOW);
 
-        verify(participantRepository, never()).closeAllActiveByOccupancyId(OCCUPANCY_ID, NOW);
+        verify(meetingPresenceCoordinator, never()).leaveAll(OCCUPANCY_ID, SPACE_ID, NOW);
         verify(eventPublisher, never()).publishRoomVacated(
                 new RoomVacatedEvent(SPACE_ID, OCCUPANCY_ID, NOW));
     }

@@ -26,6 +26,19 @@ public interface OccupancyParticipantJpaRepository extends JpaRepository<Occupan
      */
     Optional<OccupancyParticipant> findByOccupancyIdAndUserId(Long occupancyId, UUID userId);
 
+    Optional<OccupancyParticipant> findByCohortMembershipIdAndLeftAtIsNull(Long cohortMembershipId);
+
+    @Query("""
+                SELECT new site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository$ActiveParticipant(
+                       p.cohortMembershipId, p.userId)
+                  FROM OccupancyParticipant p
+                 WHERE p.occupancyId = :occupancyId
+                   AND p.leftAt IS NULL
+                 ORDER BY p.id ASC""")
+    List<OccupancyParticipantRepository.ActiveParticipant> findActiveParticipantsByOccupancyId(
+            @Param("occupancyId") Long occupancyId
+    );
+
     /**
      * 이 계정에게 열린 참여 행이 있는가. 점유자도 참여 행을 가지므로(MR-27)
      * 이 하나로 점유자·참여자를 모두 덮는다.

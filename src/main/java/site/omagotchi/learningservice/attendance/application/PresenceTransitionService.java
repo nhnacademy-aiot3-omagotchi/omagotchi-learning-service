@@ -29,30 +29,6 @@ public class PresenceTransitionService {
     private final AttendanceRecordRepository attendanceRecordRepository;
     private final PresenceIntervalRepository presenceIntervalRepository;
 
-    public void startAttendance(Long attendanceId, Long labSpaceId, Instant at) {
-        AttendanceRecord attendance = lockAttendance(attendanceId);
-        ensureOpenAttendance(attendance);
-        requireSpaceId(labSpaceId);
-        Instant transitionAt = requireTime(at);
-
-        List<PresenceInterval> openIntervals = findOpenIntervals(attendanceId);
-        if (openIntervals.isEmpty()) {
-            presenceIntervalRepository.save(PresenceInterval.start(
-                    attendanceId,
-                    PresenceState.PRESENT,
-                    labSpaceId,
-                    transitionAt
-            ));
-            return;
-        }
-
-        PresenceInterval current = requireSingle(openIntervals);
-        if (isSame(current, PresenceState.PRESENT, labSpaceId)) {
-            return;
-        }
-        throw new BusinessException(AttendanceErrorCode.PRESENCE_STATE_MISMATCH);
-    }
-
     public void moveLab(
             Long attendanceId,
             Long expectedMembershipId,
@@ -65,9 +41,25 @@ public class PresenceTransitionService {
         requireSpaceId(nextLabSpaceId);
         Instant transitionAt = requireTime(at);
 
-        PresenceInterval current = requireCurrent(attendanceId);
+        List<PresenceInterval> openIntervals = findOpenIntervals(attendanceId);
+        if (openIntervals.isEmpty()) {
+            presenceIntervalRepository.save(PresenceInterval.start(
+                    attendanceId,
+                    PresenceState.PRESENT,
+                    nextLabSpaceId,
+                    transitionAt
+            ));
+            return;
+        }
+
+        PresenceInterval current = requireSingle(openIntervals);
         if (isSame(current, PresenceState.PRESENT, nextLabSpaceId)) {
             return;
+        }
+        if (current.getState() == PresenceState.MEETING) {
+            throw new BusinessException(
+                    AttendanceErrorCode.PRESENCE_MEETING_EXIT_REQUIRED
+            );
         }
         if (current.getState() != PresenceState.PRESENT) {
             throw new BusinessException(AttendanceErrorCode.PRESENCE_STATE_MISMATCH);
@@ -149,6 +141,52 @@ public class PresenceTransitionService {
                 returnInterval.getSpaceId(),
                 transitionAt
         );
+    }
+
+    /**
+     * 소속 종료처럼 복귀할 자격이 사라진 경우 현재 회의 구간만 닫는다.
+     * 새 {@code PRESENT}는 만들지 않는다.
+     */
+    public void closeMeetingWithoutReturn(
+            Long attendanceId,
+            Long expectedMembershipId,
+            Long meetingSpaceId,
+            Instant at
+    ) {
+        closeMeetingInterval(attendanceId, expectedMembershipId, meetingSpaceId, at, true);
+    }
+
+    /** 소속 종료 정리용. 현재 열린 MEETING이면 공간 식별자와 무관하게 닫는다. */
+    public void closeAnyMeetingWithoutReturn(
+            Long attendanceId,
+            Long expectedMembershipId,
+            Instant at
+    ) {
+        closeMeetingInterval(attendanceId, expectedMembershipId, null, at, false);
+    }
+
+    private void closeMeetingInterval(
+            Long attendanceId,
+            Long expectedMembershipId,
+            Long meetingSpaceId,
+            Instant at,
+            boolean requireMeetingSpace
+    ) {
+        AttendanceRecord attendance = lockAttendance(attendanceId);
+        ensureMembership(attendance, expectedMembershipId);
+        // 점유 정리와 소속 종료 복구는 출결 행이 이미 체크아웃된 뒤에도 남은
+        // 고아 MEETING 구간을 닫아야 하므로 ensureOpenAttendance를 적용하지 않는다.
+        if (requireMeetingSpace) {
+            requireSpaceId(meetingSpaceId);
+        }
+        Instant transitionAt = requireTime(at);
+
+        PresenceInterval current = requireCurrent(attendanceId);
+        if (current.getState() != PresenceState.MEETING
+                || (requireMeetingSpace && !Objects.equals(current.getSpaceId(), meetingSpaceId))) {
+            throw new BusinessException(AttendanceErrorCode.PRESENCE_STATE_MISMATCH);
+        }
+        end(current, transitionAt);
     }
 
     public void closeAttendance(Long attendanceId, Instant at) {

@@ -6,7 +6,6 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
-import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 
 import java.time.OffsetDateTime;
@@ -33,7 +32,7 @@ import java.time.OffsetDateTime;
 public class OccupancyExpiration {
 
     private final RoomOccupancyRepository occupancyRepository;
-    private final OccupancyParticipantRepository participantRepository;
+    private final MeetingPresenceCoordinator meetingPresenceCoordinator;
     private final OccupancyEventPublisher eventPublisher;
 
     /**
@@ -55,8 +54,8 @@ public class OccupancyExpiration {
         // 점유가 끝나면 그 안의 참여도 끝난다 (MR-32). 열어 두면
         // uq_occupancy_participants_one_active가 계정 기준이라 그 사람들이 영구히
         // 다른 회의에 참여할 수 없다.
-        participantRepository.closeAllActiveByOccupancyId(
-                occupancy.occupancyId(), occupancy.endedAt());
+        meetingPresenceCoordinator.leaveAll(
+                occupancy.occupancyId(), occupancy.spaceId(), occupancy.endedAt());
 
         // 발행은 상태 변경 뒤다. 리스너가 AFTER_COMMIT으로 받으므로 실제 발송은 커밋 후이며,
         // vacatedAt이 now가 아닌 것은 스케줄러 주기만큼 늦게 발견했을 뿐 실제로 비워진 것은

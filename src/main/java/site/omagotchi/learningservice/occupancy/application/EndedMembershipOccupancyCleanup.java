@@ -6,7 +6,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
-import site.omagotchi.learningservice.occupancy.application.port.OccupancyParticipantRepository;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertRepository;
 import site.omagotchi.learningservice.occupancy.domain.RoomOccupancy;
@@ -42,7 +41,7 @@ import java.util.UUID;
 public class EndedMembershipOccupancyCleanup {
 
     private final RoomOccupancyRepository occupancyRepository;
-    private final OccupancyParticipantRepository participantRepository;
+    private final MeetingPresenceCoordinator meetingPresenceCoordinator;
     private final VacancyAlertRepository alertRepository;
     private final OccupancyEventPublisher eventPublisher;
 
@@ -69,9 +68,9 @@ public class EndedMembershipOccupancyCleanup {
 
         // 남의 점유에 참여자로 들어가 있던 경우다 (명세 06 §2 7항). 점유자 본인의 행은
         // 위에서 이미 닫혔고, 계정당 열린 참여가 하나뿐이라 둘이 겹치지 않는다.
-        int closed = participantRepository.closeActiveByUserId(userId, endedAt);
-        if (closed > 0) {
-            log.info("소속 종료로 참여를 마감했습니다. membershipId={}, 마감={}건", membershipId, closed);
+        boolean closed = meetingPresenceCoordinator.closeEndedMembership(membershipId, endedAt);
+        if (closed) {
+            log.info("소속 종료로 참여를 마감했습니다. membershipId={}", membershipId);
         }
 
         // 이 사람이 걸어 둔 대기 알림을 지운다 (명세 06 §2 8단계).
@@ -111,7 +110,7 @@ public class EndedMembershipOccupancyCleanup {
 
         // 점유가 끝나면 그 안의 참여도 끝난다 (MR-32). 열어 두면 참여자 전원이 계정 기준
         // 유니크에 묶여 다른 회의에 들어가지 못한다.
-        participantRepository.closeAllActiveByOccupancyId(occupancy.getId(), endedAt);
+        meetingPresenceCoordinator.leaveAll(occupancy.getId(), occupancy.getSpaceId(), endedAt);
 
         // 반납과 같은 규약으로 알린다 — 사람이 빠져 방이 비었으므로 대기자에게 알린다.
         // 커밋 후 비동기로 발송된다 (ADR space-team/0006).

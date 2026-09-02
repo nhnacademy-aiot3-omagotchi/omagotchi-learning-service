@@ -52,8 +52,8 @@ class PresenceTransitionServiceTest {
     private PresenceTransitionService service;
 
     @Test
-    @DisplayName("열린 구간이 없으면 선택한 실습실의 PRESENT 구간을 시작한다")
-    void startsPresentIntervalForSelectedLab() {
+    @DisplayName("체크인 후 최초 실습실 선택은 열린 구간이 없어도 PRESENT 구간을 시작한다")
+    void firstLabSelectionStartsPresentInterval() {
         Instant at = Instant.parse("2026-08-31T01:00:00Z");
         stubAttendance(attendance(false));
         when(presenceIntervalRepository
@@ -61,9 +61,10 @@ class PresenceTransitionServiceTest {
                 .thenReturn(List.of());
         ArgumentCaptor<PresenceInterval> captor = ArgumentCaptor.forClass(PresenceInterval.class);
 
-        service.startAttendance(ATTENDANCE_ID, LAB_A_ID, at);
+        service.moveLab(ATTENDANCE_ID, MEMBERSHIP_ID, LAB_A_ID, at);
 
         verify(presenceIntervalRepository).save(captor.capture());
+        assertThat(captor.getValue().getAttendanceId()).isEqualTo(ATTENDANCE_ID);
         assertThat(captor.getValue().getState()).isEqualTo(PresenceState.PRESENT);
         assertThat(captor.getValue().getSpaceId()).isEqualTo(LAB_A_ID);
         assertThat(captor.getValue().getStartedAt()).isEqualTo(at);
@@ -80,8 +81,9 @@ class PresenceTransitionServiceTest {
         stubAttendance(attendance(false));
         stubOpenIntervals(current);
 
-        service.startAttendance(
+        service.moveLab(
                 ATTENDANCE_ID,
+                MEMBERSHIP_ID,
                 LAB_A_ID,
                 Instant.parse("2026-08-31T01:05:00Z")
         );
@@ -139,8 +141,9 @@ class PresenceTransitionServiceTest {
 
         assertBusinessError(
                 AttendanceErrorCode.PRESENCE_INVALID_SPACE_ID,
-                () -> service.startAttendance(
+                () -> service.moveLab(
                         ATTENDANCE_ID,
+                        MEMBERSHIP_ID,
                         null,
                         Instant.parse("2026-08-31T01:00:00Z")
                 )
@@ -188,7 +191,7 @@ class PresenceTransitionServiceTest {
         stubOpenIntervals(current);
 
         assertBusinessError(
-                AttendanceErrorCode.PRESENCE_STATE_MISMATCH,
+                AttendanceErrorCode.PRESENCE_MEETING_EXIT_REQUIRED,
                 () -> service.moveLab(
                         ATTENDANCE_ID,
                         MEMBERSHIP_ID,
@@ -398,6 +401,25 @@ class PresenceTransitionServiceTest {
         assertThat(current.getEndedAt()).isEqualTo(at);
         verify(presenceIntervalRepository).save(current);
         verify(presenceIntervalRepository, never()).delete(any(PresenceInterval.class));
+    }
+
+    @Test
+    @DisplayName("소속 종료 회의 마감은 MEETING만 닫고 복귀 PRESENT를 만들지 않는다")
+    void closesMeetingWithoutReturnForEndedMembership() {
+        Instant at = Instant.parse("2026-08-31T04:00:00Z");
+        PresenceInterval meeting = presence(
+                PresenceState.MEETING,
+                MEETING_ID,
+                "2026-08-31T02:00:00Z"
+        );
+        stubAttendance(attendance(false));
+        stubOpenIntervals(meeting);
+
+        service.closeAnyMeetingWithoutReturn(ATTENDANCE_ID, MEMBERSHIP_ID, at);
+
+        assertThat(meeting.getEndedAt()).isEqualTo(at);
+        verify(presenceIntervalRepository).save(meeting);
+        verify(presenceIntervalRepository, times(1)).save(any(PresenceInterval.class));
     }
 
     private AttendanceRecord attendance(boolean checkedOut) {

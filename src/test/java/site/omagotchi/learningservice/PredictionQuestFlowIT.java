@@ -32,19 +32,25 @@ import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.prediction.application.exception.PredictionClientException;
 import site.omagotchi.learningservice.prediction.application.port.PredictionClient;
 import site.omagotchi.learningservice.prediction.application.result.StudyTimePredictionResult;
-import site.omagotchi.learningservice.space.application.port.SpaceRepository;
+import site.omagotchi.learningservice.global.util.DateTimeProvider;
+import site.omagotchi.learningservice.space.application.SpaceCommandService;
+import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceType;
+import site.omagotchi.learningservice.study.application.StudyRecordCommandService;
+import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static site.omagotchi.learningservice.global.time.AggregationDateTime.today;
@@ -72,13 +78,16 @@ class PredictionQuestFlowIT {
     @Autowired CohortMembershipService membershipService;
     @Autowired CharacterOnboardingService characterOnboardingService;
     @Autowired DailyQuestService dailyQuestService;
-    @Autowired SpaceRepository spaceRepository;
+    @Autowired SpaceCommandService spaceCommandService;
+    @Autowired StudyRecordCommandService studyRecordCommandService;
+    @Autowired DateTimeProvider dateTimeProvider;
     @Autowired JdbcTemplate jdbcTemplate;
 
     @MockitoBean PredictionClient predictionClient;
 
     private UUID studentId;
     private UUID managerId;
+    private Long cohortId;
 
     @BeforeEach
     void setUp() {
@@ -188,6 +197,51 @@ class PredictionQuestFlowIT {
         assertThat(countQuestTargets).isZero();
     }
 
+    @Test
+    @DisplayName("학습 기록이 목표에 못 미치면 학습 완료하기만 완료되고 공부 시간 퀘스트는 진행 중으로 남는다")
+    void keepsStudyTimeQuestInProgressWhenStudySecondsBelowTarget() throws InterruptedException {
+        when(predictionClient.predict(any(), any()))
+                .thenReturn(new StudyTimePredictionResult(4.0, "study-time-test"));
+        dailyQuestService.getOrCreateDailyQuests(studentId);
+
+        // 집계일 경계(04:00 KST)를 넘지 않는 짧은 기록. 목표 4시간 24분에는 한참 못 미친다.
+        // 수동 기록 정책(ManualStudyRecordPolicy)이 분 단위 정렬을 요구하므로 분으로 잘라낸다.
+        Instant end = dateTimeProvider.currentInstant().truncatedTo(ChronoUnit.MINUTES);
+        Instant boundary = dateTimeProvider.startOfAggregationDate(dateTimeProvider.currentAggregationDate());
+        Instant start = end.minus(Duration.ofMinutes(10));
+        if (start.isBefore(boundary)) {
+            start = boundary;
+        }
+        // 집계일이 시작된 직후 1분 안에서는 길이 0인 기록밖에 못 만들어 전제 자체가 성립하지 않는다.
+        assumeTrue(start.isBefore(end), "집계일 시작 직후에는 학습 기록을 만들 수 없어 건너뛴다.");
+        studyRecordCommandService.create(studentId, cohortId, new CreateStudyRecordCommand(start, end));
+
+        // 기록 저장이 STUDY_COMPLETED 이벤트를 발행하고 그 이벤트가 handleStudyCompleted를 부른다.
+        // 여기서 직접 호출하면 비동기 처리와 같은 행을 동시에 갱신해 낙관적 잠금 충돌이 나므로
+        // 운영과 같은 이벤트 경로가 끝나기를 기다린다.
+        DailyQuestResult routine = waitForRoutineStudyQuestCompleted();
+
+        assertThat(routine.progressCount()).isEqualTo(1);
+
+        DailyQuestResult studyTime = issueAndFindStudyTimeQuest();
+        assertThat(studyTime.status()).isEqualTo(QuestStatus.IN_PROGRESS);
+        assertThat(studyTime.progressCount()).isZero();
+    }
+
+    private DailyQuestResult waitForRoutineStudyQuestCompleted() throws InterruptedException {
+        for (int attempt = 0; attempt < 50; attempt++) {
+            DailyQuestResult quest = dailyQuestService.getOrCreateDailyQuests(studentId).stream()
+                    .filter(candidate -> DailyQuestService.STUDY_COMPLETED_CODE.equals(candidate.code()))
+                    .findFirst()
+                    .orElseThrow();
+            if (quest.status() == QuestStatus.COMPLETED) {
+                return quest;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("학습 기록 이벤트가 학습 완료하기 퀘스트를 완료하지 못했습니다.");
+    }
+
     private DailyQuestResult issueAndFindStudyTimeQuest() {
         return studyTimeQuestOf(dailyQuestService.getOrCreateDailyQuests(studentId));
     }
@@ -238,6 +292,7 @@ class PredictionQuestFlowIT {
                 SYSTEM_ADMIN_ID,
                 GlobalRole.SYSTEM_ADMIN
         );
+        cohortId = cohort.id();
         cohortManagerService.assignManager(
                 cohort.id(), new AssignCohortManagerCommand(managerId), SYSTEM_ADMIN_ID, GlobalRole.SYSTEM_ADMIN
         );
@@ -249,10 +304,13 @@ class PredictionQuestFlowIT {
                 managerId,
                 GlobalRole.USER
         );
-        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Asia/Seoul"));
-        spaceRepository.save(Space.create(
-                "예측퀘스트-실습실-" + cohort.id(), SpaceType.LAB, 20, cohort.id(), now
-        ).activate(now));
+        // 기수를 ACTIVE로 바꾸려면 활성 실습실이 최소 1개 있어야 한다.
+        // Space 피처의 규칙을 우회하지 않도록 public application method로 준비한다.
+        Space lab = spaceCommandService.create(
+                new CreateSpaceCommand("예측퀘스트-실습실-" + cohort.id(), SpaceType.LAB, 20, cohort.id()),
+                managerId
+        );
+        spaceCommandService.activate(lab.getId(), managerId);
         cohortService.changeStatus(cohort.id(), new ChangeCohortStatusCommand(CohortStatus.ACTIVE), GlobalRole.SYSTEM_ADMIN);
 
         var joinCode = joinCodeService.issue(

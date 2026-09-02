@@ -43,10 +43,22 @@ class StudySpaceSelectionServiceTest {
     }
 
     @Test
-    @DisplayName("STUDY가 아니거나 비활성인 공간은 도서관으로 선택할 수 없다")
-    void rejectsUnavailableOrNonStudySpace() {
+    @DisplayName("STUDY가 아닌 공간은 도서관으로 선택할 수 없다")
+    void rejectsNonStudySpace() {
         when(spaceRepository.findByIdForUpdate(10L))
                 .thenReturn(Optional.of(space(SpaceType.MEETING, SpaceOperationalStatus.ACTIVE)));
+
+        assertThatThrownBy(() -> service.requireSelectableStudySpace(10L))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isSameAs(SpaceErrorCode.STUDY_SPACE_NOT_SELECTABLE));
+    }
+
+    @Test
+    @DisplayName("비활성 STUDY 공간은 도서관으로 선택할 수 없다")
+    void rejectsInactiveStudySpace() {
+        when(spaceRepository.findByIdForUpdate(10L))
+                .thenReturn(Optional.of(space(SpaceType.STUDY, SpaceOperationalStatus.INACTIVE)));
 
         assertThatThrownBy(() -> service.requireSelectableStudySpace(10L))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->

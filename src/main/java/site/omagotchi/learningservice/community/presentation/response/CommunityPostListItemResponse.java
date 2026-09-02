@@ -1,7 +1,6 @@
 package site.omagotchi.learningservice.community.presentation.response;
 
 import site.omagotchi.learningservice.community.application.query.CommunityPostListItem;
-import site.omagotchi.learningservice.community.domain.CommunityPostScope;
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
 
 import java.time.Instant;
@@ -12,7 +11,6 @@ public record CommunityPostListItemResponse(
         CommunityPostType type,
         String title,
         UUID authorUserId,
-        CommunityPostScope scope,
         Long cohortId,
         boolean pinned,
         Instant createdAt,
@@ -26,7 +24,6 @@ public record CommunityPostListItemResponse(
                 item.type(),
                 item.title(),
                 item.authorUserId(),
-                item.scope(),
                 item.cohortId(),
                 item.pinned(),
                 item.createdAt(),

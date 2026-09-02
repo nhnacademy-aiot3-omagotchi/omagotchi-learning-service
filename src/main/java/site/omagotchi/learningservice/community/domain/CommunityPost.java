@@ -19,6 +19,12 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * 커뮤니티 게시글. 언제나 특정 기수에 속한다.
+ *
+ * <p>공지와 자유글은 {@link CommunityPostType}으로만 갈린다. 둘 다 기수 게시판 안의
+ * 글이고, 작성/수정 권한과 고정 가능 여부에서 차이가 난다.</p>
+ */
 @Entity
 @Table(name = "community_posts", schema = "learning_service")
 @Getter
@@ -43,11 +49,8 @@ public class CommunityPost {
     @Column(name = "author_user_id", nullable = false, updatable = false)
     private UUID authorUserId;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private CommunityPostScope scope;
-
-    @Column(name = "cohort_id")
+    // 게시글은 기수를 옮겨 다니지 않는다.
+    @Column(name = "cohort_id", nullable = false, updatable = false)
     private Long cohortId;
 
     @Column(nullable = false)
@@ -69,7 +72,6 @@ public class CommunityPost {
             String title,
             String content,
             UUID authorUserId,
-            CommunityPostScope scope,
             Long cohortId
     ) {
         CommunityPost post = new CommunityPost();
@@ -77,8 +79,7 @@ public class CommunityPost {
         post.title = requireTitle(title);
         post.content = requireContent(content);
         post.authorUserId = requireAuthorUserId(authorUserId);
-        post.scope = requireScope(scope);
-        post.cohortId = validateCohortId(post.scope, cohortId);
+        post.cohortId = requireCohortId(cohortId);
         post.pinned = false;
         return post;
     }
@@ -110,12 +111,12 @@ public class CommunityPost {
         return type == CommunityPostType.FREE;
     }
 
-    public boolean isGlobal() {
-        return scope == CommunityPostScope.GLOBAL;
+    public boolean belongsTo(Long cohortId) {
+        return this.cohortId.equals(cohortId);
     }
 
-    public boolean isCohortScoped() {
-        return scope == CommunityPostScope.COHORT;
+    public boolean isAuthor(UUID userId) {
+        return authorUserId.equals(userId);
     }
 
     private static CommunityPostType requireType(CommunityPostType type) {
@@ -154,19 +155,9 @@ public class CommunityPost {
         return authorUserId;
     }
 
-    private static CommunityPostScope requireScope(CommunityPostScope scope) {
-        if (scope == null) {
-            throw new IllegalArgumentException("게시글 공개 범위는 필수입니다.");
-        }
-        return scope;
-    }
-
-    private static Long validateCohortId(CommunityPostScope scope, Long cohortId) {
-        if (scope == CommunityPostScope.GLOBAL && cohortId != null) {
-            throw new IllegalArgumentException("전체 공개 게시글은 기수를 가질 수 없습니다.");
-        }
-        if (scope == CommunityPostScope.COHORT && cohortId == null) {
-            throw new IllegalArgumentException("기수 공개 게시글은 기수가 필요합니다.");
+    private static Long requireCohortId(Long cohortId) {
+        if (cohortId == null) {
+            throw new IllegalArgumentException("기수 식별자는 필수입니다.");
         }
         return cohortId;
     }

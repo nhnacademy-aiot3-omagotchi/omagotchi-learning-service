@@ -5,11 +5,10 @@ import site.omagotchi.learningservice.community.application.query.CommunityPostP
 import site.omagotchi.learningservice.community.application.query.CommunityPostSearchCondition;
 
 import java.util.Optional;
-import java.util.UUID;
 
 public interface CommunityPostQueryPort {
 
     CommunityPostPage findVisiblePosts(CommunityPostSearchCondition condition);
 
-    Optional<CommunityPostDetail> findVisiblePost(UUID userId, Long postId);
+    Optional<CommunityPostDetail> findVisiblePost(Long cohortId, Long postId);
 }

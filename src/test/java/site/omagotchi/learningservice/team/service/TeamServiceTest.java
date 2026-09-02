@@ -134,6 +134,8 @@ class TeamServiceTest {
                 1L,
                 "테스트",
                 now.minusDays(1),
+                1L,
+                TeamMemberRole.MASTER,
                 List.of(
                         new TeamDetailLocalResult.Member(
                                 1L, masterUserId, TeamMemberRole.MASTER, now.plusMinutes(5)),
@@ -150,6 +152,8 @@ class TeamServiceTest {
         TeamDetailResult response = teamService.getTeam(teamId, userId);
 
         // Then: 조회 순서를 유지하면서 표시 이름을 붙인 팀원 목록 반환
+        assertThat(response.myMemberId()).isEqualTo(1L);
+        assertThat(response.myRole()).isEqualTo(TeamMemberRole.MASTER);
         assertThat(response.memberCount()).isEqualTo(2);
         assertThat(response.members())
                 .extracting("displayName", "role")
@@ -171,6 +175,8 @@ class TeamServiceTest {
                 1L,
                 "테스트",
                 now.minusDays(1),
+                1L,
+                TeamMemberRole.MASTER,
                 List.of(
                         new TeamDetailLocalResult.Member(
                                 1L, knownUserId, TeamMemberRole.MASTER, now),

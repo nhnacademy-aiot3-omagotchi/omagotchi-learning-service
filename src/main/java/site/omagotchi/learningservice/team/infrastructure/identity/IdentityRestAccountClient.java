@@ -16,7 +16,9 @@ import site.omagotchi.learningservice.team.infrastructure.identity.request.Ident
 import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountResponse;
 import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountSearchResponse;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -30,6 +32,11 @@ import java.util.UUID;
 public class IdentityRestAccountClient implements IdentityAccountClient {
 
     private static final int ACCOUNT_BATCH_SIZE = 100;
+    private static final int ACCOUNT_SEARCH_RESULT_LIMIT = 20;
+    private static final Comparator<IdentityAccountView> ACCOUNT_SEARCH_ORDER = Comparator
+            .comparing(IdentityAccountView::displayName)
+            .thenComparing(IdentityAccountView::email)
+            .thenComparing(IdentityAccountView::accountId);
 
     private final IdentityAccountHttpService httpService;
     private final RestClientCallExecutor callExecutor;
@@ -83,11 +90,28 @@ public class IdentityRestAccountClient implements IdentityAccountClient {
             return List.of();
         }
         return callExecutor.execute(
-                () -> fetchSearchResults(query, requestedIds),
+                () -> fetchSearchResultsInBatches(query, requestedIds),
                 exception -> {
                     throw errorResolver.resolveBatchLookupError(exception);
                 }
         );
+    }
+
+    private List<IdentityAccountView> fetchSearchResultsInBatches(
+            String query,
+            Set<UUID> requestedIds
+    ) {
+        List<UUID> ids = List.copyOf(requestedIds);
+        List<IdentityAccountView> accounts = new ArrayList<>();
+        for (int start = 0; start < ids.size(); start += ACCOUNT_BATCH_SIZE) {
+            Set<UUID> batchIds = new LinkedHashSet<>(ids.subList(
+                    start, Math.min(start + ACCOUNT_BATCH_SIZE, ids.size())));
+            accounts.addAll(fetchSearchResults(query, batchIds));
+        }
+        return accounts.stream()
+                .sorted(ACCOUNT_SEARCH_ORDER)
+                .limit(ACCOUNT_SEARCH_RESULT_LIMIT)
+                .toList();
     }
 
     private IdentityAccountState fetchAccountState(UUID userId) {

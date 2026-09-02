@@ -27,6 +27,8 @@ public enum TeamErrorCode implements ErrorCode {
     // 400
     INVALID_NAME(ErrorType.INVALID_INPUT, "TEAM_INVALID_NAME",
             "팀 이름은 공백을 제외하고 1~30자여야 합니다."),
+    INVALID_MEMBER_QUERY(ErrorType.INVALID_INPUT, "TEAM_INVALID_MEMBER_QUERY",
+            "팀원 검색어는 공백을 제외하고 1~100자여야 합니다."),
     COHORT_REQUIRED(ErrorType.INVALID_INPUT, "TEAM_COHORT_REQUIRED",
             "대상 기수를 지정하세요."),
     TARGET_NOT_IN_COHORT(ErrorType.INVALID_INPUT, "TEAM_TARGET_NOT_IN_COHORT",

@@ -1,5 +1,7 @@
 package site.omagotchi.learningservice.team.application.result;
 
+import site.omagotchi.learningservice.team.domain.TeamMemberRole;
+
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -18,6 +20,8 @@ public record TeamDetailResult(
         Long cohortId,
         String name,
         OffsetDateTime createdAt,
+        Long myMemberId,
+        TeamMemberRole myRole,
         List<TeamMemberResult> members
 ) {
     /** {@code members}는 이미 정렬된(마스터 우선) 목록이어야 한다. 여기서 다시 정렬하지 않는다. */

@@ -37,7 +37,7 @@ public class TeamDetailLookup {
     public TeamDetailLocalResult load(Long teamId, UUID userId) {
         Team team = accessSupport.loadActiveTeam(teamId);
         TeamMembership membership = accessSupport.requireActiveMembership(team.getCohortId(), userId);
-        accessSupport.requireMembership(teamId, membership.id());
+        TeamMember requesterMember = accessSupport.requireMembership(teamId, membership.id());
 
         List<TeamMember> members = teamMemberRepository.findByTeamIdOrderByJoinedAtAsc(teamId);
         Map<Long, UUID> userIdsByMembership = cohortMembershipQueryService.findUserIds(
@@ -57,6 +57,6 @@ public class TeamDetailLookup {
                 ))
                 .toList();
 
-        return TeamDetailLocalResult.of(team, localMembers);
+        return TeamDetailLocalResult.of(team, requesterMember, localMembers);
     }
 }

@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.community.application;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -36,6 +37,7 @@ import java.util.UUID;
  * <p>게시판은 기수 단위이므로 권한은 전부 해당 기수의 membership으로 판정한다.
  * 공지는 MANAGER·MENTOR가, 자유글은 작성자 본인이 다룬다.</p>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -222,7 +224,16 @@ public class CommunityPostCommandService {
             deleteStoredAttachmentsAfterCommit(existingAttachments);
             return savedAttachments;
         } catch (RuntimeException exception) {
-            storedAttachments.forEach(attachment -> attachmentStorage.delete(attachment.storageKey()));
+            // 정리하다 저장소가 또 실패해도 원래 실패를 가리지 않는다. 객체 스토리지는
+            // 네트워크 너머라 삭제도 실패할 수 있고, 그때 남는 고아 객체보다 원인을
+            // 잃는 쪽이 더 나쁘다.
+            storedAttachments.forEach(attachment -> {
+                try {
+                    attachmentStorage.delete(attachment.storageKey());
+                } catch (RuntimeException cleanupFailure) {
+                    exception.addSuppressed(cleanupFailure);
+                }
+            });
             throw exception;
         }
     }
@@ -239,8 +250,23 @@ public class CommunityPostCommandService {
                 .toList();
     }
 
+    /**
+     * 커밋이 끝난 뒤 부르는 정리라서 실패를 밖으로 올리지 않는다.
+     * 여기에서 예외를 던지면 이미 성공한 요청이 500이 된다. 고아 객체를 남기고 로그만 남긴다.
+     */
     private void deleteStoredAttachments(List<CommunityPostAttachment> attachments) {
-        attachments.forEach(attachment -> attachmentStorage.delete(attachment.getStorageKey()));
+        attachments.forEach(attachment -> {
+            try {
+                attachmentStorage.delete(attachment.getStorageKey());
+            } catch (RuntimeException exception) {
+                log.warn(
+                        "첨부파일 객체를 지우지 못했습니다. postId={}, key={}",
+                        attachment.getPostId(),
+                        attachment.getStorageKey(),
+                        exception
+                );
+            }
+        });
     }
 
     private void deleteStoredAttachmentsAfterCommit(List<CommunityPostAttachment> attachments) {

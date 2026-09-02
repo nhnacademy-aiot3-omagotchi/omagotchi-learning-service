@@ -28,8 +28,10 @@ public record StudyTimeQuestProperties(
     }
 
     private static void requirePositive(Number value, String propertyName) {
-        if (value == null || value.doubleValue() <= 0) {
-            throw new IllegalArgumentException(propertyName + "은 양수여야 합니다.");
+        // NaN은 어떤 비교에도 false를 내므로 <= 0 검사만으로는 통과한다.
+        // 그대로 흘러가면 Math.round(NaN)이 0이 되어 목표가 조용히 하한으로 굳는다.
+        if (value == null || !Double.isFinite(value.doubleValue()) || value.doubleValue() <= 0) {
+            throw new IllegalArgumentException(propertyName + "은 유한한 양수여야 합니다.");
         }
     }
 }

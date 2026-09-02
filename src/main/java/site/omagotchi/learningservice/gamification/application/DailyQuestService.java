@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.gamification.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.gamification.application.port.DailyQuestIssueRepository;
 import site.omagotchi.learningservice.gamification.application.result.DailyQuestResult;
 import site.omagotchi.learningservice.gamification.application.result.HomeResult;
 import site.omagotchi.learningservice.gamification.domain.QuestStatus;
@@ -43,6 +44,7 @@ public class DailyQuestService {
     private final XpRewardService xpRewardService;
     private final CharacterGrowthService characterGrowthService;
     private final DateTimeProvider dateTimeProvider;
+    private final DailyQuestIssueRepository dailyQuestIssueRepository;
     private final StudyTimeQuestTargetResolver studyTimeQuestTargetResolver;
     private final UserStudySecondsReader userStudySecondsReader;
 
@@ -181,10 +183,9 @@ public class DailyQuestService {
                 .filter(template -> !existingCodes.contains(template.getCode()))
                 .map(template -> newQuest(userId, questDate, template))
                 .toList();
-        if (quests.isEmpty()) {
-            return;
-        }
-        userDailyQuestRepository.saveAll(quests);
+        // 미리 걸러도 두 요청이 같은 순간에 "없음"으로 읽을 수 있다.
+        // 남은 충돌은 저장소가 ON CONFLICT로 흡수한다.
+        dailyQuestIssueRepository.issueIfAbsent(quests);
     }
 
     private UserDailyQuest newQuest(UUID userId, LocalDate questDate, QuestTemplate template) {

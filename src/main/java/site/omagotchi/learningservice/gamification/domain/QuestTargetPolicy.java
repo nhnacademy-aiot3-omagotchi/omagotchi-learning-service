@@ -1,8 +1,5 @@
 package site.omagotchi.learningservice.gamification.domain;
 
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
-
 /**
  * 예측값을 퀘스트 목표 시간으로 바꾸는 정책.
  *
@@ -10,8 +7,10 @@ import lombok.NoArgsConstructor;
  * prediction-service가 이미 출력을 [0, 11.5]h로 보정해 주므로 계수를 곱하면 상한을 넘길 수 있고,
  * 그 경계 처리는 learning-service의 책임이다(ADR prediction/0002).
  */
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class QuestTargetPolicy {
+
+    private QuestTargetPolicy() {
+    }
 
     private static final int SECONDS_PER_HOUR = 3600;
 

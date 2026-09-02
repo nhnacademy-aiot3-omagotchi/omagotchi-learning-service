@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import site.omagotchi.learningservice.gamification.application.port.DailyQuestIssueRepository;
 import site.omagotchi.learningservice.gamification.domain.QuestStatus;
 import site.omagotchi.learningservice.gamification.domain.QuestType;
 import site.omagotchi.learningservice.gamification.domain.UserDailyQuest;
@@ -27,8 +28,6 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,6 +51,9 @@ class DailyQuestServiceTest {
     private CharacterGrowthService characterGrowthService;
 
     @Mock
+    private DailyQuestIssueRepository dailyQuestIssueRepository;
+
+    @Mock
     private StudyTimeQuestTargetResolver studyTimeQuestTargetResolver;
 
     @Mock
@@ -70,6 +72,7 @@ class DailyQuestServiceTest {
                 xpRewardService,
                 characterGrowthService,
                 dateTimeProvider,
+                dailyQuestIssueRepository,
                 studyTimeQuestTargetResolver,
                 userStudySecondsReader
         );
@@ -83,7 +86,7 @@ class DailyQuestServiceTest {
 
         dailyQuestService.getOrCreateDailyQuests(USER_ID);
 
-        verify(userDailyQuestRepository, never()).saveAll(any());
+        verify(dailyQuestIssueRepository).issueIfAbsent(List.of());
     }
 
     @Test

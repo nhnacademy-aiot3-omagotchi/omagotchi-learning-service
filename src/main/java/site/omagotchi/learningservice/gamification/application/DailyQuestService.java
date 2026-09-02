@@ -72,18 +72,19 @@ public class DailyQuestService {
     public DailyQuestResult handleStudyCompleted(UUID userId) {
         LocalDate questDate = dateTimeProvider.currentAggregationDate();
         createDailyQuestsIfAbsent(userId, questDate);
-        UserDailyQuest quest = requireTodayQuest(userId, questDate, STUDY_COMPLETED_CODE);
 
-        if (!quest.isStudyTimeQuest()) {
-            // 목표 시간이 없는 기존 횟수형 행은 이전 계약대로 1회 진행으로 완료한다.
-            quest.progress(1, dateTimeProvider.currentInstant());
-            return DailyQuestResult.from(quest);
-        }
+        // "학습 완료하기"는 원래 계약대로 학습 1회에 완료한다.
+        UserDailyQuest routine = requireTodayQuest(userId, questDate, STUDY_COMPLETED_CODE);
+        routine.progress(1, dateTimeProvider.currentInstant());
 
-        // 시간형은 이벤트 횟수가 아니라 오늘 누적 공부시간으로 판정한다.
-        // 기록 수정·삭제로 누적이 줄 수 있으므로 증분이 아니라 매번 원본을 다시 읽는다.
-        completeIfStudyTimeReached(userId, questDate, quest);
-        return DailyQuestResult.from(quest);
+        // 같은 학습 이벤트로 LLM 슬롯의 공부 시간 퀘스트도 판정한다.
+        // 이벤트 횟수가 아니라 오늘 누적 공부시간을 보며, 기록 수정·삭제로 누적이 줄 수 있으므로
+        // 증분이 아니라 매번 원본을 다시 읽는다. 행이 없거나 시간형이 아니면 건너뛴다.
+        userDailyQuestRepository.findByUserIdAndQuestDateAndCode(userId, questDate, LLM_QUEST_CODE)
+                .filter(UserDailyQuest::isStudyTimeQuest)
+                .ifPresent(quest -> completeIfStudyTimeReached(userId, questDate, quest));
+
+        return DailyQuestResult.from(routine);
     }
 
     private void completeIfStudyTimeReached(UUID userId, LocalDate questDate, UserDailyQuest quest) {
@@ -189,7 +190,8 @@ public class DailyQuestService {
     }
 
     private UserDailyQuest newQuest(UUID userId, LocalDate questDate, QuestTemplate template) {
-        if (!STUDY_COMPLETED_CODE.equals(template.getCode())) {
+        // LLM 슬롯이 예측 기반 공부 시간 퀘스트 자리다. 나머지는 템플릿을 그대로 복사한다.
+        if (!LLM_QUEST_CODE.equals(template.getCode())) {
             return UserDailyQuest.fromTemplate(userId, questDate, template);
         }
         // 목표는 사용자마다 다르므로 제목도 발급 시점에 만들어 행으로 복사한다.

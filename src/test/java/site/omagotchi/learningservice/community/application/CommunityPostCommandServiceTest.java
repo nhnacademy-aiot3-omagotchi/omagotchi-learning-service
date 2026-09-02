@@ -25,7 +25,6 @@ import site.omagotchi.learningservice.community.infrastructure.CommunityPostJpaR
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.io.ByteArrayInputStream;
-import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -70,7 +69,7 @@ class CommunityPostCommandServiceTest {
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-08-08T00:00:00Z"), ZoneOffset.UTC);
     private final CommunityAttachmentProperties attachmentProperties = new CommunityAttachmentProperties(
-            Path.of("data/community-attachments"),
+            "community-attachments",
             DataSize.ofMegabytes(5),
             5,
             List.of("jpg", "jpeg", "png", "gif"),

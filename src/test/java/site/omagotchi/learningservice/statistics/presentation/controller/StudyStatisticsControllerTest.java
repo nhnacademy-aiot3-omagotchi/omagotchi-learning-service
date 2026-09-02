@@ -256,6 +256,7 @@ class StudyStatisticsControllerTest {
                             new MemberSummaryResult(
                                     101L,
                                     UUID.fromString("00000000-0000-0000-0000-000000000101"),
+                                    "오마",
                                     3_600L,
                                     10_800L,
                                     3L,
@@ -290,6 +291,7 @@ class StudyStatisticsControllerTest {
                     .andExpect(jsonPath("$.items[0].cohortMembershipId").value(101L))
                     .andExpect(jsonPath("$.items[0].userId")
                             .value("00000000-0000-0000-0000-000000000101"))
+                    .andExpect(jsonPath("$.items[0].nickname").value("오마"))
                     .andExpect(jsonPath("$.items[0].todayStudySeconds").value(3_600L))
                     .andExpect(jsonPath("$.items[0].periodStudySeconds").value(10_800L))
                     .andExpect(jsonPath("$.items[0].activeStudyDays").value(3L))
@@ -301,6 +303,7 @@ class StudyStatisticsControllerTest {
                             .value("2000-01-30T02:30:00Z"))
                     .andExpect(jsonPath("$.items[1].lastStudiedAt").doesNotExist())
                     .andExpect(jsonPath("$.items[1].isRunning").value(false))
+                    .andExpect(jsonPath("$.items[1].nickname").doesNotExist())
                     .andExpect(jsonPath("$.items[1].timerStartedAt").doesNotExist())
                     .andExpect(jsonPath("$.items[0].name").doesNotExist())
                     .andExpect(jsonPath("$.items[0].email").doesNotExist())

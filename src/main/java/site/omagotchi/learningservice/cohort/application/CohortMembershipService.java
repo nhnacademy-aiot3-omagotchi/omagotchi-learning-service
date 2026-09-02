@@ -20,14 +20,18 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
+import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+import site.omagotchi.learningservice.gamification.application.result.RepresentativeCharacterResult;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -44,6 +48,7 @@ public class CohortMembershipService {
     private final CohortMembershipRepository membershipRepository;
     private final CohortAccessService accessService;
     private final CohortEventPublisher eventPublisher;
+    private final CharacterGrowthService characterGrowthService;
 
     /**
      * 기수 소속을 종료한다 (GR-16, MR-26).
@@ -132,10 +137,18 @@ public class CohortMembershipService {
     public List<CohortMembershipResponse> getPendingJoinRequests(Long cohortId, UUID actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
-        return membershipRepository
-                .findByCohortIdAndStatusOrderByRequestedAtAsc(cohortId, CohortMembershipStatus.PENDING)
-                .stream()
-                .map(CohortMembershipResponse::from)
+        List<CohortMembership> pending = membershipRepository
+                .findByCohortIdAndStatusOrderByRequestedAtAsc(cohortId, CohortMembershipStatus.PENDING);
+        if (pending.isEmpty()) {
+            return List.of();
+        }
+
+        Map<UUID, String> nicknamesByUserId = lookupNicknames(pending);
+        return pending.stream()
+                .map(membership -> CohortMembershipResponse.from(
+                        membership,
+                        nicknamesByUserId.get(membership.getUserId())
+                ))
                 .toList();
     }
 
@@ -146,9 +159,31 @@ public class CohortMembershipService {
     public List<CohortMembershipResponse> getMembers(Long cohortId, UUID actorUserId) {
         accessService.requireManager(cohortId, actorUserId);
 
-        return membershipRepository.findAllByCohortIdOrderByRequestedAtAsc(cohortId).stream()
-                .map(CohortMembershipResponse::from)
+        List<CohortMembership> memberships = membershipRepository.findAllByCohortIdOrderByRequestedAtAsc(cohortId);
+        if (memberships.isEmpty()) {
+            return List.of();
+        }
+
+        Map<UUID, String> nicknamesByUserId = lookupNicknames(memberships);
+        return memberships.stream()
+                .map(membership -> CohortMembershipResponse.from(
+                        membership,
+                        nicknamesByUserId.get(membership.getUserId())
+                ))
                 .toList();
+    }
+
+    private Map<UUID, String> lookupNicknames(List<CohortMembership> memberships) {
+        List<UUID> userIds = memberships.stream()
+                .map(CohortMembership::getUserId)
+                .distinct()
+                .toList();
+        return characterGrowthService.findRepresentativeCharacters(userIds).stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        RepresentativeCharacterResult::userId,
+                        RepresentativeCharacterResult::displayName,
+                        (first, ignored) -> first
+                ));
     }
 
     /**

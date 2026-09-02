@@ -34,7 +34,7 @@
 - 현재 활성 `STUDENT` membership만 인원과 기수 집계에 포함한다.
 - 삭제되지 않은 확정 `study_records`만 학습 시간에 포함한다.
 - 오늘 요약은 정상 실행 중인 `timer_runs`의 현재 집계일 경과 시간을 추가로 포함한다.
-- 수강생 page의 학습시간·학습일·건수·마지막 학습 시각은 확정 `study_records`만 사용하고, 현재 타이머의 `isRunning`, `timerStartedAt`만 별도로 제공한다.
+- 수강생 page의 학습시간·학습일·건수·마지막 학습 시각은 확정 `study_records`만 사용하고, 대표 캐릭터의 `nickname`과 현재 타이머의 `isRunning`, `timerStartedAt`을 별도로 제공한다.
 - 기간 추이, 수강생 overview와 일별 records는 실행 중 타이머 시간을 포함하지 않는다.
 - 이름, 이메일, 랭킹과 팀 통계는 포함하지 않는다.
 
@@ -234,6 +234,7 @@ direction은 `asc` 또는 `desc`만 허용한다. null은 항상 마지막이며
     {
       "cohortMembershipId": 101,
       "userId": "00000000-0000-0000-0000-000000000101",
+      "nickname": "오마",
       "todayStudySeconds": 7200,
       "periodStudySeconds": 54000,
       "activeStudyDays": 12,
@@ -263,6 +264,7 @@ direction은 `asc` 또는 `desc`만 허용한다. null은 항상 마지막이며
 
 - `todayStudySeconds`는 응답의 `to` 집계일에 확정된 record 값이며 실행 중 타이머 시간은 더하지 않는다.
 - 나머지 학습 통계 필드도 `from..to` 안의 확정 record만으로 계산한다.
+- `nickname`은 사용자의 대표 캐릭터 닉네임이며 대표 캐릭터가 없으면 값은 `null`이고 HTTP 필드는 생략된다.
 - `isRunning`은 `calculatedAt` 기준 정상 실행 중 타이머 존재 여부다.
 - `timerStartedAt`은 실행 중 타이머의 원래 시작 시각이며 `isRunning: false`이면 값은 `null`이고 현재 null 직렬화 정책에 따라 HTTP 필드는 생략된다.
 - 타이머 상태는 page의 각 item을 가져온 뒤 배치 조회로 보강하므로 기존 확정 통계 기반 정렬과 offset/limit 결과를 변경하지 않는다.

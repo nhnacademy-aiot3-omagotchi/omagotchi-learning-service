@@ -45,6 +45,7 @@ public record MemberPageResponse(
     public record Member(
             Long cohortMembershipId,
             UUID userId,
+            String nickname,
             long todayStudySeconds,
             long periodStudySeconds,
             long activeStudyDays,
@@ -58,6 +59,7 @@ public record MemberPageResponse(
             return new Member(
                     result.cohortMembershipId(),
                     result.userId(),
+                    result.nickname(),
                     result.todayStudySeconds(),
                     result.periodStudySeconds(),
                     result.activeStudyDays(),

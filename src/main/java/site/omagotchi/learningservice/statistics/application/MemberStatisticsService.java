@@ -8,6 +8,8 @@ import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.time.AggregationDateTime;
+import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+import site.omagotchi.learningservice.gamification.application.result.RepresentativeCharacterResult;
 import site.omagotchi.learningservice.statistics.application.port.MemberStatisticsRepository;
 import site.omagotchi.learningservice.statistics.application.port.MemberStatisticsRepository.MemberReference;
 import site.omagotchi.learningservice.statistics.application.port.MemberStatisticsRepository.PeriodSummary;
@@ -34,6 +36,7 @@ public class MemberStatisticsService {
 
     private final CohortAccessService cohortAccessService;
     private final MemberStatisticsRepository memberStatisticsRepository;
+    private final CharacterGrowthService characterGrowthService;
     private final StudyRecordAggregationQueryService studyRecordAggregationQueryService;
     private final Clock clock;
 
@@ -73,7 +76,7 @@ public class MemberStatisticsService {
                 dateRange.to(),
                 query
         );
-        List<MemberSummaryResult> items = addCurrentTimerState(
+        List<MemberSummaryResult> items = enrichMemberPageItems(
                 confirmedItems,
                 calculatedAt
         );
@@ -226,7 +229,7 @@ public class MemberStatisticsService {
         return Math.toIntExact(((totalElements - 1) / size) + 1);
     }
 
-    private List<MemberSummaryResult> addCurrentTimerState(
+    private List<MemberSummaryResult> enrichMemberPageItems(
             List<MemberSummaryResult> confirmedItems,
             Instant calculatedAt
     ) {
@@ -234,6 +237,17 @@ public class MemberStatisticsService {
             return List.of();
         }
 
+        Map<UUID, String> nicknamesByUserId = characterGrowthService
+                .findRepresentativeCharacters(
+                        confirmedItems.stream()
+                                .map(MemberSummaryResult::userId)
+                                .toList()
+                ).stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        RepresentativeCharacterResult::userId,
+                        RepresentativeCharacterResult::displayName,
+                        (first, ignored) -> first
+                ));
         Map<Long, MemberCurrentTimerResult> timersByMembershipId =
                 studyRecordAggregationQueryService.getCurrentTimers(
                                 confirmedItems.stream()
@@ -248,12 +262,15 @@ public class MemberStatisticsService {
 
         return confirmedItems.stream()
                 .map(item -> {
+                    MemberSummaryResult itemWithNickname = item.withNickname(
+                            nicknamesByUserId.get(item.userId())
+                    );
                     MemberCurrentTimerResult timer = timersByMembershipId.get(
                             item.cohortMembershipId()
                     );
                     return timer == null
-                            ? item
-                            : item.withRunningTimer(timer.timerStartedAt());
+                            ? itemWithNickname
+                            : itemWithNickname.withRunningTimer(timer.timerStartedAt());
                 })
                 .toList();
     }

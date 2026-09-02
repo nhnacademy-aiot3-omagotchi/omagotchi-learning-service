@@ -5,12 +5,14 @@ import site.omagotchi.learningservice.community.domain.CommunityPostType;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 public record CommunityPostDetailResponse(
         Long postId,
         CommunityPostType type,
         String title,
         String content,
+        UUID authorUserId,
         String authorNickname,
         Long cohortId,
         boolean pinned,
@@ -26,6 +28,7 @@ public record CommunityPostDetailResponse(
                 detail.type(),
                 detail.title(),
                 detail.content(),
+                detail.authorUserId(),
                 detail.authorNickname(),
                 detail.cohortId(),
                 detail.pinned(),

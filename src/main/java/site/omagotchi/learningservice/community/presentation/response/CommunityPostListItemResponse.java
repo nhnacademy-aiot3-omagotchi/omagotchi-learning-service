@@ -4,15 +4,17 @@ import site.omagotchi.learningservice.community.application.query.CommunityPostL
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /**
- * 작성자는 표시 이름만 내보낸다. 내부 식별자(UUID)를 목록에 실을 이유가 없고,
- * 본인 글 판정은 {@code canManage}가 대신한다.
+ * 본인 글 판정은 {@code canManage}를 쓴다. {@code authorUserId}로 비교하지 않아도 되고,
+ * 클라이언트에는 애초에 자기 식별자가 없다.
  */
 public record CommunityPostListItemResponse(
         Long postId,
         CommunityPostType type,
         String title,
+        UUID authorUserId,
         String authorNickname,
         Long cohortId,
         boolean pinned,
@@ -27,6 +29,7 @@ public record CommunityPostListItemResponse(
                 item.postId(),
                 item.type(),
                 item.title(),
+                item.authorUserId(),
                 item.authorNickname(),
                 item.cohortId(),
                 item.pinned(),

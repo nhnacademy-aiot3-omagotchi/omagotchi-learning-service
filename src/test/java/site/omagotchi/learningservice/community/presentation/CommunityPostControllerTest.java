@@ -112,7 +112,7 @@ class CommunityPostControllerTest {
                 .andExpect(jsonPath("$.items[0].cohortId").value(10))
                 .andExpect(jsonPath("$.items[0].authorNickname").value("글쓴이"))
                 .andExpect(jsonPath("$.items[0].canManage").value(true))
-                .andExpect(jsonPath("$.items[0].authorUserId").doesNotExist())
+                .andExpect(jsonPath("$.items[0].authorUserId").value(AUTHOR_ID.toString()))
                 .andExpect(jsonPath("$.items[0].pinned").value(true))
                 .andExpect(jsonPath("$.page.number").value(1))
                 .andExpect(jsonPath("$.page.size").value(10))
@@ -149,7 +149,7 @@ class CommunityPostControllerTest {
                 .andExpect(jsonPath("$.cohortId").value(10))
                 .andExpect(jsonPath("$.authorNickname").value("글쓴이"))
                 .andExpect(jsonPath("$.canManage").value(true))
-                .andExpect(jsonPath("$.authorUserId").doesNotExist());
+                .andExpect(jsonPath("$.authorUserId").value(AUTHOR_ID.toString()));
 
         verify(communityPostQueryService).getPost(USER_ID, COHORT_ID, 1L);
     }

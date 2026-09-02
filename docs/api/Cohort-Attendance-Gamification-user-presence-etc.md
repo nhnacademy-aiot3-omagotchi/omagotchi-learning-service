@@ -308,26 +308,29 @@ PATCH /api/cohorts/{cohort-id}/attendance-records/{attendance-id}/status
 
 게시글 목록/상세/생성/수정/삭제/고정 API다.
 
+서게시판은 기수에 속한다. 소속 기수는 경로에서 받고, 그 기수의 ACTIVE 소속이 아니면
+기수 존재를 숨기기 위해 404를 반환한다. 공지와 자유글은 같은 게시판 안에서 `type`으로
+갈리며, 공지 작성·수정·고정은 그 기수의 MANAGER·MENTOR만 할 수 있다.
+
 ```http
-GET /api/community/posts?page=0&size=20&type=NOTICE&search=공지
-GET /api/community/posts/{post-id}
-POST /api/community/posts
-POST /api/community/posts (multipart/form-data)
-PATCH /api/community/posts/{post-id}
-PATCH /api/community/posts/{post-id} (multipart/form-data)
-DELETE /api/community/posts/{post-id}
-PATCH /api/community/posts/{post-id}/pin
+GET /api/v1/cohorts/{cohort-id}/community/posts?page=0&size=20&type=NOTICE&search=공지
+GET /api/v1/cohorts/{cohort-id}/community/posts/{post-id}
+GET /api/v1/cohorts/{cohort-id}/community/posts/{post-id}/attachments/{attachment-id}
+POST /api/v1/cohorts/{cohort-id}/community/posts
+POST /api/v1/cohorts/{cohort-id}/community/posts (multipart/form-data)
+PATCH /api/v1/cohorts/{cohort-id}/community/posts/{post-id}
+PATCH /api/v1/cohorts/{cohort-id}/community/posts/{post-id} (multipart/form-data)
+DELETE /api/v1/cohorts/{cohort-id}/community/posts/{post-id}
+PATCH /api/v1/cohorts/{cohort-id}/community/posts/{post-id}/pin
 ```
 
-JSON 생성 요청:
+JSON 생성 요청. 소속 기수는 경로에서 오므로 본문에 담지 않는다:
 
 ```json
 {
   "type": "NOTICE",
   "title": "공지 제목",
-  "content": "공지 내용",
-  "scope": "COHORT",
-  "cohortId": 1
+  "content": "공지 내용"
 }
 ```
 

@@ -12,6 +12,7 @@ import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.port.TimerRunQueryRepository;
 import site.omagotchi.learningservice.study.application.result.MemberCurrentStudyDurationResult;
+import site.omagotchi.learningservice.study.application.result.MemberCurrentTimerResult;
 import site.omagotchi.learningservice.study.application.result.MemberStudyDurationResult;
 import site.omagotchi.learningservice.study.domain.TimerRun;
 import site.omagotchi.learningservice.study.domain.TimerTimePolicy;
@@ -23,15 +24,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("멤버십별 공부시간 조회")
@@ -194,6 +189,75 @@ class StudyRecordAggregationQueryServiceTest {
 
             assertEquals(List.of(), result);
             verifyNoInteractions(studyRecordQueryRepository, timerRunQueryRepository);
+        }
+    }
+
+    @Nested
+    @DisplayName("현재 실행 타이머")
+    class CurrentTimers {
+
+        @Test
+        @DisplayName("집계일 경계로 자른 시간과 원래 시작 시각 반환")
+        void returnsStartedAtAndClippedAggregationDuration() {
+            List<Long> membershipIds = List.of(10L, 20L);
+            Set<Long> requestedMembershipIds = new LinkedHashSet<>(membershipIds);
+            Instant calculatedAt = Instant.parse("2000-01-02T21:30:00Z");
+            TimerRun previousDayTimer = TimerRun.start(
+                    10L,
+                    Instant.parse("2000-01-02T18:00:00Z")
+            );
+            TimerRun justStartedTimer = TimerRun.start(20L, calculatedAt);
+            given(timerRunQueryRepository.findActiveByCohortMembershipIds(requestedMembershipIds))
+                    .willReturn(List.of(previousDayTimer, justStartedTimer));
+
+            List<MemberCurrentTimerResult> result = service.getCurrentTimers(
+                    membershipIds,
+                    calculatedAt
+            );
+
+            assertEquals(
+                    List.of(
+                            new MemberCurrentTimerResult(
+                                    10L,
+                                    Instant.parse("2000-01-02T18:00:00Z"),
+                                    9_000L
+                            ),
+                            new MemberCurrentTimerResult(20L, calculatedAt, 0L)
+                    ),
+                    result
+            );
+        }
+
+        @Test
+        @DisplayName("만료된 열린 타이머 제외")
+        void excludesExpiredOpenTimer() {
+            Set<Long> membershipIds = Set.of(10L);
+            Instant calculatedAt = Instant.parse("2000-01-03T08:00:00Z");
+            TimerRun expiredTimer = TimerRun.start(
+                    10L,
+                    calculatedAt.minus(MAX_TIMER_DURATION)
+            );
+            given(timerRunQueryRepository.findActiveByCohortMembershipIds(membershipIds))
+                    .willReturn(List.of(expiredTimer));
+
+            List<MemberCurrentTimerResult> result = service.getCurrentTimers(
+                    membershipIds,
+                    calculatedAt
+            );
+
+            assertEquals(List.of(), result);
+        }
+
+        @Test
+        @DisplayName("멤버십 목록이 비어 있으면 타이머를 조회하지 않음")
+        void skipsQueryForEmptyMemberships() {
+            List<MemberCurrentTimerResult> result = service.getCurrentTimers(
+                    List.of(),
+                    Instant.parse("2000-01-03T08:00:00Z")
+            );
+
+            assertEquals(List.of(), result);
+            verifyNoInteractions(timerRunQueryRepository);
         }
     }
 }

@@ -49,7 +49,9 @@ public record MemberPageResponse(
             long periodStudySeconds,
             long activeStudyDays,
             long recordCount,
-            Instant lastStudiedAt
+            Instant lastStudiedAt,
+            boolean isRunning,
+            Instant timerStartedAt
     ) {
 
         private static Member from(MemberSummaryResult result) {
@@ -60,7 +62,9 @@ public record MemberPageResponse(
                     result.periodStudySeconds(),
                     result.activeStudyDays(),
                     result.recordCount(),
-                    result.lastStudiedAt()
+                    result.lastStudiedAt(),
+                    result.isRunning(),
+                    result.timerStartedAt()
             );
         }
     }

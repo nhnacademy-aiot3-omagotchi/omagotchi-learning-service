@@ -3,8 +3,8 @@
 ## 문서 상태
 
 - 상태: 검토 중
-- 최종 변경일: 2026-08-12
-- 범위: 기수 관리자용 확정 학습 기록 통계 조회
+- 최종 변경일: 2026-09-02
+- 범위: 기수 관리자용 확정 학습 기록 및 현재 타이머 통계 조회
 - base path: `/api/v1/cohorts/{cohort-id}/study-statistics`
 
 이 문서는 현재 `StudyStatisticsController`와 response record를 기준으로 한 외부 HTTP 계약이다.
@@ -33,25 +33,35 @@
 
 - 현재 활성 `STUDENT` membership만 인원과 기수 집계에 포함한다.
 - 삭제되지 않은 확정 `study_records`만 학습 시간에 포함한다.
-- 실행 중 `timer_runs`의 경과 시간은 포함하지 않는다.
+- 오늘 요약은 정상 실행 중인 `timer_runs`의 현재 집계일 경과 시간을 추가로 포함한다.
+- 수강생 page의 학습시간·학습일·건수·마지막 학습 시각은 확정 `study_records`만 사용하고, 현재 타이머의 `isRunning`, `timerStartedAt`만 별도로 제공한다.
+- 기간 추이, 수강생 overview와 일별 records는 실행 중 타이머 시간을 포함하지 않는다.
 - 이름, 이메일, 랭킹과 팀 통계는 포함하지 않는다.
+
+정상 실행 중 타이머는 `calculatedAt`보다 미래에 시작하지 않았고 `TimerTimePolicy`의 최대 실행 시간을 넘지 않은 열린 타이머다. 오늘 반영 시간은 다음과 같이 현재 집계일의 KST 04:
+00 경계에서 자른다.
+
+```text
+effectiveStartedAt = max(timerStartedAt, aggregationDate의 KST 04:00)
+runningSeconds = calculatedAt - effectiveStartedAt
+```
 
 ### 빈 값과 평균
 
 - 합계, 평균, 인원과 건수는 대상 값이 없으면 `0`이다.
-- nullable 시각 값은 대상 기록이 없으면 `null`이다.
+- nullable 시각 값은 대상 기록이 없으면 DTO에서 `null`이며 현재 HTTP null 직렬화 정책에 따라 필드가 생략된다.
 - 기간 추이는 요청 기간의 모든 날짜를 반환하며 기록이 없는 날짜도 `0`초로 포함한다.
 - 평균 나눗셈의 나머지는 버린다.
 
 ## API 목록
 
-| 목적 | Method | Path |
-| --- | --- | --- |
-| 오늘 요약 | GET | `/api/v1/cohorts/{cohort-id}/study-statistics/today` |
-| 기간 추이 | GET | `/api/v1/cohorts/{cohort-id}/study-statistics/trend?window={N}d` |
-| 수강생 통계 page | GET | `/api/v1/cohorts/{cohort-id}/study-statistics/members?window={N}d&page=0&size=20&sort=periodStudySeconds,desc` |
-| 수강생 기간 상세 | GET | `/api/v1/cohorts/{cohort-id}/study-statistics/members/{cohort-membership-id}/overview?window={N}d` |
-| 수강생 일별 기록 | GET | `/api/v1/cohorts/{cohort-id}/study-statistics/members/{cohort-membership-id}/records?date=yyyy-MM-dd` |
+| 목적             | Method | Path                                                                                                           |
+|------------------|--------|----------------------------------------------------------------------------------------------------------------|
+| 오늘 요약        | GET    | `/api/v1/cohorts/{cohort-id}/study-statistics/today`                                                           |
+| 기간 추이        | GET    | `/api/v1/cohorts/{cohort-id}/study-statistics/trend?window={N}d`                                               |
+| 수강생 통계 page | GET    | `/api/v1/cohorts/{cohort-id}/study-statistics/members?window={N}d&page=0&size=20&sort=periodStudySeconds,desc` |
+| 수강생 기간 상세 | GET    | `/api/v1/cohorts/{cohort-id}/study-statistics/members/{cohort-membership-id}/overview?window={N}d`             |
+| 수강생 일별 기록 | GET    | `/api/v1/cohorts/{cohort-id}/study-statistics/members/{cohort-membership-id}/records?date=yyyy-MM-dd`          |
 
 ## 1. 오늘 학습 통계
 
@@ -70,6 +80,7 @@ Authorization: Bearer {JWT}
   "activeStudentCount": 4,
   "participantCount": 3,
   "noRecordStudentCount": 1,
+  "runningTimerCount": 1,
   "averageParticipantStudySeconds": 5400,
   "durationBuckets": [
     {
@@ -98,26 +109,27 @@ Authorization: Bearer {JWT}
 
 ### 필드 계산
 
-| 필드 | 타입 | 계산 |
-| --- | --- | --- |
-| `aggregationDate` | date | KST 04:00 기준 현재 집계일 |
-| `calculatedAt` | instant | 요청에서 한 번 캡처한 서버 시각 |
-| `totalStudySeconds` | long | 오늘 확정 record의 `studySeconds` 합계 |
-| `activeStudentCount` | long | 기수의 활성 STUDENT 수 |
-| `participantCount` | long | 오늘 합계가 0보다 큰 수강생 수 |
-| `noRecordStudentCount` | long | `activeStudentCount - participantCount` |
-| `averageParticipantStudySeconds` | long | `totalStudySeconds / participantCount`, 참여자 0명이면 0 |
-| `durationBuckets` | array | 아래 5개 구간을 고정 순서로 모두 반환 |
+| 필드                             | 타입    | 계산                                                                                                   |
+|----------------------------------|---------|--------------------------------------------------------------------------------------------------------|
+| `aggregationDate`                | date    | KST 04:00 기준 현재 집계일                                                                             |
+| `calculatedAt`                   | instant | 요청에서 한 번 캡처한 서버 시각                                                                        |
+| `totalStudySeconds`              | long    | 오늘 확정 record와 정상 실행 중 타이머의 현재 집계일 반영 시간 합계                                    |
+| `activeStudentCount`             | long    | 기수의 활성 STUDENT 수                                                                                 |
+| `participantCount`               | long    | 확정 record와 현재 타이머를 합친 오늘 합계가 0보다 큰 수강생 수                                        |
+| `noRecordStudentCount`           | long    | `activeStudentCount - participantCount`                                                                |
+| `runningTimerCount`              | long    | `calculatedAt` 기준 정상 실행 중인 타이머 수. 반영 시간이 0초인 막 시작한 타이머도 포함                |
+| `averageParticipantStudySeconds` | long    | `totalStudySeconds / participantCount`, 참여자 0명이면 0                                               |
+| `durationBuckets`                | array   | 확정 record와 현재 타이머를 합친 수강생별 오늘 시간을 아래 5개 구간으로 분류하여 고정 순서로 모두 반환 |
 
 ### 시간 구간
 
-| code | 오늘 누적 학습 시간 |
-| --- | --- |
-| `NO_RECORD` | 0초 |
-| `UNDER_ONE_HOUR` | 1~3,599초 |
-| `ONE_TO_TWO_HOURS` | 3,600~7,199초 |
-| `TWO_TO_FOUR_HOURS` | 7,200~14,399초 |
-| `FOUR_HOURS_OR_MORE` | 14,400초 이상 |
+| code                 | 오늘 누적 학습 시간 |
+|----------------------|---------------------|
+| `NO_RECORD`          | 0초                 |
+| `UNDER_ONE_HOUR`     | 1~3,599초           |
+| `ONE_TO_TWO_HOURS`   | 3,600~7,199초       |
+| `TWO_TO_FOUR_HOURS`  | 7,200~14,399초      |
+| `FOUR_HOURS_OR_MORE` | 14,400초 이상       |
 
 `durationBuckets`의 `memberCount` 합계는 `activeStudentCount`와 같다.
 
@@ -130,9 +142,9 @@ Authorization: Bearer {JWT}
 
 ### 요청값
 
-| 이름 | 필수 | 형식 | 제약 |
-| --- | --- | --- | --- |
-| `window` | 예 | `{N}d` | N은 7~60의 정수, 선행 0과 대문자 `D` 불가 |
+| 이름     | 필수 | 형식   | 제약                                      |
+|----------|------|--------|-------------------------------------------|
+| `window` | 예   | `{N}d` | N은 7~60의 정수, 선행 0과 대문자 `D` 불가 |
 
 `from = currentAggregationDate - (N - 1)`이고 `to = currentAggregationDate`다. `from`, `to`를 직접 요청할 수 없다.
 
@@ -147,13 +159,34 @@ Authorization: Bearer {JWT}
   "totalStudySeconds": 10800,
   "averageDailyStudySeconds": 1542,
   "dailyTotals": [
-    { "aggregationDate": "2026-08-05", "studySeconds": 3600 },
-    { "aggregationDate": "2026-08-06", "studySeconds": 0 },
-    { "aggregationDate": "2026-08-07", "studySeconds": 0 },
-    { "aggregationDate": "2026-08-08", "studySeconds": 0 },
-    { "aggregationDate": "2026-08-09", "studySeconds": 0 },
-    { "aggregationDate": "2026-08-10", "studySeconds": 0 },
-    { "aggregationDate": "2026-08-11", "studySeconds": 7200 }
+    {
+      "aggregationDate": "2026-08-05",
+      "studySeconds": 3600
+    },
+    {
+      "aggregationDate": "2026-08-06",
+      "studySeconds": 0
+    },
+    {
+      "aggregationDate": "2026-08-07",
+      "studySeconds": 0
+    },
+    {
+      "aggregationDate": "2026-08-08",
+      "studySeconds": 0
+    },
+    {
+      "aggregationDate": "2026-08-09",
+      "studySeconds": 0
+    },
+    {
+      "aggregationDate": "2026-08-10",
+      "studySeconds": 0
+    },
+    {
+      "aggregationDate": "2026-08-11",
+      "studySeconds": 7200
+    }
   ]
 }
 ```
@@ -171,12 +204,12 @@ Authorization: Bearer {JWT}
 
 ### 요청값
 
-| 이름 | 필수 | 기본값 | 제약 |
-| --- | --- | --- | --- |
-| `window` | 예 | 없음 | `{N}d`, N=7~60 |
-| `page` | 아니요 | `0` | 0 기반, 음수 불가 |
-| `size` | 아니요 | `20` | 1~100 |
-| `sort` | 아니요 | `periodStudySeconds,desc` | 단일 `field,direction` |
+| 이름     | 필수   | 기본값                    | 제약                   |
+|----------|--------|---------------------------|------------------------|
+| `window` | 예     | 없음                      | `{N}d`, N=7~60         |
+| `page`   | 아니요 | `0`                       | 0 기반, 음수 불가      |
+| `size`   | 아니요 | `20`                      | 1~100                  |
+| `sort`   | 아니요 | `periodStudySeconds,desc` | 단일 `field,direction` |
 
 허용 sort field:
 
@@ -197,10 +230,6 @@ direction은 `asc` 또는 `desc`만 허용한다. null은 항상 마지막이며
   "from": "2026-07-13",
   "to": "2026-08-11",
   "calculatedAt": "2026-08-11T03:00:00Z",
-  "page": 0,
-  "size": 20,
-  "totalElements": 2,
-  "totalPages": 1,
   "items": [
     {
       "cohortMembershipId": 101,
@@ -209,7 +238,9 @@ direction은 `asc` 또는 `desc`만 허용한다. null은 항상 마지막이며
       "periodStudySeconds": 54000,
       "activeStudyDays": 12,
       "recordCount": 15,
-      "lastStudiedAt": "2026-08-11T02:00:00Z"
+      "lastStudiedAt": "2026-08-11T02:00:00Z",
+      "isRunning": true,
+      "timerStartedAt": "2026-08-11T02:30:00Z"
     },
     {
       "cohortMembershipId": 102,
@@ -218,14 +249,23 @@ direction은 `asc` 또는 `desc`만 허용한다. null은 항상 마지막이며
       "periodStudySeconds": 0,
       "activeStudyDays": 0,
       "recordCount": 0,
-      "lastStudiedAt": null
+      "isRunning": false
     }
-  ]
+  ],
+  "page": {
+    "number": 0,
+    "size": 20,
+    "totalElements": 2,
+    "totalPages": 1
+  }
 }
 ```
 
-- `todayStudySeconds`는 응답의 `to` 집계일 값이다.
-- 나머지 기간 필드는 `from..to` 안에서만 계산한다.
+- `todayStudySeconds`는 응답의 `to` 집계일에 확정된 record 값이며 실행 중 타이머 시간은 더하지 않는다.
+- 나머지 학습 통계 필드도 `from..to` 안의 확정 record만으로 계산한다.
+- `isRunning`은 `calculatedAt` 기준 정상 실행 중 타이머 존재 여부다.
+- `timerStartedAt`은 실행 중 타이머의 원래 시작 시각이며 `isRunning: false`이면 값은 `null`이고 현재 null 직렬화 정책에 따라 HTTP 필드는 생략된다.
+- 타이머 상태는 page의 각 item을 가져온 뒤 배치 조회로 보강하므로 기존 확정 통계 기반 정렬과 offset/limit 결과를 변경하지 않는다.
 - 기록이 없는 활성 수강생도 0/null 값으로 포함한다.
 - `totalElements`는 현재 기수의 전체 활성 STUDENT 수다.
 - `totalPages = ceil(totalElements / size)`이며 대상이 없으면 0이다.
@@ -241,10 +281,10 @@ Authorization: Bearer {JWT}
 
 ### 요청값
 
-| 이름 | 위치 | 필수 | 제약 |
-| --- | --- | --- | --- |
-| `cohort-membership-id` | path | 예 | 같은 기수의 활성 STUDENT membership ID |
-| `window` | query | 예 | `{N}d`, N=7~60 |
+| 이름                   | 위치  | 필수 | 제약                                   |
+|------------------------|-------|------|----------------------------------------|
+| `cohort-membership-id` | path  | 예   | 같은 기수의 활성 STUDENT membership ID |
+| `window`               | query | 예   | `{N}d`, N=7~60                         |
 
 성공 응답: `200 OK`
 
@@ -262,13 +302,34 @@ Authorization: Bearer {JWT}
   "recordCount": 2,
   "lastStudiedAt": "2026-08-11T02:00:00Z",
   "dailyTotals": [
-    { "aggregationDate": "2026-08-05", "studySeconds": 3600 },
-    { "aggregationDate": "2026-08-06", "studySeconds": 0 },
-    { "aggregationDate": "2026-08-07", "studySeconds": 0 },
-    { "aggregationDate": "2026-08-08", "studySeconds": 0 },
-    { "aggregationDate": "2026-08-09", "studySeconds": 0 },
-    { "aggregationDate": "2026-08-10", "studySeconds": 0 },
-    { "aggregationDate": "2026-08-11", "studySeconds": 7200 }
+    {
+      "aggregationDate": "2026-08-05",
+      "studySeconds": 3600
+    },
+    {
+      "aggregationDate": "2026-08-06",
+      "studySeconds": 0
+    },
+    {
+      "aggregationDate": "2026-08-07",
+      "studySeconds": 0
+    },
+    {
+      "aggregationDate": "2026-08-08",
+      "studySeconds": 0
+    },
+    {
+      "aggregationDate": "2026-08-09",
+      "studySeconds": 0
+    },
+    {
+      "aggregationDate": "2026-08-10",
+      "studySeconds": 0
+    },
+    {
+      "aggregationDate": "2026-08-11",
+      "studySeconds": 7200
+    }
   ]
 }
 ```
@@ -287,10 +348,10 @@ Authorization: Bearer {JWT}
 
 ### 요청값
 
-| 이름 | 위치 | 필수 | 제약 |
-| --- | --- | --- | --- |
-| `cohort-membership-id` | path | 예 | 같은 기수의 활성 STUDENT membership ID |
-| `date` | query | 예 | 집계일 `yyyy-MM-dd`, 현재 집계일보다 미래일 수 없음 |
+| 이름                   | 위치  | 필수 | 제약                                                |
+|------------------------|-------|------|-----------------------------------------------------|
+| `cohort-membership-id` | path  | 예   | 같은 기수의 활성 STUDENT membership ID              |
+| `date`                 | query | 예   | 집계일 `yyyy-MM-dd`, 현재 집계일보다 미래일 수 없음 |
 
 과거 날짜에는 별도의 60일 하한을 적용하지 않는다.
 
@@ -335,15 +396,15 @@ Authorization: Bearer {JWT}
 
 현재 `requestId`는 nullable이며 Statistics API가 별도로 생성하지 않는다.
 
-| 조건 | HTTP | code |
-| --- | --- | --- |
-| JWT 없음 또는 인증 실패 | 401 | `AUTH_AUTHENTICATION_REQUIRED` |
-| 활성 기수 소속 없음 | 404 | `COHORT_NOT_FOUND` |
-| 활성 소속이지만 MANAGER가 아님 | 403 | `COHORT_MANAGER_REQUIRED` |
-| 다른 기수·비활성·비학생 상세 대상 | 404 | `MEMBERSHIP_NOT_FOUND` |
-| window 누락·형식·범위 오류 | 400 | `COMMON_INVALID_REQUEST` |
-| page 음수, size 범위 오류, sort 오류 | 400 | `COMMON_INVALID_REQUEST` |
-| date 누락·형식 오류·미래 집계일 | 400 | `COMMON_INVALID_REQUEST` |
+| 조건                                 | HTTP | code                           |
+|--------------------------------------|------|--------------------------------|
+| JWT 없음 또는 인증 실패              | 401  | `AUTH_AUTHENTICATION_REQUIRED` |
+| 활성 기수 소속 없음                  | 404  | `COHORT_NOT_FOUND`             |
+| 활성 소속이지만 MANAGER가 아님       | 403  | `COHORT_MANAGER_REQUIRED`      |
+| 다른 기수·비활성·비학생 상세 대상    | 404  | `MEMBERSHIP_NOT_FOUND`         |
+| window 누락·형식·범위 오류           | 400  | `COMMON_INVALID_REQUEST`       |
+| page 음수, size 범위 오류, sort 오류 | 400  | `COMMON_INVALID_REQUEST`       |
+| date 누락·형식 오류·미래 집계일      | 400  | `COMMON_INVALID_REQUEST`       |
 
 ## 캐시와 호출 분리 메모
 
@@ -359,7 +420,8 @@ Authorization: Bearer {JWT}
 
 ## 보류 및 별도 기능
 
-- 실행 중 TimerRun 경과 시간 합산
+- frontend에서 `isRunning`, `timerStartedAt`, `calculatedAt`을 이용한 1초 단위 화면 증가와 서버 재동기화
+- 기간 추이, 수강생 overview와 일별 records의 실행 중 TimerRun 경과 시간 합산
 - 개인/기수/팀 랭킹
 - 팀별 합산 통계
 - 이름·이메일 결합과 이름 검색

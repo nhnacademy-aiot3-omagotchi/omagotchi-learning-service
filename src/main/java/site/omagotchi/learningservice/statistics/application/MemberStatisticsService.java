@@ -14,12 +14,9 @@ import site.omagotchi.learningservice.statistics.application.port.MemberStatisti
 import site.omagotchi.learningservice.statistics.application.query.MemberPageQuery;
 import site.omagotchi.learningservice.statistics.application.query.WindowQuery;
 import site.omagotchi.learningservice.statistics.application.query.WindowQuery.DateRange;
-import site.omagotchi.learningservice.statistics.application.result.MemberSummaryResult;
-import site.omagotchi.learningservice.statistics.application.result.DailyTotalResult;
-import site.omagotchi.learningservice.statistics.application.result.MemberDailyRecordResult;
-import site.omagotchi.learningservice.statistics.application.result.MemberDailyRecordsResult;
-import site.omagotchi.learningservice.statistics.application.result.MemberOverviewResult;
-import site.omagotchi.learningservice.statistics.application.result.MemberPageResult;
+import site.omagotchi.learningservice.statistics.application.result.*;
+import site.omagotchi.learningservice.study.application.StudyRecordAggregationQueryService;
+import site.omagotchi.learningservice.study.application.result.MemberCurrentTimerResult;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -37,6 +34,7 @@ public class MemberStatisticsService {
 
     private final CohortAccessService cohortAccessService;
     private final MemberStatisticsRepository memberStatisticsRepository;
+    private final StudyRecordAggregationQueryService studyRecordAggregationQueryService;
     private final Clock clock;
 
     public MemberPageResult getMembers(
@@ -66,15 +64,19 @@ public class MemberStatisticsService {
         int totalPages = totalPages(totalElements, query.size());
 
         // 요청 페이지가 존재할 때만 수강생 통계 DB 조회
-        List<MemberSummaryResult> items = query.offset() >= totalElements
+        List<MemberSummaryResult> confirmedItems = query.offset() >= totalElements
                 ? List.of()
                 : memberStatisticsRepository.findActiveStudentStatisticsPage(
-                        cohortId,
-                        dateRange.to(),
-                        dateRange.from(),
-                        dateRange.to(),
-                        query
-                );
+                cohortId,
+                dateRange.to(),
+                dateRange.from(),
+                dateRange.to(),
+                query
+        );
+        List<MemberSummaryResult> items = addCurrentTimerState(
+                confirmedItems,
+                calculatedAt
+        );
 
         // 페이지 조회 결과와 메타데이터 조립
         return new MemberPageResult(
@@ -222,5 +224,37 @@ public class MemberStatisticsService {
 
         // 나머지가 있는 마지막 페이지를 포함해 전체 페이지 수 계산
         return Math.toIntExact(((totalElements - 1) / size) + 1);
+    }
+
+    private List<MemberSummaryResult> addCurrentTimerState(
+            List<MemberSummaryResult> confirmedItems,
+            Instant calculatedAt
+    ) {
+        if (confirmedItems.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, MemberCurrentTimerResult> timersByMembershipId =
+                studyRecordAggregationQueryService.getCurrentTimers(
+                                confirmedItems.stream()
+                                        .map(MemberSummaryResult::cohortMembershipId)
+                                        .toList(),
+                                calculatedAt
+                        ).stream()
+                        .collect(Collectors.toUnmodifiableMap(
+                                MemberCurrentTimerResult::cohortMembershipId,
+                                timer -> timer
+                        ));
+
+        return confirmedItems.stream()
+                .map(item -> {
+                    MemberCurrentTimerResult timer = timersByMembershipId.get(
+                            item.cohortMembershipId()
+                    );
+                    return timer == null
+                            ? item
+                            : item.withRunningTimer(timer.timerStartedAt());
+                })
+                .toList();
     }
 }

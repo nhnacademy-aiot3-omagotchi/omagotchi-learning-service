@@ -61,9 +61,14 @@ telegram:
   link-token:
     ttl: PT10M
 
+minio:
+  endpoint: http://localhost:9000
+  access-key: test-access-key
+  secret-key: test-secret-key
+
 community:
   attachments:
-    storage-root: target/test-community-attachments
+    bucket: test-community-attachments
     max-file-size: 5MB
     max-count: 5
 

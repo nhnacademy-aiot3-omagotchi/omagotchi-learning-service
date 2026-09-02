@@ -65,6 +65,21 @@ public enum CohortErrorCode implements ErrorCode {
             "COHORT_NOT_FOUND",
             "기수를 찾을 수 없습니다."
     ),
+    /*
+     * 기수는 있으나 출결 정책 행이 없는 상태다.
+     *
+     * 기수 자체가 없는 COHORT_NOT_FOUND와 반드시 구분해야 한다. 화면은 이 코드를 받으면
+     * "기수 없음"이 아니라 "정책 미설정"으로 처리하고 기본값 입력 폼을 연다.
+     *
+     * code 문자열은 AttendanceErrorCode.ATTENDANCE_POLICY_NOT_FOUND와 의도적으로 같다.
+     * 정책 행은 cohort 소유이고 attendance가 빌려 쓰는 구조라 패키지 순환을 피하려고
+     * 양쪽에 선언을 두되, Browser가 보는 계약은 하나로 유지한다.
+     */
+    ATTENDANCE_POLICY_NOT_FOUND(
+            ErrorType.NOT_FOUND,
+            "ATTENDANCE_POLICY_NOT_FOUND",
+            "출결 정책이 설정되지 않았습니다."
+    ),
     COHORT_MEMBERSHIP_NOT_FOUND(
             ErrorType.NOT_FOUND,
             "MEMBERSHIP_NOT_FOUND",

@@ -35,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import site.omagotchi.learningservice.global.time.AggregationDateTime;
 
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
@@ -203,7 +204,7 @@ class JoinCodeServiceIT {
     }
 
     private ManagedCohort createManagedCohort(String name) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = AggregationDateTime.today();
         UUID managerId = UUID.randomUUID();
         var cohort = cohortService.create(
                 new CreateCohortCommand(

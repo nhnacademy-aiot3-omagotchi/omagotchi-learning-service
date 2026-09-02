@@ -8,8 +8,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
-import site.omagotchi.learningservice.gamification.infrastructure.StudyProgressionRepository;
-import site.omagotchi.learningservice.gamification.infrastructure.UserDailyQuestRepository;
+import site.omagotchi.learningservice.gamification.application.port.StudyProgressionQueryRepository;
+import site.omagotchi.learningservice.gamification.application.port.UserDailyQuestQueryRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.util.DateTimeProvider;
 
@@ -32,10 +32,10 @@ class GamificationProgressionServiceTest {
     private CohortAccessService cohortAccessService;
 
     @Mock
-    private StudyProgressionRepository studyProgressionRepository;
+    private StudyProgressionQueryRepository studyProgressionQueryRepository;
 
     @Mock
-    private UserDailyQuestRepository userDailyQuestRepository;
+    private UserDailyQuestQueryRepository userDailyQuestQueryRepository;
 
     @Mock
     private DateTimeProvider dateTimeProvider;
@@ -57,7 +57,7 @@ class GamificationProgressionServiceTest {
         )).isInstanceOf(BusinessException.class);
 
         // 권한 판정 전에 하위 조회가 실행되면 안 된다.
-        verify(studyProgressionRepository, never())
+        verify(studyProgressionQueryRepository, never())
                 .getDailyStudySeconds(any(), any(), any());
     }
 }

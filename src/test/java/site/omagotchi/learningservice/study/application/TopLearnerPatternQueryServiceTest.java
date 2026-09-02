@@ -28,7 +28,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -60,6 +59,10 @@ class TopLearnerPatternQueryServiceTest {
 
     @Mock
     private StudyRecordQueryRepository studyRecordQueryRepository;
+
+    // 소속은 진입점에서 한 번만 조회해 내 패턴 조회에 넘긴다. 스텁이 같은 인스턴스를 가리켜야 한다
+    @Mock
+    private CohortMembership membership;
 
     private TopLearnerPatternQueryService service;
 
@@ -219,7 +222,7 @@ class TopLearnerPatternQueryServiceTest {
         @DisplayName("기간은 내 패턴 조회가 확정한 값을 그대로 쓴다")
         void reusesPeriodDaysResolvedByMyPatternQuery() {
             // 서버가 기본값 30일로 확정한 상황 (호출자는 null을 넘겼다)
-            given(studyPatternQueryService.getPattern(USER_ID, null))
+            given(studyPatternQueryService.getPattern(membership, null))
                     .willReturn(okPattern(30));
             givenCohortStudents(5);
 
@@ -230,7 +233,7 @@ class TopLearnerPatternQueryServiceTest {
     }
 
     private void givenMyPatternIsOk() {
-        given(studyPatternQueryService.getPattern(USER_ID, PERIOD_DAYS))
+        given(studyPatternQueryService.getPattern(membership, PERIOD_DAYS))
                 .willReturn(okPattern(PERIOD_DAYS));
     }
 
@@ -242,7 +245,6 @@ class TopLearnerPatternQueryServiceTest {
     }
 
     private void givenCohortStudents(int count) {
-        CohortMembership membership = mock(CohortMembership.class);
         given(membership.getCohortId()).willReturn(COHORT_ID);
         given(cohortAccessService.requireCurrentActiveMembership(USER_ID)).willReturn(membership);
 

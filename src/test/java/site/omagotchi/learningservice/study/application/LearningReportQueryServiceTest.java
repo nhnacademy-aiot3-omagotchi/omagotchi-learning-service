@@ -25,7 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -56,6 +55,10 @@ class LearningReportQueryServiceTest {
     @Mock
     private StudyRecordQueryRepository studyRecordQueryRepository;
 
+    // 소속은 리포트가 한 번만 조회해 하위 조회들에 넘긴다. 스텁·검증이 같은 인스턴스를 가리켜야 한다
+    @Mock
+    private CohortMembership membership;
+
     private LearningReportQueryService service;
 
     @BeforeEach
@@ -83,7 +86,7 @@ class LearningReportQueryServiceTest {
             service.getReport(USER_ID, null);
 
             // 패턴 조회 Tool의 기본값(30일)이 아니라 리포트 기본값(7일)을 넘긴다
-            verify(topLearnerPatternQueryService).getTopLearnerPattern(USER_ID, 7);
+            verify(topLearnerPatternQueryService).getTopLearnerPattern(membership, 7);
         }
 
         @Test
@@ -95,7 +98,7 @@ class LearningReportQueryServiceTest {
 
             service.getReport(USER_ID, 30);
 
-            verify(topLearnerPatternQueryService).getTopLearnerPattern(USER_ID, 30);
+            verify(topLearnerPatternQueryService).getTopLearnerPattern(membership, 30);
         }
 
         @Test
@@ -225,7 +228,7 @@ class LearningReportQueryServiceTest {
             givenActiveMembership();
             TopLearnerPatternResult thisPeriod =
                     TopLearnerPatternResult.insufficientSample(7, 5);
-            given(topLearnerPatternQueryService.getTopLearnerPattern(USER_ID, 7))
+            given(topLearnerPatternQueryService.getTopLearnerPattern(membership, 7))
                     .willReturn(thisPeriod);
             givenPreviousDaily();
 
@@ -241,13 +244,12 @@ class LearningReportQueryServiceTest {
     // --- 픽스처 ---
 
     private void givenActiveMembership() {
-        CohortMembership membership = mock(CohortMembership.class);
         given(membership.getId()).willReturn(MEMBERSHIP_ID);
         given(cohortAccessService.requireCurrentActiveMembership(USER_ID)).willReturn(membership);
     }
 
     private void givenThisPeriod(int periodDays) {
-        given(topLearnerPatternQueryService.getTopLearnerPattern(eq(USER_ID), any()))
+        given(topLearnerPatternQueryService.getTopLearnerPattern(eq(membership), any()))
                 .willReturn(TopLearnerPatternResult.noData(periodDays, 12));
     }
 

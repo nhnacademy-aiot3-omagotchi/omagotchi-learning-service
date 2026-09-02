@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.team.presentation.response;
 
 import site.omagotchi.learningservice.team.application.result.TeamDetailResult;
+import site.omagotchi.learningservice.team.domain.TeamMemberRole;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -19,6 +20,8 @@ public record TeamDetailResponse(
         String name,
         OffsetDateTime createdAt,
         int memberCount,
+        Long myMemberId,
+        TeamMemberRole myRole,
         List<TeamMemberResponse> members
 ) {
 
@@ -29,6 +32,8 @@ public record TeamDetailResponse(
                 result.name(),
                 result.createdAt(),
                 result.memberCount(),
+                result.myMemberId(),
+                result.myRole(),
                 result.members().stream()
                         .map(TeamMemberResponse::from)
                         .toList()

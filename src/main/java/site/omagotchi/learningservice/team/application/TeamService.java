@@ -162,6 +162,8 @@ public class TeamService {
                 localResult.cohortId(),
                 localResult.name(),
                 localResult.createdAt(),
+                localResult.myMemberId(),
+                localResult.myRole(),
                 members
         );
     }

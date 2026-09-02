@@ -3,15 +3,15 @@ package site.omagotchi.learningservice.gamification.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.gamification.application.port.GameCharacterQueryRepository;
+import site.omagotchi.learningservice.gamification.application.port.LevelPolicyQueryRepository;
+import site.omagotchi.learningservice.gamification.application.port.UserCharacterQueryRepository;
+import site.omagotchi.learningservice.gamification.application.port.UserCharacterWriteRepository;
 import site.omagotchi.learningservice.gamification.application.result.CharacterGrowthResult;
 import site.omagotchi.learningservice.gamification.application.result.RepresentativeCharacterResult;
 import site.omagotchi.learningservice.gamification.domain.GameCharacter;
 import site.omagotchi.learningservice.gamification.domain.LevelPolicy;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
-import site.omagotchi.learningservice.gamification.infrastructure.GameCharacterRepository;
-import site.omagotchi.learningservice.gamification.infrastructure.LevelPolicyRepository;
-import site.omagotchi.learningservice.gamification.application.port.UserCharacterQueryRepository;
-import site.omagotchi.learningservice.gamification.application.port.UserCharacterWriteRepository;
 import site.omagotchi.learningservice.gamification.domain.CharacterNicknameValidator;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
@@ -32,8 +32,8 @@ public class CharacterGrowthService {
 
     private final UserCharacterQueryRepository userCharacterQueryRepository;
     private final UserCharacterWriteRepository userCharacterWriteRepository;
-    private final LevelPolicyRepository levelPolicyRepository;
-    private final GameCharacterRepository gameCharacterRepository;
+    private final LevelPolicyQueryRepository levelPolicyQueryRepository;
+    private final GameCharacterQueryRepository gameCharacterQueryRepository;
 
     public UserCharacter requireRepresentativeCharacter(UUID userId) {
         return userCharacterQueryRepository.findRepresentativeByUserId(userId)
@@ -92,7 +92,7 @@ public class CharacterGrowthService {
     private GameCharacter findGameCharacter(Long gameCharacterId) {
         return gameCharacterId == null
                 ? null
-                : gameCharacterRepository.findById(gameCharacterId).orElse(null);
+                : gameCharacterQueryRepository.findById(gameCharacterId).orElse(null);
     }
 
     public List<RepresentativeCharacterResult> findRepresentativeCharacters(Collection<UUID> userIds) {
@@ -107,7 +107,7 @@ public class CharacterGrowthService {
                 .collect(Collectors.toSet());
         Map<Long, GameCharacter> gameCharacterById = gameCharacterIds.isEmpty()
                 ? Map.of()
-                : gameCharacterRepository.findAllById(gameCharacterIds).stream()
+                : gameCharacterQueryRepository.findAllById(gameCharacterIds).stream()
                 .collect(Collectors.toMap(GameCharacter::getId, Function.identity(), (first, ignored) -> first));
 
         // 참조가 끊어진 캐릭터도 목록에서 빼지 않는다. 랭킹에서 사용자가 통째로 사라지는 편이 더 나쁘다.
@@ -126,7 +126,7 @@ public class CharacterGrowthService {
     }
 
     List<LevelPolicy> requireLevelPolicies() {
-        List<LevelPolicy> policies = levelPolicyRepository.findByLevelLessThanEqualOrderByLevelAsc(30);
+        List<LevelPolicy> policies = levelPolicyQueryRepository.findUpToLevel(30);
         if (policies.isEmpty()) {
             throw new BusinessException(GamificationErrorCode.LEVEL_POLICY_NOT_FOUND);
         }

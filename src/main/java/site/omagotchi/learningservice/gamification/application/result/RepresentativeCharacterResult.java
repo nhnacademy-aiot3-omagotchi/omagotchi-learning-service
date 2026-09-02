@@ -33,7 +33,7 @@ public record RepresentativeCharacterResult(
                 character.getId(),
                 character.displayName(),
                 gameCharacter == null ? null : gameCharacter.getAssetKey(),
-                character.getColorId()
+                gameCharacter == null ? null : character.getColorId()
         );
     }
 }

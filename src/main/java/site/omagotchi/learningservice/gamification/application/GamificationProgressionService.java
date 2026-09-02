@@ -3,14 +3,14 @@ package site.omagotchi.learningservice.gamification.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.gamification.application.port.StudyProgressionQueryRepository;
+import site.omagotchi.learningservice.gamification.application.port.UserDailyQuestQueryRepository;
 import site.omagotchi.learningservice.gamification.application.result.GamificationProgressionResult;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.gamification.domain.QuestStatus;
 import site.omagotchi.learningservice.gamification.domain.StudyProgressionCalculator;
 import site.omagotchi.learningservice.gamification.domain.UserDailyQuest;
 import site.omagotchi.learningservice.gamification.domain.WeekdayStreakCalculator;
-import site.omagotchi.learningservice.gamification.infrastructure.StudyProgressionRepository;
-import site.omagotchi.learningservice.gamification.infrastructure.UserDailyQuestRepository;
 import site.omagotchi.learningservice.global.util.DateTimeProvider;
 
 import java.time.LocalDate;
@@ -32,8 +32,8 @@ public class GamificationProgressionService {
     private static final int STREAK_LOOKBACK_DAYS = 14;
 
     private final CohortAccessService cohortAccessService;
-    private final StudyProgressionRepository studyProgressionRepository;
-    private final UserDailyQuestRepository userDailyQuestRepository;
+    private final StudyProgressionQueryRepository studyProgressionQueryRepository;
+    private final UserDailyQuestQueryRepository userDailyQuestQueryRepository;
     private final DateTimeProvider dateTimeProvider;
 
     public GamificationProgressionResult getProgression(UUID userId, Long cohortId, LocalDate aggregationDate) {
@@ -45,7 +45,7 @@ public class GamificationProgressionService {
         LocalDate targetDate = aggregationDate == null
                 ? dateTimeProvider.currentAggregationDate()
                 : aggregationDate;
-        long studySeconds = studyProgressionRepository.getDailyStudySeconds(userId, cohortId, targetDate);
+        long studySeconds = studyProgressionQueryRepository.getDailyStudySeconds(userId, cohortId, targetDate);
 
         return new GamificationProgressionResult(
                 targetDate,
@@ -76,8 +76,8 @@ public class GamificationProgressionService {
         }
 
         LocalDate baseDate = dateTimeProvider.currentAggregationDate();
-        Map<UUID, Set<LocalDate>> attendedDatesByUser = userDailyQuestRepository
-                .findByUserIdInAndQuestDateBetweenAndCode(
+        Map<UUID, Set<LocalDate>> attendedDatesByUser = userDailyQuestQueryRepository
+                .findByUsersAndDateRangeAndCode(
                         distinctUserIds,
                         baseDate.minusDays(STREAK_LOOKBACK_DAYS),
                         baseDate,
@@ -106,7 +106,7 @@ public class GamificationProgressionService {
     }
 
     private Set<LocalDate> attendedDates(UUID userId, LocalDate baseDate) {
-        return userDailyQuestRepository.findByUserIdAndQuestDateBetweenAndCodeOrderByQuestDateAsc(
+        return userDailyQuestQueryRepository.findByUserAndDateRangeAndCode(
                         userId,
                         baseDate.minusDays(STREAK_LOOKBACK_DAYS),
                         baseDate,

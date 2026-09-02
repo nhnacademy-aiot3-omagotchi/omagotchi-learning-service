@@ -91,6 +91,22 @@ class AttendanceControllerTest {
     }
 
     @Test
+    @DisplayName("도서관 입장은 선택한 공용 학습 공간 ID를 출결 서비스에 전달한다")
+    void movesToSelectedStudySpace() throws Exception {
+        given(attendanceService.moveStudySpace(COHORT_ID, USER_ID, 301L)).willReturn(record());
+
+        mockMvc.perform(post("/api/v1/cohorts/{cohort-id}/attendance-records/move-study", COHORT_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .contentType("application/json")
+                        .content("{\"spaceId\":301}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(10))
+                .andExpect(jsonPath("$.spaceId").value(301));
+
+        verify(attendanceService).moveStudySpace(COHORT_ID, USER_ID, 301L);
+    }
+
+    @Test
     @DisplayName("내 출결 목록은 JWT subject의 기록을 반환한다")
     void getsMyAttendanceRecords() throws Exception {
         AttendancePageQuery query = AttendancePageQuery.of(

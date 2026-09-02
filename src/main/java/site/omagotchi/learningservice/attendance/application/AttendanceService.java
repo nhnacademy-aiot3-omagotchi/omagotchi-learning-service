@@ -31,6 +31,7 @@ import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepo
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.time.AggregationDateTime;
 import site.omagotchi.learningservice.space.application.LabSelectionService;
+import site.omagotchi.learningservice.space.application.StudySpaceSelectionService;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -56,6 +57,7 @@ public class AttendanceService {
     private final PresenceIntervalRepository presenceIntervalRepository;
     private final PresenceTransitionService presenceTransitionService;
     private final LabSelectionService labSelectionService;
+    private final StudySpaceSelectionService studySpaceSelectionService;
     private final AttendanceEventPublisher attendanceEventPublisher;
     private final Clock clock;
 
@@ -132,25 +134,28 @@ public class AttendanceService {
         CohortMembership membership = cohortAccessService.requireActiveMembership(cohortId, userId);
         lockActiveMembership(membership.getId());
         Instant now = clock.instant();
-        LocalDate attendanceDate = AggregationDateTime.aggregationDate(now);
-
-        AttendanceRecord record = attendanceRecordRepository
-                .findByCohortMembershipIdAndAttendanceDate(membership.getId(), attendanceDate)
-                .orElseThrow(() -> new BusinessException(AttendanceErrorCode.ATTENDANCE_RECORD_NOT_FOUND));
-        if (record.getCheckedInAt() == null) {
-            throw new BusinessException(AttendanceErrorCode.ATTENDANCE_CHECK_IN_REQUIRED);
-        }
-        if (record.getCheckedOutAt() != null) {
-            throw new BusinessException(AttendanceErrorCode.PRESENCE_TRANSITION_NOT_ALLOWED);
-        }
-        if (isInMeeting(membership.getId())) {
-            throw new BusinessException(
-                    AttendanceErrorCode.PRESENCE_MEETING_EXIT_REQUIRED
-            );
-        }
+        AttendanceRecord record = requireSpaceMovableAttendance(membership.getId(), now);
 
         labSelectionService.requireSelectableLab(cohortId, record.getId(), spaceId);
         presenceTransitionService.moveLab(record.getId(), membership.getId(), spaceId, now);
+        return AttendanceRecordResult.from(record);
+    }
+
+    /** 체크인한 사용자를 활성 공용 학습 공간으로 이동한다. */
+    @Transactional
+    public AttendanceRecordResult moveStudySpace(Long cohortId, UUID userId, Long spaceId) {
+        CohortMembership membership = cohortAccessService.requireActiveMembership(cohortId, userId);
+        lockActiveMembership(membership.getId());
+        Instant now = clock.instant();
+        AttendanceRecord record = requireSpaceMovableAttendance(membership.getId(), now);
+
+        studySpaceSelectionService.requireSelectableStudySpace(spaceId);
+        presenceTransitionService.moveStudySpace(
+                record.getId(),
+                membership.getId(),
+                spaceId,
+                now
+        );
         return AttendanceRecordResult.from(record);
     }
 
@@ -262,5 +267,24 @@ public class AttendanceService {
      */
     private boolean isInMeeting(Long membershipId) {
         return presenceIntervalRepository.existsOpenMeetingByMembershipId(membershipId);
+    }
+
+    private AttendanceRecord requireSpaceMovableAttendance(Long membershipId, Instant now) {
+        LocalDate attendanceDate = AggregationDateTime.aggregationDate(now);
+        AttendanceRecord record = attendanceRecordRepository
+                .findByCohortMembershipIdAndAttendanceDate(membershipId, attendanceDate)
+                .orElseThrow(() -> new BusinessException(
+                        AttendanceErrorCode.ATTENDANCE_RECORD_NOT_FOUND
+                ));
+        if (record.getCheckedInAt() == null) {
+            throw new BusinessException(AttendanceErrorCode.ATTENDANCE_CHECK_IN_REQUIRED);
+        }
+        if (record.getCheckedOutAt() != null) {
+            throw new BusinessException(AttendanceErrorCode.PRESENCE_TRANSITION_NOT_ALLOWED);
+        }
+        if (isInMeeting(membershipId)) {
+            throw new BusinessException(AttendanceErrorCode.PRESENCE_MEETING_EXIT_REQUIRED);
+        }
+        return record;
     }
 }

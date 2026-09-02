@@ -564,6 +564,23 @@ class SpaceCommandServiceTest {
     }
 
     @Test
+    @DisplayName("복귀 예약이 있으면 실습실이 아닌 공간의 비활성화도 거절한다")
+    void rejectsStudySpaceDeactivationWhenReturnReservationExists() {
+        when(spaceLabReductionQueryPort.find(1L))
+                .thenReturn(Optional.of(new SpaceLabReductionView(1L, 42L, false)));
+        when(spaceRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(activeStudySpace()));
+        when(spacePresenceQueryService.summarize(1L))
+                .thenReturn(new SpacePresenceSummary(0L, 1L));
+
+        assertBusinessError(
+                SpaceErrorCode.SPACE_HAS_RETURN_RESERVATION,
+                () -> spaceCommandService.deactivate(1L, "점검")
+        );
+        verify(spaceRepository, never()).save(any(Space.class));
+    }
+
+    @Test
     @DisplayName("권한 없는 실습실 비활성화 요청은 기수 잠금 전에 거절한다")
     void rejectsUnauthorizedLabDeactivationBeforeCohortLock() {
         when(spaceLabReductionQueryPort.find(1L))
@@ -1093,6 +1110,22 @@ class SpaceCommandServiceTest {
                 "실습실 A",
                 SpaceType.LAB,
                 20,
+                SpaceOperationalStatus.ACTIVE,
+                null,
+                now.minusDays(1),
+                now.minusHours(1),
+                null
+        );
+    }
+
+    private Space activeStudySpace() {
+        ZonedDateTime now = ZonedDateTime.ofInstant(NOW, SEOUL);
+        return Space.restore(
+                1L,
+                42L,
+                "스터디룸 A",
+                SpaceType.STUDY,
+                4,
                 SpaceOperationalStatus.ACTIVE,
                 null,
                 now.minusDays(1),

@@ -85,7 +85,7 @@ public enum SpaceErrorCode implements ErrorCode {
     SPACE_HAS_RETURN_RESERVATION(
             ErrorType.CONFLICT,
             "SPACE_HAS_RETURN_RESERVATION",
-            "회의 종료 후 복귀할 사용자가 있어 실습실을 변경할 수 없습니다."
+            "회의 종료 후 복귀할 사용자가 있어 공간을 변경할 수 없습니다."
     ),
     LAB_NOT_SELECTABLE(
             ErrorType.CONFLICT,
@@ -96,6 +96,11 @@ public enum SpaceErrorCode implements ErrorCode {
             ErrorType.CONFLICT,
             "LAB_CAPACITY_EXCEEDED",
             "실습실 정원이 가득 찼습니다."
+    ),
+    STUDY_SPACE_NOT_SELECTABLE(
+            ErrorType.CONFLICT,
+            "STUDY_SPACE_NOT_SELECTABLE",
+            "활성 공용 학습 공간만 선택할 수 있습니다."
     ),
     LAST_ACTIVE_LAB_REQUIRED(
             ErrorType.CONFLICT,

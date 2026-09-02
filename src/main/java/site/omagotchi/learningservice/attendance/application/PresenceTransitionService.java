@@ -35,10 +35,28 @@ public class PresenceTransitionService {
             Long nextLabSpaceId,
             Instant at
     ) {
+        movePresentSpace(attendanceId, expectedMembershipId, nextLabSpaceId, at);
+    }
+
+    public void moveStudySpace(
+            Long attendanceId,
+            Long expectedMembershipId,
+            Long nextStudySpaceId,
+            Instant at
+    ) {
+        movePresentSpace(attendanceId, expectedMembershipId, nextStudySpaceId, at);
+    }
+
+    private void movePresentSpace(
+            Long attendanceId,
+            Long expectedMembershipId,
+            Long nextSpaceId,
+            Instant at
+    ) {
         AttendanceRecord attendance = lockAttendance(attendanceId);
         ensureMembership(attendance, expectedMembershipId);
         ensureOpenAttendance(attendance);
-        requireSpaceId(nextLabSpaceId);
+        requireSpaceId(nextSpaceId);
         Instant transitionAt = requireTime(at);
 
         List<PresenceInterval> openIntervals = findOpenIntervals(attendanceId);
@@ -46,14 +64,14 @@ public class PresenceTransitionService {
             presenceIntervalRepository.save(PresenceInterval.start(
                     attendanceId,
                     PresenceState.PRESENT,
-                    nextLabSpaceId,
+                    nextSpaceId,
                     transitionAt
             ));
             return;
         }
 
         PresenceInterval current = requireSingle(openIntervals);
-        if (isSame(current, PresenceState.PRESENT, nextLabSpaceId)) {
+        if (isSame(current, PresenceState.PRESENT, nextSpaceId)) {
             return;
         }
         if (current.getState() == PresenceState.MEETING) {
@@ -68,7 +86,7 @@ public class PresenceTransitionService {
         transition(
                 current,
                 PresenceState.PRESENT,
-                nextLabSpaceId,
+                nextSpaceId,
                 transitionAt
         );
     }

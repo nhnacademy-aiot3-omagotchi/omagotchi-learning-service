@@ -16,12 +16,7 @@ import site.omagotchi.learningservice.study.domain.StudyRecord;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -72,12 +67,7 @@ public class TopLearnerPatternQueryService {
             return TopLearnerPatternResult.noData(periodDays, students.size());
         }
         // 4. 공부 시간이 많은 순 정렬
-        durations.sort(new Comparator<MemberStudyDurationResult>() {
-            @Override
-            public int compare(MemberStudyDurationResult a, MemberStudyDurationResult b) {
-                return Long.compare(b.studySeconds(), a.studySeconds());
-            }
-        });
+        durations.sort((a, b) -> Long.compare(b.studySeconds(), a.studySeconds()));
 
         // 5. 상위 그룹 선정: 전체의 10%, 단 최소 3명
         int topGroupSize = students.size() / 10;

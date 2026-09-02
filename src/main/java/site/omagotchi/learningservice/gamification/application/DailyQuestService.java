@@ -6,6 +6,8 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.gamification.application.result.DailyQuestResult;
 import site.omagotchi.learningservice.gamification.application.result.HomeResult;
 import site.omagotchi.learningservice.gamification.domain.QuestStatus;
+import site.omagotchi.learningservice.gamification.domain.StudyTimeQuestTarget;
+import site.omagotchi.learningservice.gamification.domain.StudyTimeQuestTitle;
 import site.omagotchi.learningservice.gamification.domain.QuestTemplate;
 import site.omagotchi.learningservice.gamification.domain.QuestType;
 import site.omagotchi.learningservice.gamification.domain.UserDailyQuest;
@@ -20,7 +22,10 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +43,8 @@ public class DailyQuestService {
     private final XpRewardService xpRewardService;
     private final CharacterGrowthService characterGrowthService;
     private final DateTimeProvider dateTimeProvider;
+    private final StudyTimeQuestTargetResolver studyTimeQuestTargetResolver;
+    private final UserStudySecondsReader userStudySecondsReader;
 
     @Transactional
     public List<DailyQuestResult> getOrCreateDailyQuests(UUID userId) {
@@ -61,7 +68,31 @@ public class DailyQuestService {
 
     @Transactional
     public DailyQuestResult handleStudyCompleted(UUID userId) {
-        return progressToday(userId, STUDY_COMPLETED_CODE);
+        LocalDate questDate = dateTimeProvider.currentAggregationDate();
+        createDailyQuestsIfAbsent(userId, questDate);
+        UserDailyQuest quest = requireTodayQuest(userId, questDate, STUDY_COMPLETED_CODE);
+
+        if (!quest.isStudyTimeQuest()) {
+            // 목표 시간이 없는 기존 횟수형 행은 이전 계약대로 1회 진행으로 완료한다.
+            quest.progress(1, dateTimeProvider.currentInstant());
+            return DailyQuestResult.from(quest);
+        }
+
+        // 시간형은 이벤트 횟수가 아니라 오늘 누적 공부시간으로 판정한다.
+        // 기록 수정·삭제로 누적이 줄 수 있으므로 증분이 아니라 매번 원본을 다시 읽는다.
+        completeIfStudyTimeReached(userId, questDate, quest);
+        return DailyQuestResult.from(quest);
+    }
+
+    private void completeIfStudyTimeReached(UUID userId, LocalDate questDate, UserDailyQuest quest) {
+        Optional<Long> cohortId = userStudySecondsReader.findActiveCohortId(userId);
+        if (cohortId.isEmpty()) {
+            return;
+        }
+        long studySeconds = userStudySecondsReader.dailyStudySeconds(userId, cohortId.get(), questDate);
+        if (studySeconds >= quest.getTargetSeconds()) {
+            quest.complete(dateTimeProvider.currentInstant());
+        }
     }
 
     @Transactional
@@ -138,14 +169,37 @@ public class DailyQuestService {
     }
 
     private void createDailyQuestsIfAbsent(UUID userId, LocalDate questDate) {
-        // 같은 날짜 슬롯이 이미 있으면 기본 5개를 다시 만들지 않음
-        if (userDailyQuestRepository.existsByUserIdAndQuestDate(userId, questDate)) {
+        // 날짜 단위로 검사하면 발급 시점이 둘로 갈릴 때 먼저 만들어진 한 건 때문에
+        // 나머지 슬롯이 영영 생기지 않는다. 그래서 code 단위로 비교하되,
+        // code마다 exists를 던지지 않도록 오늘 행을 한 번만 읽어 메모리에서 대조한다.
+        Set<String> existingCodes = userDailyQuestRepository
+                .findByUserIdAndQuestDateOrderByIdAsc(userId, questDate).stream()
+                .map(UserDailyQuest::getCode)
+                .collect(Collectors.toSet());
+
+        List<UserDailyQuest> quests = dailyTemplates().stream()
+                .filter(template -> !existingCodes.contains(template.getCode()))
+                .map(template -> newQuest(userId, questDate, template))
+                .toList();
+        if (quests.isEmpty()) {
             return;
         }
-        List<UserDailyQuest> quests = dailyTemplates().stream()
-                .map(template -> UserDailyQuest.fromTemplate(userId, questDate, template))
-                .toList();
         userDailyQuestRepository.saveAll(quests);
+    }
+
+    private UserDailyQuest newQuest(UUID userId, LocalDate questDate, QuestTemplate template) {
+        if (!STUDY_COMPLETED_CODE.equals(template.getCode())) {
+            return UserDailyQuest.fromTemplate(userId, questDate, template);
+        }
+        // 목표는 사용자마다 다르므로 제목도 발급 시점에 만들어 행으로 복사한다.
+        StudyTimeQuestTarget target = studyTimeQuestTargetResolver.resolve(userId, questDate);
+        return UserDailyQuest.studyTimeFromTemplate(
+                userId,
+                questDate,
+                template,
+                StudyTimeQuestTitle.of(target.targetSeconds()),
+                target
+        );
     }
 
     private List<QuestTemplate> dailyTemplates() {

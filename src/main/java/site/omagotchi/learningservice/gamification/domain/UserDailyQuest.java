@@ -60,6 +60,17 @@ public class UserDailyQuest {
     @Column(name = "reward_xp", nullable = false)
     private long rewardXp;
 
+    // 학습 시간 퀘스트의 실제 목표(초). 횟수형 퀘스트는 null이다.
+    @Column(name = "target_seconds")
+    private Integer targetSeconds;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "target_source", nullable = false, length = 20)
+    private QuestTargetSource targetSource;
+
+    @Column(name = "model_version", length = 50)
+    private String modelVersion;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private QuestStatus status;
@@ -116,7 +127,41 @@ public class UserDailyQuest {
         quest.progressCount = 0;
         quest.rewardXp = rewardXp;
         quest.status = QuestStatus.IN_PROGRESS;
+        quest.targetSource = QuestTargetSource.TEMPLATE;
         return quest;
+    }
+
+    /**
+     * 예측 기반 학습 시간 퀘스트를 발급한다.
+     *
+     * <p>MVP는 진행도를 노출하지 않으므로 targetCount는 1로 두고 완료 판정만 목표 시간으로 한다.
+     * 제목은 사용자마다 다르므로 템플릿 제목 대신 산정된 목표로 만든 문구를 복사한다.
+     */
+    public static UserDailyQuest studyTimeFromTemplate(
+            UUID userId,
+            LocalDate questDate,
+            QuestTemplate template,
+            String title,
+            StudyTimeQuestTarget target
+    ) {
+        UserDailyQuest quest = create(
+                userId,
+                questDate,
+                template.getId(),
+                template.getType(),
+                template.getCode(),
+                title,
+                1,
+                template.getRewardXp()
+        );
+        quest.targetSeconds = target.targetSeconds();
+        quest.targetSource = target.source();
+        quest.modelVersion = target.modelVersion();
+        return quest;
+    }
+
+    public boolean isStudyTimeQuest() {
+        return targetSeconds != null;
     }
 
     public void progress(int amount, Instant completedAt) {

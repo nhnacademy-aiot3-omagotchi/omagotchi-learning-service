@@ -51,6 +51,12 @@ class DailyQuestServiceTest {
     @Mock
     private CharacterGrowthService characterGrowthService;
 
+    @Mock
+    private StudyTimeQuestTargetResolver studyTimeQuestTargetResolver;
+
+    @Mock
+    private UserStudySecondsReader userStudySecondsReader;
+
     private DailyQuestService dailyQuestService;
     private LocalDate today;
 
@@ -63,16 +69,17 @@ class DailyQuestServiceTest {
                 questTemplateRepository,
                 xpRewardService,
                 characterGrowthService,
-                dateTimeProvider
+                dateTimeProvider,
+                studyTimeQuestTargetResolver,
+                userStudySecondsReader
         );
     }
 
     @Test
     @DisplayName("이미 오늘 퀘스트가 있으면 중복 생성하지 않는다")
     void doesNotCreateDuplicatedDailyQuests() {
-        when(userDailyQuestRepository.existsByUserIdAndQuestDate(USER_ID, today)).thenReturn(true);
         when(userDailyQuestRepository.findByUserIdAndQuestDateOrderByIdAsc(USER_ID, today))
-                .thenReturn(List.of());
+                .thenReturn(allDefaultQuests());
 
         dailyQuestService.getOrCreateDailyQuests(USER_ID);
 
@@ -123,7 +130,8 @@ class DailyQuestServiceTest {
                 1,
                 40
         );
-        when(userDailyQuestRepository.existsByUserIdAndQuestDate(USER_ID, today)).thenReturn(true);
+        when(userDailyQuestRepository.findByUserIdAndQuestDateOrderByIdAsc(USER_ID, today))
+                .thenReturn(allDefaultQuests());
         when(userDailyQuestRepository.findByUserIdAndQuestDateAndCode(
                 USER_ID,
                 today,
@@ -146,7 +154,8 @@ class DailyQuestServiceTest {
                 DailyQuestService.ROUTINE_REVIEW_CODE,
                 "오늘 학습 돌아보기"
         );
-        when(userDailyQuestRepository.existsByUserIdAndQuestDate(USER_ID, today)).thenReturn(true);
+        when(userDailyQuestRepository.findByUserIdAndQuestDateOrderByIdAsc(USER_ID, today))
+                .thenReturn(allDefaultQuests());
         when(userDailyQuestRepository.findByUserIdAndQuestDateAndCode(
                 USER_ID,
                 today,
@@ -219,6 +228,29 @@ class DailyQuestServiceTest {
                 title,
                 1,
                 10
+        );
+    }
+
+    /**
+     * 발급 가드가 code 단위로 바뀌었으므로 "오늘 퀘스트가 이미 있다"는 상태는
+     * 기본 슬롯 5개가 모두 존재하는 것으로 표현한다.
+     */
+    private List<UserDailyQuest> allDefaultQuests() {
+        return List.of(
+                routineQuest(DailyQuestService.ATTENDANCE_CODE, "출석하기"),
+                routineQuest(DailyQuestService.STUDY_COMPLETED_CODE, "학습 완료하기"),
+                routineQuest(DailyQuestService.CHARACTER_CHECKED_CODE, "캐릭터 확인하기"),
+                routineQuest(DailyQuestService.ROUTINE_REVIEW_CODE, "오늘 학습 돌아보기"),
+                UserDailyQuest.create(
+                        USER_ID,
+                        today,
+                        null,
+                        QuestType.LLM,
+                        DailyQuestService.LLM_QUEST_CODE,
+                        "AI 추천 퀘스트",
+                        1,
+                        40
+                )
         );
     }
 }

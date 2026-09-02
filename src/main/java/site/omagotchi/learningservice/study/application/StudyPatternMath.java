@@ -2,6 +2,7 @@ package site.omagotchi.learningservice.study.application;
 
 import site.omagotchi.learningservice.global.util.DateTimePolicy;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -46,6 +47,20 @@ final class StudyPatternMath {
         }
         int minutesOfDay = (median + RESET_MINUTES) % 1440;
         return String.format("%02d:%02d", minutesOfDay / 60, minutesOfDay % 60);
+    }
+
+    /**
+     * 자리에 있던 시간(첫 세션 시작~마지막 세션 종료)의 초.
+     *
+     * <p>세션 하나의 길이를 더하면 세션 사이에 쉰 시간이 빠져 밀도가 항상 100이 된다.
+     * 일시정지는 타이머를 끄고 다시 켜는 방식이라 쉰 시간이 세션 <b>사이</b>에만 남기
+     * 때문이다. 그래서 구간의 양 끝으로 재야 실제로 앉아 있던 시간이 나온다.</p>
+     */
+    static long spanSeconds(Instant first, Instant last) {
+        if (first == null || last == null || !first.isBefore(last)) {
+            return 0;
+        }
+        return Duration.between(first, last).getSeconds();
     }
 
     /** 앉아 있던 시간 중 실제 공부한 비율(0~100). 분모가 0이면 0을 돌려준다. */

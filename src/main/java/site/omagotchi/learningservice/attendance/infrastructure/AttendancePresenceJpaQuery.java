@@ -5,7 +5,9 @@ import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.attendance.application.port.AttendancePresenceQuery;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.attendance.application.result.OpenUserPresenceView;
+import site.omagotchi.learningservice.attendance.application.result.PresenceIntervalView;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -19,6 +21,14 @@ public class AttendancePresenceJpaQuery implements AttendancePresenceQuery {
     }
     @Override public List<OpenUserPresenceView> findOpenPresences(Collection<UUID> userIds) {
         return presenceIntervalRepository.findOpenPresences(userIds);
+    }
+
+    @Override public List<PresenceIntervalView> findPresenceIntervals(
+            Long cohortMembershipId,
+            Instant from,
+            Instant toExclusive
+    ) {
+        return presenceIntervalRepository.findPresenceIntervals(cohortMembershipId, from, toExclusive);
     }
     @Override public List<OpenPresenceView> findOpenPresencesByMembershipIds(Collection<Long> membershipIds) {
         return presenceIntervalRepository.findOpenPresencesByMembershipIds(membershipIds);

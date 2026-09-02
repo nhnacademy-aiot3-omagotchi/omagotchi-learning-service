@@ -7,9 +7,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import site.omagotchi.learningservice.gamification.application.port.GameCharacterQueryRepository;
+import site.omagotchi.learningservice.gamification.application.port.LevelPolicyQueryRepository;
 import site.omagotchi.learningservice.gamification.application.port.UserCharacterWriteRepository;
 import site.omagotchi.learningservice.gamification.domain.UserCharacter;
-import site.omagotchi.learningservice.gamification.infrastructure.LevelPolicyRepository;
 import site.omagotchi.learningservice.gamification.application.port.UserCharacterQueryRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
@@ -18,6 +19,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -43,7 +45,10 @@ class CharacterGrowthServiceTest {
     private UserCharacterWriteRepository userCharacterWriteRepository;
 
     @Mock
-    private LevelPolicyRepository levelPolicyRepository;
+    private GameCharacterQueryRepository gameCharacterQueryRepository;
+
+    @Mock
+    private LevelPolicyQueryRepository levelPolicyQueryRepository;
 
     @InjectMocks
     private CharacterGrowthService characterGrowthService;
@@ -149,6 +154,23 @@ class CharacterGrowthServiceTest {
         );
 
         assertSame(GamificationErrorCode.REPRESENTATIVE_CHARACTER_NOT_FOUND, exception.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("게임 캐릭터 참조가 끊기면 외형과 색상을 함께 비운다")
+    void clearsAppearanceWhenGameCharacterIsMissing() {
+        UserCharacter character = representativeCharacter("오마");
+        given(userCharacterQueryRepository.findRepresentativeByUserId(USER_ID))
+                .willReturn(Optional.of(character));
+        given(gameCharacterQueryRepository.findById(1L)).willReturn(Optional.empty());
+
+        var result = characterGrowthService.findRepresentativeCharacter(USER_ID).orElseThrow();
+
+        assertAll(
+                () -> assertEquals("오마", result.displayName()),
+                () -> assertNull(result.characterType()),
+                () -> assertNull(result.colorId())
+        );
     }
 
     private UserCharacter representativeCharacter(String nickname) {

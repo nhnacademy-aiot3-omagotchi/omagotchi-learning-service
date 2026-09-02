@@ -67,6 +67,9 @@ class CommunityPostCommandServiceTest {
     @Mock
     private CommunityAttachmentStorage attachmentStorage;
 
+    @Mock
+    private CommunityAuthorNames communityAuthorNames;
+
     private final Clock clock = Clock.fixed(Instant.parse("2026-08-08T00:00:00Z"), ZoneOffset.UTC);
     private final CommunityAttachmentProperties attachmentProperties = new CommunityAttachmentProperties(
             "community-attachments",
@@ -86,6 +89,7 @@ class CommunityPostCommandServiceTest {
                 cohortMembershipRepository,
                 attachmentStorage,
                 attachmentProperties,
+                communityAuthorNames,
                 clock
         );
     }

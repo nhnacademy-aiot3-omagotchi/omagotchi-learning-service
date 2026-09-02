@@ -90,11 +90,13 @@ class CommunityPostControllerTest {
                         CommunityPostType.NOTICE,
                         "공지",
                         AUTHOR_ID,
+                        "글쓴이",
                         COHORT_ID,
                         true,
                         Instant.parse("2026-08-08T00:00:00Z"),
                         Instant.parse("2026-08-08T00:00:00Z"),
-                        0L
+                        0L,
+                        true
                 )
         ), 1, 10, 11, 2));
 
@@ -108,6 +110,9 @@ class CommunityPostControllerTest {
                 .andExpect(jsonPath("$.items[0].postId").value(1))
                 .andExpect(jsonPath("$.items[0].type").value("NOTICE"))
                 .andExpect(jsonPath("$.items[0].cohortId").value(10))
+                .andExpect(jsonPath("$.items[0].authorNickname").value("글쓴이"))
+                .andExpect(jsonPath("$.items[0].canManage").value(true))
+                .andExpect(jsonPath("$.items[0].authorUserId").doesNotExist())
                 .andExpect(jsonPath("$.items[0].pinned").value(true))
                 .andExpect(jsonPath("$.page.number").value(1))
                 .andExpect(jsonPath("$.page.size").value(10))
@@ -141,7 +146,10 @@ class CommunityPostControllerTest {
                 .andExpect(jsonPath("$.type").value("FREE"))
                 .andExpect(jsonPath("$.title").value("자유글"))
                 .andExpect(jsonPath("$.content").value("내용"))
-                .andExpect(jsonPath("$.cohortId").value(10));
+                .andExpect(jsonPath("$.cohortId").value(10))
+                .andExpect(jsonPath("$.authorNickname").value("글쓴이"))
+                .andExpect(jsonPath("$.canManage").value(true))
+                .andExpect(jsonPath("$.authorUserId").doesNotExist());
 
         verify(communityPostQueryService).getPost(USER_ID, COHORT_ID, 1L);
     }
@@ -271,11 +279,13 @@ class CommunityPostControllerTest {
                 title,
                 content,
                 AUTHOR_ID,
+                "글쓴이",
                 COHORT_ID,
                 false,
                 Instant.parse("2026-08-08T00:00:00Z"),
                 Instant.parse("2026-08-08T00:00:00Z"),
-                List.of()
+                List.of(),
+                true
         );
     }
 }

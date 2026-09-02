@@ -53,6 +53,7 @@ public class CommunityPostCommandService {
     private final CohortMembershipRepository cohortMembershipRepository;
     private final CommunityAttachmentStorage attachmentStorage;
     private final CommunityAttachmentProperties attachmentProperties;
+    private final CommunityAuthorNames communityAuthorNames;
     private final Clock clock;
 
     /**
@@ -80,7 +81,9 @@ public class CommunityPostCommandService {
                 List.of(),
                 command.attachments()
         );
-        return CommunityPostDetail.from(savedPost, toMetadata(attachments));
+        // 방금 만든 글이므로 작성자는 요청자이고 관리 권한도 당연히 있다.
+        return CommunityPostDetail.from(savedPost, toMetadata(attachments))
+                .withViewer(communityAuthorNames.of(userId), true);
     }
 
     @Transactional
@@ -100,7 +103,9 @@ public class CommunityPostCommandService {
                 command.attachments()
         )
                 : attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(post.getId());
-        return CommunityPostDetail.from(post, toMetadata(attachments));
+        // validateManagePermission을 통과했으므로 관리 권한이 있다.
+        return CommunityPostDetail.from(post, toMetadata(attachments))
+                .withViewer(communityAuthorNames.of(post.getAuthorUserId()), true);
     }
 
     @Transactional
@@ -128,9 +133,14 @@ public class CommunityPostCommandService {
         requireNoticeWriter(userId, cohortId);
         CommunityPost post = findActivePost(cohortId, postId);
         post.changePinned(command.pinned());
+        // 고정은 MANAGER·MENTOR의 권한이지만, 남의 자유글을 고정했다고 그 글을
+        // 수정·삭제할 수 있는 건 아니다.
         return CommunityPostDetail.from(
                 post,
                 toMetadata(attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(post.getId()))
+        ).withViewer(
+                communityAuthorNames.of(post.getAuthorUserId()),
+                post.isNotice() || post.isAuthor(userId)
         );
     }
 

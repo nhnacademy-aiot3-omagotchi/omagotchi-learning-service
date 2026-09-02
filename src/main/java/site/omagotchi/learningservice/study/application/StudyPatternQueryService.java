@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.time.AggregationDateTime;
 import site.omagotchi.learningservice.global.util.DateTimePolicy;
@@ -34,9 +35,22 @@ public class StudyPatternQueryService {
     private final StudyRecordQueryRepository studyRecordQueryRepository;
     private final Clock clock;
 
+    // 패턴 Tool이 직접 부르는 진입점 (소속을 스스로 구함)
     public StudyPatternResult getPattern(UUID userId, Integer periodDaysOrNull) {
+        // 기간 검증을 소속 조회보다 먼저 한다. 잘못된 기간에 DB를 치지 않는다
         int periodDays = resolvePeriodDays(periodDaysOrNull);
-        Long membershipId = cohortAccessService.requireCurrentActiveMembership(userId).getId();
+        return this.getPattern(this.cohortAccessService.requireCurrentActiveMembership(userId), periodDays);
+    }
+
+    /**
+     * 이미 활성 소속을 구한 호출자를 위한 진입점.
+     * <p>
+     * 리포트는 한 요청에서 이 서비스와 상위권 비교·환경 분석을 함께 쓰는데, 각자 소속을 다시 조회하면 같은 쿼리가 네 번 나간다.
+     * 소속 조회는 조건으로 찾는 파생 쿼리라 같은 트랜잭션이어도 영속성 컨텍스트가 걸러주지 않는다.
+     */
+    public StudyPatternResult getPattern(CohortMembership membership, Integer periodDaysOrNull) {
+        int periodDays = resolvePeriodDays(periodDaysOrNull);
+        Long membershipId = membership.getId();
 
         LocalDate today = AggregationDateTime.aggregationDate(clock.instant());
         LocalDate startDate = today.minusDays(periodDays - 1L);
@@ -50,11 +64,7 @@ public class StudyPatternQueryService {
         // 날짜별로 기록을 묶는다: 날짜 → 그날의 기록 목록
         Map<LocalDate, List<StudyRecord>> byDate = new HashMap<>();
         for (StudyRecord record : records) {
-            List<StudyRecord> daily = byDate.get(record.getAggregationDate());
-            if (daily == null) {
-                daily = new ArrayList<>();
-                byDate.put(record.getAggregationDate(), daily);
-            }
+            List<StudyRecord> daily = byDate.computeIfAbsent(record.getAggregationDate(), k -> new ArrayList<>());
             daily.add(record);
         }
 
@@ -90,7 +100,9 @@ public class StudyPatternQueryService {
         );
     }
 
-    /** 그날 자리에 있던 시간: 첫 세션 시작부터 마지막 세션 종료까지. */
+    /**
+     * 그날 자리에 있던 시간: 첫 세션 시작부터 마지막 세션 종료까지.
+     */
     private long daySpanSeconds(List<StudyRecord> daily) {
         Instant first = null;
         Instant last = null;
@@ -105,7 +117,9 @@ public class StudyPatternQueryService {
         return StudyPatternMath.spanSeconds(first, last);
     }
 
-    /** LLM이 채우는 값이라 신뢰하지 않는다. 미지정이면 기본값, 범위 밖이면 거부. */
+    /**
+     * LLM이 채우는 값이라 신뢰하지 않는다. 미지정이면 기본값, 범위 밖이면 거부.
+     */
     private int resolvePeriodDays(Integer periodDaysOrNull) {
         if (periodDaysOrNull == null) {
             return DEFAULT_PERIOD_DAYS;
@@ -116,7 +130,9 @@ public class StudyPatternQueryService {
         return periodDaysOrNull;
     }
 
-    /** 날짜마다 첫 세션의 시작 시각(분)을 모아 중앙값을 "HH:mm"으로 돌려준다. */
+    /**
+     * 날짜마다 첫 세션의 시작 시각(분)을 모아 중앙값을 "HH:mm"으로 돌려준다.
+     */
     private String typicalStartTime(Map<LocalDate, List<StudyRecord>> byDate) {
         List<Integer> shiftedMinutes = new ArrayList<>();
 
@@ -134,7 +150,9 @@ public class StudyPatternQueryService {
         return StudyPatternMath.medianStartTime(shiftedMinutes);
     }
 
-    /** 세션의 공부 시간을 시작 시각대에 귀속시켜, 시작 성과가 가장 좋은 시각대를 찾는다. */
+    /**
+     * 세션의 공부 시간을 시작 시각대에 귀속시켜, 시작 성과가 가장 좋은 시각대를 찾는다.
+     */
     private Integer bestStartHour(List<StudyRecord> records) {
         // 시각대 → 누적 공부 초
         Map<Integer, Long> secondsByHour = new HashMap<>();
@@ -158,7 +176,9 @@ public class StudyPatternQueryService {
         return bestHour;
     }
 
-    /** 오늘(기록 없으면 어제)부터 거꾸로 세어, 끊기지 않고 이어진 학습일 수. */
+    /**
+     * 오늘(기록 없으면 어제)부터 거꾸로 세어, 끊기지 않고 이어진 학습일 수.
+     */
     private int currentStreakDays(Set<LocalDate> studyDates, LocalDate today) {
         LocalDate cursor = studyDates.contains(today) ? today : today.minusDays(1);
         int streak = 0;

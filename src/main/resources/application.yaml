@@ -12,7 +12,7 @@ spring:
     google:
       genai:
         chat:
-          model: gemini-3.6-flash # 변경 가능
+          model: gemini-3.6-flash # 변경 가능. 2.5-flash는 신규 발급 API Key로 접근이 막혀 있다
           temperature: 0.7
           thinking-level: MINIMAL
     ollama:

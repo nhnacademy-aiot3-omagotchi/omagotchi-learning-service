@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
+import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.global.time.AggregationDateTime;
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.result.MemberStudyDurationResult;
@@ -15,12 +16,7 @@ import site.omagotchi.learningservice.study.domain.StudyRecord;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -38,13 +34,19 @@ public class TopLearnerPatternQueryService {
     private final StudyRecordQueryRepository studyRecordQueryRepository;
     private final Clock clock;
 
+    // 상위권 비교 Tool이 직접 부르는 진입점
     public TopLearnerPatternResult getTopLearnerPattern(UUID userId, Integer periodDaysOrNull) {
+        return this.getTopLearnerPattern(this.cohortAccessService.requireCurrentActiveMembership(userId), periodDaysOrNull);
+    }
+
+    // 이미 활성 소속을 구한 호출자(리포트)를 위한 진입점
+    public TopLearnerPatternResult getTopLearnerPattern(CohortMembership membership, Integer periodDaysOrNull) {
         // 1. 내 패턴을 먼저 계산한다.
-        StudyPatternResult myPattern = studyPatternQueryService.getPattern(userId, periodDaysOrNull);
+        StudyPatternResult myPattern = studyPatternQueryService.getPattern(membership, periodDaysOrNull);
         int periodDays = myPattern.periodDays();
 
         // 2. 내 기수의 학생 명단
-        Long cohortId = cohortAccessService.requireCurrentActiveMembership(userId).getCohortId();
+        Long cohortId = membership.getCohortId();
         List<CohortMembershipView> students =
                 cohortMembershipQueryService.findActiveStudentMemberships(cohortId);
         if (students.size() < MIN_STUDENT_COUNT) {
@@ -65,12 +67,7 @@ public class TopLearnerPatternQueryService {
             return TopLearnerPatternResult.noData(periodDays, students.size());
         }
         // 4. 공부 시간이 많은 순 정렬
-        durations.sort(new Comparator<MemberStudyDurationResult>() {
-            @Override
-            public int compare(MemberStudyDurationResult a, MemberStudyDurationResult b) {
-                return Long.compare(b.studySeconds(), a.studySeconds());
-            }
-        });
+        durations.sort((a, b) -> Long.compare(b.studySeconds(), a.studySeconds()));
 
         // 5. 상위 그룹 선정: 전체의 10%, 단 최소 3명
         int topGroupSize = students.size() / 10;
@@ -102,7 +99,9 @@ public class TopLearnerPatternQueryService {
         return studyRecordQueryRepository.findConfirmedDurations(membershipIds, startDate, endDate);
     }
 
-    /** 상위 그룹 전체의 기록을 하나의 익명 통계로 요약한다. */
+    /**
+     * 상위 그룹 전체의 기록을 하나의 익명 통계로 요약한다.
+     */
     private TopLearnerPatternResult aggregate(
             StudyPatternResult myPattern,
             int periodDays,

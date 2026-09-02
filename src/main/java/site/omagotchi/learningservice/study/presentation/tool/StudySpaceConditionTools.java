@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.study.presentation;
+package site.omagotchi.learningservice.study.presentation.tool;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

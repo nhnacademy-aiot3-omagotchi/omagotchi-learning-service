@@ -12,7 +12,7 @@ import site.omagotchi.learningservice.study.application.result.StudyPatternResul
 import site.omagotchi.learningservice.study.domain.StudyRecord;
 
 import java.time.Clock;
-import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -58,17 +58,21 @@ public class StudyPatternQueryService {
             daily.add(record);
         }
 
-        // 총 공부 시간·앉아 있던 시간·최장 세션을 한 바퀴에 계산한다
+        // 총 공부 시간과 최장 세션
         long totalStudySeconds = 0;
-        long totalOccupiedSeconds = 0;
         long longestSessionSeconds = 0;
         for (StudyRecord record : records) {
             totalStudySeconds = totalStudySeconds + record.getStudySeconds();
-            totalOccupiedSeconds = totalOccupiedSeconds
-                    + Duration.between(record.getStartTime(), record.getEndTime()).getSeconds();
             if (record.getStudySeconds() > longestSessionSeconds) {
                 longestSessionSeconds = record.getStudySeconds();
             }
+        }
+
+        // 밀도의 분모는 "자리에 있던 시간" — 날마다 첫 세션 시작~마지막 세션 종료를 더한다.
+        // 세션 길이를 더하면 세션 사이에 쉰 시간이 빠져 항상 100%가 나온다
+        long totalSpanSeconds = 0;
+        for (List<StudyRecord> daily : byDate.values()) {
+            totalSpanSeconds = totalSpanSeconds + daySpanSeconds(daily);
         }
 
         return new StudyPatternResult(
@@ -81,9 +85,24 @@ public class StudyPatternQueryService {
                 longestSessionSeconds / 60,
                 typicalStartTime(byDate),
                 bestStartHour(records),
-                StudyPatternMath.focusDensityPercent(totalStudySeconds, totalOccupiedSeconds),
+                StudyPatternMath.focusDensityPercent(totalStudySeconds, totalSpanSeconds),
                 currentStreakDays(byDate.keySet(), today)
         );
+    }
+
+    /** 그날 자리에 있던 시간: 첫 세션 시작부터 마지막 세션 종료까지. */
+    private long daySpanSeconds(List<StudyRecord> daily) {
+        Instant first = null;
+        Instant last = null;
+        for (StudyRecord record : daily) {
+            if (first == null || record.getStartTime().isBefore(first)) {
+                first = record.getStartTime();
+            }
+            if (last == null || record.getEndTime().isAfter(last)) {
+                last = record.getEndTime();
+            }
+        }
+        return StudyPatternMath.spanSeconds(first, last);
     }
 
     /** LLM이 채우는 값이라 신뢰하지 않는다. 미지정이면 기본값, 범위 밖이면 거부. */

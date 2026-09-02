@@ -352,13 +352,15 @@ public class SpaceCommandService {
         }
     }
 
+    /**
+     * 지금 이 공간에 있는 사람과, 회의를 마치고 이 공간으로 돌아올 사람을 모두 보호한다.
+     */
     private void ensureNoCurrentPresenceOrReturnReservation(Space space) {
         SpacePresenceSummary summary = spacePresenceQueryService.summarize(space.getId());
         if (summary.currentCount() > 0L) {
             throw new BusinessException(SpaceErrorCode.SPACE_HAS_CURRENT_PRESENCE);
         }
-        if (space.getSpaceType() == SpaceType.LAB
-                && summary.returnReservationCount() > 0L) {
+        if (summary.returnReservationCount() > 0L) {
             throw new BusinessException(SpaceErrorCode.SPACE_HAS_RETURN_RESERVATION);
         }
     }

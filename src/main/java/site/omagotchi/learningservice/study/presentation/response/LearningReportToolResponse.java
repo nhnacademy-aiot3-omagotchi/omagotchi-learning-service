@@ -6,14 +6,16 @@ public record LearningReportToolResponse(
         int periodDays,
         long previousTotalStudyMinutes,
         int previousStudyDayCount,
-        TopLearnerPatternToolResponse thisPeriod
+        TopLearnerPatternToolResponse thisPeriod,
+        StudyEnvironmentToolResponse environment
 ) {
     public static LearningReportToolResponse from(LearningReportResult result) {
         return new LearningReportToolResponse(
                 result.periodDays(),
                 result.previousTotalStudyMinutes(),
                 result.previousStudyDayCount(),
-                TopLearnerPatternToolResponse.from(result.thisPeriod())
+                TopLearnerPatternToolResponse.from(result.thisPeriod()),
+                StudyEnvironmentToolResponse.from(result.environment())
         );
     }
 }

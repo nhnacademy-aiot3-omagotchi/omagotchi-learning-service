@@ -40,6 +40,7 @@ class PresenceTransitionServiceTest {
     private static final Long LAB_A_ID = 10L;
     private static final Long LAB_B_ID = 20L;
     private static final Long MEETING_ID = 30L;
+    private static final Long STUDY_SPACE_ID = 40L;
     private static final Instant CHECKED_IN_AT = Instant.parse("2026-08-31T00:00:00Z");
 
     @Mock
@@ -180,6 +181,29 @@ class PresenceTransitionServiceTest {
     }
 
     @Test
+    @DisplayName("도서관 입장은 이전 재실 구간을 종료하고 STUDY 공간의 PRESENT를 시작한다")
+    void movesToStudySpaceWithAdjacentIntervals() {
+        Instant at = Instant.parse("2026-08-31T02:00:00Z");
+        PresenceInterval current = presence(
+                PresenceState.PRESENT,
+                LAB_A_ID,
+                "2026-08-31T01:00:00Z"
+        );
+        stubAttendance(attendance(false));
+        stubOpenIntervals(current);
+        ArgumentCaptor<PresenceInterval> captor = ArgumentCaptor.forClass(PresenceInterval.class);
+
+        service.moveStudySpace(ATTENDANCE_ID, MEMBERSHIP_ID, STUDY_SPACE_ID, at);
+
+        verify(presenceIntervalRepository, times(2)).save(captor.capture());
+        PresenceInterval next = captor.getAllValues().get(1);
+        assertThat(current.getEndedAt()).isEqualTo(at);
+        assertThat(next.getState()).isEqualTo(PresenceState.PRESENT);
+        assertThat(next.getSpaceId()).isEqualTo(STUDY_SPACE_ID);
+        assertThat(next.getStartedAt()).isEqualTo(at);
+    }
+
+    @Test
     @DisplayName("회의실에 체류 중이면 실습실 이동을 거절한다")
     void rejectsLabMoveWhileInMeeting() {
         PresenceInterval current = presence(
@@ -272,13 +296,13 @@ class PresenceTransitionServiceTest {
     }
 
     @Test
-    @DisplayName("회의 이탈은 맞닿은 가장 최근 비회의 공간으로 PRESENT를 재개한다")
+    @DisplayName("도서관에서 시작한 회의의 이탈은 직전 도서관으로 PRESENT를 재개한다")
     void leavesMeetingAndReturnsToPreviousSpace() {
         Instant meetingStartedAt = Instant.parse("2026-08-31T02:00:00Z");
         Instant leaveAt = Instant.parse("2026-08-31T03:00:00Z");
         PresenceInterval previous = presence(
-                PresenceState.STUDYING,
-                LAB_A_ID,
+                PresenceState.PRESENT,
+                STUDY_SPACE_ID,
                 "2026-08-31T01:00:00Z"
         );
         previous.end(meetingStartedAt);
@@ -304,7 +328,7 @@ class PresenceTransitionServiceTest {
         PresenceInterval returned = captor.getAllValues().get(1);
         assertThat(meeting.getEndedAt()).isEqualTo(leaveAt);
         assertThat(returned.getState()).isEqualTo(PresenceState.PRESENT);
-        assertThat(returned.getSpaceId()).isEqualTo(LAB_A_ID);
+        assertThat(returned.getSpaceId()).isEqualTo(STUDY_SPACE_ID);
         assertThat(returned.getStartedAt()).isEqualTo(leaveAt);
     }
 

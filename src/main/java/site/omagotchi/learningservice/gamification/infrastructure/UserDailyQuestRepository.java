@@ -16,8 +16,6 @@ import java.util.UUID;
  */
 public interface UserDailyQuestRepository extends JpaRepository<UserDailyQuest, Long> {
 
-    boolean existsByUserIdAndQuestDate(UUID userId, LocalDate questDate);
-
     List<UserDailyQuest> findByUserIdAndQuestDateOrderByIdAsc(UUID userId, LocalDate questDate);
 
     Optional<UserDailyQuest> findByUserIdAndQuestDateAndCode(UUID userId, LocalDate questDate, String code);

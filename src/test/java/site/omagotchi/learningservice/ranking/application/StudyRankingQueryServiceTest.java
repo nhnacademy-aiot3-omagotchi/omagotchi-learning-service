@@ -12,6 +12,7 @@ import site.omagotchi.learningservice.cohort.application.CohortMembershipQuerySe
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+import site.omagotchi.learningservice.gamification.application.GamificationProgressionService;
 import site.omagotchi.learningservice.gamification.application.result.RepresentativeCharacterResult;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.ranking.application.query.StudyRankingPeriodSelection;
@@ -68,6 +69,9 @@ class StudyRankingQueryServiceTest {
 
     @Mock
     private CharacterGrowthService characterGrowthService;
+
+    @Mock
+    private GamificationProgressionService gamificationProgressionService;
 
     @Mock
     private CurrentTeamMembershipQueryService currentTeamMembershipQueryService;

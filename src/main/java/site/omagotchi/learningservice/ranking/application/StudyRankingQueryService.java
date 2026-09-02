@@ -8,6 +8,7 @@ import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+import site.omagotchi.learningservice.gamification.application.GamificationProgressionService;
 import site.omagotchi.learningservice.gamification.application.result.RepresentativeCharacterResult;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
@@ -38,6 +39,7 @@ public class StudyRankingQueryService {
     private final CohortMembershipQueryService cohortMembershipQueryService;
     private final StudyRecordAggregationQueryService studyRecordAggregationQueryService;
     private final CharacterGrowthService characterGrowthService;
+    private final GamificationProgressionService gamificationProgressionService;
     private final CurrentTeamMembershipQueryService currentTeamMembershipQueryService;
     private final Clock clock;
 
@@ -343,22 +345,22 @@ public class StudyRankingQueryService {
                 ));
     }
 
-    // 계산된 순위 행에 표시명을 결합해 목록과 내 순위 결과를 함께 조립한다.
+    // 계산된 순위 행에 표시명과 캐릭터 외형을 결합해 목록과 내 순위 결과를 함께 조립한다.
     private MemberStudyRankingViewResult memberViewResult(StudyRankingRows rows) {
-        Map<UUID, String> displayNames = findDisplayNames(rows);
+        RankingProfiles profiles = findProfiles(rows);
         return new MemberStudyRankingViewResult(
-                boardResult(rows, displayNames),
-                mineResult(rows, displayNames)
+                boardResult(rows, profiles),
+                mineResult(rows, profiles)
         );
     }
 
     // 노출 대상으로 선택된 상위 순위 행을 개인 랭킹 목록 결과로 변환한다.
     private StudyRankingBoardResult boardResult(
             StudyRankingRows rows,
-            Map<UUID, String> displayNames
+            RankingProfiles profiles
     ) {
         List<StudyRankingEntryResult> entries = rows.leaders().stream()
-                .map(row -> entryResult(row, displayNames))
+                .map(row -> entryResult(row, profiles))
                 .toList();
         return new StudyRankingBoardResult(
                 rows.rankedMemberCount(),
@@ -369,31 +371,36 @@ public class StudyRankingQueryService {
     // 전체 순위 수와 요청자의 선택적 순위 행을 내 랭킹 결과로 변환한다.
     private MyStudyRankingResult mineResult(
             StudyRankingRows rows,
-            Map<UUID, String> displayNames
+            RankingProfiles profiles
     ) {
         Optional<StudyRankingEntryResult> ranking = rows.focusedMember()
-                .map(row -> entryResult(row, displayNames));
+                .map(row -> entryResult(row, profiles));
         return new MyStudyRankingResult(
                 rows.rankedMemberCount(),
                 ranking
         );
     }
 
-    // 내부 개인 순위 행에 대표 캐릭터 표시명을 붙여 Application 결과로 변환한다.
+    // 내부 개인 순위 행에 대표 캐릭터 표시명과 외형, 출석 스트릭을 붙여 Application 결과로 변환한다.
     private StudyRankingEntryResult entryResult(
             RankedStudyMember row,
-            Map<UUID, String> displayNames
+            RankingProfiles profiles
     ) {
+        // 대표 캐릭터가 없어도 순위에서 빼지 않는다. 이름과 외형만 비운 채로 내려보낸다.
+        RepresentativeCharacterResult character = profiles.charactersByUserId().get(row.userId());
         return new StudyRankingEntryResult(
                 row.rank(),
-                displayNames.get(row.userId()),
+                character == null ? null : character.displayName(),
                 row.studySeconds(),
-                row.timerRunning()
+                row.timerRunning(),
+                character == null ? null : character.characterType(),
+                character == null ? null : character.colorId(),
+                profiles.streakDaysByUserId().getOrDefault(row.userId(), 0)
         );
     }
 
-    // 상위권과 요청자에게 필요한 대표 캐릭터 표시명만 한 번에 조회한다.
-    private Map<UUID, String> findDisplayNames(StudyRankingRows rows) {
+    // 상위권과 요청자에게 필요한 대표 캐릭터와 출석 스트릭만 각각 한 번에 조회한다.
+    private RankingProfiles findProfiles(StudyRankingRows rows) {
         Collection<UUID> userIds = new LinkedHashSet<>();
         rows.leaders().stream()
                 .map(RankedStudyMember::userId)
@@ -402,15 +409,36 @@ public class StudyRankingQueryService {
                 .map(RankedStudyMember::userId)
                 .ifPresent(userIds::add);
         if (userIds.isEmpty()) {
-            return Map.of();
+            return RankingProfiles.empty();
         }
-        return characterGrowthService.findRepresentativeCharacters(userIds)
+        Map<UUID, RepresentativeCharacterResult> charactersByUserId = characterGrowthService
+                .findRepresentativeCharacters(userIds)
                 .stream()
                 .collect(Collectors.toMap(
                         RepresentativeCharacterResult::userId,
-                        RepresentativeCharacterResult::displayName,
+                        Function.identity(),
                         (first, ignored) -> first
                 ));
+        return new RankingProfiles(
+                charactersByUserId,
+                gamificationProgressionService.findWeekdayStreakDays(userIds)
+        );
+    }
+
+    // 순위 행에 붙일 사용자별 부가 정보를 한 묶음으로 옮긴다. 인자 목록이 길어지는 것을 막는다.
+    private record RankingProfiles(
+            Map<UUID, RepresentativeCharacterResult> charactersByUserId,
+            Map<UUID, Integer> streakDaysByUserId
+    ) {
+
+        private static RankingProfiles empty() {
+            return new RankingProfiles(Map.of(), Map.of());
+        }
+
+        private RankingProfiles {
+            charactersByUserId = Map.copyOf(charactersByUserId);
+            streakDaysByUserId = Map.copyOf(streakDaysByUserId);
+        }
     }
 
     // 기수 소속 뷰에서 공부시간 배치 조회에 사용할 membership 식별자만 추출한다.

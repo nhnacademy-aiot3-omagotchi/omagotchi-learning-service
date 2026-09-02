@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.attendance.application.port.AttendancePresenceQuery;
+import site.omagotchi.learningservice.attendance.application.result.CurrentPresenceResult;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.Instant;
@@ -25,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -72,6 +74,88 @@ class PresenceTransitionServiceIT {
                     assertThat(presence.state().name()).isEqualTo("PRESENT");
                     assertThat(presence.startedAt()).isEqualTo(STARTED_AT);
                 });
+    }
+
+    @Test
+    @DisplayName("현재 위치 조회는 더 최신 PRESENT보다 이전 집계일의 열린 MEETING을 앞에 둔다")
+    void ordersOpenMeetingBeforeNewerPresence() {
+        Scenario scenario = saveScenario(false);
+        LocalDate nextDate = ATTENDANCE_DATE.plusDays(1);
+        Instant enteredMeetingAt = Instant.parse("2026-08-31T02:00:00Z");
+        Instant nextDaySelectedAt = Instant.parse("2026-09-01T00:00:00Z");
+
+        service.moveLab(
+                scenario.attendanceId(),
+                scenario.membershipId(),
+                scenario.firstLabId(),
+                STARTED_AT
+        );
+        service.enterMeeting(
+                scenario.attendanceId(),
+                scenario.membershipId(),
+                scenario.meetingId(),
+                enteredMeetingAt
+        );
+        Long nextAttendanceId = saveAttendance(
+                scenario.membershipId(),
+                nextDate,
+                nextDaySelectedAt
+        );
+        service.moveLab(
+                nextAttendanceId,
+                scenario.membershipId(),
+                scenario.secondLabId(),
+                nextDaySelectedAt
+        );
+
+        List<CurrentPresenceResult> presences = attendancePresenceQuery.findCurrentPresences(
+                scenario.membershipId(),
+                nextDate
+        );
+
+        // startedAt 만 보면 오늘 PRESENT(09-01)가 앞서지만, 회의 우선 정렬이 이를 뒤집는다.
+        assertThat(presences)
+                .extracting(presence -> presence.state().name(), CurrentPresenceResult::spaceId)
+                .containsExactly(
+                        tuple("MEETING", scenario.meetingId()),
+                        tuple("PRESENT", scenario.secondLabId())
+                );
+        // CurrentPresenceQueryService 가 findFirst() 로 고르는 값이 회의여야 한다.
+        assertThat(presences.getFirst().startedAt()).isEqualTo(enteredMeetingAt);
+    }
+
+    @Test
+    @DisplayName("현재 위치 조회는 열린 회의가 여럿이면 가장 늦게 시작한 회의를 앞에 둔다")
+    void ordersMultipleOpenMeetingsByStartedAtDesc() {
+        Scenario scenario = saveScenario(false);
+        LocalDate nextDate = ATTENDANCE_DATE.plusDays(1);
+        Instant olderMeetingAt = Instant.parse("2026-08-31T02:00:00Z");
+        Instant newerMeetingAt = Instant.parse("2026-09-01T02:00:00Z");
+
+        savePresence(
+                scenario.attendanceId(),
+                "MEETING",
+                scenario.meetingId(),
+                olderMeetingAt,
+                null
+        );
+        Long nextAttendanceId = saveAttendance(
+                scenario.membershipId(),
+                nextDate,
+                Instant.parse("2026-09-01T00:00:00Z")
+        );
+        Long otherMeetingId = saveSpace(saveCohort(), "MEETING");
+        savePresence(nextAttendanceId, "MEETING", otherMeetingId, newerMeetingAt, null);
+
+        List<CurrentPresenceResult> presences = attendancePresenceQuery.findCurrentPresences(
+                scenario.membershipId(),
+                nextDate
+        );
+
+        // 같은 상태끼리는 startedAt DESC 가 순서를 정한다.
+        assertThat(presences)
+                .extracting(CurrentPresenceResult::spaceId)
+                .containsExactly(otherMeetingId, scenario.meetingId());
     }
 
     @Test

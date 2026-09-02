@@ -170,6 +170,61 @@ class IdentityRestAccountClientTest {
     }
 
     @Test
+    @DisplayName("검색 후보가 100명을 넘으면 Identity 제한에 맞춰 나누고 결과를 합친다")
+    void splitsSearchCandidatesIntoBatchesOfAtMostOneHundred() {
+        List<UUID> candidateIds = IntStream.range(0, 101)
+                .mapToObj(ignored -> UUID.randomUUID())
+                .toList();
+        willAnswer(invocation -> {
+            IdentityAccountSearchRequest request = invocation.getArgument(0);
+            UUID accountId = request.candidateIds().getFirst();
+            String displayName = request.candidateIds().size() == 1 ? "가 사용자" : "나 사용자";
+            return ResponseEntity.ok(List.of(new IdentityAccountSearchResponse(
+                    accountId,
+                    displayName,
+                    displayName + "@example.com",
+                    IdentityAccountState.ACTIVE
+            )));
+        }).given(httpService).searchAccounts(any());
+
+        assertThat(accountClient.search("사용자", candidateIds))
+                .extracting(account -> account.displayName())
+                .containsExactly("가 사용자", "나 사용자");
+        verify(httpService).searchAccounts(argThat(request -> request.candidateIds().size() == 100));
+        verify(httpService).searchAccounts(argThat(request -> request.candidateIds().size() == 1));
+    }
+
+    @Test
+    @DisplayName("분할 검색 결과를 이름 이메일 ID 순으로 정렬하고 최대 20명만 반환한다")
+    void sortsMergedSearchResultsAndLimitsThemToTwenty() {
+        List<UUID> candidateIds = IntStream.range(0, 201)
+                .mapToObj(ignored -> UUID.randomUUID())
+                .toList();
+        willAnswer(invocation -> {
+            IdentityAccountSearchRequest request = invocation.getArgument(0);
+            return ResponseEntity.ok(request.candidateIds().stream()
+                    .limit(20)
+                    .map(accountId -> {
+                        int index = candidateIds.indexOf(accountId);
+                        String displayName = "사용자-" + String.format("%03d", 999 - index);
+                        return new IdentityAccountSearchResponse(
+                                accountId,
+                                displayName,
+                                displayName + "@example.com",
+                                IdentityAccountState.ACTIVE
+                        );
+                    })
+                    .toList());
+        }).given(httpService).searchAccounts(any());
+
+        assertThat(accountClient.search("사용자", candidateIds))
+                .hasSize(20)
+                .extracting(account -> account.displayName())
+                .isSorted();
+        verify(httpService, times(3)).searchAccounts(any());
+    }
+
+    @Test
     @DisplayName("Identity 성공 응답의 요청 계정 불일치 거절")
     void rejectsMismatchedAccountResponse() {
         // Given: 요청과 다른 계정 ID를 포함한 성공 응답

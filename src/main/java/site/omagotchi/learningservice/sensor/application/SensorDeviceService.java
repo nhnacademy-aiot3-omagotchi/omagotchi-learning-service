@@ -27,6 +27,7 @@ import java.util.UUID;
 public class SensorDeviceService {
 
     private final SensorDeviceRepository sensorDeviceRepository;
+    private final ThresholdRuleService thresholdRuleService;
     private final CohortAccessService cohortAccessService;
     private final SpaceCohortQueryService spaceCohortQueryService;
     private final SpaceCohortWriteGuard spaceCohortWriteGuard;
@@ -56,8 +57,10 @@ public class SensorDeviceService {
             throw new BusinessException(SensorErrorCode.DEVICE_ALREADY_EXISTS);
         }
 
-        save(device);
-        return device.getDeviceEui();
+        SensorDevice saved = save(device);
+        thresholdRuleService.synchronizeRequiredRulesForDevice(
+                saved, requesterId, "sensor-create:" + saved.getDeviceEui());
+        return saved.getDeviceEui();
     }
 
     @Transactional
@@ -83,7 +86,10 @@ public class SensorDeviceService {
             throw new BusinessException(SensorErrorCode.DEVICE_INVALID_ATTRIBUTE, e.getMessage(), e);
         }
 
-        return SensorDeviceResult.from(save(device));
+        SensorDevice saved = save(device);
+        thresholdRuleService.synchronizeRequiredRulesForDevice(
+                saved, requesterId, "sensor-update:" + saved.getDeviceEui());
+        return SensorDeviceResult.from(saved);
     }
 
     @Transactional
@@ -97,7 +103,12 @@ public class SensorDeviceService {
         SensorDevice device = requireDeviceInCohort(deviceEui, cohortId);
 
         device.changeActive(active);
-        return SensorDeviceResult.from(save(device));
+        SensorDevice saved = save(device);
+        if (active) {
+            thresholdRuleService.synchronizeRequiredRulesForDevice(
+                    saved, requesterId, "sensor-activate:" + saved.getDeviceEui());
+        }
+        return SensorDeviceResult.from(saved);
     }
 
     /**
@@ -152,7 +163,10 @@ public class SensorDeviceService {
         log.info("주인 없는 센서를 인계했습니다. cohortId={}, deviceEui={}, spaceId={}",
                 cohortId, deviceEui, spaceId);
 
-        return SensorDeviceResult.from(save(device));
+        SensorDevice saved = save(device);
+        thresholdRuleService.synchronizeRequiredRulesForDevice(
+                saved, requesterId, "sensor-claim:" + saved.getDeviceEui());
+        return SensorDeviceResult.from(saved);
     }
 
     /**

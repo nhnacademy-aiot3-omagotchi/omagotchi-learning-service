@@ -4,7 +4,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import site.omagotchi.learningservice.sensor.application.command.ApplySpaceThresholdCommand;
@@ -24,7 +23,8 @@ import java.util.List;
 public record ApplySpaceThresholdRequest(
 
         @Valid
-        @NotEmpty(message = "적용할 항목은 최소 하나여야 합니다.")
+        @NotNull
+        @Size(min = 3, max = 3, message = "CO2, 온도, 습도 임계값을 모두 입력해야 합니다.")
         List<MetricConditionRequest> rules
 ) {
 

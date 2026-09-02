@@ -2,9 +2,11 @@ package site.omagotchi.learningservice.sensor.application;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
@@ -24,6 +26,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
@@ -236,6 +239,114 @@ class ThresholdRuleServiceTest {
                 .isEqualTo(SensorErrorCode.DEVICE_SPACE_NOT_FOUND);
         verify(sensorDeviceRepository, never()).findBySpaceIds(any());
         verifyNoInteractions(thresholdRuleRepository, thresholdRuleHistoryRepository, eventPublisher);
+    }
+
+    @Test
+    void createsMissingRulesWhenApplyingThresholdsToSpace() {
+        SensorDevice first = device(DEVICE_EUI, SPACE_ID);
+        SensorDevice second = device(OTHER_DEVICE_EUI, SPACE_ID);
+        when(spaceCohortQueryService.findCohortId(SPACE_ID)).thenReturn(Optional.of(COHORT_ID));
+        when(sensorDeviceRepository.findBySpaceIds(List.of(SPACE_ID))).thenReturn(List.of(first, second));
+        when(thresholdRuleRepository.findByDeviceEuiIn(List.of(DEVICE_EUI, OTHER_DEVICE_EUI)))
+                .thenReturn(List.of());
+        saveNewRulesWithIdentity();
+
+        var result = thresholdRuleService.applyToSpace(
+                COHORT_ID,
+                REQUESTER_ID,
+                "request-1",
+                SPACE_ID,
+                new ApplySpaceThresholdCommand(List.of(
+                        new ApplySpaceThresholdCommand.MetricCondition("co2", Operator.GTE, 1000.0),
+                        new ApplySpaceThresholdCommand.MetricCondition("temperature", Operator.GTE, 28.0),
+                        new ApplySpaceThresholdCommand.MetricCondition("humidity", Operator.GTE, 70.0)
+                ))
+        );
+
+        assertThat(result.deviceCount()).isEqualTo(2);
+        assertThat(result.created()).isEqualTo(6);
+        assertThat(result.applied()).isZero();
+        assertThat(result.unchanged()).isZero();
+        assertThat(result.missing()).isZero();
+        verify(thresholdRuleHistoryRepository, org.mockito.Mockito.times(6)).save(any());
+        verify(eventPublisher, org.mockito.Mockito.times(6)).publishThresholdRuleChanged(any());
+    }
+
+    @Test
+    void synchronizesExistingSpaceRuleAndDefaultsWhenRegisteringSensor() {
+        SensorDevice existing = device(DEVICE_EUI, SPACE_ID);
+        SensorDevice newcomer = device(OTHER_DEVICE_EUI, SPACE_ID);
+        ThresholdRule existingRule = rule(DEVICE_EUI, "co2", 950.0);
+        when(sensorDeviceRepository.findBySpaceIds(List.of(SPACE_ID)))
+                .thenReturn(List.of(existing, newcomer));
+        when(thresholdRuleRepository.findByDeviceEuiIn(List.of(DEVICE_EUI, OTHER_DEVICE_EUI)))
+                .thenReturn(List.of(existingRule));
+        saveNewRulesWithIdentity();
+
+        int synchronizedCount = thresholdRuleService.synchronizeRequiredRulesForDevice(
+                newcomer, REQUESTER_ID, "sensor-create:" + OTHER_DEVICE_EUI);
+
+        assertThat(synchronizedCount).isEqualTo(3);
+        ArgumentCaptor<ThresholdRule> saved = ArgumentCaptor.forClass(ThresholdRule.class);
+        verify(thresholdRuleRepository, org.mockito.Mockito.times(3)).save(saved.capture());
+        assertThat(saved.getAllValues())
+                .extracting(ThresholdRule::getMetric, ThresholdRule::getThreshold)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("co2", 950.0),
+                        org.assertj.core.groups.Tuple.tuple("temperature", 28.0),
+                        org.assertj.core.groups.Tuple.tuple("humidity", 70.0)
+                );
+    }
+
+    @Test
+    void keepsExistingRuleWhenNoPeerDefinesTheMetric() {
+        SensorDevice onlyDevice = device(DEVICE_EUI, SPACE_ID);
+        ThresholdRule co2 = rule(DEVICE_EUI, "co2", 820.0);
+        ThresholdRule temperature = rule(DEVICE_EUI, "temperature", 25.0);
+        ThresholdRule humidity = rule(DEVICE_EUI, "humidity", 55.0);
+        when(sensorDeviceRepository.findBySpaceIds(List.of(SPACE_ID)))
+                .thenReturn(List.of(onlyDevice));
+        when(thresholdRuleRepository.findByDeviceEuiIn(List.of(DEVICE_EUI)))
+                .thenReturn(List.of(co2, temperature, humidity));
+
+        int synchronizedCount = thresholdRuleService.synchronizeRequiredRulesForDevice(
+                onlyDevice, REQUESTER_ID, "sensor-update:" + DEVICE_EUI);
+
+        assertThat(synchronizedCount).isZero();
+        verify(thresholdRuleRepository, never()).save(any());
+        verify(thresholdRuleRepository, never()).update(any());
+        verifyNoInteractions(thresholdRuleHistoryRepository, eventPublisher);
+    }
+
+    @Test
+    void rejectsSpaceSaveWhenAnyRequiredMetricIsMissing() {
+        when(spaceCohortQueryService.findCohortId(SPACE_ID)).thenReturn(Optional.of(COHORT_ID));
+
+        BusinessException thrown = catchThrowableOfType(BusinessException.class, () ->
+                thresholdRuleService.applyToSpace(
+                        COHORT_ID,
+                        REQUESTER_ID,
+                        "request-1",
+                        SPACE_ID,
+                        new ApplySpaceThresholdCommand(List.of(
+                                new ApplySpaceThresholdCommand.MetricCondition(
+                                        "co2", Operator.GTE, 1000.0)
+                        ))
+                )
+        );
+
+        assertThat(thrown.getErrorCode()).isEqualTo(SensorErrorCode.RULE_INVALID_CONDITION);
+        verify(sensorDeviceRepository, never()).findBySpaceIds(any());
+    }
+
+    private void saveNewRulesWithIdentity() {
+        AtomicLong nextId = new AtomicLong(1);
+        when(thresholdRuleRepository.save(any(ThresholdRule.class))).thenAnswer(invocation -> {
+            ThresholdRule rule = invocation.getArgument(0);
+            ReflectionTestUtils.setField(rule, "id", nextId.getAndIncrement());
+            ReflectionTestUtils.setField(rule, "version", 0L);
+            return rule;
+        });
     }
 
     private SensorDevice device(String deviceEui, Long spaceId) {

@@ -13,7 +13,6 @@ import site.omagotchi.learningservice.study.application.result.SpaceEnvironmentS
 
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -40,18 +39,23 @@ public class SpaceEnvironmentQueryService {
     private final SpaceQueryService spaceQueryService;
 
     /**
-     * 공간의 시간대별 평균값과 기준치를 조회한다.
+     * 공간의 시간대별 평균값을 조회한다.
      *
-     * @param window 조회 창. "day"는 최근 1일, "week"는 최근 7일을 시간 단위로 돌려준다
+     * <p>공간 이름을 인자로 받는 이유는 호출 비용 때문이다. 센서 시계열은 이름(location)으로
+     * 조회하는데, 한 공간에 대해 측정항목 수만큼 이 메서드가 불린다. 이름을 여기서 찾으면
+     * 같은 공간 목록 조회가 항목마다 반복된다 — 호출부가 한 번 찾아 넘기게 한다.</p>
+     *
+     * @param spaceName 공간 이름. null이면 조회하지 않고 빈 시계열을 돌려준다
+     * @param window    조회 창. "day"는 최근 1일, "week"는 최근 7일을 시간 단위로 돌려준다
      */
     public SpaceEnvironmentSeries getHourlySeries(
             Long cohortId,
             UUID requesterUserId,
             Long spaceId,
+            String spaceName,
             String measurement,
             String window
     ) {
-        String spaceName = findSpaceName(spaceId);
         Map<Instant, Double> hourlyAverages = new HashMap<>();
 
         if (spaceName != null) {
@@ -73,14 +77,14 @@ public class SpaceEnvironmentQueryService {
         return new SpaceEnvironmentSeries(spaceId, spaceName, measurement, hourlyAverages);
     }
 
-    private String findSpaceName(Long spaceId) {
-        List<SpaceNameResult> names = spaceQueryService.findAllSpaceNames();
-        for (SpaceNameResult name : names) {
-            if (name.spaceId().equals(spaceId)) {
-                return name.name();
-            }
+    /**
+     * 공간 ID → 이름 사전. 여러 공간·여러 항목을 조회하기 전에 한 번만 부르면 된다.
+     */
+    public Map<Long, String> findSpaceNames() {
+        Map<Long, String> names = new HashMap<>();
+        for (SpaceNameResult name : spaceQueryService.findAllSpaceNames()) {
+            names.put(name.spaceId(), name.name());
         }
-        log.debug("공간 이름을 찾지 못했습니다. spaceId={}", spaceId);
-        return null;
+        return names;
     }
 }

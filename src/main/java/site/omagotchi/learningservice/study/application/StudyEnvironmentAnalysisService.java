@@ -10,6 +10,10 @@ import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.time.AggregationDateTime;
+import site.omagotchi.learningservice.space.application.SpaceQueryService;
+import site.omagotchi.learningservice.space.application.result.SpaceListResult;
+import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
+import site.omagotchi.learningservice.space.domain.SpaceType;
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.result.SpaceEnvironmentSeries;
 import site.omagotchi.learningservice.study.application.result.StudyEnvironmentResult;
@@ -20,24 +24,24 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * 학습 세션 · 체류 공간 · 센서 환경을 하나로 묶어 "어디서 할 때 잘 됐는가"를 낸다.
+ * 학습 세션을 시간대·공간 블록으로 쪼개, 블록마다 밀도와 환경값을 붙인다.
  *
- * <p>세 재료의 출처가 모두 다르다. 세션은 study, 공간은 attendance의 체류 구간, 환경값은
- * sensor다. 이 서비스는 각 파트의 공개 계약만 부르고, 겹침 판정과 집계만 직접 한다.</p>
+ * <p>세 재료의 출처가 다르다. 세션은 study, 공간은 attendance의 체류 구간, 환경값은 sensor다.
+ * 이 서비스는 각 파트의 공개 계약만 부르고 겹침 판정과 집계만 직접 한다.</p>
  *
- * <p>이산화탄소·온도·습도를 함께 본다. 어느 하나가 아니라 셋의 조합이 집중과 졸음을
- * 좌우하기 때문이다 — 예컨대 같은 온도라도 습도가 높으면 졸음 호소가 늘어난다. 다만
- * "몇 이상이면 나쁘다"는 판정은 여기서 하지 않고, 해석하는 쪽(도구 설명)이 갖는다.</p>
+ * <p><b>시간대는 집계일 원점(KST 04:00)에 맞춰 자른다.</b> 자정 기준으로 자르면 집계일 하나가
+ * 04시 조각과 다음날 새벽 조각으로 찢어져 같은 블록이 두 덩어리가 된다.</p>
  *
- * <p>기간이 최대 7일인 것은 센서 조회의 해상도 때문이다. 7일까지는 시간 단위 평균이지만
- * 그보다 길면 일 단위 평균이라 세션(보통 1~2시간)과 맞물리지 않는다.</p>
+ * <p><b>공간은 두 단계로 정한다.</b> 체류 기록에 공간이 있으면 그것을 쓰고, 없으면 기수에
+ * 배정된 실습실에 있었다고 본다(회의실을 안 썼으면 실습실이라는 규칙). 후자는 추정이므로
+ * {@code spaceSource}에 표시해 받는 쪽이 단정하지 않게 한다.</p>
  */
 @Slf4j
 @Service
@@ -51,11 +55,21 @@ public class StudyEnvironmentAnalysisService {
     private static final List<String> MEASUREMENTS = List.of("co2", "temperature", "humidity");
     private static final String SERIES_WINDOW = "week";
     private static final long SLOT_SECONDS = 3600L;
+    // 체크아웃을 안 한 구간을 언제까지 인정할지. 타이머 한 세션 상한(12시간)보다 조금 길게 잡는다
+    private static final Duration MAX_OPEN_STAY = Duration.ofHours(14);
+
+    // 집계일 원점(04:00)에서 몇 시간째인지로 시간대를 나눈다. 마지막 밴드가 다음날 04시까지다
+    private static final int[] BAND_START_HOURS = {0, 5, 9, 14};
+    private static final int[] BAND_END_HOURS = {5, 9, 14, 24};
+    private static final String[] BAND_LABELS = {
+            "새벽·아침(04-09시)", "오전(09-13시)", "오후(13-18시)", "저녁·밤(18-04시)"
+    };
 
     private final CohortAccessService cohortAccessService;
     private final StudyRecordQueryRepository studyRecordQueryRepository;
     private final AttendancePresenceQueryService attendancePresenceQueryService;
     private final SpaceEnvironmentQueryService spaceEnvironmentQueryService;
+    private final SpaceQueryService spaceQueryService;
     private final Clock clock;
 
     public StudyEnvironmentResult analyze(UUID userId, Integer periodDaysOrNull) {
@@ -68,120 +82,103 @@ public class StudyEnvironmentAnalysisService {
         LocalDate today = AggregationDateTime.aggregationDate(clock.instant());
         LocalDate startDate = today.minusDays(periodDays - 1L);
 
-        // 1. 기간 내 내 학습 세션
+        // 1. 기간 내 학습 세션
         List<StudyRecord> records = studyRecordQueryRepository
                 .findActiveRecordsBetween(membershipId, startDate, today);
         if (records.isEmpty()) {
             return StudyEnvironmentResult.noData(periodDays);
         }
 
-        // 2. 같은 기간의 체류 구간 (어느 공간에 있었는지)
+        // 2. 같은 기간의 체류 구간
         Instant from = AggregationDateTime.startOfAggregationDate(startDate);
         Instant toExclusive = clock.instant();
         List<PresenceIntervalView> intervals = attendancePresenceQueryService
                 .findPresenceIntervals(membershipId, from, toExclusive);
 
-        // 3. 세션마다 공간을 붙인다. 겹친 시간이 가장 긴 구간의 공간을 그 세션의 공간으로 본다
-        Map<Long, List<StudyRecord>> recordsBySpace = new HashMap<>();
+        // 3. 공간을 못 찾을 때 쓸 기수 실습실
+        SpaceListResult fallbackLab = findCohortLab(userId, cohortId);
+
+        // 4. 세션을 (집계일 × 시간대 × 공간) 블록으로 쪼개 담는다
+        Map<String, Block> blocks = new LinkedHashMap<>();
         int unknownSpaceSessionCount = 0;
+        boolean usedPresence = false;
+        boolean usedFallback = false;
+
         for (StudyRecord record : records) {
-            Long spaceId = findSpaceId(record, intervals);
-            if (spaceId == null) {
+            Long spaceId = findSpaceId(record, intervals, toExclusive);
+            String spaceName = null;
+            if (spaceId != null) {
+                usedPresence = true;
+            } else if (fallbackLab != null) {
+                spaceId = fallbackLab.spaceId();
+                spaceName = fallbackLab.name();
+                usedFallback = true;
+            } else {
                 unknownSpaceSessionCount = unknownSpaceSessionCount + 1;
                 continue;
             }
-            List<StudyRecord> spaceRecords = recordsBySpace.get(spaceId);
-            if (spaceRecords == null) {
-                spaceRecords = new ArrayList<>();
-                recordsBySpace.put(spaceId, spaceRecords);
-            }
-            spaceRecords.add(record);
+            addToBlocks(blocks, record, spaceId, spaceName);
         }
-        if (recordsBySpace.isEmpty()) {
+        if (blocks.isEmpty()) {
             return StudyEnvironmentResult.noSpaceData(periodDays, unknownSpaceSessionCount);
         }
 
-        // 4. 공간마다 측정항목별 시간대 환경값을 가져온다
+        // 5. 블록에 등장한 공간마다 항목별 시계열을 한 번씩 가져온다.
+        //    공간 이름 사전은 여기서 한 번만 읽는다 — 항목마다 다시 읽으면 같은 조회가 반복된다
+        Map<Long, String> spaceNames = spaceEnvironmentQueryService.findSpaceNames();
         Map<Long, Map<String, SpaceEnvironmentSeries>> seriesBySpace = new HashMap<>();
-        for (Long spaceId : recordsBySpace.keySet()) {
+        for (Block block : blocks.values()) {
+            if (seriesBySpace.containsKey(block.spaceId)) {
+                continue;
+            }
+            String spaceName = spaceNames.get(block.spaceId);
             Map<String, SpaceEnvironmentSeries> byMeasurement = new HashMap<>();
             for (String measurement : MEASUREMENTS) {
                 byMeasurement.put(measurement, spaceEnvironmentQueryService.getHourlySeries(
-                        cohortId, userId, spaceId, measurement, SERIES_WINDOW));
+                        cohortId, userId, block.spaceId, spaceName, measurement, SERIES_WINDOW));
             }
-            seriesBySpace.put(spaceId, byMeasurement);
+            seriesBySpace.put(block.spaceId, byMeasurement);
         }
 
-        // 5. 공간별 성과와, 측정항목별 세션 목록을 함께 모은다
-        List<StudyEnvironmentResult.SpacePerformance> spaces = new ArrayList<>();
-        Map<String, List<SessionValue>> sessionsByMeasurement = new HashMap<>();
-        for (String measurement : MEASUREMENTS) {
-            sessionsByMeasurement.put(measurement, new ArrayList<>());
-        }
-        int analyzedSessionCount = 0;
-
-        for (Map.Entry<Long, List<StudyRecord>> entry : recordsBySpace.entrySet()) {
-            Long spaceId = entry.getKey();
-            List<StudyRecord> spaceRecords = entry.getValue();
-            Map<String, SpaceEnvironmentSeries> seriesByMeasurement = seriesBySpace.get(spaceId);
-
-            long studySeconds = 0;
-            long occupiedSeconds = 0;
-            Map<String, Double> valueSums = new HashMap<>();
-            Map<String, Integer> valueCounts = new HashMap<>();
-
-            for (StudyRecord record : spaceRecords) {
-                studySeconds = studySeconds + record.getStudySeconds();
-                occupiedSeconds = occupiedSeconds + occupiedSecondsOf(record);
-
-                boolean measured = false;
-                for (String measurement : MEASUREMENTS) {
-                    Double value = averageValueOf(record, seriesByMeasurement.get(measurement));
-                    if (value == null) {
-                        continue;
-                    }
-                    measured = true;
-                    sessionsByMeasurement.get(measurement).add(new SessionValue(record, value));
-                    valueSums.merge(measurement, value, Double::sum);
-                    valueCounts.merge(measurement, 1, Integer::sum);
-                }
-                if (measured) {
-                    analyzedSessionCount = analyzedSessionCount + 1;
-                }
+        // 6. 블록마다 그 시간대의 환경 평균을 붙인다
+        boolean anyMeasured = false;
+        for (Block block : blocks.values()) {
+            Map<String, SpaceEnvironmentSeries> byMeasurement = seriesBySpace.get(block.spaceId);
+            block.co2 = blockAverage(block, byMeasurement.get("co2"));
+            block.temperature = blockAverage(block, byMeasurement.get("temperature"));
+            block.humidity = blockAverage(block, byMeasurement.get("humidity"));
+            if (block.co2 != null || block.temperature != null || block.humidity != null) {
+                anyMeasured = true;
             }
-
-            spaces.add(new StudyEnvironmentResult.SpacePerformance(
-                    spaceId,
-                    seriesByMeasurement.get(MEASUREMENTS.get(0)).spaceName(),
-                    spaceRecords.size(),
-                    studySeconds / 60,
-                    StudyPatternMath.focusDensityPercent(studySeconds, occupiedSeconds),
-                    averageOf(valueSums, valueCounts, "co2"),
-                    averageOf(valueSums, valueCounts, "temperature"),
-                    averageOf(valueSums, valueCounts, "humidity")
-            ));
-        }
-
-        if (analyzedSessionCount == 0) {
-            return StudyEnvironmentResult.noSensorData(periodDays, unknownSpaceSessionCount, spaces);
-        }
-
-        // 6. 측정항목마다 중앙값으로 갈라 밀도를 비교한다
-        List<StudyEnvironmentResult.MeasurementContrast> contrasts = new ArrayList<>();
-        for (String measurement : MEASUREMENTS) {
-            List<SessionValue> sessions = sessionsByMeasurement.get(measurement);
-            if (sessions.size() >= 2) {
-                contrasts.add(contrastOf(measurement, sessions));
+            if (block.spaceName == null) {
+                block.spaceName = byMeasurement.get("co2").spaceName();
             }
         }
 
+        // 7. 시간대별·공간별로 합산한다
+        List<StudyEnvironmentResult.BlockSummary> timeBands = summarize(blocks.values(), true);
+        List<StudyEnvironmentResult.BlockSummary> spaces = summarize(blocks.values(), false);
+
+        int analyzedSessionCount = records.size() - unknownSpaceSessionCount;
+        String spaceSource = "NONE";
+        if (usedPresence) {
+            spaceSource = "PRESENCE";
+        } else if (usedFallback) {
+            spaceSource = "COHORT_LAB";
+        }
+
+        if (!anyMeasured) {
+            return StudyEnvironmentResult.noSensorData(periodDays, spaceSource,
+                    analyzedSessionCount, unknownSpaceSessionCount, timeBands, spaces);
+        }
         return new StudyEnvironmentResult(
                 StudyEnvironmentResult.Status.OK,
                 periodDays,
+                spaceSource,
                 analyzedSessionCount,
                 unknownSpaceSessionCount,
-                spaces,
-                contrasts
+                timeBands,
+                spaces
         );
     }
 
@@ -196,20 +193,74 @@ public class StudyEnvironmentAnalysisService {
         return periodDaysOrNull;
     }
 
-    private Double averageOf(
-            Map<String, Double> valueSums,
-            Map<String, Integer> valueCounts,
-            String measurement
-    ) {
-        Integer count = valueCounts.get(measurement);
-        if (count == null || count == 0) {
-            return null;
+    /** 기수에 배정된 운영 중인 실습실. 없으면 null. */
+    private SpaceListResult findCohortLab(UUID userId, Long cohortId) {
+        for (SpaceListResult space : spaceQueryService.getSpaceList(userId)) {
+            if (!cohortId.equals(space.cohortId())) {
+                continue;
+            }
+            if (space.spaceType() != SpaceType.LAB) {
+                continue;
+            }
+            if (space.operationalStatus() != SpaceOperationalStatus.ACTIVE) {
+                continue;
+            }
+            return space;
         }
-        return valueSums.get(measurement) / count;
+        return null;
+    }
+
+    /** 세션을 시간대 경계로 쪼개 블록에 더한다. 공부 시간은 겹친 시간 비율로 나눈다. */
+    private void addToBlocks(
+            Map<String, Block> blocks,
+            StudyRecord record,
+            Long spaceId,
+            String spaceName
+    ) {
+        LocalDate date = record.getAggregationDate();
+        Instant origin = AggregationDateTime.startOfAggregationDate(date);
+        long sessionSeconds = Duration.between(record.getStartTime(), record.getEndTime()).getSeconds();
+        if (sessionSeconds <= 0) {
+            return;
+        }
+
+        for (int band = 0; band < BAND_LABELS.length; band++) {
+            Instant bandStart = origin.plusSeconds(BAND_START_HOURS[band] * 3600L);
+            Instant bandEnd = origin.plusSeconds(BAND_END_HOURS[band] * 3600L);
+
+            long overlap = overlapSeconds(
+                    record.getStartTime(), record.getEndTime(), bandStart, bandEnd);
+            if (overlap <= 0) {
+                continue;
+            }
+
+            String key = date + "|" + band + "|" + spaceId;
+            Block block = blocks.get(key);
+            if (block == null) {
+                block = new Block(band, spaceId, spaceName, bandStart, bandEnd);
+                blocks.put(key, block);
+            }
+
+            // 세션이 밴드를 걸치면 공부 시간도 겹친 비율만큼만 이 블록의 몫이다
+            block.studySeconds = block.studySeconds
+                    + record.getStudySeconds() * overlap / sessionSeconds;
+            block.sessionCount = block.sessionCount + 1;
+
+            Instant clippedStart = record.getStartTime().isAfter(bandStart)
+                    ? record.getStartTime() : bandStart;
+            Instant clippedEnd = record.getEndTime().isBefore(bandEnd)
+                    ? record.getEndTime() : bandEnd;
+            if (block.first == null || clippedStart.isBefore(block.first)) {
+                block.first = clippedStart;
+            }
+            if (block.last == null || clippedEnd.isAfter(block.last)) {
+                block.last = clippedEnd;
+            }
+        }
     }
 
     /** 세션과 가장 오래 겹친 체류 구간의 공간. 겹치는 구간이 없으면 null이다. */
-    private Long findSpaceId(StudyRecord record, List<PresenceIntervalView> intervals) {
+    private Long findSpaceId(StudyRecord record, List<PresenceIntervalView> intervals, Instant now) {
         Long bestSpaceId = null;
         long bestOverlap = 0;
 
@@ -217,13 +268,9 @@ public class StudyEnvironmentAnalysisService {
             if (interval.spaceId() == null) {
                 continue;
             }
-            Instant intervalEnd = interval.endedAt();
-            if (intervalEnd == null) {
-                intervalEnd = clock.instant();
-            }
             long overlap = overlapSeconds(
                     record.getStartTime(), record.getEndTime(),
-                    interval.startedAt(), intervalEnd);
+                    interval.startedAt(), intervalEndOf(interval, now));
             if (overlap > bestOverlap) {
                 bestOverlap = overlap;
                 bestSpaceId = interval.spaceId();
@@ -232,8 +279,29 @@ public class StudyEnvironmentAnalysisService {
         return bestSpaceId;
     }
 
-    /** 세션이 걸친 시간대들의 환경값 평균. 값이 하나도 없으면 null이다. */
-    private Double averageValueOf(StudyRecord record, SpaceEnvironmentSeries series) {
+    /**
+     * 체류 구간의 끝. 체크아웃을 안 한 구간은 시작 후 {@link #MAX_OPEN_STAY}까지만 인정한다.
+     *
+     * <p>출결에는 열린 구간을 자동으로 닫는 배치가 없어, 퇴근 처리를 잊은 날의 구간은
+     * {@code endedAt}이 영원히 비어 있다. 그것을 "지금까지"로 보면 며칠 전 구간이 오늘까지
+     * 이어진 것으로 계산돼, 이후 모든 세션이 그 공간에 붙는다.</p>
+     *
+     * <p>집계일 경계(KST 04:00)로 자르지 않는 이유가 있다. 학습 기록은 집계일을 넘지 못하므로,
+     * 새벽 1시에 체크인한 구간을 04:00에서 자르면 그날 아침 세션과 겹침이 <b>정확히 0</b>이 되어
+     * 지금 실제로 자리에 있는 사람의 공간까지 못 찾는다. 체크인이 03:59냐 04:01이냐로 인정 폭이
+     * 1분과 24시간을 오가는 문제도 생긴다. 그래서 시작 시각 기준 경과 시간으로 자른다.</p>
+     */
+    private Instant intervalEndOf(PresenceIntervalView interval, Instant now) {
+        if (interval.endedAt() != null) {
+            return interval.endedAt();
+        }
+
+        Instant limit = interval.startedAt().plus(MAX_OPEN_STAY);
+        return limit.isBefore(now) ? limit : now;
+    }
+
+    /** 블록의 시간 구간과 겹치는 센서 슬롯들의 평균. 값이 없으면 null. */
+    private Double blockAverage(Block block, SpaceEnvironmentSeries series) {
         if (series == null || !series.hasValues()) {
             return null;
         }
@@ -243,7 +311,7 @@ public class StudyEnvironmentAnalysisService {
         for (Map.Entry<Instant, Double> slot : series.hourlyAverages().entrySet()) {
             Instant slotStart = slot.getKey();
             Instant slotEnd = slotStart.plusSeconds(SLOT_SECONDS);
-            if (overlapSeconds(record.getStartTime(), record.getEndTime(), slotStart, slotEnd) > 0) {
+            if (overlapSeconds(block.first, block.last, slotStart, slotEnd) > 0) {
                 sum = sum + slot.getValue();
                 count = count + 1;
             }
@@ -254,66 +322,35 @@ public class StudyEnvironmentAnalysisService {
         return sum / count;
     }
 
-    /** 환경값 중앙값으로 세션을 둘로 갈라 몰입 밀도를 비교한다. */
-    private StudyEnvironmentResult.MeasurementContrast contrastOf(
-            String measurement,
-            List<SessionValue> sessions
+    /** 블록들을 시간대별(byBand=true) 또는 공간별로 합산한다. */
+    private List<StudyEnvironmentResult.BlockSummary> summarize(
+            Iterable<Block> blocks,
+            boolean byBand
     ) {
-        List<Double> values = new ArrayList<>();
-        for (SessionValue session : sessions) {
-            values.add(session.value());
-        }
-        Collections.sort(values);
-        double median;
-        int size = values.size();
-        if (size % 2 == 1) {
-            median = values.get(size / 2);
-        } else {
-            median = (values.get(size / 2 - 1) + values.get(size / 2)) / 2;
-        }
-
-        long lowStudySeconds = 0;
-        long lowOccupiedSeconds = 0;
-        double lowValueSum = 0;
-        int lowCount = 0;
-        long highStudySeconds = 0;
-        long highOccupiedSeconds = 0;
-        double highValueSum = 0;
-        int highCount = 0;
-
-        for (SessionValue session : sessions) {
-            StudyRecord record = session.record();
-            if (session.value() <= median) {
-                lowStudySeconds = lowStudySeconds + record.getStudySeconds();
-                lowOccupiedSeconds = lowOccupiedSeconds + occupiedSecondsOf(record);
-                lowValueSum = lowValueSum + session.value();
-                lowCount = lowCount + 1;
-            } else {
-                highStudySeconds = highStudySeconds + record.getStudySeconds();
-                highOccupiedSeconds = highOccupiedSeconds + occupiedSecondsOf(record);
-                highValueSum = highValueSum + session.value();
-                highCount = highCount + 1;
+        Map<String, Sum> sums = new LinkedHashMap<>();
+        for (Block block : blocks) {
+            String key = byBand ? BAND_LABELS[block.band] : String.valueOf(block.spaceId);
+            Sum sum = sums.get(key);
+            if (sum == null) {
+                sum = new Sum(byBand ? BAND_LABELS[block.band] : block.spaceName,
+                        byBand ? null : block.spaceId);
+                sums.put(key, sum);
             }
+            sum.add(block);
         }
 
-        return new StudyEnvironmentResult.MeasurementContrast(
-                measurement,
-                median,
-                lowCount,
-                StudyPatternMath.focusDensityPercent(lowStudySeconds, lowOccupiedSeconds),
-                lowCount == 0 ? 0 : lowValueSum / lowCount,
-                highCount,
-                StudyPatternMath.focusDensityPercent(highStudySeconds, highOccupiedSeconds),
-                highCount == 0 ? 0 : highValueSum / highCount
-        );
-    }
-
-    private long occupiedSecondsOf(StudyRecord record) {
-        return Duration.between(record.getStartTime(), record.getEndTime()).getSeconds();
+        List<StudyEnvironmentResult.BlockSummary> summaries = new ArrayList<>();
+        for (Sum sum : sums.values()) {
+            summaries.add(sum.toSummary());
+        }
+        return summaries;
     }
 
     /** 두 구간이 겹친 초. 겹치지 않으면 0이다. */
     private long overlapSeconds(Instant leftStart, Instant leftEnd, Instant rightStart, Instant rightEnd) {
+        if (leftStart == null || leftEnd == null) {
+            return 0;
+        }
         Instant start = leftStart.isAfter(rightStart) ? leftStart : rightStart;
         Instant end = leftEnd.isBefore(rightEnd) ? leftEnd : rightEnd;
         if (!start.isBefore(end)) {
@@ -322,7 +359,75 @@ public class StudyEnvironmentAnalysisService {
         return Duration.between(start, end).getSeconds();
     }
 
-    /** 세션 하나와 그 세션 시간대의 환경값. 중앙값 대비를 내는 데만 쓴다. */
-    private record SessionValue(StudyRecord record, double value) {
+    /** 집계 중인 블록 하나. 계산 중에만 쓰는 가변 상자다. */
+    private static final class Block {
+        private final int band;
+        private final Long spaceId;
+        private String spaceName;
+        private long studySeconds;
+        private int sessionCount;
+        private Instant first;
+        private Instant last;
+        private Double co2;
+        private Double temperature;
+        private Double humidity;
+
+        private Block(int band, Long spaceId, String spaceName, Instant bandStart, Instant bandEnd) {
+            this.band = band;
+            this.spaceId = spaceId;
+            this.spaceName = spaceName;
+        }
+    }
+
+    /** 블록들을 한 축으로 합칠 때 쓰는 누적기. */
+    private static final class Sum {
+        private final String label;
+        private final Long spaceId;
+        private long studySeconds;
+        private long spanSeconds;
+        private int sessionCount;
+        private double co2Sum;
+        private int co2Count;
+        private double temperatureSum;
+        private int temperatureCount;
+        private double humiditySum;
+        private int humidityCount;
+
+        private Sum(String label, Long spaceId) {
+            this.label = label;
+            this.spaceId = spaceId;
+        }
+
+        private void add(Block block) {
+            studySeconds = studySeconds + block.studySeconds;
+            spanSeconds = spanSeconds + StudyPatternMath.spanSeconds(block.first, block.last);
+            sessionCount = sessionCount + block.sessionCount;
+            if (block.co2 != null) {
+                co2Sum = co2Sum + block.co2;
+                co2Count = co2Count + 1;
+            }
+            if (block.temperature != null) {
+                temperatureSum = temperatureSum + block.temperature;
+                temperatureCount = temperatureCount + 1;
+            }
+            if (block.humidity != null) {
+                humiditySum = humiditySum + block.humidity;
+                humidityCount = humidityCount + 1;
+            }
+        }
+
+        private StudyEnvironmentResult.BlockSummary toSummary() {
+            return new StudyEnvironmentResult.BlockSummary(
+                    label,
+                    spaceId,
+                    sessionCount,
+                    studySeconds / 60,
+                    spanSeconds / 60,
+                    StudyPatternMath.focusDensityPercent(studySeconds, spanSeconds),
+                    co2Count == 0 ? null : co2Sum / co2Count,
+                    temperatureCount == 0 ? null : temperatureSum / temperatureCount,
+                    humidityCount == 0 ? null : humiditySum / humidityCount
+            );
+        }
     }
 }

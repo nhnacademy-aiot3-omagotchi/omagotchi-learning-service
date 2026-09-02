@@ -14,7 +14,6 @@ import site.omagotchi.learningservice.study.application.result.TopLearnerPattern
 import site.omagotchi.learningservice.study.domain.StudyRecord;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -111,14 +110,13 @@ public class TopLearnerPatternQueryService {
             int topGroupSize,
             List<StudyRecord> topRecords
     ) {
-        // 1. 섞여 온 기록으로 "사람 × 날짜" 표를 채운다
+        // 1. 섞여 온 기록으로 "사람 × 날짜" 표를 채운다.
+        //    첫 세션과 마지막 세션을 함께 들고 있어야 그날 자리에 있던 시간을 잴 수 있다
         Map<Long, Map<LocalDate, StudyRecord>> firstByMemberAndDate = new HashMap<>();
+        Map<Long, Map<LocalDate, StudyRecord>> lastByMemberAndDate = new HashMap<>();
         long totalStudySeconds = 0;
-        long totalOccupiedSeconds = 0;
         for (StudyRecord record : topRecords) {
             totalStudySeconds = totalStudySeconds + record.getStudySeconds();
-            totalOccupiedSeconds = totalOccupiedSeconds
-                    + Duration.between(record.getStartTime(), record.getEndTime()).getSeconds();
 
             Map<LocalDate, StudyRecord> byDate = firstByMemberAndDate.get(record.getCohortMembershipId());
             if (byDate == null) {
@@ -129,15 +127,36 @@ public class TopLearnerPatternQueryService {
             if (current == null || record.getStartTime().isBefore(current.getStartTime())) {
                 byDate.put(record.getAggregationDate(), record);
             }
+
+            Map<LocalDate, StudyRecord> lastByDate =
+                    lastByMemberAndDate.get(record.getCohortMembershipId());
+            if (lastByDate == null) {
+                lastByDate = new HashMap<>();
+                lastByMemberAndDate.put(record.getCohortMembershipId(), lastByDate);
+            }
+            StudyRecord latest = lastByDate.get(record.getAggregationDate());
+            if (latest == null || record.getEndTime().isAfter(latest.getEndTime())) {
+                lastByDate.put(record.getAggregationDate(), record);
+            }
         }
 
         // 2. 완성된 표를 돌며 계산 재료를 꺼낸다
         int totalStudyDays = 0;
+        long totalSpanSeconds = 0;
         List<Integer> shiftedMinutes = new ArrayList<>();
-        for (Map<LocalDate, StudyRecord> byDate : firstByMemberAndDate.values()) {
+        for (Map.Entry<Long, Map<LocalDate, StudyRecord>> member : firstByMemberAndDate.entrySet()) {
+            Map<LocalDate, StudyRecord> byDate = member.getValue();
+            Map<LocalDate, StudyRecord> lastByDate = lastByMemberAndDate.get(member.getKey());
             totalStudyDays = totalStudyDays + byDate.size();
-            for (StudyRecord first : byDate.values()) {
+
+            for (Map.Entry<LocalDate, StudyRecord> day : byDate.entrySet()) {
+                StudyRecord first = day.getValue();
                 shiftedMinutes.add(StudyPatternMath.toShiftedMinutes(first.getStartTime()));
+
+                // 그 사람이 그날 자리에 있던 시간: 첫 세션 시작~마지막 세션 종료
+                StudyRecord last = lastByDate.get(day.getKey());
+                totalSpanSeconds = totalSpanSeconds
+                        + StudyPatternMath.spanSeconds(first.getStartTime(), last.getEndTime());
             }
         }
 
@@ -150,7 +169,7 @@ public class TopLearnerPatternQueryService {
                 totalStudySeconds / 60 / totalStudyDays,        // 공부한 날 하루 평균 분
                 (int) Math.round((double) totalStudyDays / topGroupSize),           // 1인당 평균 학습일 (반올림)
                 totalStudySeconds / topRecords.size() / 60,                         // 평균 세션 길이(분)
-                StudyPatternMath.focusDensityPercent(totalStudySeconds, totalOccupiedSeconds), // 몰입 밀도(%)
+                StudyPatternMath.focusDensityPercent(totalStudySeconds, totalSpanSeconds), // 몰입 밀도(%)
                 StudyPatternMath.medianStartTime(shiftedMinutes),                   // 대표 시작 시각 "HH:mm"
                 myPattern                                                           // 내 패턴은 계산 없이 동봉
         );

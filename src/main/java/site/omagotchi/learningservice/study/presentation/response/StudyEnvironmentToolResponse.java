@@ -6,77 +6,60 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 학습 세션을 공간·환경과 묶어 본 결과의 LLM 전달용 모양.
+ * 시간대·공간 블록으로 쪼갠 학습 환경 분석의 LLM 전달용 모양.
  */
 public record StudyEnvironmentToolResponse(
         String status,
         int periodDays,
+        String spaceSource,
         int analyzedSessionCount,
         int unknownSpaceSessionCount,
-        List<SpacePerformanceResponse> spaces,
-        List<MeasurementContrastResponse> contrasts
+        List<BlockSummaryResponse> timeBands,
+        List<BlockSummaryResponse> spaces
 ) {
 
-    public record SpacePerformanceResponse(
+    public record BlockSummaryResponse(
+            String label,
             Long spaceId,
-            String spaceName,
             int sessionCount,
-            long totalStudyMinutes,
-            int focusDensityPercent,
-            Double averageCo2,          // ppm, 없으면 null
-            Double averageTemperature,  // 섭씨, 없으면 null
-            Double averageHumidity      // %, 없으면 null
-    ) {
-    }
-
-    public record MeasurementContrastResponse(
-            String measurement,
-            double medianValue,
-            int lowSessionCount,
-            int lowFocusDensityPercent,
-            double lowAverageValue,
-            int highSessionCount,
-            int highFocusDensityPercent,
-            double highAverageValue
+            long studyMinutes,
+            long spanMinutes,          // 자리에 있던 시간
+            int densityPercent,        // 공부 시간 ÷ 자리에 있던 시간
+            Double averageCo2,         // ppm, 없으면 null
+            Double averageTemperature, // 섭씨, 없으면 null
+            Double averageHumidity     // %, 없으면 null
     ) {
     }
 
     public static StudyEnvironmentToolResponse from(StudyEnvironmentResult result) {
-        List<SpacePerformanceResponse> spaces = new ArrayList<>();
-        for (StudyEnvironmentResult.SpacePerformance space : result.spaces()) {
-            spaces.add(new SpacePerformanceResponse(
-                    space.spaceId(),
-                    space.spaceName(),
-                    space.sessionCount(),
-                    space.totalStudyMinutes(),
-                    space.focusDensityPercent(),
-                    space.averageCo2(),
-                    space.averageTemperature(),
-                    space.averageHumidity()
-            ));
-        }
-
-        List<MeasurementContrastResponse> contrasts = new ArrayList<>();
-        for (StudyEnvironmentResult.MeasurementContrast contrast : result.contrasts()) {
-            contrasts.add(new MeasurementContrastResponse(
-                    contrast.measurement(),
-                    contrast.medianValue(),
-                    contrast.lowSessionCount(),
-                    contrast.lowFocusDensityPercent(),
-                    contrast.lowAverageValue(),
-                    contrast.highSessionCount(),
-                    contrast.highFocusDensityPercent(),
-                    contrast.highAverageValue()
-            ));
-        }
-
         return new StudyEnvironmentToolResponse(
                 result.status().name(),
                 result.periodDays(),
+                result.spaceSource(),
                 result.analyzedSessionCount(),
                 result.unknownSpaceSessionCount(),
-                spaces,
-                contrasts
+                convert(result.timeBands()),
+                convert(result.spaces())
         );
+    }
+
+    private static List<BlockSummaryResponse> convert(
+            List<StudyEnvironmentResult.BlockSummary> blocks
+    ) {
+        List<BlockSummaryResponse> converted = new ArrayList<>();
+        for (StudyEnvironmentResult.BlockSummary block : blocks) {
+            converted.add(new BlockSummaryResponse(
+                    block.label(),
+                    block.spaceId(),
+                    block.sessionCount(),
+                    block.studyMinutes(),
+                    block.spanMinutes(),
+                    block.densityPercent(),
+                    block.averageCo2(),
+                    block.averageTemperature(),
+                    block.averageHumidity()
+            ));
+        }
+        return converted;
     }
 }

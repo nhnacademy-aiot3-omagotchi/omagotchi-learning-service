@@ -67,12 +67,13 @@ public class StudySpaceConditionQueryService {
         List<StudySpaceConditionResult.SpaceCondition> conditions = new ArrayList<>();
         boolean anyValue = false;
         for (SpaceListResult space : candidates) {
+            // 공간 목록에 이름이 이미 있으므로 그대로 넘긴다. 조회 서비스가 다시 찾지 않게 한다
             SpaceEnvironmentSeries co2Series = spaceEnvironmentQueryService.getHourlySeries(
-                    cohortId, userId, space.spaceId(), CO2, SERIES_WINDOW);
+                    cohortId, userId, space.spaceId(), space.name(), CO2, SERIES_WINDOW);
             SpaceEnvironmentSeries temperatureSeries = spaceEnvironmentQueryService.getHourlySeries(
-                    cohortId, userId, space.spaceId(), TEMPERATURE, SERIES_WINDOW);
+                    cohortId, userId, space.spaceId(), space.name(), TEMPERATURE, SERIES_WINDOW);
             SpaceEnvironmentSeries humiditySeries = spaceEnvironmentQueryService.getHourlySeries(
-                    cohortId, userId, space.spaceId(), HUMIDITY, SERIES_WINDOW);
+                    cohortId, userId, space.spaceId(), space.name(), HUMIDITY, SERIES_WINDOW);
 
             // 세 항목의 최신 시각이 다를 수 있어, 이산화탄소 기준 시각을 대표로 삼는다
             Instant latestTime = latestTimeOf(co2Series);

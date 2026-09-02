@@ -14,6 +14,7 @@ import site.omagotchi.learningservice.attendance.application.query.AttendancePag
 import site.omagotchi.learningservice.attendance.application.event.AttendanceCheckedInEvent;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceEventPublisher;
 import site.omagotchi.learningservice.space.application.LabSelectionService;
+import site.omagotchi.learningservice.space.application.StudySpaceSelectionService;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceRecordQueryRepository;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
@@ -54,6 +55,7 @@ class AttendanceServiceTest {
     private static final Long COHORT_ID = 10L;
     private static final Long MEMBERSHIP_ID = 100L;
     private static final Long LAB_SPACE_ID = 200L;
+    private static final Long STUDY_SPACE_ID = 300L;
     private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID MANAGER_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
     private static final LocalDate ATTENDANCE_DATE = LocalDate.of(2026, 7, 29);
@@ -87,6 +89,9 @@ class AttendanceServiceTest {
 
     @Mock
     private LabSelectionService labSelectionService;
+
+    @Mock
+    private StudySpaceSelectionService studySpaceSelectionService;
 
     @Mock
     private AttendanceEventPublisher attendanceEventPublisher;
@@ -236,6 +241,50 @@ class AttendanceServiceTest {
         InOrder order = inOrder(labSelectionService, presenceTransitionService);
         order.verify(labSelectionService).requireSelectableLab(COHORT_ID, 1L, LAB_SPACE_ID);
         order.verify(presenceTransitionService).moveLab(1L, MEMBERSHIP_ID, LAB_SPACE_ID, moveAt);
+    }
+
+    @Test
+    @DisplayName("도서관 입장은 활성 STUDY 승인 후 체류 전환을 호출한다")
+    void movesToSelectableStudySpace() {
+        Instant moveAt = Instant.parse("2026-07-29T02:00:00Z");
+        AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
+        ReflectionTestUtils.setField(record, "id", 1L);
+        record.checkIn(Instant.parse("2026-07-29T00:00:00Z"), AttendanceStatus.PENDING, 0);
+        givenActiveMembership();
+        given(clock.instant()).willReturn(moveAt);
+        given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(
+                MEMBERSHIP_ID, ATTENDANCE_DATE)).willReturn(Optional.of(record));
+
+        var result = attendanceService.moveStudySpace(COHORT_ID, USER_ID, STUDY_SPACE_ID);
+
+        assertEquals(1L, result.id());
+        InOrder order = inOrder(studySpaceSelectionService, presenceTransitionService);
+        order.verify(studySpaceSelectionService).requireSelectableStudySpace(STUDY_SPACE_ID);
+        order.verify(presenceTransitionService).moveStudySpace(
+                1L, MEMBERSHIP_ID, STUDY_SPACE_ID, moveAt);
+    }
+
+    @Test
+    @DisplayName("회의 참여 중에는 도서관 입장도 거절한다")
+    void rejectsStudySpaceMoveDuringMembershipMeeting() {
+        Instant moveAt = Instant.parse("2026-07-29T02:00:00Z");
+        AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
+        ReflectionTestUtils.setField(record, "id", 1L);
+        record.checkIn(Instant.parse("2026-07-29T00:00:00Z"), AttendanceStatus.PENDING, 0);
+        givenActiveMembership();
+        given(clock.instant()).willReturn(moveAt);
+        given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(
+                MEMBERSHIP_ID, ATTENDANCE_DATE)).willReturn(Optional.of(record));
+        given(presenceIntervalRepository.existsOpenMeetingByMembershipId(MEMBERSHIP_ID))
+                .willReturn(true);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> attendanceService.moveStudySpace(COHORT_ID, USER_ID, STUDY_SPACE_ID)
+        );
+
+        assertSame(AttendanceErrorCode.PRESENCE_MEETING_EXIT_REQUIRED, exception.getErrorCode());
+        verifyNoInteractions(studySpaceSelectionService, presenceTransitionService);
     }
 
     @Test

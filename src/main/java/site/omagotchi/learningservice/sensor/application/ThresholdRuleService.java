@@ -30,6 +30,12 @@ import java.util.*;
 @RequiredArgsConstructor
 public class ThresholdRuleService {
 
+    private static final List<RequiredMetric> REQUIRED_METRICS = List.of(
+            new RequiredMetric("co2", Operator.GTE, 1000.0),
+            new RequiredMetric("temperature", Operator.GTE, 28.0),
+            new RequiredMetric("humidity", Operator.GTE, 70.0)
+    );
+
     private final SensorDeviceRepository sensorDeviceRepository;
     private final ThresholdRuleRepository thresholdRuleRepository;
     private final ThresholdRuleHistoryRepository thresholdRuleHistoryRepository;
@@ -47,37 +53,14 @@ public class ThresholdRuleService {
         cohortAccessService.requireManager(cohortId, requesterId);
         requireDeviceInCohort(command.deviceEui(), cohortId, SensorErrorCode.DEVICE_NOT_FOUND);
 
-        ThresholdRule thresholdRule;
-        try {
-            thresholdRule = ThresholdRule.create(
-                    command.deviceEui(),
-                    command.metric(),
-                    command.operator(),
-                    command.threshold(),
-                    requesterId
-            );
-        } catch (IllegalArgumentException e) {
-            throw new BusinessException(SensorErrorCode.RULE_INVALID_CONDITION, e.getMessage(), e);
-        }
-
-        if (thresholdRuleRepository.existsByDeviceEuiAndMetric(
-                thresholdRule.getDeviceEui(),
-                thresholdRule.getMetric()
-        )) {
-            throw new BusinessException(SensorErrorCode.RULE_ALREADY_EXISTS);
-        }
-
-        // 유니크 위반은 경계 안에서 RULE_ALREADY_EXISTS로 변환된다
-        saveRule(thresholdRule);
-
-        thresholdRuleHistoryRepository.save(ThresholdRuleHistory.record(
-                thresholdRule,
-                ChangeType.CREATED,
+        ThresholdRule thresholdRule = createRule(
+                command.deviceEui(),
+                command.metric(),
+                command.operator(),
+                command.threshold(),
                 requesterId,
                 requestId
-        ));
-
-        eventPublisher.publishThresholdRuleChanged(thresholdRule);
+        );
 
         log.info("임계치 룰 생성: id={}", thresholdRule.getId());
         return thresholdRule.getId();
@@ -193,9 +176,9 @@ public class ThresholdRuleService {
     /**
      * 공간 안 모든 기기의 임계치를 한 번에 맞춘다.
      *
-     * <p>룰이 없는 기기에는 만들지 않는다 — 그 기기가 이 metric 을 측정하는지 서버가
-     * 알 수 없다. 온도계에 co2 룰이 붙는 것을 막기 위한 의도적 제약이며, 건너뛴 수를
-     * missing 으로 돌려주어 화면이 드러내게 한다.</p>
+     * <p>요청 본문의 항목은 관리자가 이 공간에 적용하겠다고 명시한 metric 이다. 따라서
+     * 기존 룰은 갱신하고 없는 룰은 만든다. 이전에는 없는 룰을 건너뛰어, 센서가 등록돼도
+     * 임계값을 설정할 수 없는 상태가 남았다.</p>
      *
      * <p>N 건의 이력이 같은 requestId 를 공유한다. 나중에 "한 번의 공간 변경"으로
      * 묶어 볼 수 있는 유일한 단서다.</p>
@@ -213,6 +196,7 @@ public class ThresholdRuleService {
     ) {
         cohortAccessService.requireManager(cohortId, requesterId);
         requireSpaceInCohort(spaceId, cohortId);
+        List<MetricCondition> requiredConditions = requireAllMetrics(command.conditions());
         List<SensorDevice> devices = sensorDeviceRepository.findBySpaceIds(List.of(spaceId));
 
         if (devices.isEmpty()) {
@@ -221,18 +205,27 @@ public class ThresholdRuleService {
 
         Map<String, ThresholdRule> rulesByKey = indexRules(devices);
 
+        int created = 0;
         int applied = 0;
         int unchanged = 0;
-        int missing = 0;
 
         for (SensorDevice device : devices) {
-            for (MetricCondition condition : command.conditions()) {
+            for (MetricCondition condition : requiredConditions) {
 
                 ThresholdRule rule = rulesByKey.get(
                         ruleKey(device.getDeviceEui(), condition.normalizedMetric()));
 
                 if (Objects.isNull(rule)) {
-                    missing++;
+                    ThresholdRule createdRule = createRule(
+                            device.getDeviceEui(),
+                            condition.normalizedMetric(),
+                            condition.operator(),
+                            condition.threshold(),
+                            requesterId,
+                            requestId
+                    );
+                    rulesByKey.put(ruleKey(createdRule.getDeviceEui(), createdRule.getMetric()), createdRule);
+                    created++;
                     continue;
                 }
 
@@ -259,11 +252,78 @@ public class ThresholdRuleService {
             }
         }
 
-        log.info("공간 임계치 일괄 적용: spaceId={}, 적용={}, 동일={}, 룰없음={}",
-                spaceId, applied, unchanged, missing);
+        log.info("공간 임계치 일괄 적용: spaceId={}, 생성={}, 적용={}, 동일={}",
+                spaceId, created, applied, unchanged);
 
         return new ApplySpaceThresholdResult(
-                spaceId, devices.size(), applied, unchanged, missing);
+                spaceId, devices.size(), created, applied, unchanged, 0);
+    }
+
+    /** 센서 등록·이동·인계 시 목적지 공간의 대표값 또는 서버 기본값으로 필수 룰을 맞춘다. */
+    @Transactional
+    public int synchronizeRequiredRulesForDevice(
+            SensorDevice targetDevice,
+            UUID requesterId,
+            String requestId
+    ) {
+        List<SensorDevice> peers = sensorDeviceRepository.findBySpaceIds(List.of(targetDevice.getSpaceId()))
+                .stream()
+                .filter(device -> !device.getDeviceEui().equals(targetDevice.getDeviceEui()))
+                .toList();
+
+        LinkedHashSet<String> uniqueDeviceEuis = new LinkedHashSet<>(deviceEuisOf(peers));
+        uniqueDeviceEuis.add(targetDevice.getDeviceEui());
+        List<String> deviceEuis = List.copyOf(uniqueDeviceEuis);
+        List<ThresholdRule> allRules = thresholdRuleRepository.findByDeviceEuiIn(deviceEuis);
+
+        Map<String, ThresholdRule> targetRules = new HashMap<>();
+        Map<String, List<ThresholdRule>> peerRulesByMetric = new LinkedHashMap<>();
+        for (ThresholdRule rule : allRules) {
+            if (rule.getDeviceEui().equals(targetDevice.getDeviceEui())) {
+                targetRules.put(rule.getMetric(), rule);
+            } else {
+                peerRulesByMetric.computeIfAbsent(rule.getMetric(), key -> new ArrayList<>()).add(rule);
+            }
+        }
+
+        int synchronizedCount = 0;
+        for (RequiredMetric required : REQUIRED_METRICS) {
+            ThresholdRule current = targetRules.get(required.metric());
+            RuleCondition condition = representativeCondition(
+                    peerRulesByMetric.getOrDefault(required.metric(), List.of()),
+                    current,
+                    required
+            );
+            if (current == null) {
+                createRule(
+                        targetDevice.getDeviceEui(),
+                        required.metric(),
+                        condition.operator(),
+                        condition.threshold(),
+                        requesterId,
+                        requestId
+                );
+                synchronizedCount++;
+                continue;
+            }
+
+            boolean changed = current.changeCondition(
+                    condition.operator(), condition.threshold(), requesterId);
+            if (!changed) {
+                continue;
+            }
+            updateRule(current);
+            thresholdRuleHistoryRepository.save(ThresholdRuleHistory.record(
+                    current, ChangeType.UPDATED, requesterId, requestId));
+            eventPublisher.publishThresholdRuleChanged(current);
+            synchronizedCount++;
+        }
+
+        if (synchronizedCount > 0) {
+            log.info("센서 필수 룰 동기화: deviceEui={}, spaceId={}, 변경={}건",
+                    targetDevice.getDeviceEui(), targetDevice.getSpaceId(), synchronizedCount);
+        }
+        return synchronizedCount;
     }
 
     /** 공간 하나의 metric 별 요약. 전체 기수의 룰을 미리 읽었으므로 여기서는 쿼리하지 않는다. */
@@ -337,6 +397,34 @@ public class ThresholdRuleService {
         }
     }
 
+    private ThresholdRule createRule(
+            String deviceEui,
+            String metric,
+            Operator operator,
+            Double threshold,
+            UUID requesterId,
+            String requestId
+    ) {
+        ThresholdRule thresholdRule;
+        try {
+            thresholdRule = ThresholdRule.create(deviceEui, metric, operator, threshold, requesterId);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(SensorErrorCode.RULE_INVALID_CONDITION, e.getMessage(), e);
+        }
+
+        if (thresholdRuleRepository.existsByDeviceEuiAndMetric(
+                thresholdRule.getDeviceEui(), thresholdRule.getMetric())) {
+            throw new BusinessException(SensorErrorCode.RULE_ALREADY_EXISTS);
+        }
+
+        // 유니크 위반은 경계 안에서 RULE_ALREADY_EXISTS로 변환된다.
+        saveRule(thresholdRule);
+        thresholdRuleHistoryRepository.save(ThresholdRuleHistory.record(
+                thresholdRule, ChangeType.CREATED, requesterId, requestId));
+        eventPublisher.publishThresholdRuleChanged(thresholdRule);
+        return thresholdRule;
+    }
+
     private ThresholdRule saveRule(ThresholdRule rule) {
         try {
             return thresholdRuleRepository.save(rule);
@@ -392,6 +480,66 @@ public class ThresholdRuleService {
 
     private static String ruleKey(String deviceEui, String metric) {
         return deviceEui + ":" + metric;
+    }
+
+    private List<MetricCondition> requireAllMetrics(List<MetricCondition> conditions) {
+        Map<String, MetricCondition> byMetric = new LinkedHashMap<>();
+        if (conditions != null) {
+            for (MetricCondition condition : conditions) {
+                String metric = condition == null ? null : condition.normalizedMetric();
+                if (metric == null || REQUIRED_METRICS.stream().noneMatch(required -> required.metric().equals(metric))) {
+                    throw new BusinessException(
+                            SensorErrorCode.RULE_INVALID_CONDITION,
+                            "필수 측정 항목은 co2, temperature, humidity입니다."
+                    );
+                }
+                if (byMetric.put(metric, condition) != null) {
+                    throw new BusinessException(
+                            SensorErrorCode.RULE_INVALID_CONDITION,
+                            "같은 측정 항목을 중복해서 저장할 수 없습니다: " + metric
+                    );
+                }
+            }
+        }
+
+        if (byMetric.size() != REQUIRED_METRICS.size()) {
+            throw new BusinessException(
+                    SensorErrorCode.RULE_INVALID_CONDITION,
+                    "co2, temperature, humidity 임계값을 모두 입력해야 합니다."
+            );
+        }
+        return REQUIRED_METRICS.stream()
+                .map(required -> byMetric.get(required.metric()))
+                .toList();
+    }
+
+    private RuleCondition representativeCondition(
+            List<ThresholdRule> peerRules,
+            ThresholdRule current,
+            RequiredMetric fallback
+    ) {
+        if (peerRules.isEmpty()) {
+            if (current != null) {
+                return new RuleCondition(current.getOperator(), current.getThreshold());
+            }
+            return new RuleCondition(fallback.operator(), fallback.threshold());
+        }
+
+        Map<RuleCondition, Integer> frequencies = new LinkedHashMap<>();
+        for (ThresholdRule rule : peerRules) {
+            RuleCondition condition = new RuleCondition(rule.getOperator(), rule.getThreshold());
+            frequencies.merge(condition, 1, Integer::sum);
+        }
+        return frequencies.entrySet().stream()
+                .max(Map.Entry.comparingByValue())
+                .orElseThrow()
+                .getKey();
+    }
+
+    private record RequiredMetric(String metric, Operator operator, Double threshold) {
+    }
+
+    private record RuleCondition(Operator operator, Double threshold) {
     }
 
 }

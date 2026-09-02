@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
+import site.omagotchi.learningservice.attendance.application.port.AttendancePresenceQuery;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.Instant;
@@ -44,7 +45,34 @@ class PresenceTransitionServiceIT {
     private AttendancePresenceQueryService presenceQueryService;
 
     @Autowired
+    private AttendancePresenceQuery attendancePresenceQuery;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Test
+    @DisplayName("현재 위치 조회는 체크인된 출결의 최신 열린 공간 구간을 반환한다")
+    void findsLatestOpenSpacePresence() {
+        Scenario scenario = saveScenario(false);
+
+        service.moveLab(
+                scenario.attendanceId(),
+                scenario.membershipId(),
+                scenario.firstLabId(),
+                STARTED_AT
+        );
+
+        assertThat(attendancePresenceQuery.findCurrentPresences(
+                scenario.membershipId(),
+                ATTENDANCE_DATE
+        ))
+                .singleElement()
+                .satisfies(presence -> {
+                    assertThat(presence.spaceId()).isEqualTo(scenario.firstLabId());
+                    assertThat(presence.state().name()).isEqualTo("PRESENT");
+                    assertThat(presence.startedAt()).isEqualTo(STARTED_AT);
+                });
+    }
 
     @Test
     @DisplayName("집계일이 바뀌어 더 최신 PRESENT가 생겨도 이탈은 이전 출결의 열린 MEETING을 선택한다")

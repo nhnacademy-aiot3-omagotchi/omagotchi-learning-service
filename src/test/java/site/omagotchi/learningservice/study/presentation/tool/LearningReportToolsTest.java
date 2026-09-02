@@ -9,6 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.model.ToolContext;
 import site.omagotchi.learningservice.study.application.LearningReportQueryService;
 import site.omagotchi.learningservice.study.application.result.LearningReportResult;
+import site.omagotchi.learningservice.study.application.result.StudyEnvironmentResult;
 import site.omagotchi.learningservice.study.application.result.TopLearnerPatternResult;
 import site.omagotchi.learningservice.study.presentation.response.LearningReportToolResponse;
 
@@ -41,7 +42,8 @@ class LearningReportToolsTest {
     void queriesWithUserIdFromToolContextAndCarriesBothPeriods() {
         given(this.learningReportQueryService.getReport(USER_ID, 14))
                 .willReturn(new LearningReportResult(
-                        14, 300, 5, TopLearnerPatternResult.noData(14, 12)));
+                        14, 300, 5, TopLearnerPatternResult.noData(14, 12),
+                        StudyEnvironmentResult.noData(7)));
 
         LearningReportToolResponse response =
                 this.learningReportTools.getLearningReport(14, toolContextOf(USER_ID));
@@ -58,7 +60,8 @@ class LearningReportToolsTest {
     void passesNullPeriodSoServerDecidesReportDefault() {
         given(this.learningReportQueryService.getReport(USER_ID, null))
                 .willReturn(new LearningReportResult(
-                        7, 0, 0, TopLearnerPatternResult.noData(7, 12)));
+                        7, 0, 0, TopLearnerPatternResult.noData(7, 12),
+                        StudyEnvironmentResult.noData(7)));
 
         LearningReportToolResponse response =
                 this.learningReportTools.getLearningReport(null, toolContextOf(USER_ID));

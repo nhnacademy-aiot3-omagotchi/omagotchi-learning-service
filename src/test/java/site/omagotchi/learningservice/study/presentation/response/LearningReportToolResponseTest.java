@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.study.presentation.response;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import site.omagotchi.learningservice.study.application.result.LearningReportResult;
+import site.omagotchi.learningservice.study.application.result.StudyEnvironmentResult;
 import site.omagotchi.learningservice.study.application.result.StudyPatternResult;
 import site.omagotchi.learningservice.study.application.result.TopLearnerPatternResult;
 
@@ -26,7 +27,8 @@ class LearningReportToolResponseTest {
                 TopLearnerPatternResult.Status.OK, 7,
                 30, 3, 150, 6, 40, 85, "08:30", myPattern
         );
-        LearningReportResult result = new LearningReportResult(7, 240, 4, thisPeriod);
+        LearningReportResult result = new LearningReportResult(
+                7, 240, 4, thisPeriod, StudyEnvironmentResult.noData(7));
 
         LearningReportToolResponse response = LearningReportToolResponse.from(result);
 
@@ -42,7 +44,8 @@ class LearningReportToolResponseTest {
     @DisplayName("이번 기간이 익명성 하한에 걸려도 그 상태를 감추지 않는다")
     void preservesInsufficientSampleStatus() {
         LearningReportResult result = new LearningReportResult(
-                7, 100, 2, TopLearnerPatternResult.insufficientSample(7, 5));
+                7, 100, 2, TopLearnerPatternResult.insufficientSample(7, 5),
+                StudyEnvironmentResult.noData(7));
 
         LearningReportToolResponse response = LearningReportToolResponse.from(result);
 
@@ -57,7 +60,8 @@ class LearningReportToolResponseTest {
     @DisplayName("직전 기간에 기록이 없으면 0으로 내려간다")
     void carriesZeroWhenPreviousPeriodIsEmpty() {
         LearningReportResult result = new LearningReportResult(
-                7, 0, 0, TopLearnerPatternResult.noData(7, 12));
+                7, 0, 0, TopLearnerPatternResult.noData(7, 12),
+                StudyEnvironmentResult.noData(7));
 
         LearningReportToolResponse response = LearningReportToolResponse.from(result);
 

@@ -48,6 +48,9 @@ class LearningReportQueryServiceTest {
     private TopLearnerPatternQueryService topLearnerPatternQueryService;
 
     @Mock
+    private StudyEnvironmentAnalysisService studyEnvironmentAnalysisService;
+
+    @Mock
     private CohortAccessService cohortAccessService;
 
     @Mock
@@ -59,6 +62,7 @@ class LearningReportQueryServiceTest {
     void setUp() {
         service = new LearningReportQueryService(
                 topLearnerPatternQueryService,
+                studyEnvironmentAnalysisService,
                 cohortAccessService,
                 studyRecordQueryRepository,
                 Clock.fixed(NOW, KST)

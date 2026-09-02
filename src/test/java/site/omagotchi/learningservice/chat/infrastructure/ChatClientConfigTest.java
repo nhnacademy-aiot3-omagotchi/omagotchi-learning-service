@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.chat.infrastructure;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -18,11 +19,13 @@ import org.springframework.ai.model.tool.autoconfigure.ToolCallingAutoConfigurat
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 @DisplayName("모델별 ChatClient 구성")
 class ChatClientConfigTest {
@@ -39,9 +42,13 @@ class ChatClientConfigTest {
                     OllamaChatAutoConfiguration.class
             ))
             .withUserConfiguration(ChatMemoryConfig.class, ChatClientConfig.class)
+            // 대화 기록이 Redis로 옮겨가면서 ChatMemoryConfig가 이 둘을 요구한다
+            // 여기서는 빈 구성만 검증하므로 Redis에 실제로 접근하지는 않는다
+            .withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
+            .withBean(ObjectMapper.class, ObjectMapper::new)
             .withPropertyValues(
                     "gemini.api-keys=dummy-key-1,dummy-key-2,dummy-key-3",
-                    "spring.ai.google.genai.chat.model=gemini-2.5-flash",
+                    "spring.ai.google.genai.chat.model=gemini-3.6-flash",
                     "spring.ai.ollama.base-url=http://localhost:11434",
                     "spring.ai.ollama.chat.model=qwen2.5:latest"
             );

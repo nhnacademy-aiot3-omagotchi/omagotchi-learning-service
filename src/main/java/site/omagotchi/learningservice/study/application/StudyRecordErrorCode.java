@@ -45,7 +45,12 @@ public enum StudyRecordErrorCode implements ErrorCode {
     INVALID_PATTERN_PERIOD(
             ErrorType.INVALID_INPUT,
             "STUDY_PATTERN_INVALID_PERIOD",
-                    "학습 패턴 조회 기간은 1일에서 90일 사이여야 합니다."
+            "학습 패턴 조회 기간은 1일에서 90일 사이여야 합니다."
+    ),
+    INVALID_TIME_SUMMARY_PERIOD(
+            ErrorType.INVALID_INPUT,
+            "STUDY_TIME_SUMMARY_INVALID_PERIOD",
+            "학습 시간 요약 조회 기간은 1일에서 90일 사이여야 합니다."
     );
 
     private final ErrorType type;

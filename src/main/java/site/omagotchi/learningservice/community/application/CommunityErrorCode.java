@@ -36,12 +36,12 @@ public enum CommunityErrorCode implements ErrorCode {
             ErrorType.NOT_FOUND,
             "COMMUNITY_ATTACHMENT_NOT_FOUND",
             "첨부파일을 찾을 수 없습니다."
-    ),
-    ATTACHMENT_STORAGE_FAILED(
-            ErrorType.INTERNAL,
-            "COMMUNITY_ATTACHMENT_STORAGE_FAILED",
-            "첨부파일 저장에 실패했습니다."
     );
+
+    // 저장소 자체의 실패(객체 스토리지 장애 등)에는 전용 코드를 두지 않는다.
+    // BusinessException은 ErrorType.INTERNAL을 전달할 수 없고(의도된 가드), 이 실패는
+    // 클라이언트가 분기할 외부 계약도 없다 -- 그대로 전파해
+    // GlobalExceptionHandler의 마지막 경계에서 500으로 옮긴다.
 
     private final ErrorType type;
     private final String code;

@@ -1,19 +1,13 @@
 package site.omagotchi.learningservice.community.infrastructure;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
-import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentFile;
-import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentStorage;
-import site.omagotchi.learningservice.community.application.attachment.StoredCommunityAttachment;
 import site.omagotchi.learningservice.community.application.CommunityErrorCode;
+import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentFile;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -23,13 +17,18 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * 커뮤니티 이미지 첨부파일을 로컬 파일시스템에 저장하는 최소 저장소 구현이다.
+ * 첨부파일 업로드 규칙을 강제하고 저장소가 쓸 객체 키를 만든다.
  *
- * <p>클라이언트 파일명은 저장 경로로 사용하지 않고, 확장자와 실제 파일 헤더 기반 MIME을 함께 검증한다.</p>
+ * <p>저장소 종류와 무관한 정책이라 구현체(MinIO 등)와 분리했다. 확장자와 실제 파일
+ * 헤더(magic bytes)를 함께 검증하므로, 확장자만 {@code .png}로 바꾼 파일은 걸러진다.
+ * 클라이언트가 보낸 Content-Type은 신뢰하지 않는다.</p>
+ *
+ * <p>객체 키에는 사용자 입력을 넣지 않는다. 사용자 파일명을 키로 쓰면 같은 이름을 두 번
+ * 올릴 때 덮어써지고, 인코딩 문제도 따라온다.</p>
  */
 @Component
 @RequiredArgsConstructor
-public class LocalCommunityAttachmentStorage implements CommunityAttachmentStorage {
+public class CommunityAttachmentPolicy {
 
     private static final Map<String, Set<String>> EXTENSIONS_BY_CONTENT_TYPE = Map.of(
             "image/jpeg", Set.of("jpg", "jpeg"),
@@ -37,55 +36,25 @@ public class LocalCommunityAttachmentStorage implements CommunityAttachmentStora
             "image/gif", Set.of("gif")
     );
 
+    // JPEG(3) · PNG(8) · GIF(6) 시그니처를 모두 담을 수 있는 최소 길이.
+    private static final int HEADER_LENGTH = 12;
+
     private final CommunityAttachmentProperties properties;
     private final Clock clock;
 
-    @Override
-    public StoredCommunityAttachment store(CommunityAttachmentFile attachmentFile) {
+    public CommunityAttachmentTarget prepare(CommunityAttachmentFile attachmentFile) {
         String originalFileName = safeOriginalFileName(attachmentFile.originalFileName());
         String extension = extension(originalFileName);
         validateExtension(extension);
         validateSize(attachmentFile.sizeBytes());
-        byte[] header = header(attachmentFile);
-        String detectedContentType = detectContentType(header);
+        String detectedContentType = detectContentType(header(attachmentFile));
         validateContentType(detectedContentType, extension);
 
-        String storageKey = storageKey(extension);
-        Path targetPath = targetPath(storageKey);
-        try {
-            Files.createDirectories(targetPath.getParent());
-            try (InputStream inputStream = attachmentFile.openStream()) {
-                Files.copy(inputStream, targetPath);
-            }
-        } catch (IOException exception) {
-            throw new BusinessException(CommunityErrorCode.ATTACHMENT_STORAGE_FAILED, exception);
-        }
-
-        return new StoredCommunityAttachment(
-                storageKey,
+        return new CommunityAttachmentTarget(
+                storageKey(extension),
                 originalFileName,
-                detectedContentType,
-                attachmentFile.sizeBytes(),
-                attachmentFile.displayOrder()
+                detectedContentType
         );
-    }
-
-    @Override
-    public void delete(String storageKey) {
-        try {
-            Files.deleteIfExists(targetPath(storageKey));
-        } catch (IOException exception) {
-            throw new BusinessException(CommunityErrorCode.ATTACHMENT_STORAGE_FAILED, exception);
-        }
-    }
-
-    @Override
-    public Resource load(String storageKey) {
-        Path path = targetPath(storageKey);
-        if (!Files.isRegularFile(path) || !Files.isReadable(path)) {
-            throw new BusinessException(CommunityErrorCode.ATTACHMENT_STORAGE_FAILED);
-        }
-        return new FileSystemResource(path);
     }
 
     private String safeOriginalFileName(String originalFileName) {
@@ -122,11 +91,14 @@ public class LocalCommunityAttachmentStorage implements CommunityAttachmentStora
         }
     }
 
+    /**
+     * 스트림은 한 번에 12바이트를 다 주지 않을 수 있으므로 readNBytes로 채운다.
+     * 채우지 못하면 이미지로 볼 수 없는 크기이므로 거절한다.
+     */
     private byte[] header(CommunityAttachmentFile file) {
-        byte[] header = new byte[12];
         try (InputStream inputStream = file.openStream()) {
-            int read = inputStream.read(header);
-            if (read <= 0) {
+            byte[] header = inputStream.readNBytes(HEADER_LENGTH);
+            if (header.length < HEADER_LENGTH) {
                 throw new BusinessException(CommunityErrorCode.INVALID_ATTACHMENT);
             }
             return header;
@@ -169,6 +141,10 @@ public class LocalCommunityAttachmentStorage implements CommunityAttachmentStora
         }
     }
 
+    /**
+     * 날짜 prefix는 폴더가 아니다. 객체 저장소의 키는 평평하고 {@code /}는 이름의 일부라,
+     * 키를 고르게 흩는 역할을 한다.
+     */
     private String storageKey(String extension) {
         LocalDate today = LocalDate.now(clock.withZone(ZoneOffset.UTC));
         return "%04d/%02d/%02d/%s.%s".formatted(
@@ -178,14 +154,5 @@ public class LocalCommunityAttachmentStorage implements CommunityAttachmentStora
                 UUID.randomUUID(),
                 extension
         );
-    }
-
-    private Path targetPath(String storageKey) {
-        Path root = properties.storageRoot().toAbsolutePath().normalize();
-        Path target = root.resolve(storageKey).normalize();
-        if (!target.startsWith(root)) {
-            throw new BusinessException(CommunityErrorCode.INVALID_ATTACHMENT);
-        }
-        return target;
     }
 }

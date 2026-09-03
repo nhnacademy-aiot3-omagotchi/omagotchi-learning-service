@@ -37,13 +37,15 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 /**
- * 사용자와 운영자가 공유하는 커뮤니티 게시글 REST API다.
+ * 기수 커뮤니티 게시글 REST API다.
  *
- * <p>읽기/쓰기 모두 동일한 community_posts 데이터를 사용하며, 작성자와 권한은 JWT에서 파생한다.</p>
+ * <p>게시판은 기수에 속하므로 소속 기수를 경로에서 받는다. 그 기수의 ACTIVE 소속이
+ * 아니면 기수 존재를 숨기기 위해 404로 끊는다. 공지와 자유글은 같은 게시판 안에서
+ * type으로 갈리고, 권한 차이는 기수 membership role로 판정한다.</p>
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/community/posts")
+@RequestMapping("/api/v1/cohorts/{cohort-id}/community/posts")
 public class CommunityPostController {
 
     private final CommunityPostQueryService communityPostQueryService;
@@ -52,6 +54,7 @@ public class CommunityPostController {
     @GetMapping
     public CommunityPostPageResponse getPosts(
             JwtAuthenticationToken authentication,
+            @PathVariable("cohort-id") Long cohortId,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) CommunityPostType type,
@@ -60,6 +63,7 @@ public class CommunityPostController {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return CommunityPostPageResponse.from(communityPostQueryService.getPosts(
                 user.userId(),
+                cohortId,
                 page,
                 size,
                 type,
@@ -70,11 +74,13 @@ public class CommunityPostController {
     @GetMapping("/{post-id}")
     public CommunityPostDetailResponse getPost(
             JwtAuthenticationToken authentication,
+            @PathVariable("cohort-id") Long cohortId,
             @PathVariable("post-id") Long postId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return CommunityPostDetailResponse.from(communityPostQueryService.getPost(
                 user.userId(),
+                cohortId,
                 postId
         ));
     }
@@ -82,11 +88,14 @@ public class CommunityPostController {
     @GetMapping("/{post-id}/attachments/{attachment-id}")
     public ResponseEntity<Resource> downloadAttachment(
             JwtAuthenticationToken authentication,
+            @PathVariable("cohort-id") Long cohortId,
             @PathVariable("post-id") Long postId,
             @PathVariable("attachment-id") Long attachmentId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        var download = communityPostQueryService.downloadAttachment(user.userId(), postId, attachmentId);
+        var download = communityPostQueryService.downloadAttachment(
+                user.userId(), cohortId, postId, attachmentId
+        );
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(download.contentType()))
                 .contentLength(download.sizeBytes())
@@ -105,12 +114,13 @@ public class CommunityPostController {
     @ResponseStatus(HttpStatus.CREATED)
     public CommunityPostDetailResponse create(
             JwtAuthenticationToken authentication,
+            @PathVariable("cohort-id") Long cohortId,
             @Valid @RequestBody CreateCommunityPostRequest request
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return CommunityPostDetailResponse.from(communityPostCommandService.create(
                 user.userId(),
-                user.globalRole(),
+                cohortId,
                 request.toCommand()
         ));
     }
@@ -119,13 +129,14 @@ public class CommunityPostController {
     @ResponseStatus(HttpStatus.CREATED)
     public CommunityPostDetailResponse createWithAttachments(
             JwtAuthenticationToken authentication,
+            @PathVariable("cohort-id") Long cohortId,
             @Valid @RequestPart("post") CreateCommunityPostRequest request,
             @RequestPart(value = "attachments", required = false) List<MultipartFile> attachments
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return CommunityPostDetailResponse.from(communityPostCommandService.create(
                 user.userId(),
-                user.globalRole(),
+                cohortId,
                 request.toCommand(attachmentFiles(attachments))
         ));
     }
@@ -133,13 +144,14 @@ public class CommunityPostController {
     @PatchMapping("/{post-id}")
     public CommunityPostDetailResponse update(
             JwtAuthenticationToken authentication,
+            @PathVariable("cohort-id") Long cohortId,
             @PathVariable("post-id") Long postId,
             @Valid @RequestBody UpdateCommunityPostRequest request
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return CommunityPostDetailResponse.from(communityPostCommandService.update(
                 user.userId(),
-                user.globalRole(),
+                cohortId,
                 postId,
                 request.toCommand()
         ));
@@ -151,6 +163,7 @@ public class CommunityPostController {
     )
     public CommunityPostDetailResponse updateWithAttachments(
             JwtAuthenticationToken authentication,
+            @PathVariable("cohort-id") Long cohortId,
             @PathVariable("post-id") Long postId,
             @Valid @RequestPart("post") UpdateCommunityPostRequest request,
             @RequestPart(value = "attachments", required = false) List<MultipartFile> attachments
@@ -158,7 +171,7 @@ public class CommunityPostController {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return CommunityPostDetailResponse.from(communityPostCommandService.update(
                 user.userId(),
-                user.globalRole(),
+                cohortId,
                 postId,
                 attachments == null ? request.toCommand() : request.toCommand(attachmentFiles(attachments))
         ));
@@ -168,26 +181,24 @@ public class CommunityPostController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(
             JwtAuthenticationToken authentication,
+            @PathVariable("cohort-id") Long cohortId,
             @PathVariable("post-id") Long postId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        communityPostCommandService.delete(
-                user.userId(),
-                user.globalRole(),
-                postId
-        );
+        communityPostCommandService.delete(user.userId(), cohortId, postId);
     }
 
     @PatchMapping("/{post-id}/pin")
     public CommunityPostDetailResponse pin(
             JwtAuthenticationToken authentication,
+            @PathVariable("cohort-id") Long cohortId,
             @PathVariable("post-id") Long postId,
             @Valid @RequestBody PinCommunityPostRequest request
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         return CommunityPostDetailResponse.from(communityPostCommandService.pin(
                 user.userId(),
-                user.globalRole(),
+                cohortId,
                 postId,
                 request.toCommand()
         ));

@@ -3,12 +3,11 @@ package site.omagotchi.learningservice.community.infrastructure;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.unit.DataSize;
 
-import java.nio.file.Path;
 import java.util.List;
 
 @ConfigurationProperties(prefix = "community.attachments")
 public record CommunityAttachmentProperties(
-        Path storageRoot,
+        String bucket,
         DataSize maxFileSize,
         int maxCount,
         List<String> allowedExtensions,
@@ -16,8 +15,8 @@ public record CommunityAttachmentProperties(
 ) {
 
     public CommunityAttachmentProperties {
-        if (storageRoot == null) {
-            storageRoot = Path.of("data/community-attachments");
+        if (bucket == null || bucket.isBlank()) {
+            bucket = "community-attachments";
         }
         if (maxFileSize == null) {
             maxFileSize = DataSize.ofMegabytes(5);

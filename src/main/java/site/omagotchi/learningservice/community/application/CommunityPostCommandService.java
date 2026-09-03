@@ -1,16 +1,13 @@
 package site.omagotchi.learningservice.community.application;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
-import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
+import site.omagotchi.learningservice.cohort.application.CohortLockService;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentFile;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentStorage;
 import site.omagotchi.learningservice.community.application.attachment.StoredCommunityAttachment;
@@ -19,45 +16,38 @@ import site.omagotchi.learningservice.community.application.command.PinCommunity
 import site.omagotchi.learningservice.community.application.command.UpdateCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.query.CommunityAttachmentMetadata;
 import site.omagotchi.learningservice.community.application.query.CommunityPostDetail;
-import site.omagotchi.learningservice.community.application.CommunityErrorCode;
 import site.omagotchi.learningservice.community.domain.CommunityPost;
 import site.omagotchi.learningservice.community.domain.CommunityPostAttachment;
-import site.omagotchi.learningservice.community.domain.CommunityPostScope;
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
 import site.omagotchi.learningservice.community.infrastructure.CommunityAttachmentProperties;
 import site.omagotchi.learningservice.community.infrastructure.CommunityPostAttachmentRepository;
 import site.omagotchi.learningservice.community.infrastructure.CommunityPostJpaRepository;
-import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 /**
  * 커뮤니티 게시글 생성/수정/삭제/고정 정책을 담당한다.
  *
- * <p>STUDENT, MENTOR, MANAGER, SYSTEM_ADMIN 권한 차이를 서버의 cohort membership과 JWT role로 검증한다.</p>
+ * <p>게시판은 기수 단위이므로 권한은 전부 해당 기수의 membership으로 판정한다.
+ * 공지는 MANAGER·MENTOR가, 자유글은 작성자 본인이 다룬다.</p>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class CommunityPostCommandService {
 
-    private static final Set<CohortMembershipRole> NOTICE_WRITER_ROLES = Set.of(
-            CohortMembershipRole.MANAGER,
-            CohortMembershipRole.MENTOR
-    );
-
     private final CommunityPostJpaRepository communityPostRepository;
     private final CommunityPostAttachmentRepository attachmentRepository;
-    private final CohortMembershipRepository cohortMembershipRepository;
-    private final CohortRepository cohortRepository;
     private final CohortAccessService cohortAccessService;
+    private final CohortLockService cohortLockService;
     private final CommunityAttachmentStorage attachmentStorage;
     private final CommunityAttachmentProperties attachmentProperties;
+    private final CommunityAuthorNames communityAuthorNames;
     private final Clock clock;
 
     /**
@@ -67,18 +57,17 @@ public class CommunityPostCommandService {
     @Transactional
     public CommunityPostDetail create(
             UUID userId,
-            GlobalRole globalRole,
+            Long cohortId,
             CreateCommunityPostCommand command
     ) {
-        validateCreatePermission(userId, globalRole, command);
+        validateWritePermission(userId, cohortId, command.type());
         validateAttachmentCount(command.attachments());
         CommunityPost post = CommunityPost.create(
                 command.type(),
                 command.title(),
                 command.content(),
                 userId,
-                command.scope(),
-                command.cohortId()
+                cohortId
         );
         CommunityPost savedPost = communityPostRepository.saveAndFlush(post);
         List<CommunityPostAttachment> attachments = replaceAttachmentsWithoutCountValidation(
@@ -86,18 +75,20 @@ public class CommunityPostCommandService {
                 List.of(),
                 command.attachments()
         );
-        return CommunityPostDetail.from(savedPost, toMetadata(attachments));
+        // 방금 만든 글이므로 작성자는 요청자이고 관리 권한도 당연히 있다.
+        return CommunityPostDetail.from(savedPost, toMetadata(attachments))
+                .withViewer(communityAuthorNames.of(userId), true);
     }
 
     @Transactional
     public CommunityPostDetail update(
             UUID userId,
-            GlobalRole globalRole,
+            Long cohortId,
             Long postId,
             UpdateCommunityPostCommand command
     ) {
-        CommunityPost post = findActivePost(postId);
-        validateManagePermission(userId, globalRole, post);
+        CommunityPost post = findActivePost(cohortId, postId);
+        validateManagePermission(userId, cohortId, post);
         post.update(command.title(), command.content());
         List<CommunityPostAttachment> attachments = command.replaceAttachments()
                 ? replaceAttachments(
@@ -106,13 +97,15 @@ public class CommunityPostCommandService {
                 command.attachments()
         )
                 : attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(post.getId());
-        return CommunityPostDetail.from(post, toMetadata(attachments));
+        // validateManagePermission을 통과했으므로 관리 권한이 있다.
+        return CommunityPostDetail.from(post, toMetadata(attachments))
+                .withViewer(communityAuthorNames.of(post.getAuthorUserId()), true);
     }
 
     @Transactional
-    public void delete(UUID userId, GlobalRole globalRole, Long postId) {
-        CommunityPost post = findActivePost(postId);
-        validateManagePermission(userId, globalRole, post);
+    public void delete(UUID userId, Long cohortId, Long postId) {
+        CommunityPost post = findActivePost(cohortId, postId);
+        validateManagePermission(userId, cohortId, post);
         List<CommunityPostAttachment> attachments = attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(
                 post.getId()
         );
@@ -121,109 +114,93 @@ public class CommunityPostCommandService {
         deleteStoredAttachmentsAfterCommit(attachments);
     }
 
+    /**
+     * 고정은 기수 게시판의 운영 행위다. 공지를 쓸 수 있는 MANAGER·MENTOR가 수행한다.
+     *
+     * <p>기수의 고정 공지는 하나다. 화면 상단 배너가 한 자리뿐이라, 새로 고정하면
+     * 기존 고정은 자동으로 내려간다. 운영자가 이전 것을 먼저 찾아 해제할 필요가 없다.</p>
+     */
     @Transactional
     public CommunityPostDetail pin(
             UUID userId,
-            GlobalRole globalRole,
+            Long cohortId,
             Long postId,
             PinCommunityPostCommand command
     ) {
-        cohortAccessService.requireSystemAdmin(globalRole);
-        CommunityPost post = findActivePost(postId);
+        requireNoticeWriter(userId, cohortId);
+        // 기수 행을 공통 mutex로 쓴다. 고정 행이 아직 없는 경우에도 같은 기수의
+        // 두 요청이 "전부 해제 → 새 고정" 사이로 끼어들 수 없게 한다.
+        cohortLockService.lock(cohortId);
+        CommunityPost post = findActivePost(cohortId, postId);
+        if (command.pinned()) {
+            requireNotice(post);
+            communityPostRepository.unpinAll(cohortId);
+            // unpinAll이 영속성 컨텍스트를 비우므로, 갱신할 대상은 다시 읽어야 한다.
+            post = findActivePost(cohortId, postId);
+        }
         post.changePinned(command.pinned());
+        // 고정은 MANAGER·MENTOR의 권한이지만, 남의 자유글을 고정했다고 그 글을
+        // 수정·삭제할 수 있는 건 아니다.
         return CommunityPostDetail.from(
                 post,
                 toMetadata(attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(post.getId()))
+        ).withViewer(
+                communityAuthorNames.of(post.getAuthorUserId()),
+                post.isNotice() || post.isAuthor(userId)
         );
     }
 
-    private CommunityPost findActivePost(Long postId) {
-        return communityPostRepository.findByIdAndDeletedAtIsNull(postId)
+    /**
+     * 다른 기수의 게시글 식별자는 404로 돌려 기수 경계 밖 게시글의 존재를 숨긴다.
+     */
+    private CommunityPost findActivePost(Long cohortId, Long postId) {
+        return communityPostRepository.findByIdAndCohortIdAndDeletedAtIsNull(postId, cohortId)
                 .orElseThrow(() -> new BusinessException(CommunityErrorCode.POST_NOT_FOUND));
     }
 
-    private void validateCreatePermission(
-            UUID userId,
-            GlobalRole globalRole,
-            CreateCommunityPostCommand command
-    ) {
-        if (command.type() == null || command.scope() == null) {
+    /**
+     * 상단 배너는 공지 자리다. 자유글을 고정하면 "공지" 라벨 아래 자유글이 걸린다.
+     *
+     * <p>관리자 화면이 공지 목록에서만 고정 버튼을 그리므로 UI로는 닿지 않는 경로지만,
+     * API를 직접 부르면 가능하므로 서버에서 막는다.</p>
+     */
+    private void requireNotice(CommunityPost post) {
+        if (!post.isNotice()) {
             throw new BusinessException(CommunityErrorCode.INVALID_POST_REQUEST);
         }
-
-        if (command.type() == CommunityPostType.FREE) {
-            requireCohortScoped(command.scope(), command.cohortId());
-            requireActiveCohortMember(userId, command.cohortId());
-            return;
-        }
-
-        if (command.type() == CommunityPostType.NOTICE) {
-            if (globalRole == GlobalRole.SYSTEM_ADMIN) {
-                validateNoticeScope(command.scope(), command.cohortId());
-                return;
-            }
-            requireCohortScoped(command.scope(), command.cohortId());
-            requireNoticeWriter(userId, command.cohortId());
-            return;
-        }
-
-        throw new BusinessException(CommunityErrorCode.INVALID_POST_REQUEST);
     }
 
-    private void validateManagePermission(UUID userId, GlobalRole globalRole, CommunityPost post) {
-        if (globalRole == GlobalRole.SYSTEM_ADMIN && post.isNotice()) {
-            return;
-        }
-        if (post.isFree() && post.getAuthorUserId().equals(userId)) {
-            return;
-        }
-        if (post.isNotice() && post.isCohortScoped()) {
-            requireNoticeWriter(userId, post.getCohortId());
-            return;
-        }
-        throw new BusinessException(CommunityErrorCode.POST_ACCESS_DENIED);
-    }
-
-    private void validateNoticeScope(CommunityPostScope scope, Long cohortId) {
-        if (scope == CommunityPostScope.GLOBAL && cohortId == null) {
-            return;
-        }
-        requireCohortScoped(scope, cohortId);
-        requireExistingCohort(cohortId);
-    }
-
-    private void requireCohortScoped(CommunityPostScope scope, Long cohortId) {
-        if (scope != CommunityPostScope.COHORT || cohortId == null) {
+    private void validateWritePermission(UUID userId, Long cohortId, CommunityPostType type) {
+        if (type == null) {
             throw new BusinessException(CommunityErrorCode.INVALID_POST_REQUEST);
         }
+        if (type == CommunityPostType.NOTICE) {
+            requireNoticeWriter(userId, cohortId);
+            return;
+        }
+        requireActiveCohortMember(userId, cohortId);
+    }
+
+    private void validateManagePermission(UUID userId, Long cohortId, CommunityPost post) {
+        if (post.isNotice()) {
+            requireNoticeWriter(userId, cohortId);
+            return;
+        }
+        if (!post.isAuthor(userId)) {
+            throw new BusinessException(CommunityErrorCode.POST_ACCESS_DENIED);
+        }
+        requireActiveCohortMember(userId, cohortId);
     }
 
     private void requireActiveCohortMember(UUID userId, Long cohortId) {
-        boolean activeMember = cohortMembershipRepository.existsByCohortIdAndUserIdAndStatusIn(
-                cohortId,
-                userId,
-                Set.of(CohortMembershipStatus.ACTIVE)
-        );
-        if (!activeMember) {
+        if (!cohortAccessService.isActiveMember(cohortId, userId)) {
             throw new BusinessException(CommunityErrorCode.POST_ACCESS_DENIED);
         }
     }
 
     private void requireNoticeWriter(UUID userId, Long cohortId) {
-        boolean noticeWriter = cohortMembershipRepository.existsByCohortIdAndUserIdAndRoleInAndStatus(
-                cohortId,
-                userId,
-                NOTICE_WRITER_ROLES,
-                CohortMembershipStatus.ACTIVE
-        );
-        if (!noticeWriter) {
+        if (!cohortAccessService.isActiveManagerOrMentor(cohortId, userId)) {
             throw new BusinessException(CommunityErrorCode.POST_ACCESS_DENIED);
-        }
-    }
-
-    private void requireExistingCohort(Long cohortId) {
-        if (!cohortRepository.existsById(cohortId)) {
-            throw new BusinessException(CohortErrorCode.COHORT_NOT_FOUND);
         }
     }
 
@@ -264,7 +241,16 @@ public class CommunityPostCommandService {
             deleteStoredAttachmentsAfterCommit(existingAttachments);
             return savedAttachments;
         } catch (RuntimeException exception) {
-            storedAttachments.forEach(attachment -> attachmentStorage.delete(attachment.storageKey()));
+            // 정리하다 저장소가 또 실패해도 원래 실패를 가리지 않는다. 객체 스토리지는
+            // 네트워크 너머라 삭제도 실패할 수 있고, 그때 남는 고아 객체보다 원인을
+            // 잃는 쪽이 더 나쁘다.
+            storedAttachments.forEach(attachment -> {
+                try {
+                    attachmentStorage.delete(attachment.storageKey());
+                } catch (RuntimeException cleanupFailure) {
+                    exception.addSuppressed(cleanupFailure);
+                }
+            });
             throw exception;
         }
     }
@@ -281,8 +267,23 @@ public class CommunityPostCommandService {
                 .toList();
     }
 
+    /**
+     * 커밋이 끝난 뒤 부르는 정리라서 실패를 밖으로 올리지 않는다.
+     * 여기에서 예외를 던지면 이미 성공한 요청이 500이 된다. 고아 객체를 남기고 로그만 남긴다.
+     */
     private void deleteStoredAttachments(List<CommunityPostAttachment> attachments) {
-        attachments.forEach(attachment -> attachmentStorage.delete(attachment.getStorageKey()));
+        attachments.forEach(attachment -> {
+            try {
+                attachmentStorage.delete(attachment.getStorageKey());
+            } catch (RuntimeException exception) {
+                log.warn(
+                        "첨부파일 객체를 지우지 못했습니다. postId={}, key={}",
+                        attachment.getPostId(),
+                        attachment.getStorageKey(),
+                        exception
+                );
+            }
+        });
     }
 
     private void deleteStoredAttachmentsAfterCommit(List<CommunityPostAttachment> attachments) {

@@ -3,7 +3,6 @@ package site.omagotchi.learningservice.chat.infrastructure;
 import com.google.genai.Client;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.google.genai.GoogleGenAiChatModel;
@@ -12,8 +11,8 @@ import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import site.omagotchi.learningservice.global.ai.AiToolProvider;
 import site.omagotchi.learningservice.chat.application.ChatSystemPrompt;
+import site.omagotchi.learningservice.global.ai.AiToolProvider;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -86,7 +85,8 @@ public class ChatClientConfig {
                 .defaultSystem(ChatSystemPrompt.DEFAULT)
                 .defaultTools(toolProviders.toArray())
                 // .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))로 대화방 ID 넘겨줘야 대화방별로 기억이 구분됨
-                .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                // MessageChatMemoryAdvisor는 모델 호출 전에 질문을 저장해서, 실패하면 답 없는 질문이 남고 다음 턴에서 모델이 그것까지 답해 버리므로, 새로 구현하여 씀
+                .defaultAdvisors(new CompletedTurnChatMemoryAdvisor(chatMemory))
                 .build();
     }
 }

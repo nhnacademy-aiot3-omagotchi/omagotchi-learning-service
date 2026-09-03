@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.attendance.infrastructure;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import site.omagotchi.learningservice.attendance.application.result.CurrentPresenceResult;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
 import site.omagotchi.learningservice.attendance.application.result.OpenUserPresenceView;
 import site.omagotchi.learningservice.attendance.application.result.PresenceIntervalView;
@@ -10,6 +11,7 @@ import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
 import site.omagotchi.learningservice.attendance.domain.PresenceState;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +24,29 @@ import java.util.UUID;
  * {@code ended_at}을 채우고 다음 구간을 새 행으로 보존한다.</p>
  */
 public interface PresenceIntervalRepository extends JpaRepository<PresenceInterval, Long> {
+
+    /** 체크아웃되지 않은 출결에 속한 열린 체류구간을 최신순으로 조회한다. */
+    @Query("""
+                SELECT new site.omagotchi.learningservice.attendance.application.result.CurrentPresenceResult(
+                           i.spaceId, i.state, i.startedAt)
+                  FROM PresenceInterval i
+                  JOIN AttendanceRecord r ON r.id = i.attendanceId
+                 WHERE r.cohortMembershipId = :cohortMembershipId
+                   AND r.checkedInAt IS NOT NULL
+                   AND r.checkedOutAt IS NULL
+                   AND i.endedAt IS NULL
+                   AND (r.attendanceDate = :attendanceDate
+                        OR i.state = site.omagotchi.learningservice.attendance.domain.PresenceState.MEETING)
+                 ORDER BY CASE
+                              WHEN i.state = site.omagotchi.learningservice.attendance.domain.PresenceState.MEETING
+                              THEN 0 ELSE 1
+                          END,
+                          i.startedAt DESC,
+                          i.id DESC""")
+    List<CurrentPresenceResult> findCurrentPresences(
+            @Param("cohortMembershipId") Long cohortMembershipId,
+            @Param("attendanceDate") LocalDate attendanceDate
+    );
 
     /** 열린 구간 중복을 감지할 수 있도록 한 건으로 축약하지 않는다. */
     List<PresenceInterval> findByAttendanceIdAndEndedAtIsNullOrderByStartedAtAscIdAsc(

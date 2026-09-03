@@ -10,7 +10,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.ByteArrayResource;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
-import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentStorage;
 import site.omagotchi.learningservice.community.application.port.CommunityPostQueryPort;
@@ -92,7 +91,7 @@ class CommunityPostQueryServiceTest {
     @DisplayName("ACTIVE 소속이 아니면 조회하지 않는다")
     void rejectsNonMemberBeforeQuerying() {
         willThrow(new BusinessException(CohortErrorCode.COHORT_NOT_FOUND))
-                .given(cohortAccessService).requireActiveMembership(COHORT_ID, USER_ID);
+                .given(cohortAccessService).requireActiveMembershipAndIsManagerOrMentor(COHORT_ID, USER_ID);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -278,8 +277,8 @@ class CommunityPostQueryServiceTest {
     }
 
     private void givenMemberWithRole(CohortMembershipRole role) {
-        given(cohortAccessService.requireActiveMembership(COHORT_ID, USER_ID))
-                .willReturn(CohortMembership.pending(COHORT_ID, USER_ID, role));
+        given(cohortAccessService.requireActiveMembershipAndIsManagerOrMentor(COHORT_ID, USER_ID))
+                .willReturn(role == CohortMembershipRole.MANAGER || role == CohortMembershipRole.MENTOR);
     }
 
     private CommunityPostListItem listItem(CommunityPostType type, UUID authorUserId) {

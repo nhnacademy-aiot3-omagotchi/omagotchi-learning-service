@@ -5,12 +5,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.util.unit.DataSize;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.cohort.application.CohortLockService;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentFile;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentStorage;
 import site.omagotchi.learningservice.community.application.attachment.StoredCommunityAttachment;
@@ -28,7 +28,6 @@ import java.io.ByteArrayInputStream;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,9 +40,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -62,7 +61,10 @@ class CommunityPostCommandServiceTest {
     private CommunityPostAttachmentRepository attachmentRepository;
 
     @Mock
-    private CohortMembershipRepository cohortMembershipRepository;
+    private CohortAccessService cohortAccessService;
+
+    @Mock
+    private CohortLockService cohortLockService;
 
     @Mock
     private CommunityAttachmentStorage attachmentStorage;
@@ -86,7 +88,8 @@ class CommunityPostCommandServiceTest {
         communityPostCommandService = new CommunityPostCommandService(
                 communityPostRepository,
                 attachmentRepository,
-                cohortMembershipRepository,
+                cohortAccessService,
+                cohortLockService,
                 attachmentStorage,
                 attachmentProperties,
                 communityAuthorNames,
@@ -332,7 +335,9 @@ class CommunityPostCommandServiceTest {
 
         communityPostCommandService.pin(USER_ID, COHORT_ID, 1L, new PinCommunityPostCommand(true));
 
-        verify(communityPostRepository).unpinAll(COHORT_ID);
+        InOrder order = inOrder(cohortLockService, communityPostRepository);
+        order.verify(cohortLockService).lock(COHORT_ID);
+        order.verify(communityPostRepository).unpinAll(COHORT_ID);
     }
 
     @Test
@@ -400,20 +405,11 @@ class CommunityPostCommandServiceTest {
     }
 
     private void givenActiveMember(boolean active) {
-        given(cohortMembershipRepository.existsByCohortIdAndUserIdAndStatusIn(
-                eq(COHORT_ID),
-                eq(USER_ID),
-                org.mockito.ArgumentMatchers.<Collection<CohortMembershipStatus>>any()
-        )).willReturn(active);
+        given(cohortAccessService.isActiveMember(COHORT_ID, USER_ID)).willReturn(active);
     }
 
     private void givenNoticeWriter(boolean noticeWriter) {
-        given(cohortMembershipRepository.existsByCohortIdAndUserIdAndRoleInAndStatus(
-                eq(COHORT_ID),
-                eq(USER_ID),
-                org.mockito.ArgumentMatchers.<Collection<CohortMembershipRole>>any(),
-                eq(CohortMembershipStatus.ACTIVE)
-        )).willReturn(noticeWriter);
+        given(cohortAccessService.isActiveManagerOrMentor(COHORT_ID, USER_ID)).willReturn(noticeWriter);
     }
 
     private void givenFoundPost(CommunityPost post) {

@@ -86,19 +86,31 @@ class CommunityPostControllerTest {
                 "학습"
         )).willReturn(new CommunityPostPage(List.of(
                 new CommunityPostListItem(
-                        1L,
+                        2L,
                         CommunityPostType.NOTICE,
-                        "공지",
+                        "일반 공지",
                         AUTHOR_ID,
                         "글쓴이",
                         COHORT_ID,
-                        true,
+                        false,
                         Instant.parse("2026-08-08T00:00:00Z"),
                         Instant.parse("2026-08-08T00:00:00Z"),
                         0L,
                         true
                 )
-        ), null, 1, 10, 11, 2));
+        ), new CommunityPostListItem(
+                1L,
+                CommunityPostType.NOTICE,
+                "고정 공지",
+                AUTHOR_ID,
+                "기수장",
+                COHORT_ID,
+                true,
+                Instant.parse("2026-08-09T00:00:00Z"),
+                Instant.parse("2026-08-09T00:00:00Z"),
+                0L,
+                false
+        ), 1, 10, 11, 2));
 
         mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/community/posts", COHORT_ID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
@@ -107,13 +119,16 @@ class CommunityPostControllerTest {
                         .param("type", "NOTICE")
                         .param("search", "학습"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].postId").value(1))
+                .andExpect(jsonPath("$.items[0].postId").value(2))
                 .andExpect(jsonPath("$.items[0].type").value("NOTICE"))
                 .andExpect(jsonPath("$.items[0].cohortId").value(10))
                 .andExpect(jsonPath("$.items[0].authorNickname").value("글쓴이"))
                 .andExpect(jsonPath("$.items[0].canManage").value(true))
                 .andExpect(jsonPath("$.items[0].authorUserId").value(AUTHOR_ID.toString()))
-                .andExpect(jsonPath("$.items[0].pinned").value(true))
+                .andExpect(jsonPath("$.items[0].pinned").value(false))
+                .andExpect(jsonPath("$.pinned.postId").value(1))
+                .andExpect(jsonPath("$.pinned.pinned").value(true))
+                .andExpect(jsonPath("$.pinned.canManage").value(false))
                 .andExpect(jsonPath("$.page.number").value(1))
                 .andExpect(jsonPath("$.page.size").value(10))
                 .andExpect(jsonPath("$.page.totalElements").value(11))

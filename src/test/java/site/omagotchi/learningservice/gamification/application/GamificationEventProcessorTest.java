@@ -91,13 +91,11 @@ class GamificationEventProcessorTest {
     }
 
     /*
-     * AI 추천 퀘스트는 예측 모델이 "학습 종료"를 신호로 학습되어 있어 완료 조건이
-     * 학습 완료와 같다. 호출부가 빠지면 화면에서 AI 카드만 0/1 로 남고 보상 받기가
-     * 나타나지 않는다. 실제로 그 상태로 한동안 방치됐던 적이 있어 여기서 묶어 둔다.
+     * 학습 완료 이벤트는 AI 추천 퀘스트의 완료 여부도 함께 판정한다.
      */
     @Test
-    @DisplayName("학습 완료 이벤트는 AI 추천 퀘스트도 함께 완료한다")
-    void completesLlmQuestOnStudyCompleted() {
+    @DisplayName("학습 완료 이벤트는 AI 추천 퀘스트 완료 여부도 함께 판정한다")
+    void evaluatesLlmQuestOnStudyCompleted() {
         GamificationEventMessage event = new GamificationEventMessage(
                 GamificationEventType.STUDY_COMPLETED,
                 STUDY_SOURCE_ID.toString(),

@@ -308,7 +308,7 @@ PATCH /api/cohorts/{cohort-id}/attendance-records/{attendance-id}/status
 
 게시글 목록/상세/생성/수정/삭제/고정 API다.
 
-서게시판은 기수에 속한다. 소속 기수는 경로에서 받고, 그 기수의 ACTIVE 소속이 아니면
+게시판은 기수에 속한다. 소속 기수는 경로에서 받고, 그 기수의 ACTIVE 소속이 아니면
 기수 존재를 숨기기 위해 404를 반환한다. 공지와 자유글은 같은 게시판 안에서 `type`으로
 갈리며, 공지 작성·수정·고정은 그 기수의 MANAGER·MENTOR만 할 수 있다.
 
@@ -348,7 +348,7 @@ multipart 생성/수정:
 }
 ```
 
-고정 요청:
+고정 요청. 기수의 고정 공지는 하나이므로 새로 고정하면 기존 고정은 자동으로 내려간다:
 
 ```json
 {
@@ -356,28 +356,49 @@ multipart 생성/수정:
 }
 ```
 
-목록 응답:
+목록 응답. `items`에는 고정 공지가 들어가지 않고 `pinned`로 따로 실린다 -- 화면 상단 배너가
+한 자리라 목록과 배너에 같은 글이 두 번 나오지 않게 한다. 고정된 글이 없으면 `pinned`는
+null이고, 있으면 유형·검색어·페이지와 무관하게 늘 같은 글이 온다.
+
+`authorNickname`은 대표 캐릭터 닉네임이며 아직 캐릭터를 고르지 않은 작성자는 null이다.
+`canManage`는 보는 사람에 따라 달라진다 -- 공지는 MANAGER·MENTOR, 자유글은 작성자 본인일 때 참이다.
 
 ```json
 {
   "items": [
     {
-      "postId": 1,
-      "type": "NOTICE",
-      "title": "공지 제목",
+      "postId": 2,
+      "type": "FREE",
+      "title": "자유글 제목",
       "authorUserId": "00000000-0000-0000-0000-000000000001",
-      "scope": "COHORT",
+      "authorNickname": "옆자리",
       "cohortId": 1,
-      "pinned": true,
+      "pinned": false,
       "createdAt": "2026-08-10T00:10:00Z",
       "updatedAt": "2026-08-10T00:10:00Z",
-      "attachmentCount": 1
+      "attachmentCount": 1,
+      "canManage": true
     }
   ],
-  "page": 0,
-  "size": 20,
-  "totalElements": 1,
-  "totalPages": 1
+  "pinned": {
+    "postId": 1,
+    "type": "NOTICE",
+    "title": "공지 제목",
+    "authorUserId": "00000000-0000-0000-0000-000000000002",
+    "authorNickname": "기수장",
+    "cohortId": 1,
+    "pinned": true,
+    "createdAt": "2026-08-09T00:00:00Z",
+    "updatedAt": "2026-08-09T00:00:00Z",
+    "attachmentCount": 0,
+    "canManage": false
+  },
+  "page": {
+    "number": 0,
+    "size": 20,
+    "totalElements": 1,
+    "totalPages": 1
+  }
 }
 ```
 
@@ -390,7 +411,7 @@ multipart 생성/수정:
   "title": "공지 제목",
   "content": "공지 내용",
   "authorUserId": "00000000-0000-0000-0000-000000000001",
-  "scope": "COHORT",
+  "authorNickname": "기수장",
   "cohortId": 1,
   "pinned": true,
   "createdAt": "2026-08-10T00:10:00Z",
@@ -398,12 +419,13 @@ multipart 생성/수정:
   "attachments": [
     {
       "attachmentId": 10,
-      "originalFileName": "notice.pdf",
-      "contentType": "application/pdf",
+      "originalFileName": "notice.png",
+      "contentType": "image/png",
       "sizeBytes": 12000,
       "displayOrder": 0
     }
-  ]
+  ],
+  "canManage": true
 }
 ```
 

@@ -20,6 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -87,8 +89,8 @@ class StudyTimeQuestTargetResolverTest {
     }
 
     @Test
-    @DisplayName("예측도 등원 이력도 없으면 하한을 기본 목표로 낸다")
-    void fallsBackToDefaultWhenNoHistory() {
+    @DisplayName("예측이 실패하고 최근 등원 평균도 0이면 하한을 기본 목표로 낸다")
+    void fallsBackToDefaultWhenNoRecentAttendance() {
         when(userStudySecondsReader.findActiveCohortId(USER_ID)).thenReturn(Optional.of(COHORT_ID));
         when(userStudySecondsReader.hasStudyRecordBefore(USER_ID, COHORT_ID, QUEST_DATE)).thenReturn(true);
         when(studyTimePredictionService.predict(USER_ID, COHORT_ID, null))
@@ -131,6 +133,7 @@ class StudyTimeQuestTargetResolverTest {
                 () -> assertEquals(QuestTargetSource.DEFAULT, target.source())
         );
         verifyNoInteractions(studyTimePredictionService);
+        verify(userStudySecondsReader, never()).recentAttendedAverageSeconds(USER_ID, COHORT_ID, QUEST_DATE);
     }
 
     @Test

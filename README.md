@@ -87,7 +87,7 @@ echo "누락된 키:"; comm -23 /tmp/req.txt /tmp/have.txt
 - PostgreSQL: 영속 Domain 데이터
 - Redis: WebSocket Presence·Session TTL
 - RabbitMQ: Rule 품질 데이터 소비·복구 Queue
-- 첨부파일: `COMMUNITY_ATTACHMENT_STORAGE_ROOT`
+- MinIO: 커뮤니티 첨부파일 객체 저장소 (`MINIO_ENDPOINT`, `COMMUNITY_ATTACHMENT_BUCKET`)
 - Telegram: 사용자 연동·Webhook
 
 ### Identity Service 연동
@@ -198,7 +198,7 @@ echo "누락된 키:"; comm -23 /tmp/req.txt /tmp/have.txt
 - Frontend Session과 Learning Presence의 Redis 논리 DB 분리
 - Telegram Webhook의 Access JWT 예외와 제공자 검증의 분리
 - 공유 DB Migration의 담당 절차 외 실행 금지
-- 운영 첨부파일 Volume 연결
+- 공유 MinIO의 버킷 이름 선점과 서비스 전용 Credential 사용
 
 ## 관련 문서
 

@@ -12,12 +12,6 @@ import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * 학습 시간 퀘스트의 목표를 산정한다.
- *
- * <p>MODEL → RULE_B2 → DEFAULT 순서로 내려간다. 어떤 경우에도 예외를 밖으로 올리지 않는다.
- * prediction-service 장애가 퀘스트 발급 자체를 막으면 안 되기 때문이다(ADR prediction/0001).
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -34,8 +28,15 @@ public class StudyTimeQuestTargetResolver {
             return defaultTarget();
         }
 
-        return predictedTarget(userId, cohortId.get())
-                .or(() -> ruleTarget(userId, cohortId.get(), questDate))
+        Long activeCohortId = cohortId.get();
+        if (!userStudySecondsReader.hasStudyRecordBefore(userId, activeCohortId, questDate)) {
+            // 확정 학습 기록이 하나도 없으면 모델 입력이 전부 0이라 누구에게나 같은 값이 나온다.
+            // 그건 예측이 아니고, 규칙(B2)도 등원일이 없어 값을 못 내므로 바로 기본값으로 간다.
+            return defaultTarget();
+        }
+
+        return predictedTarget(userId, activeCohortId)
+                .or(() -> ruleTarget(userId, activeCohortId, questDate))
                 .orElseGet(this::defaultTarget);
     }
 

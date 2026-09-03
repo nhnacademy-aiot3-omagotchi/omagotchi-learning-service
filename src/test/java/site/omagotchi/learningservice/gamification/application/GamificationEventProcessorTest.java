@@ -11,9 +11,13 @@ import site.omagotchi.learningservice.gamification.application.port.Gamification
 import java.time.Instant;
 import java.util.UUID;
 
+import org.mockito.InOrder;
+
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("게이미피케이션 내부 이벤트 처리")
@@ -84,5 +88,52 @@ class GamificationEventProcessorTest {
         eventProcessor.process(event);
 
         verify(dailyQuestService).handleStudyCompleted(USER_ID);
+    }
+
+    /*
+     * 학습 완료 이벤트는 AI 추천 퀘스트의 완료 여부도 함께 판정한다.
+     */
+    @Test
+    @DisplayName("학습 완료 이벤트는 AI 추천 퀘스트 완료 여부도 함께 판정한다")
+    void evaluatesLlmQuestOnStudyCompleted() {
+        GamificationEventMessage event = new GamificationEventMessage(
+                GamificationEventType.STUDY_COMPLETED,
+                STUDY_SOURCE_ID.toString(),
+                USER_ID,
+                OCCURRED_AT);
+        given(eventReceiptRepository.claim(
+                GamificationEventType.STUDY_COMPLETED,
+                STUDY_SOURCE_ID.toString(),
+                USER_ID,
+                OCCURRED_AT
+        )).willReturn(true);
+
+        eventProcessor.process(event);
+
+        InOrder order = inOrder(dailyQuestService);
+        order.verify(dailyQuestService).handleStudyCompleted(USER_ID);
+        order.verify(dailyQuestService).handleLlmQuestCompleted(USER_ID);
+        verifyNoMoreInteractions(dailyQuestService);
+    }
+
+    @Test
+    @DisplayName("출석 이벤트는 AI 추천 퀘스트를 건드리지 않는다")
+    void doesNotCompleteLlmQuestOnAttendance() {
+        GamificationEventMessage event = new GamificationEventMessage(
+                GamificationEventType.ATTENDANCE_CHECKED_IN,
+                STUDY_SOURCE_ID.toString(),
+                USER_ID,
+                OCCURRED_AT);
+        given(eventReceiptRepository.claim(
+                GamificationEventType.ATTENDANCE_CHECKED_IN,
+                STUDY_SOURCE_ID.toString(),
+                USER_ID,
+                OCCURRED_AT
+        )).willReturn(true);
+
+        eventProcessor.process(event);
+
+        verify(dailyQuestService).handleAttendance(USER_ID);
+        verifyNoMoreInteractions(dailyQuestService);
     }
 }

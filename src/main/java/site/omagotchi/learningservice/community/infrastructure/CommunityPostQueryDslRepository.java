@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.community.infrastructure;
 
+import com.querydsl.core.types.ConstructorExpression;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.JPAExpressions;
@@ -51,38 +52,29 @@ public class CommunityPostQueryDslRepository implements CommunityPostQueryPort {
      * FROM learning_service.community_posts p
      * WHERE p.deleted_at IS NULL
      *   AND p.cohort_id = :cohortId
+     *   AND NOT p.pinned                                      -- 고정 공지는 배너로 빠진다
      *   AND p.type = :type                                    -- type이 null이 아닐 때만
      *   AND (lower(p.title) LIKE :search ESCAPE '!'
      *        OR lower(p.content) LIKE :search ESCAPE '!')     -- search가 null이 아닐 때만
-     * ORDER BY p.pinned DESC, p.created_at DESC, p.id DESC
+     * ORDER BY p.created_at DESC, p.id DESC
      * LIMIT :size OFFSET :page * :size;
+     *
+     * ix_community_posts_cohort_list와 컬럼 순서가 같아 정렬까지 인덱스로 처리된다.
      */
     @Override
     public CommunityPostPage findVisiblePosts(CommunityPostSearchCondition condition) {
         BooleanExpression[] predicates = {
                 activeInCohort(condition.cohortId()),
+                post.pinned.isFalse(),
                 typeEquals(condition.type()),
                 searchMatches(condition.search())
         };
 
         List<CommunityPostListItem> items = queryFactory
-                .select(Projections.constructor(
-                        CommunityPostListItem.class,
-                        post.id,
-                        post.type,
-                        post.title,
-                        post.authorUserId,
-                        post.cohortId,
-                        post.pinned,
-                        post.createdAt,
-                        post.updatedAt,
-                        JPAExpressions.select(attachment.id.count())
-                                .from(attachment)
-                                .where(attachment.postId.eq(post.id))
-                ))
+                .select(listItemProjection())
                 .from(post)
                 .where(predicates)
-                .orderBy(post.pinned.desc(), post.createdAt.desc(), post.id.desc())
+                .orderBy(post.createdAt.desc(), post.id.desc())
                 .offset((long) condition.page() * condition.size())
                 .limit(condition.size())
                 .fetch();
@@ -99,6 +91,7 @@ public class CommunityPostQueryDslRepository implements CommunityPostQueryPort {
                 : (int) Math.ceil((double) totalElements / condition.size());
         return new CommunityPostPage(
                 items,
+                null,
                 condition.page(),
                 condition.size(),
                 totalElements,
@@ -106,10 +99,44 @@ public class CommunityPostQueryDslRepository implements CommunityPostQueryPort {
         );
     }
 
+    /*
+     * SELECT ... FROM community_posts p
+     * WHERE p.deleted_at IS NULL AND p.cohort_id = :cohortId AND p.pinned
+     * ORDER BY p.created_at DESC, p.id DESC
+     * LIMIT 1;
+     */
+    @Override
+    public Optional<CommunityPostListItem> findPinnedPost(Long cohortId) {
+        // 기수의 고정 공지는 하나지만, 혹시 둘이 되어도 화면이 흔들리지 않게 최신 하나만 집는다.
+        return Optional.ofNullable(queryFactory
+                .select(listItemProjection())
+                .from(post)
+                .where(activeInCohort(cohortId), post.pinned.isTrue())
+                .orderBy(post.createdAt.desc(), post.id.desc())
+                .fetchFirst());
+    }
+
     @Override
     public Optional<CommunityPostDetail> findVisiblePost(Long cohortId, Long postId) {
         return postRepository.findByIdAndCohortIdAndDeletedAtIsNull(postId, cohortId)
                 .map(found -> CommunityPostDetail.from(found, findAttachments(found.getId())));
+    }
+
+    private ConstructorExpression<CommunityPostListItem> listItemProjection() {
+        return Projections.constructor(
+                CommunityPostListItem.class,
+                post.id,
+                post.type,
+                post.title,
+                post.authorUserId,
+                post.cohortId,
+                post.pinned,
+                post.createdAt,
+                post.updatedAt,
+                JPAExpressions.select(attachment.id.count())
+                        .from(attachment)
+                        .where(attachment.postId.eq(post.id))
+        );
     }
 
     private BooleanExpression activeInCohort(Long cohortId) {

@@ -122,6 +122,9 @@ public class CommunityPostCommandService {
 
     /**
      * 고정은 기수 게시판의 운영 행위다. 공지를 쓸 수 있는 MANAGER·MENTOR가 수행한다.
+     *
+     * <p>기수의 고정 공지는 하나다. 화면 상단 배너가 한 자리뿐이라, 새로 고정하면
+     * 기존 고정은 자동으로 내려간다. 운영자가 이전 것을 먼저 찾아 해제할 필요가 없다.</p>
      */
     @Transactional
     public CommunityPostDetail pin(
@@ -131,6 +134,10 @@ public class CommunityPostCommandService {
             PinCommunityPostCommand command
     ) {
         requireNoticeWriter(userId, cohortId);
+        if (command.pinned()) {
+            // 영속성 컨텍스트를 비우므로 게시글을 읽기 전에 끝낸다.
+            communityPostRepository.unpinAll(cohortId);
+        }
         CommunityPost post = findActivePost(cohortId, postId);
         post.changePinned(command.pinned());
         // 고정은 MANAGER·MENTOR의 권한이지만, 남의 자유글을 고정했다고 그 글을

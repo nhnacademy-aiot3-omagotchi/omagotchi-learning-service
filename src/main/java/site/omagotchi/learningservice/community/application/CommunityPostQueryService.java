@@ -16,11 +16,11 @@ import site.omagotchi.learningservice.community.application.query.CommunityPostS
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * 커뮤니티 게시글 조회 조건을 정규화하고, 실제 가시성/검색/페이징 처리는 query port에 위임한다.
@@ -76,23 +76,36 @@ public class CommunityPostQueryService {
                 normalizeSearch(search)
         ));
 
+        // 배너에 걸 고정 공지는 필터·검색·페이지와 무관하게 늘 같은 글이다.
+        CommunityPostListItem pinned = communityPostQueryPort.findPinnedPost(cohortId).orElse(null);
+
         boolean noticeWriter = isNoticeWriter(membership);
-        Map<UUID, String> nicknames = communityAuthorNames.of(found.items().stream()
-                .map(CommunityPostListItem::authorUserId)
+        Map<UUID, String> nicknames = communityAuthorNames.of(Stream.concat(
+                        found.items().stream().map(CommunityPostListItem::authorUserId),
+                        pinned == null ? Stream.empty() : Stream.of(pinned.authorUserId()))
                 .collect(Collectors.toSet()));
-        List<CommunityPostListItem> items = found.items().stream()
-                .map(item -> item.withViewer(
-                        nicknames.get(item.authorUserId()),
-                        canManage(item.type(), item.authorUserId(), userId, noticeWriter)
-                ))
-                .toList();
 
         return new CommunityPostPage(
-                items,
+                found.items().stream()
+                        .map(item -> withViewer(item, nicknames, userId, noticeWriter))
+                        .toList(),
+                pinned == null ? null : withViewer(pinned, nicknames, userId, noticeWriter),
                 found.page(),
                 found.size(),
                 found.totalElements(),
                 found.totalPages()
+        );
+    }
+
+    private CommunityPostListItem withViewer(
+            CommunityPostListItem item,
+            Map<UUID, String> nicknames,
+            UUID viewerUserId,
+            boolean noticeWriter
+    ) {
+        return item.withViewer(
+                nicknames.get(item.authorUserId()),
+                canManage(item.type(), item.authorUserId(), viewerUserId, noticeWriter)
         );
     }
 

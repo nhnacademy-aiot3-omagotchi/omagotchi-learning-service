@@ -110,7 +110,18 @@ public class DailyQuestService {
 
     @Transactional
     public DailyQuestResult handleLlmQuestCompleted(UUID userId) {
-        return completeToday(userId, LLM_QUEST_CODE);
+        LocalDate questDate = dateTimeProvider.currentAggregationDate();
+        createDailyQuestsIfAbsent(userId, questDate);
+        UserDailyQuest quest = requireTodayQuest(userId, questDate, LLM_QUEST_CODE);
+
+        // 예측 기반 LLM 슬롯은 학습 종료 이벤트 자체가 아니라 누적 공부시간으로
+        // 완료한다. 기존 횟수형 LLM 퀘스트는 이전 이벤트 계약대로 완료 처리한다.
+        if (quest.isStudyTimeQuest()) {
+            completeIfStudyTimeReached(userId, questDate, quest);
+        } else {
+            quest.complete(dateTimeProvider.currentInstant());
+        }
+        return DailyQuestResult.from(quest);
     }
 
     @Transactional

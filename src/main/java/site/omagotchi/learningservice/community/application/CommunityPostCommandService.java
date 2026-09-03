@@ -135,9 +135,10 @@ public class CommunityPostCommandService {
     ) {
         requireNoticeWriter(userId, cohortId);
         if (command.pinned()) {
-            // 영속성 컨텍스트를 비우므로 게시글을 읽기 전에 끝낸다.
+            requireNotice(cohortId, postId);
             communityPostRepository.unpinAll(cohortId);
         }
+        // unpinAll이 영속성 컨텍스트를 비우므로 그 뒤에 읽어야 변경이 반영된다.
         CommunityPost post = findActivePost(cohortId, postId);
         post.changePinned(command.pinned());
         // 고정은 MANAGER·MENTOR의 권한이지만, 남의 자유글을 고정했다고 그 글을
@@ -157,6 +158,18 @@ public class CommunityPostCommandService {
     private CommunityPost findActivePost(Long cohortId, Long postId) {
         return communityPostRepository.findByIdAndCohortIdAndDeletedAtIsNull(postId, cohortId)
                 .orElseThrow(() -> new BusinessException(CommunityErrorCode.POST_NOT_FOUND));
+    }
+
+    /**
+     * 상단 배너는 공지 자리다. 자유글을 고정하면 "공지" 라벨 아래 자유글이 걸린다.
+     *
+     * <p>관리자 화면이 공지 목록에서만 고정 버튼을 그리므로 UI로는 닿지 않는 경로지만,
+     * API를 직접 부르면 가능하므로 서버에서 막는다.</p>
+     */
+    private void requireNotice(Long cohortId, Long postId) {
+        if (!findActivePost(cohortId, postId).isNotice()) {
+            throw new BusinessException(CommunityErrorCode.INVALID_POST_REQUEST);
+        }
     }
 
     private void validateWritePermission(UUID userId, Long cohortId, CommunityPostType type) {

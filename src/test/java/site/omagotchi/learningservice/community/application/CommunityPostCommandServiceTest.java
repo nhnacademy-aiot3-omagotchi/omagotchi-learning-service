@@ -336,6 +336,27 @@ class CommunityPostCommandServiceTest {
     }
 
     @Test
+    @DisplayName("자유글은 고정할 수 없다")
+    void rejectsPinningFreePost() {
+        givenNoticeWriter(true);
+        givenFoundPost(post(1L, USER_ID, CommunityPostType.FREE));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> communityPostCommandService.pin(
+                        USER_ID,
+                        COHORT_ID,
+                        1L,
+                        new PinCommunityPostCommand(true)
+                )
+        );
+
+        assertSame(CommunityErrorCode.INVALID_POST_REQUEST, exception.getErrorCode());
+        // 검증에 걸렸으므로 기존 고정을 내리지 않는다.
+        verify(communityPostRepository, never()).unpinAll(any());
+    }
+
+    @Test
     @DisplayName("고정 해제는 다른 게시글의 고정을 건드리지 않는다")
     void doesNotUnpinOthersWhenUnpinning() {
         givenNoticeWriter(true);

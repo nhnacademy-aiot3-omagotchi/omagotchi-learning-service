@@ -14,6 +14,7 @@ public record TodayResponse(
         long activeStudentCount,
         long participantCount,
         long noRecordStudentCount,
+        long runningTimerCount,
         long averageParticipantStudySeconds,
         List<DurationBucket> durationBuckets
 ) {
@@ -30,6 +31,7 @@ public record TodayResponse(
                 result.activeStudentCount(),
                 result.participantCount(),
                 result.noRecordStudentCount(),
+                result.runningTimerCount(),
                 result.averageParticipantStudySeconds(),
                 result.durationBuckets().stream()
                         .map(DurationBucket::from)

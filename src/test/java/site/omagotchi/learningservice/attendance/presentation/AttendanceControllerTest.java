@@ -12,10 +12,13 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.attendance.application.AttendanceService;
+import site.omagotchi.learningservice.attendance.application.CurrentPresenceQueryService;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordResult;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordPageResult;
+import site.omagotchi.learningservice.attendance.application.result.CurrentPresenceResult;
 import site.omagotchi.learningservice.attendance.application.query.AttendancePageQuery;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
+import site.omagotchi.learningservice.attendance.domain.PresenceState;
 import site.omagotchi.learningservice.global.security.JwtAuthorityConfig;
 import site.omagotchi.learningservice.global.security.JwtConfig;
 import site.omagotchi.learningservice.global.security.JwtProperties;
@@ -26,6 +29,7 @@ import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.BDDMockito.given;
@@ -60,6 +64,9 @@ class AttendanceControllerTest {
     @MockitoBean
     private AttendanceService attendanceService;
 
+    @MockitoBean
+    private CurrentPresenceQueryService currentPresenceQueryService;
+
     @Test
     @DisplayName("체크인은 기존처럼 요청 본문 없이 출결을 기록한다")
     void checksInWithoutRequestBody() throws Exception {
@@ -88,6 +95,53 @@ class AttendanceControllerTest {
                 .andExpect(jsonPath("$.spaceId").value(102));
 
         verify(attendanceService).moveLab(COHORT_ID, USER_ID, 102L);
+    }
+
+    @Test
+    @DisplayName("도서관 입장은 선택한 공용 학습 공간 ID를 출결 서비스에 전달한다")
+    void movesToSelectedStudySpace() throws Exception {
+        given(attendanceService.moveStudySpace(COHORT_ID, USER_ID, 301L)).willReturn(record());
+
+        mockMvc.perform(post("/api/v1/cohorts/{cohort-id}/attendance-records/move-study", COHORT_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .contentType("application/json")
+                        .content("{\"spaceId\":301}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(10))
+                .andExpect(jsonPath("$.spaceId").value(301));
+
+        verify(attendanceService).moveStudySpace(COHORT_ID, USER_ID, 301L);
+    }
+
+    @Test
+    @DisplayName("현재 위치 조회는 열린 체류구간의 공간과 상태를 반환한다")
+    void getsCurrentPresence() throws Exception {
+        given(currentPresenceQueryService.findCurrentPresence(COHORT_ID, USER_ID))
+                .willReturn(Optional.of(new CurrentPresenceResult(
+                        301L,
+                        PresenceState.PRESENT,
+                        Instant.parse("2026-09-02T01:00:00Z")
+                )));
+
+        mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/attendance-records/current-presence", COHORT_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.spaceId").value(301))
+                .andExpect(jsonPath("$.state").value("PRESENT"))
+                .andExpect(jsonPath("$.startedAt").value("2026-09-02T01:00:00Z"));
+
+        verify(currentPresenceQueryService).findCurrentPresence(COHORT_ID, USER_ID);
+    }
+
+    @Test
+    @DisplayName("열린 체류구간이 없으면 현재 위치 조회는 본문 없이 성공한다")
+    void returnsNoContentWhenCurrentPresenceDoesNotExist() throws Exception {
+        given(currentPresenceQueryService.findCurrentPresence(COHORT_ID, USER_ID))
+                .willReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/attendance-records/current-presence", COHORT_ID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isNoContent());
     }
 
     @Test

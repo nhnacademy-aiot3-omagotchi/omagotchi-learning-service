@@ -20,10 +20,15 @@ public record CohortMembershipResponse(
         OffsetDateTime processedAt,
         UUID processedByUserId,
         String rejectionReason,
-        OffsetDateTime endedAt
+        OffsetDateTime endedAt,
+        String nickname
 ) {
 
     public static CohortMembershipResponse from(CohortMembership membership) {
+        return from(membership, null);
+    }
+
+    public static CohortMembershipResponse from(CohortMembership membership, String nickname) {
         return new CohortMembershipResponse(
                 membership.getId(),
                 membership.getCohortId(),
@@ -34,7 +39,24 @@ public record CohortMembershipResponse(
                 membership.getProcessedAt(),
                 membership.getProcessedByUserId(),
                 membership.getRejectionReason(),
-                membership.getEndedAt()
+                membership.getEndedAt(),
+                nickname
+        );
+    }
+
+    public CohortMembershipResponse withNickname(String nickname) {
+        return new CohortMembershipResponse(
+                id,
+                cohortId,
+                userId,
+                role,
+                status,
+                requestedAt,
+                processedAt,
+                processedByUserId,
+                rejectionReason,
+                endedAt,
+                nickname
         );
     }
 }

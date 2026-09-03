@@ -8,11 +8,13 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
 import site.omagotchi.learningservice.team.application.TeamMasterService;
+import site.omagotchi.learningservice.team.application.TeamMemberCandidateQueryService;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
 import site.omagotchi.learningservice.team.presentation.request.AddTeamMemberRequest;
 import site.omagotchi.learningservice.team.presentation.request.CreateTeamRequest;
 import site.omagotchi.learningservice.team.presentation.response.TeamDetailResponse;
+import site.omagotchi.learningservice.team.presentation.response.TeamMemberCandidateResponse;
 import site.omagotchi.learningservice.team.presentation.response.TeamResponse;
 
 import java.util.List;
@@ -38,6 +40,7 @@ public class TeamController {
     private final TeamService teamService;
     private final TeamMemberService teamMemberService;
     private final TeamMasterService teamMasterService;
+    private final TeamMemberCandidateQueryService teamMemberCandidateQueryService;
 
     /**
      * 팀 생성 (GR-01, GR-02).
@@ -84,6 +87,18 @@ public class TeamController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         return TeamDetailResponse.from(teamService.getTeam(teamId, requesterId(jwt)));
+    }
+
+    /** 같은 기수의 팀원 후보를 검색한다. 팀 MASTER만 조회할 수 있다. */
+    @GetMapping("/{team-id}/member-candidates")
+    public List<TeamMemberCandidateResponse> searchMemberCandidates(
+            @PathVariable("team-id") Long teamId,
+            @RequestParam String query,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return teamMemberCandidateQueryService.search(teamId, query, requesterId(jwt)).stream()
+                .map(TeamMemberCandidateResponse::from)
+                .toList();
     }
 
     /**

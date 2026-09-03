@@ -3,9 +3,12 @@ package site.omagotchi.learningservice.gamification.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.gamification.application.port.DailyQuestIssueRepository;
 import site.omagotchi.learningservice.gamification.application.result.DailyQuestResult;
 import site.omagotchi.learningservice.gamification.application.result.HomeResult;
 import site.omagotchi.learningservice.gamification.domain.QuestStatus;
+import site.omagotchi.learningservice.gamification.domain.StudyTimeQuestTarget;
+import site.omagotchi.learningservice.gamification.domain.StudyTimeQuestTitle;
 import site.omagotchi.learningservice.gamification.domain.QuestTemplate;
 import site.omagotchi.learningservice.gamification.domain.QuestType;
 import site.omagotchi.learningservice.gamification.domain.UserDailyQuest;
@@ -20,7 +23,10 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +44,9 @@ public class DailyQuestService {
     private final XpRewardService xpRewardService;
     private final CharacterGrowthService characterGrowthService;
     private final DateTimeProvider dateTimeProvider;
+    private final DailyQuestIssueRepository dailyQuestIssueRepository;
+    private final StudyTimeQuestTargetResolver studyTimeQuestTargetResolver;
+    private final UserStudySecondsReader userStudySecondsReader;
 
     @Transactional
     public List<DailyQuestResult> getOrCreateDailyQuests(UUID userId) {
@@ -61,7 +70,32 @@ public class DailyQuestService {
 
     @Transactional
     public DailyQuestResult handleStudyCompleted(UUID userId) {
-        return progressToday(userId, STUDY_COMPLETED_CODE);
+        LocalDate questDate = dateTimeProvider.currentAggregationDate();
+        createDailyQuestsIfAbsent(userId, questDate);
+
+        // "학습 완료하기"는 원래 계약대로 학습 1회에 완료한다.
+        UserDailyQuest routine = requireTodayQuest(userId, questDate, STUDY_COMPLETED_CODE);
+        routine.progress(1, dateTimeProvider.currentInstant());
+
+        // 같은 학습 이벤트로 LLM 슬롯의 공부 시간 퀘스트도 판정한다.
+        // 이벤트 횟수가 아니라 오늘 누적 공부시간을 보며, 기록 수정·삭제로 누적이 줄 수 있으므로
+        // 증분이 아니라 매번 원본을 다시 읽는다. 행이 없거나 시간형이 아니면 건너뛴다.
+        userDailyQuestRepository.findByUserIdAndQuestDateAndCode(userId, questDate, LLM_QUEST_CODE)
+                .filter(UserDailyQuest::isStudyTimeQuest)
+                .ifPresent(quest -> completeIfStudyTimeReached(userId, questDate, quest));
+
+        return DailyQuestResult.from(routine);
+    }
+
+    private void completeIfStudyTimeReached(UUID userId, LocalDate questDate, UserDailyQuest quest) {
+        Optional<Long> cohortId = userStudySecondsReader.findActiveCohortId(userId);
+        if (cohortId.isEmpty()) {
+            return;
+        }
+        long studySeconds = userStudySecondsReader.dailyStudySeconds(userId, cohortId.get(), questDate);
+        if (studySeconds >= quest.getTargetSeconds()) {
+            quest.complete(dateTimeProvider.currentInstant());
+        }
     }
 
     @Transactional
@@ -138,14 +172,37 @@ public class DailyQuestService {
     }
 
     private void createDailyQuestsIfAbsent(UUID userId, LocalDate questDate) {
-        // 같은 날짜 슬롯이 이미 있으면 기본 5개를 다시 만들지 않음
-        if (userDailyQuestRepository.existsByUserIdAndQuestDate(userId, questDate)) {
-            return;
-        }
+        // 날짜 단위로 검사하면 발급 시점이 둘로 갈릴 때 먼저 만들어진 한 건 때문에
+        // 나머지 슬롯이 영영 생기지 않는다. 그래서 code 단위로 비교하되,
+        // code마다 exists를 던지지 않도록 오늘 행을 한 번만 읽어 메모리에서 대조한다.
+        Set<String> existingCodes = userDailyQuestRepository
+                .findByUserIdAndQuestDateOrderByIdAsc(userId, questDate).stream()
+                .map(UserDailyQuest::getCode)
+                .collect(Collectors.toSet());
+
         List<UserDailyQuest> quests = dailyTemplates().stream()
-                .map(template -> UserDailyQuest.fromTemplate(userId, questDate, template))
+                .filter(template -> !existingCodes.contains(template.getCode()))
+                .map(template -> newQuest(userId, questDate, template))
                 .toList();
-        userDailyQuestRepository.saveAll(quests);
+        // 미리 걸러도 두 요청이 같은 순간에 "없음"으로 읽을 수 있다.
+        // 남은 충돌은 저장소가 ON CONFLICT로 흡수한다.
+        dailyQuestIssueRepository.issueIfAbsent(quests);
+    }
+
+    private UserDailyQuest newQuest(UUID userId, LocalDate questDate, QuestTemplate template) {
+        // LLM 슬롯이 예측 기반 공부 시간 퀘스트 자리다. 나머지는 템플릿을 그대로 복사한다.
+        if (!LLM_QUEST_CODE.equals(template.getCode())) {
+            return UserDailyQuest.fromTemplate(userId, questDate, template);
+        }
+        // 목표는 사용자마다 다르므로 제목도 발급 시점에 만들어 행으로 복사한다.
+        StudyTimeQuestTarget target = studyTimeQuestTargetResolver.resolve(userId, questDate);
+        return UserDailyQuest.studyTimeFromTemplate(
+                userId,
+                questDate,
+                template,
+                StudyTimeQuestTitle.of(target.targetSeconds()),
+                target
+        );
     }
 
     private List<QuestTemplate> dailyTemplates() {

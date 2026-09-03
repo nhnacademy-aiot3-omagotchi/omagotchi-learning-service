@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.weather.presentation;
+package site.omagotchi.learningservice.weather.presentation.tool;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

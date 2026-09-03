@@ -11,8 +11,11 @@ import org.springframework.security.web.method.annotation.AuthenticationPrincipa
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
 import site.omagotchi.learningservice.team.application.TeamMasterService;
+import site.omagotchi.learningservice.team.application.TeamMemberCandidateQueryService;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
+import site.omagotchi.learningservice.team.application.result.TeamMemberCandidateResult;
+import site.omagotchi.learningservice.team.application.result.TeamMemberCandidateStatus;
 import site.omagotchi.learningservice.team.application.result.TeamResult;
 
 import java.time.OffsetDateTime;
@@ -25,6 +28,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
 
@@ -46,6 +50,7 @@ class TeamControllerTest {
     private TeamService teamService;
     private TeamMemberService teamMemberService;
     private TeamMasterService teamMasterService;
+    private TeamMemberCandidateQueryService teamMemberCandidateQueryService;
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -53,8 +58,13 @@ class TeamControllerTest {
         teamService = mock(TeamService.class);
         teamMemberService = mock(TeamMemberService.class);
         teamMasterService = mock(TeamMasterService.class);
+        teamMemberCandidateQueryService = mock(TeamMemberCandidateQueryService.class);
         mockMvc = standaloneSetup(
-                new TeamController(teamService, teamMemberService, teamMasterService))
+                new TeamController(
+                        teamService,
+                        teamMemberService,
+                        teamMasterService,
+                        teamMemberCandidateQueryService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 // @AuthenticationPrincipal은 Security의 Resolver가 있어야 풀린다.
                 // standaloneSetup은 Spring Security 필터를 끼우지 않으므로 직접 등록한다.
@@ -123,6 +133,28 @@ class TeamControllerTest {
                 .andExpect(status().isCreated());
 
         verify(teamService).create(3L, "테스트 팀", USER_ID);
+    }
+
+    @Test
+    @DisplayName("팀원 후보 검색은 JWT 요청자를 전달하고 후보 상태를 반환한다.")
+    void searchesMemberCandidatesWithJwtRequester() throws Exception {
+        UUID candidateId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        when(teamMemberCandidateQueryService.search(1L, "학생", USER_ID)).thenReturn(List.of(
+                new TeamMemberCandidateResult(
+                        candidateId,
+                        "학생 일",
+                        "student@example.com",
+                        TeamMemberCandidateStatus.AVAILABLE
+                )
+        ));
+
+        mockMvc.perform(get("/api/v1/teams/1/member-candidates")
+                        .queryParam("query", "학생"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].userId").value(candidateId.toString()))
+                .andExpect(jsonPath("$[0].status").value("AVAILABLE"));
+
+        verify(teamMemberCandidateQueryService).search(1L, "학생", USER_ID);
     }
 
     private static void authenticateAs(UUID userId) {

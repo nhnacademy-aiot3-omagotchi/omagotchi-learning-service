@@ -7,7 +7,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import site.omagotchi.learningservice.gamification.application.port.DailyQuestIssueRepository;
 import site.omagotchi.learningservice.gamification.domain.QuestStatus;
+import site.omagotchi.learningservice.gamification.domain.QuestTemplate;
+import site.omagotchi.learningservice.gamification.domain.StudyTimeQuestTarget;
 import site.omagotchi.learningservice.gamification.domain.QuestType;
 import site.omagotchi.learningservice.gamification.domain.UserDailyQuest;
 import site.omagotchi.learningservice.gamification.domain.XpSourceType;
@@ -38,6 +41,8 @@ class DailyQuestServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-08-05T05:00:00Z");
     private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final Long COHORT_ID = 7L;
+    private static final int TARGET_SECONDS = 15_840; // 4h * 1.1
 
     @Mock
     private UserDailyQuestRepository userDailyQuestRepository;
@@ -51,6 +56,15 @@ class DailyQuestServiceTest {
     @Mock
     private CharacterGrowthService characterGrowthService;
 
+    @Mock
+    private DailyQuestIssueRepository dailyQuestIssueRepository;
+
+    @Mock
+    private StudyTimeQuestTargetResolver studyTimeQuestTargetResolver;
+
+    @Mock
+    private UserStudySecondsReader userStudySecondsReader;
+
     private DailyQuestService dailyQuestService;
     private LocalDate today;
 
@@ -63,20 +77,22 @@ class DailyQuestServiceTest {
                 questTemplateRepository,
                 xpRewardService,
                 characterGrowthService,
-                dateTimeProvider
+                dateTimeProvider,
+                dailyQuestIssueRepository,
+                studyTimeQuestTargetResolver,
+                userStudySecondsReader
         );
     }
 
     @Test
     @DisplayName("이미 오늘 퀘스트가 있으면 중복 생성하지 않는다")
     void doesNotCreateDuplicatedDailyQuests() {
-        when(userDailyQuestRepository.existsByUserIdAndQuestDate(USER_ID, today)).thenReturn(true);
         when(userDailyQuestRepository.findByUserIdAndQuestDateOrderByIdAsc(USER_ID, today))
-                .thenReturn(List.of());
+                .thenReturn(allDefaultQuests());
 
         dailyQuestService.getOrCreateDailyQuests(USER_ID);
 
-        verify(userDailyQuestRepository, never()).saveAll(any());
+        verify(dailyQuestIssueRepository).issueIfAbsent(List.of());
     }
 
     @Test
@@ -123,7 +139,8 @@ class DailyQuestServiceTest {
                 1,
                 40
         );
-        when(userDailyQuestRepository.existsByUserIdAndQuestDate(USER_ID, today)).thenReturn(true);
+        when(userDailyQuestRepository.findByUserIdAndQuestDateOrderByIdAsc(USER_ID, today))
+                .thenReturn(allDefaultQuests());
         when(userDailyQuestRepository.findByUserIdAndQuestDateAndCode(
                 USER_ID,
                 today,
@@ -146,7 +163,8 @@ class DailyQuestServiceTest {
                 DailyQuestService.ROUTINE_REVIEW_CODE,
                 "오늘 학습 돌아보기"
         );
-        when(userDailyQuestRepository.existsByUserIdAndQuestDate(USER_ID, today)).thenReturn(true);
+        when(userDailyQuestRepository.findByUserIdAndQuestDateOrderByIdAsc(USER_ID, today))
+                .thenReturn(allDefaultQuests());
         when(userDailyQuestRepository.findByUserIdAndQuestDateAndCode(
                 USER_ID,
                 today,
@@ -194,6 +212,86 @@ class DailyQuestServiceTest {
         assertEquals(QuestStatus.CLAIMED, quest.getStatus());
     }
 
+    @Test
+    @DisplayName("학습 완료 이벤트는 학습 완료하기를 1회 진행하고, 누적 시간이 목표 미만이면 공부 시간 퀘스트를 완료하지 않는다")
+    void progressesRoutineButKeepsStudyTimeQuestBelowTarget() {
+        UserDailyQuest routine = routineQuest(DailyQuestService.STUDY_COMPLETED_CODE, "학습 완료하기");
+        UserDailyQuest studyTime = studyTimeQuest();
+        stubTodayQuests(routine, studyTime);
+        when(userStudySecondsReader.findActiveCohortId(USER_ID)).thenReturn(Optional.of(COHORT_ID));
+        when(userStudySecondsReader.dailyStudySeconds(USER_ID, COHORT_ID, today))
+                .thenReturn((long) TARGET_SECONDS - 1);
+
+        var result = dailyQuestService.handleStudyCompleted(USER_ID);
+
+        assertAll(
+                () -> assertEquals(DailyQuestService.STUDY_COMPLETED_CODE, result.code()),
+                () -> assertEquals(1, result.progressCount()),
+                () -> assertEquals(QuestStatus.COMPLETED, result.status()),
+                () -> assertEquals(QuestStatus.IN_PROGRESS, studyTime.getStatus()),
+                () -> assertEquals(0, studyTime.getProgressCount())
+        );
+    }
+
+    @Test
+    @DisplayName("누적 시간이 목표 이상이면 공부 시간 퀘스트를 완료하고 학습 완료하기도 1회 진행한다")
+    void completesStudyTimeQuestAtTarget() {
+        UserDailyQuest routine = routineQuest(DailyQuestService.STUDY_COMPLETED_CODE, "학습 완료하기");
+        UserDailyQuest studyTime = studyTimeQuest();
+        stubTodayQuests(routine, studyTime);
+        when(userStudySecondsReader.findActiveCohortId(USER_ID)).thenReturn(Optional.of(COHORT_ID));
+        when(userStudySecondsReader.dailyStudySeconds(USER_ID, COHORT_ID, today))
+                .thenReturn((long) TARGET_SECONDS);
+
+        var result = dailyQuestService.handleStudyCompleted(USER_ID);
+
+        assertAll(
+                () -> assertEquals(1, result.progressCount()),
+                () -> assertEquals(QuestStatus.COMPLETED, result.status()),
+                () -> assertEquals(QuestStatus.COMPLETED, studyTime.getStatus()),
+                () -> assertEquals(1, studyTime.getProgressCount())
+        );
+    }
+
+    @Test
+    @DisplayName("활성 기수 소속이 없으면 누적 시간을 읽지 않고 공부 시간 퀘스트를 그대로 둔다")
+    void skipsStudyTimeCheckWithoutActiveCohort() {
+        UserDailyQuest routine = routineQuest(DailyQuestService.STUDY_COMPLETED_CODE, "학습 완료하기");
+        UserDailyQuest studyTime = studyTimeQuest();
+        stubTodayQuests(routine, studyTime);
+        when(userStudySecondsReader.findActiveCohortId(USER_ID)).thenReturn(Optional.empty());
+
+        var result = dailyQuestService.handleStudyCompleted(USER_ID);
+
+        assertAll(
+                () -> assertEquals(QuestStatus.COMPLETED, result.status()),
+                () -> assertEquals(QuestStatus.IN_PROGRESS, studyTime.getStatus())
+        );
+        verify(userStudySecondsReader, never()).dailyStudySeconds(any(), any(), any());
+    }
+
+    private void stubTodayQuests(UserDailyQuest routine, UserDailyQuest studyTime) {
+        when(userDailyQuestRepository.findByUserIdAndQuestDateOrderByIdAsc(USER_ID, today))
+                .thenReturn(allDefaultQuests());
+        when(userDailyQuestRepository.findByUserIdAndQuestDateAndCode(
+                USER_ID, today, DailyQuestService.STUDY_COMPLETED_CODE
+        )).thenReturn(Optional.of(routine));
+        when(userDailyQuestRepository.findByUserIdAndQuestDateAndCode(
+                USER_ID, today, DailyQuestService.LLM_QUEST_CODE
+        )).thenReturn(Optional.of(studyTime));
+    }
+
+    /** LLM 슬롯에 발급된 예측 기반 공부 시간 퀘스트. targetCount는 1이고 실제 목표는 targetSeconds다. */
+    private UserDailyQuest studyTimeQuest() {
+        QuestTemplate template = QuestTemplate.create(
+                QuestType.LLM, DailyQuestService.LLM_QUEST_CODE, "AI 추천 퀘스트", 1, 40, 5
+        );
+        return UserDailyQuest.studyTimeFromTemplate(
+                USER_ID, today, template, "오늘 4시간 24분 공부하기",
+                StudyTimeQuestTarget.model(TARGET_SECONDS, "study-time-test")
+        );
+    }
+
     private UserDailyQuest completedQuest(LocalDate questDate) {
         UserDailyQuest quest = UserDailyQuest.create(
                 USER_ID,
@@ -219,6 +317,29 @@ class DailyQuestServiceTest {
                 title,
                 1,
                 10
+        );
+    }
+
+    /**
+     * 발급 가드가 code 단위로 바뀌었으므로 "오늘 퀘스트가 이미 있다"는 상태는
+     * 기본 슬롯 5개가 모두 존재하는 것으로 표현한다.
+     */
+    private List<UserDailyQuest> allDefaultQuests() {
+        return List.of(
+                routineQuest(DailyQuestService.ATTENDANCE_CODE, "출석하기"),
+                routineQuest(DailyQuestService.STUDY_COMPLETED_CODE, "학습 완료하기"),
+                routineQuest(DailyQuestService.CHARACTER_CHECKED_CODE, "캐릭터 확인하기"),
+                routineQuest(DailyQuestService.ROUTINE_REVIEW_CODE, "오늘 학습 돌아보기"),
+                UserDailyQuest.create(
+                        USER_ID,
+                        today,
+                        null,
+                        QuestType.LLM,
+                        DailyQuestService.LLM_QUEST_CODE,
+                        "AI 추천 퀘스트",
+                        1,
+                        40
+                )
         );
     }
 }

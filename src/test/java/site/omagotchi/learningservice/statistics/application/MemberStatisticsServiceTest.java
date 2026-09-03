@@ -12,16 +12,15 @@ import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
+import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+import site.omagotchi.learningservice.gamification.application.result.RepresentativeCharacterResult;
 import site.omagotchi.learningservice.statistics.application.port.MemberStatisticsRepository;
 import site.omagotchi.learningservice.statistics.application.port.MemberStatisticsRepository.MemberReference;
 import site.omagotchi.learningservice.statistics.application.port.MemberStatisticsRepository.PeriodSummary;
 import site.omagotchi.learningservice.statistics.application.query.MemberPageQuery;
-import site.omagotchi.learningservice.statistics.application.result.MemberSummaryResult;
-import site.omagotchi.learningservice.statistics.application.result.DailyTotalResult;
-import site.omagotchi.learningservice.statistics.application.result.MemberDailyRecordResult;
-import site.omagotchi.learningservice.statistics.application.result.MemberDailyRecordsResult;
-import site.omagotchi.learningservice.statistics.application.result.MemberOverviewResult;
-import site.omagotchi.learningservice.statistics.application.result.MemberPageResult;
+import site.omagotchi.learningservice.statistics.application.result.*;
+import site.omagotchi.learningservice.study.application.StudyRecordAggregationQueryService;
+import site.omagotchi.learningservice.study.application.result.MemberCurrentTimerResult;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -31,16 +30,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.*;
 
 @DisplayName("수강생 학습 통계")
 @ExtendWith(MockitoExtension.class)
@@ -56,6 +49,8 @@ class MemberStatisticsServiceTest {
     );
     private static final Instant CALCULATED_AT = Instant.parse("2000-01-30T03:00:00Z");
     private static final Instant LAST_STUDIED_AT = Instant.parse("2000-01-29T12:00:00Z");
+    private static final Instant TIMER_STARTED_AT = Instant.parse("2000-01-30T02:30:00Z");
+    private static final String NICKNAME = "오마";
     private static final LocalDate FROM = LocalDate.of(2000, Month.JANUARY, 1);
     private static final LocalDate TO = LocalDate.of(2000, Month.JANUARY, 30);
 
@@ -64,6 +59,12 @@ class MemberStatisticsServiceTest {
 
     @Mock
     private MemberStatisticsRepository memberStatisticsRepository;
+
+    @Mock
+    private CharacterGrowthService characterGrowthService;
+
+    @Mock
+    private StudyRecordAggregationQueryService studyRecordAggregationQueryService;
 
     @Mock
     private Clock clock;
@@ -99,6 +100,21 @@ class MemberStatisticsServiceTest {
             )).willReturn(items);
             given(memberStatisticsRepository.countActiveStudents(COHORT_ID))
                     .willReturn(41L);
+            given(characterGrowthService.findRepresentativeCharacters(
+                    List.of(STUDENT_USER_ID)
+            )).willReturn(List.of(new RepresentativeCharacterResult(
+                    STUDENT_USER_ID,
+                    1_001L,
+                    NICKNAME
+            )));
+            given(studyRecordAggregationQueryService.getCurrentTimers(
+                    List.of(COHORT_MEMBERSHIP_ID),
+                    CALCULATED_AT
+            )).willReturn(List.of(new MemberCurrentTimerResult(
+                    COHORT_MEMBERSHIP_ID,
+                    TIMER_STARTED_AT,
+                    1_800L
+            )));
 
             MemberPageResult result = memberStatisticsService.getMembers(
                     MANAGER_USER_ID,
@@ -118,18 +134,32 @@ class MemberStatisticsServiceTest {
                     () -> assertEquals(20, result.size()),
                     () -> assertEquals(41L, result.totalElements()),
                     () -> assertEquals(3, result.totalPages()),
-                    () -> assertEquals(items, result.items())
+                    () -> assertEquals(
+                            items.getFirst()
+                                    .withNickname(NICKNAME)
+                                    .withRunningTimer(TIMER_STARTED_AT),
+                            result.items().getFirst()
+                    )
             );
             InOrder inOrder = inOrder(
                     cohortAccessService,
                     clock,
-                    memberStatisticsRepository
+                    memberStatisticsRepository,
+                    characterGrowthService,
+                    studyRecordAggregationQueryService
             );
             inOrder.verify(cohortAccessService).requireManager(COHORT_ID, MANAGER_USER_ID);
             inOrder.verify(clock).instant();
             inOrder.verify(memberStatisticsRepository).countActiveStudents(COHORT_ID);
             inOrder.verify(memberStatisticsRepository)
                     .findActiveStudentStatisticsPage(COHORT_ID, TO, FROM, TO, query);
+            inOrder.verify(characterGrowthService).findRepresentativeCharacters(
+                    List.of(STUDENT_USER_ID)
+            );
+            inOrder.verify(studyRecordAggregationQueryService).getCurrentTimers(
+                    List.of(COHORT_MEMBERSHIP_ID),
+                    CALCULATED_AT
+            );
         }
 
         @Test
@@ -156,6 +186,7 @@ class MemberStatisticsServiceTest {
             );
             verify(memberStatisticsRepository).countActiveStudents(COHORT_ID);
             verifyNoMoreInteractions(memberStatisticsRepository);
+            verifyNoInteractions(characterGrowthService, studyRecordAggregationQueryService);
         }
 
         @Test
@@ -181,6 +212,7 @@ class MemberStatisticsServiceTest {
             );
             verify(memberStatisticsRepository).countActiveStudents(COHORT_ID);
             verifyNoMoreInteractions(memberStatisticsRepository);
+            verifyNoInteractions(characterGrowthService, studyRecordAggregationQueryService);
         }
 
         @Test
@@ -203,7 +235,12 @@ class MemberStatisticsServiceTest {
             );
 
             assertEquals(CohortErrorCode.COHORT_MANAGER_REQUIRED, exception.getErrorCode());
-            verifyNoInteractions(clock, memberStatisticsRepository);
+            verifyNoInteractions(
+                    clock,
+                    memberStatisticsRepository,
+                    characterGrowthService,
+                    studyRecordAggregationQueryService
+            );
         }
 
         @Test
@@ -222,7 +259,12 @@ class MemberStatisticsServiceTest {
             );
 
             assertEquals(CommonErrorCode.INVALID_REQUEST, exception.getErrorCode());
-            verifyNoInteractions(clock, memberStatisticsRepository);
+            verifyNoInteractions(
+                    clock,
+                    memberStatisticsRepository,
+                    characterGrowthService,
+                    studyRecordAggregationQueryService
+            );
         }
     }
 
@@ -255,13 +297,13 @@ class MemberStatisticsServiceTest {
                     new DailyTotalResult(TO, 7_200L)
             ));
 
-        MemberOverviewResult result =
-                memberStatisticsService.getOverview(
-                        MANAGER_USER_ID,
-                        COHORT_ID,
-                        COHORT_MEMBERSHIP_ID,
-                        "7d"
-                );
+            MemberOverviewResult result =
+                    memberStatisticsService.getOverview(
+                            MANAGER_USER_ID,
+                            COHORT_ID,
+                            COHORT_MEMBERSHIP_ID,
+                            "7d"
+                    );
 
             assertAll(
                     () -> assertEquals(COHORT_MEMBERSHIP_ID, result.cohortMembershipId()),
@@ -329,13 +371,13 @@ class MemberStatisticsServiceTest {
                     TO
             )).willReturn(List.of());
 
-        MemberOverviewResult result =
-                memberStatisticsService.getOverview(
-                        MANAGER_USER_ID,
-                        COHORT_ID,
-                        COHORT_MEMBERSHIP_ID,
-                        "60d"
-                );
+            MemberOverviewResult result =
+                    memberStatisticsService.getOverview(
+                            MANAGER_USER_ID,
+                            COHORT_ID,
+                            COHORT_MEMBERSHIP_ID,
+                            "60d"
+                    );
 
             assertAll(
                     () -> assertEquals("60d", result.window()),
@@ -453,13 +495,13 @@ class MemberStatisticsServiceTest {
                     date
             )).willReturn(records);
 
-        MemberDailyRecordsResult result =
-                memberStatisticsService.getDailyRecords(
-                        MANAGER_USER_ID,
-                        COHORT_ID,
-                        COHORT_MEMBERSHIP_ID,
-                        date
-                );
+            MemberDailyRecordsResult result =
+                    memberStatisticsService.getDailyRecords(
+                            MANAGER_USER_ID,
+                            COHORT_ID,
+                            COHORT_MEMBERSHIP_ID,
+                            date
+                    );
 
             assertAll(
                     () -> assertEquals(COHORT_MEMBERSHIP_ID, result.cohortMembershipId()),
@@ -497,13 +539,13 @@ class MemberStatisticsServiceTest {
                     date
             )).willReturn(List.of());
 
-        MemberDailyRecordsResult result =
-                memberStatisticsService.getDailyRecords(
-                        MANAGER_USER_ID,
-                        COHORT_ID,
-                        COHORT_MEMBERSHIP_ID,
-                        date
-                );
+            MemberDailyRecordsResult result =
+                    memberStatisticsService.getDailyRecords(
+                            MANAGER_USER_ID,
+                            COHORT_ID,
+                            COHORT_MEMBERSHIP_ID,
+                            date
+                    );
 
             assertAll(
                     () -> assertEquals(date, result.date()),

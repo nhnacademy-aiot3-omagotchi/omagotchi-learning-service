@@ -6,8 +6,8 @@ import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
 import java.time.Instant;
 import java.time.LocalDate;
 
-/** 실습실 최초 선택·이동 결과. 출결 정보와 확정된 공간을 함께 반환한다. */
-public record AttendanceLabMoveResponse(
+/** 현재 출결의 재실 공간 이동 결과. */
+public record AttendanceSpaceMoveResponse(
         Long id,
         LocalDate attendanceDate,
         AttendanceStatus autoStatus,
@@ -22,11 +22,11 @@ public record AttendanceLabMoveResponse(
         Long spaceId
 ) {
 
-    public static AttendanceLabMoveResponse from(
+    public static AttendanceSpaceMoveResponse from(
             AttendanceRecordResult result,
             Long spaceId
     ) {
-        return new AttendanceLabMoveResponse(
+        return new AttendanceSpaceMoveResponse(
                 result.id(),
                 result.attendanceDate(),
                 result.autoStatus(),

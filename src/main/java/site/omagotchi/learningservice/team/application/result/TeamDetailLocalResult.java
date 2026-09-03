@@ -19,18 +19,26 @@ public record TeamDetailLocalResult(
         Long cohortId,
         String name,
         OffsetDateTime createdAt,
+        Long myMemberId,
+        TeamMemberRole myRole,
         List<Member> members
 ) {
     public TeamDetailLocalResult {
         members = List.copyOf(members);
     }
 
-    public static TeamDetailLocalResult of(Team team, List<Member> members) {
+    public static TeamDetailLocalResult of(
+            Team team,
+            TeamMember requesterMember,
+            List<Member> members
+    ) {
         return new TeamDetailLocalResult(
                 team.getId(),
                 team.getCohortId(),
                 team.getName(),
                 team.getCreatedAt(),
+                requesterMember.getId(),
+                requesterMember.getRole(),
                 members
         );
     }

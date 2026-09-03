@@ -72,12 +72,21 @@ public class StudyEnvironmentAnalysisService {
     private final SpaceQueryService spaceQueryService;
     private final Clock clock;
 
+    /** 계정만 아는 호출자를 위한 진입점 (소속을 스스로 구함) */
     public StudyEnvironmentResult analyze(UUID userId, Integer periodDaysOrNull) {
+        // 기간 검증을 소속 조회보다 먼저 한다. 잘못된 기간에 DB를 치지 않는다
+        int periodDays = resolvePeriodDays(periodDaysOrNull);
+        return this.analyze(
+                cohortAccessService.requireCurrentActiveMembership(userId), periodDays);
+    }
+
+    /** 이미 활성 소속을 구한 호출자(리포트)를 위한 진입점 */
+    public StudyEnvironmentResult analyze(CohortMembership membership, Integer periodDaysOrNull) {
         int periodDays = resolvePeriodDays(periodDaysOrNull);
 
-        CohortMembership membership = cohortAccessService.requireCurrentActiveMembership(userId);
         Long membershipId = membership.getId();
         Long cohortId = membership.getCohortId();
+        UUID userId = membership.getUserId();
 
         LocalDate today = AggregationDateTime.aggregationDate(clock.instant());
         LocalDate startDate = today.minusDays(periodDays - 1L);

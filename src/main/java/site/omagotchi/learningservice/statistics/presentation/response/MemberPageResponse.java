@@ -45,22 +45,28 @@ public record MemberPageResponse(
     public record Member(
             Long cohortMembershipId,
             UUID userId,
+            String nickname,
             long todayStudySeconds,
             long periodStudySeconds,
             long activeStudyDays,
             long recordCount,
-            Instant lastStudiedAt
+            Instant lastStudiedAt,
+            boolean isRunning,
+            Instant timerStartedAt
     ) {
 
         private static Member from(MemberSummaryResult result) {
             return new Member(
                     result.cohortMembershipId(),
                     result.userId(),
+                    result.nickname(),
                     result.todayStudySeconds(),
                     result.periodStudySeconds(),
                     result.activeStudyDays(),
                     result.recordCount(),
-                    result.lastStudiedAt()
+                    result.lastStudiedAt(),
+                    result.isRunning(),
+                    result.timerStartedAt()
             );
         }
     }

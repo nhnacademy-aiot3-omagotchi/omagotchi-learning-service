@@ -12,7 +12,7 @@ spring:
     google:
       genai:
         chat:
-          model: gemini-3.6-flash # 변경 가능
+          model: gemini-3.6-flash # 변경 가능. 2.5-flash는 신규 발급 API Key로 접근이 막혀 있다
           temperature: 0.7
           thinking-level: MINIMAL
     ollama:
@@ -142,6 +142,15 @@ prediction:
     base-url: ${PREDICTION_SERVICE_BASE_URL}
     connect-timeout: ${PREDICTION_SERVICE_CONNECT_TIMEOUT:2s}
     read-timeout: ${PREDICTION_SERVICE_READ_TIMEOUT:5s}
+
+gamification:
+  study-time-quest:
+    # 예측값에 곱하는 도전 계수. 모델 재배포 없이 바꾸기 위해 설정으로 둔다.
+    challenge-coefficient: ${QUEST_STUDY_TIME_CHALLENGE_COEFFICIENT:1.1}
+    # 퀘스트 목표의 하한 3h30m. 예측이 0으로 나와도 target_count > 0 제약을 지키게 한다.
+    min-target-seconds: ${QUEST_STUDY_TIME_MIN_TARGET_SECONDS:12600}
+    # 퀘스트 목표의 상한 11h30m. prediction-service의 MAX_STUDY_H와는 무관한 별도 정책값이다.
+    max-target-seconds: ${QUEST_STUDY_TIME_MAX_TARGET_SECONDS:41400}
 
 telegram:
   bot:

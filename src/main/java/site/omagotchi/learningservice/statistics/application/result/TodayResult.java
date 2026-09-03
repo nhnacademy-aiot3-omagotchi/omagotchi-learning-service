@@ -11,6 +11,7 @@ public record TodayResult(
         long activeStudentCount,
         long participantCount,
         long noRecordStudentCount,
+        long runningTimerCount,
         long averageParticipantStudySeconds,
         List<DurationBucketResult> durationBuckets
 ) {

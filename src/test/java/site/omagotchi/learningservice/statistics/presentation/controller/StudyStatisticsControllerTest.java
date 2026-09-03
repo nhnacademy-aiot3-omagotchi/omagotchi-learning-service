@@ -19,15 +19,7 @@ import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
 import site.omagotchi.learningservice.statistics.application.CohortStatisticsService;
 import site.omagotchi.learningservice.statistics.application.MemberStatisticsService;
-import site.omagotchi.learningservice.statistics.application.result.DailyTotalResult;
-import site.omagotchi.learningservice.statistics.application.result.DurationBucketResult;
-import site.omagotchi.learningservice.statistics.application.result.MemberDailyRecordResult;
-import site.omagotchi.learningservice.statistics.application.result.MemberDailyRecordsResult;
-import site.omagotchi.learningservice.statistics.application.result.MemberOverviewResult;
-import site.omagotchi.learningservice.statistics.application.result.MemberPageResult;
-import site.omagotchi.learningservice.statistics.application.result.MemberSummaryResult;
-import site.omagotchi.learningservice.statistics.application.result.TodayResult;
-import site.omagotchi.learningservice.statistics.application.result.TrendResult;
+import site.omagotchi.learningservice.statistics.application.result.*;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -91,6 +83,7 @@ class StudyStatisticsControllerTest {
                             4L,
                             3L,
                             1L,
+                            1L,
                             5_400L,
                             List.of(
                                     new DurationBucketResult(
@@ -127,6 +120,7 @@ class StudyStatisticsControllerTest {
                     .andExpect(jsonPath("$.activeStudentCount").value(4L))
                     .andExpect(jsonPath("$.participantCount").value(3L))
                     .andExpect(jsonPath("$.noRecordStudentCount").value(1L))
+                    .andExpect(jsonPath("$.runningTimerCount").value(1L))
                     .andExpect(jsonPath("$.averageParticipantStudySeconds").value(5_400L))
                     .andExpect(jsonPath("$.durationBuckets.length()").value(5))
                     .andExpect(jsonPath("$.durationBuckets[0].code").value("NO_RECORD"))
@@ -180,7 +174,7 @@ class StudyStatisticsControllerTest {
                             "/api/v1/cohorts/{cohort-id}/study-statistics/trend",
                             COHORT_ID
                     ).queryParam("window", "14d")
-                    .principal(authentication()))
+                            .principal(authentication()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.window").value("14d"))
                     .andExpect(jsonPath("$.from").value("2000-01-01"))
@@ -228,7 +222,7 @@ class StudyStatisticsControllerTest {
                             "/api/v1/cohorts/{cohort-id}/study-statistics/trend",
                             COHORT_ID
                     ).queryParam("window", "61d")
-                    .principal(authentication()))
+                            .principal(authentication()))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code")
                             .value(CommonErrorCode.INVALID_REQUEST.code()));
@@ -262,11 +256,14 @@ class StudyStatisticsControllerTest {
                             new MemberSummaryResult(
                                     101L,
                                     UUID.fromString("00000000-0000-0000-0000-000000000101"),
+                                    "오마",
                                     3_600L,
                                     10_800L,
                                     3L,
                                     4L,
-                                    Instant.parse("2000-01-29T12:00:00Z")
+                                    Instant.parse("2000-01-29T12:00:00Z"),
+                                    true,
+                                    Instant.parse("2000-01-30T02:30:00Z")
                             ),
                             new MemberSummaryResult(
                                     102L,
@@ -284,7 +281,7 @@ class StudyStatisticsControllerTest {
                             "/api/v1/cohorts/{cohort-id}/study-statistics/members",
                             COHORT_ID
                     ).queryParam("window", "30d")
-                    .principal(authentication()))
+                            .principal(authentication()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.window").value("30d"))
                     .andExpect(jsonPath("$.from").value("2000-01-01"))
@@ -294,13 +291,20 @@ class StudyStatisticsControllerTest {
                     .andExpect(jsonPath("$.items[0].cohortMembershipId").value(101L))
                     .andExpect(jsonPath("$.items[0].userId")
                             .value("00000000-0000-0000-0000-000000000101"))
+                    .andExpect(jsonPath("$.items[0].nickname").value("오마"))
                     .andExpect(jsonPath("$.items[0].todayStudySeconds").value(3_600L))
                     .andExpect(jsonPath("$.items[0].periodStudySeconds").value(10_800L))
                     .andExpect(jsonPath("$.items[0].activeStudyDays").value(3L))
                     .andExpect(jsonPath("$.items[0].recordCount").value(4L))
                     .andExpect(jsonPath("$.items[0].lastStudiedAt")
                             .value("2000-01-29T12:00:00Z"))
+                    .andExpect(jsonPath("$.items[0].isRunning").value(true))
+                    .andExpect(jsonPath("$.items[0].timerStartedAt")
+                            .value("2000-01-30T02:30:00Z"))
                     .andExpect(jsonPath("$.items[1].lastStudiedAt").doesNotExist())
+                    .andExpect(jsonPath("$.items[1].isRunning").value(false))
+                    .andExpect(jsonPath("$.items[1].nickname").doesNotExist())
+                    .andExpect(jsonPath("$.items[1].timerStartedAt").doesNotExist())
                     .andExpect(jsonPath("$.items[0].name").doesNotExist())
                     .andExpect(jsonPath("$.items[0].email").doesNotExist())
                     .andExpect(jsonPath("$.search").doesNotExist())
@@ -343,8 +347,8 @@ class StudyStatisticsControllerTest {
                             "/api/v1/cohorts/{cohort-id}/study-statistics/members",
                             COHORT_ID
                     ).queryParam("window", "30d")
-                    .queryParam("page", "-1")
-                    .principal(authentication()))
+                            .queryParam("page", "-1")
+                            .principal(authentication()))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code")
                             .value(CommonErrorCode.INVALID_REQUEST.code()));
@@ -367,8 +371,8 @@ class StudyStatisticsControllerTest {
                             "/api/v1/cohorts/{cohort-id}/study-statistics/members",
                             COHORT_ID
                     ).queryParam("window", "30d")
-                    .queryParam("size", String.valueOf(size))
-                    .principal(authentication()))
+                            .queryParam("size", String.valueOf(size))
+                            .principal(authentication()))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code")
                             .value(CommonErrorCode.INVALID_REQUEST.code()));
@@ -395,8 +399,8 @@ class StudyStatisticsControllerTest {
                             "/api/v1/cohorts/{cohort-id}/study-statistics/members",
                             COHORT_ID
                     ).queryParam("window", "30d")
-                    .queryParam("sort", sort)
-                    .principal(authentication()))
+                            .queryParam("sort", sort)
+                            .principal(authentication()))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code")
                             .value(CommonErrorCode.INVALID_REQUEST.code()));
@@ -437,7 +441,7 @@ class StudyStatisticsControllerTest {
                             COHORT_ID,
                             cohortMembershipId
                     ).queryParam("window", "7d")
-                    .principal(authentication()))
+                            .principal(authentication()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.cohortMembershipId").value(101L))
                     .andExpect(jsonPath("$.userId")
@@ -479,7 +483,7 @@ class StudyStatisticsControllerTest {
                             COHORT_ID,
                             cohortMembershipId
                     ).queryParam("window", "7d")
-                    .principal(authentication()))
+                            .principal(authentication()))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.code")
                             .value(CohortErrorCode.COHORT_MEMBERSHIP_NOT_FOUND.code()));
@@ -544,7 +548,7 @@ class StudyStatisticsControllerTest {
                             COHORT_ID,
                             cohortMembershipId
                     ).queryParam("date", "2000-01-07")
-                    .principal(authentication()))
+                            .principal(authentication()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.cohortMembershipId").value(101L))
                     .andExpect(jsonPath("$.userId")
@@ -591,7 +595,7 @@ class StudyStatisticsControllerTest {
                             COHORT_ID,
                             101L
                     ).queryParam("date", "2000-01-XX")
-                    .principal(authentication()))
+                            .principal(authentication()))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code")
                             .value(CommonErrorCode.INVALID_REQUEST.code()));
@@ -615,7 +619,7 @@ class StudyStatisticsControllerTest {
                             COHORT_ID,
                             101L
                     ).queryParam("date", "2000-01-31")
-                    .principal(authentication()))
+                            .principal(authentication()))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code")
                             .value(CommonErrorCode.INVALID_REQUEST.code()));
@@ -637,7 +641,7 @@ class StudyStatisticsControllerTest {
                             COHORT_ID,
                             101L
                     ).queryParam("date", "2000-01-07")
-                    .principal(authentication()))
+                            .principal(authentication()))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.code")
                             .value(CohortErrorCode.COHORT_MEMBERSHIP_NOT_FOUND.code()));

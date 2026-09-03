@@ -14,8 +14,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.global.config.JpaAuditingConfig;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
-import site.omagotchi.learningservice.statistics.application.port.CohortStatisticsRepository.TodaySummary;
-import site.omagotchi.learningservice.statistics.application.result.DurationBucketResult;
+import site.omagotchi.learningservice.statistics.application.port.CohortStatisticsRepository.MemberTodayStudySeconds;
 import site.omagotchi.learningservice.statistics.application.result.DailyTotalResult;
 import site.omagotchi.learningservice.study.domain.StudyRecord;
 import site.omagotchi.learningservice.study.infrastructure.persistence.repository.StudyRecordJpaRepository;
@@ -57,10 +56,10 @@ class CohortStatisticsQueryDslRepositoryIT {
 
     @Nested
     @DisplayName("오늘 통계 집계")
-    class SummarizeToday {
+    class FindTodayStudySeconds {
 
         @Test
-        @DisplayName("활성 수강생의 확정 기록만 시간 구간별 집계 정상 처리")
+        @DisplayName("활성 수강생의 확정 기록만 수강생별 집계 정상 처리")
         void aggregatesOnlyConfirmedRecordsOfActiveStudents() {
             Long cohortId = insertCohort("집계 대상 기수");
             Long otherCohortId = insertCohort("다른 기수");
@@ -122,24 +121,18 @@ class CohortStatisticsQueryDslRepositoryIT {
             );
             studyRecordJpaRepository.flush();
 
-            TodaySummary result = queryRepository.summarizeToday(
+            List<MemberTodayStudySeconds> result = queryRepository.findTodayStudySeconds(
                     cohortId,
                     AGGREGATION_DATE
             );
 
             assertEquals(
-                    new TodaySummary(
-                            27_000L,
-                            5L,
-                            4L,
-                            1L,
-                            List.of(
-                                    new DurationBucketResult("NO_RECORD", 1L),
-                                    new DurationBucketResult("UNDER_ONE_HOUR", 1L),
-                                    new DurationBucketResult("ONE_TO_TWO_HOURS", 1L),
-                                    new DurationBucketResult("TWO_TO_FOUR_HOURS", 1L),
-                                    new DurationBucketResult("FOUR_HOURS_OR_MORE", 1L)
-                            )
+                    List.of(
+                            new MemberTodayStudySeconds(noRecordStudentId, 0L),
+                            new MemberTodayStudySeconds(underOneHourStudentId, 1_800L),
+                            new MemberTodayStudySeconds(oneToTwoHoursStudentId, 3_600L),
+                            new MemberTodayStudySeconds(twoToFourHoursStudentId, 7_200L),
+                            new MemberTodayStudySeconds(fourHoursOrMoreStudentId, 14_400L)
                     ),
                     result
             );
@@ -150,27 +143,12 @@ class CohortStatisticsQueryDslRepositoryIT {
         void returnsZerosWhenCohortHasNoActiveStudents() {
             Long cohortId = insertCohort("빈 기수");
 
-            TodaySummary result = queryRepository.summarizeToday(
+            List<MemberTodayStudySeconds> result = queryRepository.findTodayStudySeconds(
                     cohortId,
                     AGGREGATION_DATE
             );
 
-            assertEquals(
-                    new TodaySummary(
-                            0L,
-                            0L,
-                            0L,
-                            0L,
-                            List.of(
-                                    new DurationBucketResult("NO_RECORD", 0L),
-                                    new DurationBucketResult("UNDER_ONE_HOUR", 0L),
-                                    new DurationBucketResult("ONE_TO_TWO_HOURS", 0L),
-                                    new DurationBucketResult("TWO_TO_FOUR_HOURS", 0L),
-                                    new DurationBucketResult("FOUR_HOURS_OR_MORE", 0L)
-                            )
-                    ),
-                    result
-            );
+            assertEquals(List.of(), result);
         }
     }
 
@@ -272,17 +250,17 @@ class CohortStatisticsQueryDslRepositoryIT {
                 ? PROCESSED_AT.plusDays(10)
                 : null;
         return jdbcTemplate.queryForObject("""
-                INSERT INTO learning_service.cohort_memberships (
-                    cohort_id,
-                    user_id,
-                    role,
-                    status,
-                    processed_at,
-                    processed_by_user_id,
-                    ended_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                RETURNING id
-                """,
+                        INSERT INTO learning_service.cohort_memberships (
+                            cohort_id,
+                            user_id,
+                            role,
+                            status,
+                            processed_at,
+                            processed_by_user_id,
+                            ended_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        RETURNING id
+                        """,
                 Long.class,
                 cohortId,
                 userId,

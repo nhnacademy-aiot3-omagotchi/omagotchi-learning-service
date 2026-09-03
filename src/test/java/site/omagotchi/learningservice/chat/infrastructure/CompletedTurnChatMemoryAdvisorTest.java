@@ -133,6 +133,29 @@ class CompletedTurnChatMemoryAdvisorTest {
         }
 
         @Test
+        @DisplayName("프롬프트에 기록이 이미 있으면 중복해서 붙이지 않는다")
+        void doesNotDuplicateHistoryAlreadyInPrompt() {
+            ask(clientOf(answering("저는 오마고치입니다")), "안녕 넌 누구니?");
+
+            // 앞선 Advisor나 호출자가 기록을 이미 넣은 상황을 흉내 낸다.
+            // 그대로 또 붙이면 같은 대화가 두 번 실려 모델이 헷갈린다
+            List<Message> history = List.copyOf(chatMemory.get(CONVERSATION_ID));
+
+            AtomicReference<Prompt> captured = new AtomicReference<>();
+            ChatClient client = clientOf(capturing(captured, "네 맞습니다"));
+
+            client.prompt()
+                    .messages(history)
+                    .user("안녕")
+                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, CONVERSATION_ID))
+                    .call()
+                    .content();
+
+            assertThat(texts(captured.get().getInstructions()))
+                    .containsExactly("안녕 넌 누구니?", "저는 오마고치입니다", "안녕");
+        }
+
+        @Test
         @DisplayName("시스템 메시지는 기록에 남기지 않는다")
         void doesNotStoreSystemMessage() {
             ask(clientOf(answering("안녕하세요")), "안녕");

@@ -70,7 +70,13 @@ public class CompletedTurnChatMemoryAdvisor implements BaseChatMemoryAdvisor {
         List<Message> history = this.chatMemory.get(this.getConversationId(request.context()));
 
         // 지금까지의 대화를 앞에 붙여 모델이 맥락을 보게 한다
-        List<Message> messages = new ArrayList<>(history);
+        List<Message> messages = new ArrayList<>();
+
+        // 앞선 Advisor나 호출자가 이미 같은 기록을 넣었다면 또 붙이지 않는다
+        // 지금은 이 Advisor 하나뿐이라 일어나지 않지만, 하나라도 더 붙으면 아무 오류 없이 같은 대화가 두 번 실려 모델이 헷갈린다
+        if (!isMemoryAlreadyInPrompt(request.prompt().getInstructions(), history)) {
+            messages.addAll(history);
+        }
 
         // 기록 + 이번 질문
         messages.addAll(request.prompt().getInstructions());
@@ -143,6 +149,37 @@ public class CompletedTurnChatMemoryAdvisor implements BaseChatMemoryAdvisor {
                 return;
             }
         }
+    }
+
+    /**
+     * 프롬프트에 기록이 이미 통째로 들어 있는지 확인한다.
+     * 기록이 프롬프트 어딘가에 연속으로 들어 있으면 이미 주입된 것으로 본다.
+     * (Spring AI MessageChatMemoryAdvisor의 판정 방식을 그대로 따름)
+     * 붙일 기록이 없으면 true. "이미 있다" 라기보다 "붙일 필요가 없다" 라는 뜻이고 결과는 같다.
+     */
+    private static boolean isMemoryAlreadyInPrompt(List<Message> promptMessages, List<Message> history) {
+        if (history.isEmpty()) {
+            return true;
+        }
+        if (promptMessages.size() < history.size()) {
+            return false;
+        }
+        for (int start = 0; start <= promptMessages.size() - history.size(); start++) {
+            if (matchesFrom(promptMessages, history, start)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // promptMessages의 start 위치부터 history가 순서대로 이어지는지
+    private static boolean matchesFrom(List<Message> promptMessages, List<Message> history, int start) {
+        for (int i = 0; i < history.size(); i++) {
+            if (!history.get(i).equals(promptMessages.get(start + i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

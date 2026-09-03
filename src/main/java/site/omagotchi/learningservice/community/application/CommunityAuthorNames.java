@@ -2,13 +2,11 @@ package site.omagotchi.learningservice.community.application;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import site.omagotchi.learningservice.gamification.application.port.UserCharacterQueryRepository;
-import site.omagotchi.learningservice.gamification.domain.UserCharacter;
+import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
 
 import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * 작성자 식별자를 화면에 보여줄 이름으로 옮긴다.
@@ -22,28 +20,16 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CommunityAuthorNames {
 
-    private final UserCharacterQueryRepository userCharacterQueryRepository;
+    private final CharacterGrowthService characterGrowthService;
 
     /**
      * 대표 캐릭터가 없으면 null을 돌려준다. 표시용 대체 문구는 화면이 정한다.
      */
     public String of(UUID authorUserId) {
-        return userCharacterQueryRepository.findRepresentativeByUserId(authorUserId)
-                .map(UserCharacter::getNickname)
-                .orElse(null);
+        return characterGrowthService.findRepresentativeNickname(authorUserId);
     }
 
     public Map<UUID, String> of(Collection<UUID> authorUserIds) {
-        if (authorUserIds.isEmpty()) {
-            return Map.of();
-        }
-        return userCharacterQueryRepository.findRepresentativesByUserIds(authorUserIds).stream()
-                .filter(character -> character.getNickname() != null)
-                .collect(Collectors.toMap(
-                        UserCharacter::getUserId,
-                        UserCharacter::getNickname,
-                        // 같은 사용자에 대표 캐릭터가 둘일 수 없지만, 있어도 조회가 깨지지 않게 둔다.
-                        (first, second) -> first
-                ));
+        return characterGrowthService.findRepresentativeNicknames(authorUserIds);
     }
 }

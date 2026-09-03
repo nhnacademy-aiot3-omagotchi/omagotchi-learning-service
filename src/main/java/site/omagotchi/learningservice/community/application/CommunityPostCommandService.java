@@ -6,9 +6,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
-import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
+import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.cohort.application.CohortLockService;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentFile;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentStorage;
 import site.omagotchi.learningservice.community.application.attachment.StoredCommunityAttachment;
@@ -28,7 +27,6 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -43,14 +41,10 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class CommunityPostCommandService {
 
-    private static final Set<CohortMembershipRole> NOTICE_WRITER_ROLES = Set.of(
-            CohortMembershipRole.MANAGER,
-            CohortMembershipRole.MENTOR
-    );
-
     private final CommunityPostJpaRepository communityPostRepository;
     private final CommunityPostAttachmentRepository attachmentRepository;
-    private final CohortMembershipRepository cohortMembershipRepository;
+    private final CohortAccessService cohortAccessService;
+    private final CohortLockService cohortLockService;
     private final CommunityAttachmentStorage attachmentStorage;
     private final CommunityAttachmentProperties attachmentProperties;
     private final CommunityAuthorNames communityAuthorNames;
@@ -134,12 +128,16 @@ public class CommunityPostCommandService {
             PinCommunityPostCommand command
     ) {
         requireNoticeWriter(userId, cohortId);
-        if (command.pinned()) {
-            requireNotice(cohortId, postId);
-            communityPostRepository.unpinAll(cohortId);
-        }
-        // unpinAll이 영속성 컨텍스트를 비우므로 그 뒤에 읽어야 변경이 반영된다.
+        // 기수 행을 공통 mutex로 쓴다. 고정 행이 아직 없는 경우에도 같은 기수의
+        // 두 요청이 "전부 해제 → 새 고정" 사이로 끼어들 수 없게 한다.
+        cohortLockService.lock(cohortId);
         CommunityPost post = findActivePost(cohortId, postId);
+        if (command.pinned()) {
+            requireNotice(post);
+            communityPostRepository.unpinAll(cohortId);
+            // unpinAll이 영속성 컨텍스트를 비우므로, 갱신할 대상은 다시 읽어야 한다.
+            post = findActivePost(cohortId, postId);
+        }
         post.changePinned(command.pinned());
         // 고정은 MANAGER·MENTOR의 권한이지만, 남의 자유글을 고정했다고 그 글을
         // 수정·삭제할 수 있는 건 아니다.
@@ -166,8 +164,8 @@ public class CommunityPostCommandService {
      * <p>관리자 화면이 공지 목록에서만 고정 버튼을 그리므로 UI로는 닿지 않는 경로지만,
      * API를 직접 부르면 가능하므로 서버에서 막는다.</p>
      */
-    private void requireNotice(Long cohortId, Long postId) {
-        if (!findActivePost(cohortId, postId).isNotice()) {
+    private void requireNotice(CommunityPost post) {
+        if (!post.isNotice()) {
             throw new BusinessException(CommunityErrorCode.INVALID_POST_REQUEST);
         }
     }
@@ -195,24 +193,13 @@ public class CommunityPostCommandService {
     }
 
     private void requireActiveCohortMember(UUID userId, Long cohortId) {
-        boolean activeMember = cohortMembershipRepository.existsByCohortIdAndUserIdAndStatusIn(
-                cohortId,
-                userId,
-                Set.of(CohortMembershipStatus.ACTIVE)
-        );
-        if (!activeMember) {
+        if (!cohortAccessService.isActiveMember(cohortId, userId)) {
             throw new BusinessException(CommunityErrorCode.POST_ACCESS_DENIED);
         }
     }
 
     private void requireNoticeWriter(UUID userId, Long cohortId) {
-        boolean noticeWriter = cohortMembershipRepository.existsByCohortIdAndUserIdAndRoleInAndStatus(
-                cohortId,
-                userId,
-                NOTICE_WRITER_ROLES,
-                CohortMembershipStatus.ACTIVE
-        );
-        if (!noticeWriter) {
+        if (!cohortAccessService.isActiveManagerOrMentor(cohortId, userId)) {
             throw new BusinessException(CommunityErrorCode.POST_ACCESS_DENIED);
         }
     }

@@ -89,6 +89,30 @@ public class CharacterGrowthService {
                 ));
     }
 
+    /**
+     * 다른 feature가 작성자 표시 이름만 필요할 때 쓰는 조회 경계다.
+     * 대표 캐릭터의 선택 기준과 영속 모델은 Gamification 내부에 둔다.
+     */
+    public String findRepresentativeNickname(UUID userId) {
+        return userCharacterQueryRepository.findRepresentativeByUserId(userId)
+                .map(UserCharacter::getNickname)
+                .orElse(null);
+    }
+
+    /** 목록 화면이 N+1 없이 대표 캐릭터 닉네임을 채우는 일괄 조회 경계다. */
+    public Map<UUID, String> findRepresentativeNicknames(Collection<UUID> userIds) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        return userCharacterQueryRepository.findRepresentativesByUserIds(userIds).stream()
+                .filter(character -> character.getNickname() != null)
+                .collect(Collectors.toMap(
+                        UserCharacter::getUserId,
+                        UserCharacter::getNickname,
+                        (first, ignored) -> first
+                ));
+    }
+
     private GameCharacter findGameCharacter(Long gameCharacterId) {
         return gameCharacterId == null
                 ? null

@@ -4,8 +4,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
-import site.omagotchi.learningservice.cohort.domain.CohortMembership;
-import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentDownload;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentStorage;
 import site.omagotchi.learningservice.community.application.port.CommunityPostQueryPort;
@@ -17,7 +15,6 @@ import site.omagotchi.learningservice.community.domain.CommunityPostType;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -41,12 +38,6 @@ public class CommunityPostQueryService {
     private static final int DEFAULT_SIZE = 20;
     private static final int MAX_SIZE = 100;
 
-    // CommunityPostCommandService의 수정·삭제 판정과 같은 규칙이다.
-    private static final Set<CohortMembershipRole> NOTICE_WRITER_ROLES = Set.of(
-            CohortMembershipRole.MANAGER,
-            CohortMembershipRole.MENTOR
-    );
-
     private final CommunityPostQueryPort communityPostQueryPort;
     private final CommunityAttachmentStorage communityAttachmentStorage;
     private final CohortAccessService cohortAccessService;
@@ -60,7 +51,7 @@ public class CommunityPostQueryService {
             CommunityPostType type,
             String search
     ) {
-        CohortMembership membership = cohortAccessService.requireActiveMembership(cohortId, userId);
+        boolean noticeWriter = cohortAccessService.requireActiveMembershipAndIsManagerOrMentor(cohortId, userId);
 
         int normalizedPage = page == null ? DEFAULT_PAGE : page;
         int normalizedSize = size == null ? DEFAULT_SIZE : size;
@@ -79,7 +70,6 @@ public class CommunityPostQueryService {
         // 배너에 걸 고정 공지는 필터·검색·페이지와 무관하게 늘 같은 글이다.
         CommunityPostListItem pinned = communityPostQueryPort.findPinnedPost(cohortId).orElse(null);
 
-        boolean noticeWriter = isNoticeWriter(membership);
         Map<UUID, String> nicknames = communityAuthorNames.of(Stream.concat(
                         found.items().stream().map(CommunityPostListItem::authorUserId),
                         pinned == null ? Stream.empty() : Stream.of(pinned.authorUserId()))
@@ -110,11 +100,11 @@ public class CommunityPostQueryService {
     }
 
     public CommunityPostDetail getPost(UUID userId, Long cohortId, Long postId) {
-        CohortMembership membership = cohortAccessService.requireActiveMembership(cohortId, userId);
+        boolean noticeWriter = cohortAccessService.requireActiveMembershipAndIsManagerOrMentor(cohortId, userId);
         CommunityPostDetail detail = findVisiblePost(cohortId, postId);
         return detail.withViewer(
                 communityAuthorNames.of(detail.authorUserId()),
-                canManage(detail.type(), detail.authorUserId(), userId, isNoticeWriter(membership))
+                canManage(detail.type(), detail.authorUserId(), userId, noticeWriter)
         );
     }
 
@@ -145,10 +135,6 @@ public class CommunityPostQueryService {
     private CommunityPostDetail findVisiblePost(Long cohortId, Long postId) {
         return communityPostQueryPort.findVisiblePost(cohortId, postId)
                 .orElseThrow(() -> new BusinessException(CommunityErrorCode.POST_NOT_FOUND));
-    }
-
-    private boolean isNoticeWriter(CohortMembership membership) {
-        return NOTICE_WRITER_ROLES.contains(membership.getRole());
     }
 
     /**

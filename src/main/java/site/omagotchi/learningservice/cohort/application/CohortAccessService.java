@@ -50,6 +50,31 @@ public class CohortAccessService {
     }
 
     /**
+     * 활성 소속을 확인한 뒤, 해당 소속이 운영 역할인지 돌려준다.
+     *
+     * <p>MANAGER·MENTOR의 해석은 Cohort가 소유한다. 다른 feature는 이 결과만 사용해
+     * 자신이 정한 기능 권한으로 변환한다.</p>
+     */
+    public boolean requireActiveMembershipAndIsManagerOrMentor(Long cohortId, UUID userId) {
+        CohortMembership membership = requireActiveMembership(cohortId, userId);
+        return membership.getRole() == CohortMembershipRole.MANAGER
+                || membership.getRole() == CohortMembershipRole.MENTOR;
+    }
+
+    /**
+     * 활성 MANAGER 또는 MENTOR인지 boolean으로 확인한다.
+     * 호출자가 자기 feature의 오류 코드로 거절해야 하는 쓰기 권한 판정에 쓴다.
+     */
+    public boolean isActiveManagerOrMentor(Long cohortId, UUID userId) {
+        return membershipRepository.existsByCohortIdAndUserIdAndRoleInAndStatus(
+                cohortId,
+                userId,
+                Set.of(CohortMembershipRole.MANAGER, CohortMembershipRole.MENTOR),
+                CohortMembershipStatus.ACTIVE
+        );
+    }
+
+    /**
      * 사용자가 해당 기수의 ACTIVE 소속인지 확인하고, 소속 식별자를 반환
      * ACTIVE 소속이 없으면 기수 존재를 숨기기 위해 404로 처리
      */

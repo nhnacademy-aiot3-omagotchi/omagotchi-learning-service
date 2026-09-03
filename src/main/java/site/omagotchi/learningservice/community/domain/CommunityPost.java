@@ -111,10 +111,6 @@ public class CommunityPost {
         return type == CommunityPostType.FREE;
     }
 
-    public boolean belongsTo(Long cohortId) {
-        return this.cohortId.equals(cohortId);
-    }
-
     public boolean isAuthor(UUID userId) {
         return authorUserId.equals(userId);
     }

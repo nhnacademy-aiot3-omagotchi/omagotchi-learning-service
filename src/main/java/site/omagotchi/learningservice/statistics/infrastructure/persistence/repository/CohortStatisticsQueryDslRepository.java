@@ -11,14 +11,10 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.domain.QCohortMembership;
 import site.omagotchi.learningservice.statistics.application.port.CohortStatisticsRepository;
 import site.omagotchi.learningservice.statistics.application.result.DailyTotalResult;
-import site.omagotchi.learningservice.statistics.application.result.DurationBucketResult;
 import site.omagotchi.learningservice.study.domain.QStudyRecord;
 
 import java.time.LocalDate;
-import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 
 @Repository
 @RequiredArgsConstructor
@@ -44,15 +40,19 @@ public class CohortStatisticsQueryDslRepository
      GROUP BY cm.id;
      */
     @Override
-    public TodaySummary summarizeToday(
+    public List<MemberTodayStudySeconds> findTodayStudySeconds(
             Long cohortId,
             LocalDate aggregationDate
     ) {
         NumberExpression<Long> memberStudySeconds = studyRecord.studySeconds
                 .sumLong()
                 .coalesce(0L);
-        List<Long> memberTotals = queryFactory
-                .select(memberStudySeconds)
+        return queryFactory
+                .select(Projections.constructor(
+                        MemberTodayStudySeconds.class,
+                        cohortMembership.id,
+                        memberStudySeconds
+                ))
                 .from(cohortMembership)
                 .leftJoin(studyRecord)
                 .on(
@@ -62,23 +62,8 @@ public class CohortStatisticsQueryDslRepository
                 )
                 .where(activeStudentOfCohort(cohortId))
                 .groupBy(cohortMembership.id)
+                .orderBy(cohortMembership.id.asc())
                 .fetch();
-
-        long totalStudySeconds = memberTotals.stream()
-                .mapToLong(Long::longValue)
-                .sum();
-        long participantCount = memberTotals.stream()
-                .filter(studySeconds -> studySeconds > 0)
-                .count();
-        long activeStudentCount = memberTotals.size();
-
-        return new TodaySummary(
-                totalStudySeconds,
-                activeStudentCount,
-                participantCount,
-                activeStudentCount - participantCount,
-                durationBuckets(memberTotals)
-        );
     }
 
     /*
@@ -126,29 +111,6 @@ public class CohortStatisticsQueryDslRepository
     }
 
     /*
-     DB가 반환한 수강생별 member_study_seconds를 학습 시간 구간별 인원수로 변환한다.
-     모든 구간을 0명으로 먼저 생성하므로 해당 인원이 없어도 응답에서 구간이 누락되지 않는다.
-     이 메서드는 Java 후처리 전용이다.
-     */
-    private List<DurationBucketResult> durationBuckets(List<Long> memberTotals) {
-        Map<StudyDurationBucket, Long> counts = new EnumMap<>(StudyDurationBucket.class);
-        Arrays.stream(StudyDurationBucket.values()).forEach(bucket -> counts.put(bucket, 0L));
-        memberTotals.stream()
-                .map(StudyDurationBucket::from)
-                .forEach(bucket -> counts.computeIfPresent(
-                        bucket,
-                        (key, count) -> count + 1
-                ));
-
-        return Arrays.stream(StudyDurationBucket.values())
-                .map(bucket -> new DurationBucketResult(
-                        bucket.name(),
-                        counts.get(bucket)
-                ))
-                .toList();
-    }
-
-    /*
      WHERE cm.cohort_id = :cohortId
        AND cm.role = 'STUDENT'
        AND cm.status = 'ACTIVE'
@@ -161,34 +123,4 @@ public class CohortStatisticsQueryDslRepository
                 .and(cohortMembership.endedAt.isNull());
     }
 
-    /*
-     수강생별 오늘 학습시간을 durationBuckets 후처리에 사용할 고정 구간으로 정의한다.
-     이 enum은 Java 후처리 전용이다.
-     */
-    private enum StudyDurationBucket {
-        NO_RECORD,
-        UNDER_ONE_HOUR,
-        ONE_TO_TWO_HOURS,
-        TWO_TO_FOUR_HOURS,
-        FOUR_HOURS_OR_MORE;
-
-        /*
-         0초, 1시간 미만, 1~2시간, 2~4시간, 4시간 이상의 반개방 구간으로
-         */
-        private static StudyDurationBucket from(long studySeconds) {
-            if (studySeconds == 0) {
-                return NO_RECORD;
-            }
-            if (studySeconds < 3_600) {
-                return UNDER_ONE_HOUR;
-            }
-            if (studySeconds < 7_200) {
-                return ONE_TO_TWO_HOURS;
-            }
-            if (studySeconds < 14_400) {
-                return TWO_TO_FOUR_HOURS;
-            }
-            return FOUR_HOURS_OR_MORE;
-        }
-    }
 }

@@ -68,6 +68,8 @@ class TeamDetailLookupTest {
         given(accessSupport.loadActiveTeam(teamId)).willReturn(team);
         given(accessSupport.requireActiveMembership(10L, requesterUserId))
                 .willReturn(requesterMembership);
+        given(accessSupport.requireMembership(teamId, requesterMembership.id()))
+                .willReturn(master);
         given(teamMemberRepository.findByTeamIdOrderByJoinedAtAsc(teamId))
                 .willReturn(List.of(member, master));
         given(cohortMembershipQueryService.findUserIds(List.of(2L, 1L)))
@@ -78,6 +80,8 @@ class TeamDetailLookupTest {
 
         // Then: 접근 권한을 확인하고 마스터 우선 순서의 로컬 결과 반환
         verify(accessSupport).requireMembership(teamId, 1L);
+        assertThat(localResult.myMemberId()).isEqualTo(1L);
+        assertThat(localResult.myRole()).isEqualTo(TeamMemberRole.MASTER);
         assertThat(localResult.members())
                 .extracting(
                         TeamDetailLocalResult.Member::memberId,

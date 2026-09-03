@@ -15,11 +15,13 @@ import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.statistics.application.port.CohortStatisticsRepository;
-import site.omagotchi.learningservice.statistics.application.port.CohortStatisticsRepository.TodaySummary;
+import site.omagotchi.learningservice.statistics.application.port.CohortStatisticsRepository.MemberTodayStudySeconds;
 import site.omagotchi.learningservice.statistics.application.result.DailyTotalResult;
 import site.omagotchi.learningservice.statistics.application.result.DurationBucketResult;
 import site.omagotchi.learningservice.statistics.application.result.TodayResult;
 import site.omagotchi.learningservice.statistics.application.result.TrendResult;
+import site.omagotchi.learningservice.study.application.StudyRecordAggregationQueryService;
+import site.omagotchi.learningservice.study.application.result.MemberCurrentTimerResult;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -28,9 +30,7 @@ import java.time.Month;
 import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
@@ -58,6 +58,9 @@ class CohortStatisticsServiceTest {
     private CohortStatisticsRepository cohortStatisticsRepository;
 
     @Mock
+    private StudyRecordAggregationQueryService studyRecordAggregationQueryService;
+
+    @Mock
     private Clock clock;
 
     @InjectMocks
@@ -68,17 +71,27 @@ class CohortStatisticsServiceTest {
     class GetToday {
 
         @Test
-        @DisplayName("합계와 시간 구간 정상 처리")
-        void returnsTodaySummaryAndDurationBuckets() {
+        @DisplayName("실행 중 타이머를 합계와 시간 구간에 반영")
+        void includesRunningTimerInTodaySummaryAndDurationBuckets() {
             given(clock.instant()).willReturn(CALCULATED_AT);
-            given(cohortStatisticsRepository.summarizeToday(COHORT_ID, AGGREGATION_DATE))
-                    .willReturn(new TodaySummary(
-                            16_200L,
-                            4L,
-                            3L,
-                            1L,
-                            durationBuckets(1L, 1L, 1L, 1L, 0L)
-                    ));
+            List<MemberTodayStudySeconds> confirmedDurations = List.of(
+                    new MemberTodayStudySeconds(101L, 0L),
+                    new MemberTodayStudySeconds(102L, 1_800L),
+                    new MemberTodayStudySeconds(103L, 3_600L),
+                    new MemberTodayStudySeconds(104L, 7_200L)
+            );
+            given(cohortStatisticsRepository.findTodayStudySeconds(
+                    COHORT_ID,
+                    AGGREGATION_DATE
+            )).willReturn(confirmedDurations);
+            given(studyRecordAggregationQueryService.getCurrentTimers(
+                    List.of(101L, 102L, 103L, 104L),
+                    CALCULATED_AT
+            )).willReturn(List.of(new MemberCurrentTimerResult(
+                    101L,
+                    Instant.parse("2000-01-07T17:59:59Z"),
+                    3_600L
+            )));
 
             TodayResult result = cohortStatisticsService.getToday(
                     MANAGER_USER_ID,
@@ -90,9 +103,10 @@ class CohortStatisticsServiceTest {
                     () -> assertEquals(CALCULATED_AT, result.calculatedAt()),
                     () -> assertEquals(16_200L, result.totalStudySeconds()),
                     () -> assertEquals(4L, result.activeStudentCount()),
-                    () -> assertEquals(3L, result.participantCount()),
-                    () -> assertEquals(1L, result.noRecordStudentCount()),
-                    () -> assertEquals(5_400L, result.averageParticipantStudySeconds()),
+                    () -> assertEquals(4L, result.participantCount()),
+                    () -> assertEquals(0L, result.noRecordStudentCount()),
+                    () -> assertEquals(1L, result.runningTimerCount()),
+                    () -> assertEquals(4_050L, result.averageParticipantStudySeconds()),
                     () -> assertEquals(
                             List.of(
                                     "NO_RECORD",
@@ -106,7 +120,7 @@ class CohortStatisticsServiceTest {
                                     .toList()
                     ),
                     () -> assertEquals(
-                            List.of(1L, 1L, 1L, 1L, 0L),
+                            List.of(0L, 1L, 2L, 1L, 0L),
                             result.durationBuckets().stream()
                                     .map(DurationBucketResult::memberCount)
                                     .toList()
@@ -115,28 +129,40 @@ class CohortStatisticsServiceTest {
             InOrder inOrder = inOrder(
                     cohortAccessService,
                     clock,
-                    cohortStatisticsRepository
+                    cohortStatisticsRepository,
+                    studyRecordAggregationQueryService
             );
             inOrder.verify(cohortAccessService).requireManager(COHORT_ID, MANAGER_USER_ID);
             inOrder.verify(clock).instant();
-            inOrder.verify(cohortStatisticsRepository).summarizeToday(
+            inOrder.verify(cohortStatisticsRepository).findTodayStudySeconds(
                     COHORT_ID,
                     AGGREGATION_DATE
+            );
+            inOrder.verify(studyRecordAggregationQueryService).getCurrentTimers(
+                    List.of(101L, 102L, 103L, 104L),
+                    CALCULATED_AT
             );
         }
 
         @Test
-        @DisplayName("참여자가 없으면 평균 0초 정상 처리")
-        void returnsZeroAverageWhenNoStudentParticipates() {
+        @DisplayName("0초 실행 타이머는 실행 개수에만 반영")
+        void countsJustStartedTimerWithoutChangingStudyDuration() {
             given(clock.instant()).willReturn(CALCULATED_AT);
-            given(cohortStatisticsRepository.summarizeToday(COHORT_ID, AGGREGATION_DATE))
-                    .willReturn(new TodaySummary(
-                            0L,
-                            2L,
-                            0L,
-                            2L,
-                            durationBuckets(2L, 0L, 0L, 0L, 0L)
-                    ));
+            given(cohortStatisticsRepository.findTodayStudySeconds(
+                    COHORT_ID,
+                    AGGREGATION_DATE
+            )).willReturn(List.of(
+                    new MemberTodayStudySeconds(101L, 0L),
+                    new MemberTodayStudySeconds(102L, 0L)
+            ));
+            given(studyRecordAggregationQueryService.getCurrentTimers(
+                    List.of(101L, 102L),
+                    CALCULATED_AT
+            )).willReturn(List.of(new MemberCurrentTimerResult(
+                    101L,
+                    CALCULATED_AT,
+                    0L
+            )));
 
             TodayResult result = cohortStatisticsService.getToday(
                     MANAGER_USER_ID,
@@ -145,6 +171,9 @@ class CohortStatisticsServiceTest {
 
             assertAll(
                     () -> assertEquals(0L, result.averageParticipantStudySeconds()),
+                    () -> assertEquals(0L, result.participantCount()),
+                    () -> assertEquals(2L, result.noRecordStudentCount()),
+                    () -> assertEquals(1L, result.runningTimerCount()),
                     () -> assertEquals(2L, result.durationBuckets().getFirst().memberCount()),
                     () -> assertEquals(
                             result.activeStudentCount(),
@@ -171,7 +200,11 @@ class CohortStatisticsServiceTest {
             );
 
             assertEquals(CohortErrorCode.COHORT_MANAGER_REQUIRED, exception.getErrorCode());
-            verifyNoInteractions(clock, cohortStatisticsRepository);
+            verifyNoInteractions(
+                    clock,
+                    cohortStatisticsRepository,
+                    studyRecordAggregationQueryService
+            );
         }
     }
 
@@ -317,19 +350,4 @@ class CohortStatisticsServiceTest {
         }
     }
 
-    private List<DurationBucketResult> durationBuckets(
-            long noRecord,
-            long underOneHour,
-            long oneToTwoHours,
-            long twoToFourHours,
-            long fourHoursOrMore
-    ) {
-        return List.of(
-                new DurationBucketResult("NO_RECORD", noRecord),
-                new DurationBucketResult("UNDER_ONE_HOUR", underOneHour),
-                new DurationBucketResult("ONE_TO_TWO_HOURS", oneToTwoHours),
-                new DurationBucketResult("TWO_TO_FOUR_HOURS", twoToFourHours),
-                new DurationBucketResult("FOUR_HOURS_OR_MORE", fourHoursOrMore)
-        );
-    }
 }

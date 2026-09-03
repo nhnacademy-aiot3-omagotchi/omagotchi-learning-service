@@ -54,6 +54,9 @@ class CohortMembershipServiceTest {
     @Mock
     private CohortEventPublisher eventPublisher;
 
+    @Mock
+    private site.omagotchi.learningservice.gamification.application.CharacterGrowthService characterGrowthService;
+
     @InjectMocks
     private CohortMembershipService membershipService;
 
@@ -158,6 +161,33 @@ class CohortMembershipServiceTest {
 
         verify(membershipRepository, never()).endActive(
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("기수 구성원 목록 조회 시 대표 캐릭터 닉네임을 매핑하여 반환한다")
+    void getMembersEnrichesWithNickname() {
+        Long cohortId = 1L;
+        Long membershipId = 100L;
+        CohortMembership membership = activeMembership(cohortId, membershipId);
+
+        when(membershipRepository.findAllByCohortIdOrderByRequestedAtAsc(cohortId))
+                .thenReturn(java.util.List.of(membership));
+        when(characterGrowthService.findRepresentativeCharacters(java.util.List.of(MEMBER_USER_ID)))
+                .thenReturn(java.util.List.of(
+                        new site.omagotchi.learningservice.gamification.application.result.RepresentativeCharacterResult(
+                                MEMBER_USER_ID,
+                                1L,
+                                "오마고치마스터"
+                        )
+                ));
+
+        java.util.List<site.omagotchi.learningservice.cohort.application.result.CohortMembershipResponse> results =
+                membershipService.getMembers(cohortId, MANAGER_USER_ID);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).id()).isEqualTo(membershipId);
+        assertThat(results.get(0).nickname()).isEqualTo("오마고치마스터");
+        verify(accessService).requireManager(cohortId, MANAGER_USER_ID);
     }
 
     private CohortMembership activeMembership(Long cohortId, Long membershipId) {

@@ -9,19 +9,14 @@ import site.omagotchi.learningservice.global.time.AggregationDateTime;
 import site.omagotchi.learningservice.study.application.port.StudyRecordQueryRepository;
 import site.omagotchi.learningservice.study.application.port.TimerRunQueryRepository;
 import site.omagotchi.learningservice.study.application.result.MemberCurrentStudyDurationResult;
+import site.omagotchi.learningservice.study.application.result.MemberCurrentTimerResult;
 import site.omagotchi.learningservice.study.application.result.MemberStudyDurationResult;
 import site.omagotchi.learningservice.study.domain.TimerRun;
 import site.omagotchi.learningservice.study.domain.TimerTimePolicy;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * 다른 Feature가 멤버십별 공부시간을 조회하는 공개 계약.
@@ -90,17 +85,14 @@ public class StudyRecordAggregationQueryService {
                 new MutableCurrentDuration(duration.studySeconds(), false)
         ));
 
-        Instant aggregationStartedAt = AggregationDateTime.startOfAggregationDate(
-                aggregationDate
-        );
-        timerRunQueryRepository.findActiveByCohortMembershipIds(requestedMembershipIds)
-                .stream()
-                .filter(timerRun -> isNormallyRunning(timerRun, calculatedAt))
-                .forEach(timerRun -> addRunningDuration(
-                        durationsByMembershipId,
-                        timerRun,
-                        aggregationStartedAt,
-                        calculatedAt
+        getCurrentTimers(requestedMembershipIds, calculatedAt)
+                .forEach(timer -> durationsByMembershipId.merge(
+                        timer.cohortMembershipId(),
+                        new MutableCurrentDuration(
+                                timer.currentAggregationSeconds(),
+                                true
+                        ),
+                        MutableCurrentDuration::add
                 ));
 
         List<MemberCurrentStudyDurationResult> results = new ArrayList<>();
@@ -117,13 +109,56 @@ public class StudyRecordAggregationQueryService {
         return List.copyOf(results);
     }
 
+    /**
+     * 멤버십별 정상 실행 중 타이머와 현재 집계일 반영 시간을 일괄 조회한다.
+     *
+     * <p>반환 목록에 멤버십이 있으면 {@code calculatedAt} 기준 실행 중이며,
+     * 집계일 경계에서 막 시작한 0초 타이머도 포함한다.</p>
+     */
+    public List<MemberCurrentTimerResult> getCurrentTimers(
+            Collection<Long> cohortMembershipIds,
+            Instant calculatedAt
+    ) {
+        if (calculatedAt == null) {
+            throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
+        }
+        if (cohortMembershipIds == null || cohortMembershipIds.isEmpty()) {
+            return List.of();
+        }
+
+        Set<Long> requestedMembershipIds = new LinkedHashSet<>(cohortMembershipIds);
+        if (requestedMembershipIds.contains(null)) {
+            throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
+        }
+
+        Instant aggregationStartedAt = AggregationDateTime.startOfAggregationDate(
+                AggregationDateTime.aggregationDate(calculatedAt)
+        );
+        Map<Long, MemberCurrentTimerResult> timersByMembershipId = new HashMap<>();
+        timerRunQueryRepository.findActiveByCohortMembershipIds(requestedMembershipIds)
+                .stream()
+                .filter(timerRun -> isNormallyRunning(timerRun, calculatedAt))
+                .forEach(timerRun -> timersByMembershipId.put(
+                        timerRun.getCohortMembershipId(),
+                        currentTimerResult(
+                                timerRun,
+                                aggregationStartedAt,
+                                calculatedAt
+                        )
+                ));
+
+        return requestedMembershipIds.stream()
+                .map(timersByMembershipId::get)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
     private boolean isNormallyRunning(TimerRun timerRun, Instant calculatedAt) {
         return !timerRun.getStartedAt().isAfter(calculatedAt)
                 && timerRun.isRunningAt(calculatedAt, timerTimePolicy);
     }
 
-    private void addRunningDuration(
-            Map<Long, MutableCurrentDuration> durationsByMembershipId,
+    private MemberCurrentTimerResult currentTimerResult(
             TimerRun timerRun,
             Instant aggregationStartedAt,
             Instant calculatedAt
@@ -131,14 +166,10 @@ public class StudyRecordAggregationQueryService {
         Instant effectiveStartedAt = timerRun.getStartedAt().isAfter(aggregationStartedAt)
                 ? timerRun.getStartedAt()
                 : aggregationStartedAt;
-        long runningSeconds = timerTimePolicy.elapsedSeconds(
-                effectiveStartedAt,
-                calculatedAt
-        );
-        durationsByMembershipId.merge(
+        return new MemberCurrentTimerResult(
                 timerRun.getCohortMembershipId(),
-                new MutableCurrentDuration(runningSeconds, true),
-                MutableCurrentDuration::add
+                timerRun.getStartedAt(),
+                timerTimePolicy.elapsedSeconds(effectiveStartedAt, calculatedAt)
         );
     }
 

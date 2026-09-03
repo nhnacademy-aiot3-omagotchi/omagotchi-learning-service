@@ -45,6 +45,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
@@ -52,6 +53,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static site.omagotchi.learningservice.global.time.AggregationDateTime.today;
 
@@ -100,6 +103,7 @@ class PredictionQuestFlowIT {
     @Test
     @DisplayName("예측값에 도전 계수를 적용한 목표로 발급된다")
     void issuesQuestFromPrediction() {
+        recordStudyYesterday(18_000L);
         // 4.0h * 1.1 = 4.4h = 15840초 = 4시간 24분
         when(predictionClient.predict(any(), any()))
                 .thenReturn(new StudyTimePredictionResult(4.0, "study-time-test"));
@@ -118,6 +122,7 @@ class PredictionQuestFlowIT {
     @Test
     @DisplayName("모델 출력 상한에 계수를 곱해도 퀘스트 상한을 넘지 않는다")
     void clampsToQuestMaximum() {
+        recordStudyYesterday(18_000L);
         // 11.5h * 1.1 = 12.65h. 먼저 자르고 곱하면 상한이 상한 역할을 못 한다.
         when(predictionClient.predict(any(), any()))
                 .thenReturn(new StudyTimePredictionResult(11.5, "study-time-test"));
@@ -131,6 +136,7 @@ class PredictionQuestFlowIT {
     @Test
     @DisplayName("예측이 0으로 나와도 하한 아래로 내려가지 않는다")
     void neverIssuesBelowMinimum() {
+        recordStudyYesterday(18_000L);
         // 0초 목표는 ck_user_daily_quests_target_count 위반이라 저장 자체가 실패한다.
         when(predictionClient.predict(any(), any()))
                 .thenReturn(new StudyTimePredictionResult(0.0, "study-time-test"));
@@ -145,6 +151,7 @@ class PredictionQuestFlowIT {
     @DisplayName("prediction-service가 실패해도 퀘스트는 발급된다")
     void issuesQuestWhenPredictionFails() {
         // 예측 실패가 퀘스트 발급 자체를 막으면 안 된다(ADR prediction/0001).
+        recordStudyYesterday(18_000L); // 어제 5h
         when(predictionClient.predict(any(), any()))
                 .thenThrow(PredictionClientException.unavailable(new IllegalStateException("테스트 강제 실패")));
 
@@ -152,16 +159,30 @@ class PredictionQuestFlowIT {
 
         assertThat(quests).hasSize(5);
         DailyQuestResult quest = studyTimeQuestOf(quests);
-        // 학습 이력이 없으므로 B2도 값을 내지 못해 기본값으로 내려간다.
+        // 최근 등원일 평균(B2) 5h * 1.1 = 5h30m으로 내려간다.
+        assertThat(quest.title()).isEqualTo("오늘 5시간 30분 공부하기");
+        assertThat(targetSecondsOf()).isEqualTo(19_800);
+        assertThat(targetSourceOf()).isEqualTo("RULE_B2");
+        assertThat(modelVersionOf()).isNull();
+    }
+
+    @Test
+    @DisplayName("확정 학습 기록이 없으면 예측을 부르지 않고 기본값으로 발급된다")
+    void issuesDefaultWithoutStudyHistory() {
+        // 기록이 0일이면 모델 입력이 전부 0이라 누구에게나 같은 값이 나온다. 그건 예측이 아니다.
+        DailyQuestResult quest = issueAndFindStudyTimeQuest();
+
         assertThat(quest.title()).isEqualTo("오늘 3시간 30분 공부하기");
         assertThat(targetSecondsOf()).isEqualTo(DEFAULT_TARGET_SECONDS);
         assertThat(targetSourceOf()).isEqualTo("DEFAULT");
         assertThat(modelVersionOf()).isNull();
+        verify(predictionClient, never()).predict(any(), any());
     }
 
     @Test
     @DisplayName("두 번 조회해도 퀘스트가 중복 발급되지 않는다")
     void doesNotReissueOnSecondCall() {
+        recordStudyYesterday(18_000L);
         when(predictionClient.predict(any(), any()))
                 .thenReturn(new StudyTimePredictionResult(4.0, "study-time-test"));
 
@@ -178,6 +199,7 @@ class PredictionQuestFlowIT {
     @Test
     @DisplayName("나머지 네 개는 기존 횟수형 계약을 유지한다")
     void keepsCountQuestsUnchanged() {
+        recordStudyYesterday(18_000L);
         when(predictionClient.predict(any(), any()))
                 .thenReturn(new StudyTimePredictionResult(4.0, "study-time-test"));
 
@@ -200,6 +222,7 @@ class PredictionQuestFlowIT {
     @Test
     @DisplayName("학습 기록이 목표에 못 미치면 학습 완료하기만 완료되고 공부 시간 퀘스트는 진행 중으로 남는다")
     void keepsStudyTimeQuestInProgressWhenStudySecondsBelowTarget() throws InterruptedException {
+        recordStudyYesterday(18_000L);
         when(predictionClient.predict(any(), any()))
                 .thenReturn(new StudyTimePredictionResult(4.0, "study-time-test"));
         dailyQuestService.getOrCreateDailyQuests(studentId);
@@ -277,6 +300,31 @@ class PredictionQuestFlowIT {
         return jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM learning_service.user_daily_quests WHERE user_id = ?",
                 Integer.class, studentId
+        );
+    }
+
+    /**
+     * 어제 집계일에 확정된 학습 기록을 만든다. 콜드스타트 관문을 통과시키는 전제 조건이다.
+     *
+     * <p>application 경로로 만들면 STUDY_COMPLETED 이벤트가 오늘 퀘스트를 먼저 발급해 버려
+     * 각 테스트가 스텁한 예측값이 쓰이지 않는다. 그래서 이벤트 없이 행만 넣는다.
+     */
+    private void recordStudyYesterday(long studySeconds) {
+        LocalDate yesterday = today().minusDays(1);
+        Long membershipId = jdbcTemplate.queryForObject(
+                "SELECT id FROM learning_service.cohort_memberships WHERE user_id = ? AND cohort_id = ?",
+                Long.class, studentId, cohortId
+        );
+        Instant start = dateTimeProvider.startOfAggregationDate(yesterday).plus(Duration.ofHours(5));
+        Instant end = start.plusSeconds(studySeconds);
+        jdbcTemplate.update("""
+                INSERT INTO learning_service.study_records
+                    (id, cohort_membership_id, aggregation_date, start_time, end_time, study_seconds)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                UUID.randomUUID(), membershipId, yesterday,
+                OffsetDateTime.ofInstant(start, ZoneOffset.UTC), OffsetDateTime.ofInstant(end, ZoneOffset.UTC),
+                studySeconds
         );
     }
 

@@ -61,4 +61,32 @@ public interface StudyProgressionRepository extends Repository<UserCharacter, Lo
             @Param("cohortId") Long cohortId,
             @Param("aggregationDate") LocalDate aggregationDate
     );
+
+    /**
+     * 해당 집계일 이전에 삭제되지 않은 확정 StudyRecord가 하나라도 있는지. 콜드스타트 판정에 쓴다.
+     *
+     * <p>기록이 하나도 없으면 모델 입력이 전부 0이라 예측이 아니라 외삽이 나온다.
+     * 그런 사용자는 모델을 부르지 않고 기본 목표로 보낸다(ADR prediction/0002 §3.2).
+     */
+    @Query(
+            value = """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM learning_service.study_records sr
+                        JOIN learning_service.cohort_memberships cm
+                          ON cm.id = sr.cohort_membership_id
+                        WHERE cm.user_id = :userId
+                          AND cm.cohort_id = :cohortId
+                          AND cm.status = 'ACTIVE'
+                          AND sr.deleted_at IS NULL
+                          AND sr.aggregation_date < :aggregationDate
+                    )
+                    """,
+            nativeQuery = true
+    )
+    boolean existsStudyRecordBefore(
+            @Param("userId") UUID userId,
+            @Param("cohortId") Long cohortId,
+            @Param("aggregationDate") LocalDate aggregationDate
+    );
 }

@@ -26,4 +26,9 @@ public class JpaStudySecondsReader implements StudySecondsReader {
         );
         return Math.round(average);
     }
+
+    @Override
+    public boolean hasStudyRecordBefore(UUID userId, Long cohortId, LocalDate aggregationDate) {
+        return studyProgressionRepository.existsStudyRecordBefore(userId, cohortId, aggregationDate);
+    }
 }

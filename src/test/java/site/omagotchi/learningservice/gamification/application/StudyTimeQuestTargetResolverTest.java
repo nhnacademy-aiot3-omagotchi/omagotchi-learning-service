@@ -20,6 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -53,6 +56,7 @@ class StudyTimeQuestTargetResolverTest {
     @DisplayName("예측이 성공하면 계수를 적용한 MODEL 목표를 낸다")
     void usesPredictionWhenAvailable() {
         when(userStudySecondsReader.findActiveCohortId(USER_ID)).thenReturn(Optional.of(COHORT_ID));
+        when(userStudySecondsReader.hasStudyRecordBefore(USER_ID, COHORT_ID, QUEST_DATE)).thenReturn(true);
         when(studyTimePredictionService.predict(USER_ID, COHORT_ID, null))
                 .thenReturn(new StudyTimePredictionResult(4.0, "study-time-2026-08-16"));
 
@@ -69,6 +73,7 @@ class StudyTimeQuestTargetResolverTest {
     @DisplayName("예측이 실패하면 최근 7 등원일 평균(B2)으로 폴백한다")
     void fallsBackToRuleWhenPredictionFails() {
         when(userStudySecondsReader.findActiveCohortId(USER_ID)).thenReturn(Optional.of(COHORT_ID));
+        when(userStudySecondsReader.hasStudyRecordBefore(USER_ID, COHORT_ID, QUEST_DATE)).thenReturn(true);
         when(studyTimePredictionService.predict(USER_ID, COHORT_ID, null))
                 .thenThrow(new IllegalStateException("prediction-service 장애"));
         when(userStudySecondsReader.recentAttendedAverageSeconds(USER_ID, COHORT_ID, QUEST_DATE))
@@ -84,9 +89,10 @@ class StudyTimeQuestTargetResolverTest {
     }
 
     @Test
-    @DisplayName("예측도 등원 이력도 없으면 하한을 기본 목표로 낸다")
-    void fallsBackToDefaultWhenNoHistory() {
+    @DisplayName("예측이 실패하고 최근 등원 평균도 0이면 하한을 기본 목표로 낸다")
+    void fallsBackToDefaultWhenNoRecentAttendance() {
         when(userStudySecondsReader.findActiveCohortId(USER_ID)).thenReturn(Optional.of(COHORT_ID));
+        when(userStudySecondsReader.hasStudyRecordBefore(USER_ID, COHORT_ID, QUEST_DATE)).thenReturn(true);
         when(studyTimePredictionService.predict(USER_ID, COHORT_ID, null))
                 .thenThrow(new IllegalStateException("콜드스타트"));
         when(userStudySecondsReader.recentAttendedAverageSeconds(USER_ID, COHORT_ID, QUEST_DATE))
@@ -114,9 +120,27 @@ class StudyTimeQuestTargetResolverTest {
     }
 
     @Test
+    @DisplayName("확정 학습 기록이 없으면 예측을 호출하지 않고 기본 목표를 낸다")
+    void skipsPredictionWithoutStudyHistory() {
+        // 기록이 0일이면 모델 입력이 전부 0이라 누구에게나 같은 값이 나온다. 그건 예측이 아니다.
+        when(userStudySecondsReader.findActiveCohortId(USER_ID)).thenReturn(Optional.of(COHORT_ID));
+        when(userStudySecondsReader.hasStudyRecordBefore(USER_ID, COHORT_ID, QUEST_DATE)).thenReturn(false);
+
+        StudyTimeQuestTarget target = resolver.resolve(USER_ID, QUEST_DATE);
+
+        assertAll(
+                () -> assertEquals(MIN_SECONDS, target.targetSeconds()),
+                () -> assertEquals(QuestTargetSource.DEFAULT, target.source())
+        );
+        verifyNoInteractions(studyTimePredictionService);
+        verify(userStudySecondsReader, never()).recentAttendedAverageSeconds(USER_ID, COHORT_ID, QUEST_DATE);
+    }
+
+    @Test
     @DisplayName("규칙 평균이 상한을 넘으면 상한으로 자른다")
     void clampsRuleAverageToMaximum() {
         when(userStudySecondsReader.findActiveCohortId(USER_ID)).thenReturn(Optional.of(COHORT_ID));
+        when(userStudySecondsReader.hasStudyRecordBefore(USER_ID, COHORT_ID, QUEST_DATE)).thenReturn(true);
         when(studyTimePredictionService.predict(eq(USER_ID), eq(COHORT_ID), any()))
                 .thenThrow(new IllegalStateException("장애"));
         when(userStudySecondsReader.recentAttendedAverageSeconds(USER_ID, COHORT_ID, QUEST_DATE))

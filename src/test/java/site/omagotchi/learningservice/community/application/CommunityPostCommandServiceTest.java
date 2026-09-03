@@ -324,6 +324,30 @@ class CommunityPostCommandServiceTest {
     }
 
     @Test
+    @DisplayName("새로 고정하면 기수의 기존 고정을 먼저 내린다")
+    void unpinsPreviousPinBeforePinning() {
+        givenNoticeWriter(true);
+        givenFoundPost(post(1L, USER_ID, CommunityPostType.NOTICE));
+        given(attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(1L)).willReturn(List.of());
+
+        communityPostCommandService.pin(USER_ID, COHORT_ID, 1L, new PinCommunityPostCommand(true));
+
+        verify(communityPostRepository).unpinAll(COHORT_ID);
+    }
+
+    @Test
+    @DisplayName("고정 해제는 다른 게시글의 고정을 건드리지 않는다")
+    void doesNotUnpinOthersWhenUnpinning() {
+        givenNoticeWriter(true);
+        givenFoundPost(post(1L, USER_ID, CommunityPostType.NOTICE));
+        given(attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(1L)).willReturn(List.of());
+
+        communityPostCommandService.pin(USER_ID, COHORT_ID, 1L, new PinCommunityPostCommand(false));
+
+        verify(communityPostRepository, never()).unpinAll(any());
+    }
+
+    @Test
     @DisplayName("공지 작성 권한이 없으면 고정할 수 없다")
     void rejectsPinFromStudent() {
         givenNoticeWriter(false);

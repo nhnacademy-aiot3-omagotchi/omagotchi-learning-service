@@ -71,7 +71,7 @@ class CommunityPostQueryServiceTest {
     void appliesDefaultPaginationAndNormalizedSearch() {
         givenMemberWithRole(CohortMembershipRole.STUDENT);
         given(communityPostQueryPort.findVisiblePosts(any()))
-                .willReturn(new CommunityPostPage(List.of(), 0, 20, 0, 0));
+                .willReturn(new CommunityPostPage(List.of(), null, 0, 20, 0, 0));
         given(communityAuthorNames.of(anyCollection())).willReturn(Map.of());
 
         communityPostQueryService.getPosts(USER_ID, COHORT_ID, null, null, null, "  학습  ");
@@ -122,7 +122,7 @@ class CommunityPostQueryServiceTest {
     void fillsAuthorNickname() {
         givenMemberWithRole(CohortMembershipRole.STUDENT);
         given(communityPostQueryPort.findVisiblePosts(any())).willReturn(new CommunityPostPage(
-                List.of(listItem(CommunityPostType.FREE, OTHER_USER_ID)), 0, 20, 1, 1
+                List.of(listItem(CommunityPostType.FREE, OTHER_USER_ID)), null, 0, 20, 1, 1
         ));
         given(communityAuthorNames.of(Set.of(OTHER_USER_ID))).willReturn(Map.of(OTHER_USER_ID, "옆자리"));
 
@@ -136,7 +136,7 @@ class CommunityPostQueryServiceTest {
     void leavesNicknameNullWhenAuthorHasNoCharacter() {
         givenMemberWithRole(CohortMembershipRole.STUDENT);
         given(communityPostQueryPort.findVisiblePosts(any())).willReturn(new CommunityPostPage(
-                List.of(listItem(CommunityPostType.FREE, OTHER_USER_ID)), 0, 20, 1, 1
+                List.of(listItem(CommunityPostType.FREE, OTHER_USER_ID)), null, 0, 20, 1, 1
         ));
         given(communityAuthorNames.of(Set.of(OTHER_USER_ID))).willReturn(Map.of());
 
@@ -153,7 +153,7 @@ class CommunityPostQueryServiceTest {
                 List.of(
                         listItem(CommunityPostType.FREE, USER_ID),
                         listItem(CommunityPostType.FREE, OTHER_USER_ID)
-                ), 0, 20, 2, 1
+                ), null, 0, 20, 2, 1
         ));
         given(communityAuthorNames.of(anyCollection())).willReturn(Map.of());
 
@@ -170,7 +170,7 @@ class CommunityPostQueryServiceTest {
     void marksNoticeManageableOnlyForNoticeWriter() {
         givenMemberWithRole(CohortMembershipRole.MENTOR);
         given(communityPostQueryPort.findVisiblePosts(any())).willReturn(new CommunityPostPage(
-                List.of(listItem(CommunityPostType.NOTICE, OTHER_USER_ID)), 0, 20, 1, 1
+                List.of(listItem(CommunityPostType.NOTICE, OTHER_USER_ID)), null, 0, 20, 1, 1
         ));
         given(communityAuthorNames.of(anyCollection())).willReturn(Map.of());
 
@@ -184,13 +184,47 @@ class CommunityPostQueryServiceTest {
     void marksNoticeUnmanageableForStudent() {
         givenMemberWithRole(CohortMembershipRole.STUDENT);
         given(communityPostQueryPort.findVisiblePosts(any())).willReturn(new CommunityPostPage(
-                List.of(listItem(CommunityPostType.NOTICE, OTHER_USER_ID)), 0, 20, 1, 1
+                List.of(listItem(CommunityPostType.NOTICE, OTHER_USER_ID)), null, 0, 20, 1, 1
         ));
         given(communityAuthorNames.of(anyCollection())).willReturn(Map.of());
 
         var result = communityPostQueryService.getPosts(USER_ID, COHORT_ID, 0, 20, null, null);
 
         assertFalse(result.items().getFirst().canManage());
+    }
+
+    @Test
+    @DisplayName("고정 공지를 목록과 별도로 실어 보내고 뷰어 정보도 채운다")
+    void carriesPinnedPostAlongsideList() {
+        givenMemberWithRole(CohortMembershipRole.MENTOR);
+        given(communityPostQueryPort.findVisiblePosts(any())).willReturn(new CommunityPostPage(
+                List.of(listItem(CommunityPostType.FREE, OTHER_USER_ID)), null, 0, 20, 1, 1
+        ));
+        given(communityPostQueryPort.findPinnedPost(COHORT_ID))
+                .willReturn(Optional.of(listItem(CommunityPostType.NOTICE, OTHER_USER_ID)));
+        given(communityAuthorNames.of(anyCollection())).willReturn(Map.of(OTHER_USER_ID, "기수장"));
+
+        var result = communityPostQueryService.getPosts(USER_ID, COHORT_ID, 0, 20, null, null);
+
+        assertAll(
+                () -> assertEquals("기수장", result.pinned().authorNickname()),
+                () -> assertTrue(result.pinned().canManage(), "MENTOR는 공지를 관리한다"),
+                () -> assertEquals(1, result.items().size())
+        );
+    }
+
+    @Test
+    @DisplayName("고정 공지가 없으면 null로 둔다")
+    void leavesPinnedNullWhenNoneIsPinned() {
+        givenMemberWithRole(CohortMembershipRole.STUDENT);
+        given(communityPostQueryPort.findVisiblePosts(any()))
+                .willReturn(new CommunityPostPage(List.of(), null, 0, 20, 0, 0));
+        given(communityPostQueryPort.findPinnedPost(COHORT_ID)).willReturn(Optional.empty());
+        given(communityAuthorNames.of(anyCollection())).willReturn(Map.of());
+
+        var result = communityPostQueryService.getPosts(USER_ID, COHORT_ID, 0, 20, null, null);
+
+        assertNull(result.pinned());
     }
 
     @Test

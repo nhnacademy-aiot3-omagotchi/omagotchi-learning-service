@@ -61,17 +61,17 @@ class CommunityPostQueryDslRepositoryIT {
     }
 
     @Test
-    @DisplayName("고정, 생성일, id 순으로 정렬하고 DB 페이지를 반환한다")
+    @DisplayName("생성일, id 역순으로 정렬하고 DB 페이지를 반환한다")
     void sortsAndPaginatesInDatabase() {
         Long cohortId = saveCohort("기수");
         Long firstId = savePost("첫 글", "내용", CommunityPostType.FREE,
                 cohortId, false, "2026-08-08T00:00:00Z", null);
         Long secondId = savePost("둘째 글", "내용", CommunityPostType.FREE,
                 cohortId, false, "2026-08-08T01:00:00Z", null);
-        Long pinnedOldId = savePost("고정 예전 글", "내용", CommunityPostType.NOTICE,
-                cohortId, true, "2026-08-07T00:00:00Z", null);
-        Long pinnedNewId = savePost("고정 최신 글", "내용", CommunityPostType.NOTICE,
-                cohortId, true, "2026-08-08T02:00:00Z", null);
+        Long thirdId = savePost("셋째 글", "내용", CommunityPostType.FREE,
+                cohortId, false, "2026-08-08T02:00:00Z", null);
+        Long fourthId = savePost("넷째 글", "내용", CommunityPostType.FREE,
+                cohortId, false, "2026-08-08T03:00:00Z", null);
 
         var firstPage = queryRepository.findVisiblePosts(condition(cohortId, 0, 2, null, null));
         var secondPage = queryRepository.findVisiblePosts(condition(cohortId, 1, 2, null, null));
@@ -79,11 +79,42 @@ class CommunityPostQueryDslRepositoryIT {
         assertAll(
                 () -> assertEquals(4, firstPage.totalElements()),
                 () -> assertEquals(2, firstPage.totalPages()),
-                () -> assertEquals(pinnedNewId, firstPage.items().get(0).postId()),
-                () -> assertEquals(pinnedOldId, firstPage.items().get(1).postId()),
+                () -> assertEquals(fourthId, firstPage.items().get(0).postId()),
+                () -> assertEquals(thirdId, firstPage.items().get(1).postId()),
                 () -> assertEquals(secondId, secondPage.items().get(0).postId()),
                 () -> assertEquals(firstId, secondPage.items().get(1).postId())
         );
+    }
+
+    @Test
+    @DisplayName("고정 공지는 목록에서 빼고 따로 조회한다")
+    void keepsPinnedPostOutOfList() {
+        Long cohortId = saveCohort("기수");
+        Long pinnedId = savePost("고정 공지", "내용", CommunityPostType.NOTICE,
+                cohortId, true, "2026-08-07T00:00:00Z", null);
+        Long normalId = savePost("일반 글", "내용", CommunityPostType.FREE,
+                cohortId, false, "2026-08-08T00:00:00Z", null);
+
+        var list = queryRepository.findVisiblePosts(condition(cohortId, 0, 20, null, null));
+        var pinned = queryRepository.findPinnedPost(cohortId);
+
+        assertAll(
+                () -> assertEquals(1, list.totalElements()),
+                () -> assertEquals(normalId, list.items().getFirst().postId()),
+                () -> assertEquals(pinnedId, pinned.orElseThrow().postId()),
+                () -> assertTrue(pinned.orElseThrow().pinned())
+        );
+    }
+
+    @Test
+    @DisplayName("고정 공지 조회도 기수 경계를 지키고, 없으면 비어 있다")
+    void findsPinnedPostWithinCohortOnly() {
+        Long cohortId = saveCohort("기수");
+        Long otherCohortId = saveCohort("다른 기수");
+        savePost("다른 기수 고정", "내용", CommunityPostType.NOTICE,
+                otherCohortId, true, "2026-08-07T00:00:00Z", null);
+
+        assertTrue(queryRepository.findPinnedPost(cohortId).isEmpty());
     }
 
     @Test

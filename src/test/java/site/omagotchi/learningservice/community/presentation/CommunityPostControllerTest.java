@@ -98,7 +98,7 @@ class CommunityPostControllerTest {
                         0L,
                         true
                 )
-        ), 1, 10, 11, 2));
+        ), null, 1, 10, 11, 2));
 
         mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/community/posts", COHORT_ID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())

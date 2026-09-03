@@ -2,11 +2,10 @@ package site.omagotchi.learningservice.community.infrastructure;
 
 import io.minio.BucketExistsArgs;
 import io.minio.MinioClient;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Profile;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 /**
@@ -26,14 +25,22 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @Profile("!test")
-@RequiredArgsConstructor
-public class CommunityAttachmentBucketCheck implements ApplicationRunner {
+public class CommunityAttachmentBucketCheck {
 
     private final MinioClient minioClient;
     private final CommunityAttachmentProperties properties;
 
-    @Override
-    public void run(ApplicationArguments args) {
+    public CommunityAttachmentBucketCheck(
+            @Qualifier("communityAttachmentBucketCheckMinioClient") MinioClient minioClient,
+            CommunityAttachmentProperties properties
+    ) {
+        this.minioClient = minioClient;
+        this.properties = properties;
+    }
+
+    /** Boot의 기본 비동기 실행기에서 점검해 readiness를 막지 않는다. */
+    @Async
+    public void checkAsync() {
         check();
     }
 

@@ -31,6 +31,8 @@ import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePoli
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+import site.omagotchi.learningservice.gamification.application.result.RepresentativeCharacterResult;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -353,13 +355,16 @@ class AttendanceServiceTest {
     @Test
     @DisplayName("관리자 일자별 조회")
     void returnsDailyRecordsForManager() {
-        CohortMembership membership = activeMembership();
         AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
         record.checkIn(Instant.parse("2026-07-29T00:00:00Z"), AttendanceStatus.PENDING, 0);
-        given(membershipRepository.findByCohortIdAndStatusOrderByRequestedAtAsc(
-                COHORT_ID,
-                CohortMembershipStatus.ACTIVE
-        )).willReturn(java.util.List.of(membership));
+        // 소속은 cohort의 공개 계약으로만 받는다. 리포지토리를 직접 스텁하면
+        // 출결이 기수 파트의 infrastructure에 묶여 있다는 뜻이 된다.
+        given(cohortMembershipQueryService.findActiveMemberships(COHORT_ID))
+                .willReturn(java.util.List.of(new CohortMembershipView(MEMBERSHIP_ID, COHORT_ID, USER_ID)));
+        given(characterGrowthService.findRepresentativeCharacters(java.util.List.of(USER_ID)))
+                .willReturn(java.util.List.of(
+                        new RepresentativeCharacterResult(USER_ID, 1L, "테스트닉")
+                ));
         AttendancePageQuery query = AttendancePageQuery.of(ATTENDANCE_DATE, ATTENDANCE_DATE, 0, 20);
         // 정렬과 Pageable 생성은 infrastructure 책임이므로 여기에서 검증하지 않는다.
         given(attendanceRecordQueryRepository.findDailyRecords(
@@ -375,6 +380,9 @@ class AttendanceServiceTest {
 
         assertEquals(1, results.items().size());
         assertEquals(MEMBERSHIP_ID, results.items().getFirst().cohortMembershipId());
+        // 관리자 목록은 행과 구성원을 이을 수 있어야 한다.
+        assertEquals(USER_ID, results.items().getFirst().userId());
+        assertEquals("테스트닉", results.items().getFirst().nickname());
         assertEquals(1, results.totalElements());
     }
 

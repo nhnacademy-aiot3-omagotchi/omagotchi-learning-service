@@ -23,6 +23,7 @@ import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecord
 import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
@@ -191,15 +192,17 @@ public class AttendanceService {
     ) {
         cohortAccessService.requireManager(cohortId, managerUserId);
 
-        List<CohortMembership> memberships = membershipRepository
-                .findByCohortIdAndStatusOrderByRequestedAtAsc(cohortId, CohortMembershipStatus.ACTIVE);
+        // 소속 조회는 cohort 파트의 공개 Application 계약으로만 요청한다. 리포지토리를
+        // 직접 부르면 출결이 기수 파트의 infrastructure 구현에 묶인다.
+        List<CohortMembershipView> memberships =
+                cohortMembershipQueryService.findActiveMemberships(cohortId);
         if (memberships.isEmpty()) {
             // 조회 대상이 없으면 빈 목록으로 끊는다. 빈 IN 절을 리포지토리에 넘기지 않기 위함이다.
             return new AttendanceRecordPageResult(List.of(), query.page(), query.size(), 0L, 0);
         }
 
         List<Long> membershipIds = memberships.stream()
-                .map(CohortMembership::getId)
+                .map(CohortMembershipView::membershipId)
                 .toList();
 
         return pageResult(
@@ -234,18 +237,22 @@ public class AttendanceService {
      */
     private AttendanceRecordPageResult pageResult(
             AttendanceRecordQueryRepository.AttendanceRecordPage records,
-            List<CohortMembership> memberships
+            List<CohortMembershipView> memberships
     ) {
-        Map<Long, CohortMembership> membershipById = memberships.stream()
-                .collect(Collectors.toUnmodifiableMap(CohortMembership::getId, Function.identity()));
+        Map<Long, CohortMembershipView> membershipById = memberships.stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        CohortMembershipView::membershipId,
+                        Function.identity(),
+                        (first, ignored) -> first
+                ));
         Map<UUID, String> nicknameByUserId = lookupNicknames(memberships);
 
         return new AttendanceRecordPageResult(
                 records.items().stream()
                         .map(record -> {
-                            CohortMembership membership =
+                            CohortMembershipView membership =
                                     membershipById.get(record.getCohortMembershipId());
-                            UUID userId = membership == null ? null : membership.getUserId();
+                            UUID userId = membership == null ? null : membership.userId();
                             return AttendanceRecordResult.from(
                                     record,
                                     userId,
@@ -267,9 +274,9 @@ public class AttendanceService {
      * 이름 없는 출결이 출결 없음보다 낫다. 대표 캐릭터가 없는 계정은 애초에 결과에
      * 담기지 않으므로 호출부는 {@code null}을 정상값으로 다뤄야 한다.</p>
      */
-    private Map<UUID, String> lookupNicknames(List<CohortMembership> memberships) {
+    private Map<UUID, String> lookupNicknames(List<CohortMembershipView> memberships) {
         List<UUID> userIds = memberships.stream()
-                .map(CohortMembership::getUserId)
+                .map(CohortMembershipView::userId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();

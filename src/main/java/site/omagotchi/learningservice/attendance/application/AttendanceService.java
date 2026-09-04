@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.attendance.application;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.command.ChangeAttendanceStatusCommand;
@@ -22,12 +23,15 @@ import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecord
 import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
+import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+import site.omagotchi.learningservice.gamification.application.result.RepresentativeCharacterResult;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.time.AggregationDateTime;
 import site.omagotchi.learningservice.space.application.LabSelectionService;
@@ -37,11 +41,16 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 출석 서비스
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -58,6 +67,7 @@ public class AttendanceService {
     private final PresenceTransitionService presenceTransitionService;
     private final LabSelectionService labSelectionService;
     private final StudySpaceSelectionService studySpaceSelectionService;
+    private final CharacterGrowthService characterGrowthService;
     private final AttendanceEventPublisher attendanceEventPublisher;
     private final Clock clock;
 
@@ -182,18 +192,28 @@ public class AttendanceService {
     ) {
         cohortAccessService.requireManager(cohortId, managerUserId);
 
-        List<Long> membershipIds = membershipRepository
-                .findByCohortIdAndStatusOrderByRequestedAtAsc(cohortId, CohortMembershipStatus.ACTIVE)
-                .stream()
-                .map(CohortMembership::getId)
+        // 소속 조회는 cohort 파트의 공개 Application 계약으로만 요청한다. 리포지토리를
+        // 직접 부르면 출결이 기수 파트의 infrastructure 구현에 묶인다.
+        List<CohortMembershipView> memberships =
+                cohortMembershipQueryService.findActiveMemberships(cohortId);
+        if (memberships.isEmpty()) {
+            // 조회 대상이 없으면 빈 목록으로 끊는다. 빈 IN 절을 리포지토리에 넘기지 않기 위함이다.
+            return new AttendanceRecordPageResult(List.of(), query.page(), query.size(), 0L, 0);
+        }
+
+        List<Long> membershipIds = memberships.stream()
+                .map(CohortMembershipView::membershipId)
                 .toList();
 
-        return pageResult(attendanceRecordQueryRepository.findDailyRecords(
-                date,
-                membershipIds,
-                query.page(),
-                query.size()
-        ));
+        return pageResult(
+                attendanceRecordQueryRepository.findDailyRecords(
+                        date,
+                        membershipIds,
+                        query.page(),
+                        query.size()
+                ),
+                memberships
+        );
     }
 
     private AttendanceRecordPageResult pageResult(
@@ -206,6 +226,75 @@ public class AttendanceService {
                 records.totalElements(),
                 records.totalPages()
         );
+    }
+
+    /**
+     * 관리자 목록용. 출결 행에 소속의 계정 정보를 붙인다.
+     *
+     * <p>출결 행은 {@code cohort_membership_id}만 갖고 있어 그대로는 누구의 기록인지
+     * 화면이 알 수 없다. 소속을 이미 조회한 상태이므로 그것으로 계정을 잇고, 표시 이름만
+     * 한 번 더 배치로 읽는다.</p>
+     */
+    private AttendanceRecordPageResult pageResult(
+            AttendanceRecordQueryRepository.AttendanceRecordPage records,
+            List<CohortMembershipView> memberships
+    ) {
+        Map<Long, CohortMembershipView> membershipById = memberships.stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        CohortMembershipView::membershipId,
+                        Function.identity(),
+                        (first, ignored) -> first
+                ));
+        Map<UUID, String> nicknameByUserId = lookupNicknames(memberships);
+
+        return new AttendanceRecordPageResult(
+                records.items().stream()
+                        .map(record -> {
+                            CohortMembershipView membership =
+                                    membershipById.get(record.getCohortMembershipId());
+                            UUID userId = membership == null ? null : membership.userId();
+                            return AttendanceRecordResult.from(
+                                    record,
+                                    userId,
+                                    userId == null ? null : nicknameByUserId.get(userId)
+                            );
+                        })
+                        .toList(),
+                records.page(),
+                records.size(),
+                records.totalElements(),
+                records.totalPages()
+        );
+    }
+
+    /**
+     * 표시 이름을 계정별로 일괄 조회한다.
+     *
+     * <p><b>실패해도 목록을 죽이지 않는다.</b> 이름은 부가 정보이고, 관리자에게는
+     * 이름 없는 출결이 출결 없음보다 낫다. 대표 캐릭터가 없는 계정은 애초에 결과에
+     * 담기지 않으므로 호출부는 {@code null}을 정상값으로 다뤄야 한다.</p>
+     */
+    private Map<UUID, String> lookupNicknames(List<CohortMembershipView> memberships) {
+        List<UUID> userIds = memberships.stream()
+                .map(CohortMembershipView::userId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            return characterGrowthService.findRepresentativeCharacters(userIds).stream()
+                    .filter(character -> character.userId() != null && character.displayName() != null)
+                    .collect(Collectors.toUnmodifiableMap(
+                            RepresentativeCharacterResult::userId,
+                            RepresentativeCharacterResult::displayName,
+                            (first, ignored) -> first
+                    ));
+        } catch (RuntimeException e) {
+            log.warn("출결 목록의 표시 이름을 조회하지 못했습니다. 이름 없이 응답합니다.", e);
+            return Map.of();
+        }
     }
 
     @Transactional

@@ -12,6 +12,14 @@
 -- 이 시점엔 전체 유니크 제약이 V22가 끝날 때까지 계속 걸려 있었으므로, 활성이든 해제든
 -- 이 테이블에 telegram_chat_id·telegram_user_id·user_id 중복이 존재할 수 없다. 그래서
 -- 지우기 전 별도의 중복 검사가 필요 없다 — 검사할 대상 자체가 있을 수 없다.
+--
+-- DROP CONSTRAINT는 ACCESS EXCLUSIVE 잠금을 요구한다. 이 테이블을 잡고 있는 트랜잭션이
+-- 있으면 잠금 대기열에 걸려 무한정 기다리고, 그 뒤로 들어오는 다른 쿼리까지 줄줄이 막힌다.
+-- lock_timeout으로 대기 시간을 제한해 그 상황이면 이 Migration이 실패하게 한다 — 배포를
+-- 조용히 막는 대신 확실하게 실패시켜 재시도하게 하는 편이 낫다. SET LOCAL이라 이
+-- Transaction(이 Migration) 안에서만 적용되고 끝나면 원래 설정으로 돌아간다.
+SET LOCAL lock_timeout = '5s';
+
 ALTER TABLE learning_service.telegram_user_links
     DROP CONSTRAINT uq_telegram_user_links_chat,
     DROP CONSTRAINT uq_telegram_user_links_telegram_user,

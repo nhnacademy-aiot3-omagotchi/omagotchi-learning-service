@@ -26,6 +26,7 @@ public class StudySpaceConditionTools implements AiToolProvider {
             지난 기간의 학습 분석에는 이 도구가 아니라 학습 리포트 도구를 쓰세요.
 
             ### 응답 해석 규칙
+            - spaces에는 학생이 이용할 수 있는 공간만 포함됩니다. 사무실 등 비이용 공간은 추천하지 마세요.
             - spaces는 이산화탄소가 낮은(환기가 잘 된) 순서로 정렬돼 있습니다. 다만 정렬은
               참고일 뿐이고, 추천은 co2·temperature·humidity 셋을 함께 보고 판단하세요.
               예를 들어 CO2가 조금 더 높아도 온·습도가 훨씬 쾌적하면 그쪽이 나을 수 있습니다.
@@ -38,7 +39,7 @@ public class StudySpaceConditionTools implements AiToolProvider {
               할 수 없다고 알리고, 공간 목록만 안내하세요.
             - 값이 없는(null) 항목은 없다고만 하고 추측하지 마세요.
             - 환기·냉난방처럼 사용자가 바로 할 수 있는 행동을 한 가지 덧붙이면 좋습니다.
-
+            
             ### 환경값 해석 기준 (연구·국내 기준에 근거한 판단선)
             - 이 기준은 판단에만 쓰고, 사용자에게 근거나 논문을 나열하지 마세요.
               "CO2 1,180ppm이라 환기가 필요해 보여요"처럼 자연스럽게 녹여 말하면 됩니다.

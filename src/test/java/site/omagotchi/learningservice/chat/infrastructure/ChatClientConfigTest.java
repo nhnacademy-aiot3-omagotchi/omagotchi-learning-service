@@ -16,9 +16,15 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.ollama.autoconfigure.OllamaApiAutoConfiguration;
 import org.springframework.ai.model.ollama.autoconfigure.OllamaChatAutoConfiguration;
 import org.springframework.ai.model.tool.autoconfigure.ToolCallingAutoConfiguration;
+import org.springframework.ai.ollama.api.OllamaApi;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.convert.ApplicationConversionService;
+import org.springframework.boot.http.client.autoconfigure.HttpClientAutoConfiguration;
+import org.springframework.boot.http.client.autoconfigure.imperative.ImperativeHttpClientAutoConfiguration;
+import org.springframework.boot.http.client.autoconfigure.reactive.ReactiveHttpClientAutoConfiguration;
+import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.webclient.autoconfigure.WebClientAutoConfiguration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.List;
@@ -101,6 +107,85 @@ class ChatClientConfigTest {
         this.contextRunner
                 .withPropertyValues("spring.ai.ollama.base-url=")
                 .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    @DisplayName("OllamaApiConfig가 자동구성 대신 OllamaApi를 제공한다")
+    void ollamaApiConfigReplacesAutoConfiguration() {
+        this.ollamaApiConfigRunner().run(context -> {
+            assertThat(context).hasNotFailed();
+
+            // 자동구성과 우리 빈이 함께 뜨면 어느 쪽이 쓰이는지 알 수 없다
+            assertThat(context).hasSingleBean(OllamaApi.class);
+
+            // 자동구성 빈도 이름이 ollamaApi라, 이름만으로는 어느 쪽인지 구분되지 않는다
+            // 정의 출처를 봐야 자동구성이 실제로 물러났음이 증명된다
+            assertThat(context.getBeanFactory().getBeanDefinition("ollamaApi").getFactoryBeanName())
+                    .isEqualTo("ollamaApiConfig");
+
+            // 교체한 OllamaApi 위에서 ChatClient까지 정상적으로 만들어져야 한다
+            assertThat(context.getBean("ollamaChatClient")).isInstanceOf(ChatClient.class);
+        });
+    }
+
+    @Test
+    @DisplayName("Ollama 타임아웃 설정이 없으면 Context 시작에 실패한다")
+    void failsWithoutOllamaTimeoutProperties() {
+        this.contextRunner
+                .withUserConfiguration(OllamaApiConfig.class)
+                .withConfiguration(AutoConfigurations.of(
+                        HttpClientAutoConfiguration.class,
+                        ImperativeHttpClientAutoConfiguration.class,
+                        ReactiveHttpClientAutoConfiguration.class,
+                        RestClientAutoConfiguration.class,
+                        WebClientAutoConfiguration.class
+                ))
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    // 다른 이유로 실패해도 hasFailed()는 통과하므로 원인을 함께 고정한다
+                    assertThat(context.getStartupFailure())
+                            .hasMessageContaining("ollama.connect-timeout");
+                });
+    }
+
+    @Test
+    @DisplayName("Ollama 읽기 타임아웃 설정이 없으면 Context 시작에 실패한다")
+    void failsWithoutOllamaReadTimeout() {
+        this.contextRunner
+                .withUserConfiguration(OllamaApiConfig.class)
+                .withConfiguration(AutoConfigurations.of(
+                        HttpClientAutoConfiguration.class,
+                        ImperativeHttpClientAutoConfiguration.class,
+                        ReactiveHttpClientAutoConfiguration.class,
+                        RestClientAutoConfiguration.class,
+                        WebClientAutoConfiguration.class
+                ))
+                // 연결 타임아웃만 채워 두 값이 각각 필수임을 확인한다
+                .withPropertyValues("ollama.connect-timeout=2s")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasMessageContaining("ollama.read-timeout");
+                });
+    }
+
+    /**
+     * OllamaApiConfig는 컨텍스트의 RestClient·WebClient 빌더를 받아 쓰므로, 그 둘을 만드는 자동구성까지 함께 올려야 실제 배선과 같아진다.
+     */
+    private ApplicationContextRunner ollamaApiConfigRunner() {
+        return this.contextRunner
+                .withUserConfiguration(OllamaApiConfig.class)
+                .withConfiguration(AutoConfigurations.of(
+                        HttpClientAutoConfiguration.class,
+                        ImperativeHttpClientAutoConfiguration.class,
+                        ReactiveHttpClientAutoConfiguration.class,
+                        RestClientAutoConfiguration.class,
+                        WebClientAutoConfiguration.class
+                ))
+                .withPropertyValues(
+                        "ollama.connect-timeout=2s",
+                        "ollama.read-timeout=60s"
+                );
     }
 
     @Test

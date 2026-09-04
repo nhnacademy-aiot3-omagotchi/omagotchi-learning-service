@@ -9,6 +9,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.space.application.SpaceQueryService;
 import site.omagotchi.learningservice.space.application.result.SpaceListResult;
 import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
+import site.omagotchi.learningservice.space.domain.SpaceType;
 import site.omagotchi.learningservice.study.application.result.SpaceEnvironmentSeries;
 import site.omagotchi.learningservice.study.application.result.StudySpaceConditionResult;
 
@@ -49,15 +50,23 @@ public class StudySpaceConditionQueryService {
         CohortMembership membership = cohortAccessService.requireCurrentActiveMembership(userId);
         Long cohortId = membership.getCohortId();
 
-        // 내 기수에 배정된, 운영 중인 공간만 후보로 둔다
+        // 내 기수에 배정된, 운영 중이며 학생이 이용할 수 있는 공간만 후보로 둔다
         List<SpaceListResult> candidates = new ArrayList<>();
+
         for (SpaceListResult space : spaceQueryService.getSpaceList(userId)) {
             if (!cohortId.equals(space.cohortId())) {
                 continue;
             }
+
             if (space.operationalStatus() != SpaceOperationalStatus.ACTIVE) {
                 continue;
             }
+
+            // 사무실은 센서 조회 대상일 수 있지만, 학생의 학습 공간은 아니므로
+            if (space.spaceType() == SpaceType.OFFICE) {
+                continue;
+            }
+
             candidates.add(space);
         }
         if (candidates.isEmpty()) {
@@ -129,7 +138,9 @@ public class StudySpaceConditionQueryService {
         return new StudySpaceConditionResult(StudySpaceConditionResult.Status.OK, conditions);
     }
 
-    /** 가장 최근 시간대의 값. 값이 하나도 없으면 null이다. */
+    /**
+     * 가장 최근 시간대의 값. 값이 하나도 없으면 null이다.
+     */
     private Double latestValueOf(SpaceEnvironmentSeries series) {
         Instant latest = latestTimeOf(series);
         if (latest == null) {
@@ -138,7 +149,9 @@ public class StudySpaceConditionQueryService {
         return series.hourlyAverages().get(latest);
     }
 
-    /** 시계열에서 가장 최근 시간대의 시각. 값이 하나도 없으면 null이다. */
+    /**
+     * 시계열에서 가장 최근 시간대의 시각. 값이 하나도 없으면 null이다.
+     */
     private Instant latestTimeOf(SpaceEnvironmentSeries series) {
         Instant latest = null;
         for (Map.Entry<Instant, Double> slot : series.hourlyAverages().entrySet()) {

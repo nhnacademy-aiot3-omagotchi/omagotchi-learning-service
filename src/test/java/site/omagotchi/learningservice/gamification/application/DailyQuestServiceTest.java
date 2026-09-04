@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.gamification.application.port.DailyQuestIssueRepository;
 import site.omagotchi.learningservice.gamification.domain.QuestStatus;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -35,7 +38,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 @DisplayName("일일 퀘스트 서비스")
 class DailyQuestServiceTest {
 
@@ -86,13 +89,32 @@ class DailyQuestServiceTest {
 
     @Test
     @DisplayName("이미 오늘 퀘스트가 있으면 중복 생성하지 않는다")
-    void doesNotCreateDuplicatedDailyQuests() {
+    void doesNotCreateDuplicatedDailyQuests(CapturedOutput output) {
         when(userDailyQuestRepository.findByUserIdAndQuestDateOrderByIdAsc(USER_ID, today))
                 .thenReturn(allDefaultQuests());
 
         dailyQuestService.getOrCreateDailyQuests(USER_ID);
 
         verify(dailyQuestIssueRepository).issueIfAbsent(List.of());
+        assertThat(output.getOut()).doesNotContain("일일 퀘스트 발급을 시도했습니다.");
+    }
+
+    @Test
+    @DisplayName("발급 후보가 있으면 실제 삽입 건수와 함께 기록한다")
+    void logsDailyQuestIssueResult(CapturedOutput output) {
+        when(userDailyQuestRepository.findByUserIdAndQuestDateOrderByIdAsc(USER_ID, today))
+                .thenReturn(List.of());
+        when(studyTimeQuestTargetResolver.resolve(USER_ID, today))
+                .thenReturn(StudyTimeQuestTarget.model(TARGET_SECONDS, "study-time-test"));
+        when(dailyQuestIssueRepository.issueIfAbsent(any())).thenReturn(5);
+
+        dailyQuestService.getOrCreateDailyQuests(USER_ID);
+
+        assertThat(output.getOut())
+                .contains("일일 퀘스트 발급을 시도했습니다.")
+                .contains("userIdMasked=00000000, questDate=2026-08-05")
+                .contains("candidateCount=5, insertedCount=5")
+                .doesNotContain(USER_ID.toString());
     }
 
     @Test

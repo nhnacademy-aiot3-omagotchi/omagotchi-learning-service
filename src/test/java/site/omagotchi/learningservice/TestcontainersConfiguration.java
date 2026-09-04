@@ -9,12 +9,14 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountSnapshot;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountView;
 
+import java.time.Instant;
 import java.util.Collection;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -34,8 +36,11 @@ public class TestcontainersConfiguration {
     IdentityAccountClient testIdentityAccountClient() {
         return new IdentityAccountClient() {
             @Override
-            public IdentityAccountState getState(UUID userId) {
-                return IdentityAccountState.ACTIVE;
+            public IdentityAccountSnapshot getSnapshot(UUID userId) {
+                return new IdentityAccountSnapshot(
+                        IdentityAccountState.ACTIVE,
+                        Instant.EPOCH
+                );
             }
 
             @Override

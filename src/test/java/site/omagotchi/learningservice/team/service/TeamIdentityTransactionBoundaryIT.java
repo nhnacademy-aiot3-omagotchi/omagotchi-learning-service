@@ -12,10 +12,12 @@ import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountSnapshot;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.support.TeamTestFixture;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -56,8 +58,8 @@ class TeamIdentityTransactionBoundaryIT {
 
         willAnswer(invocation -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
-            return IdentityAccountState.ACTIVE;
-        }).given(identityAccountClient).getState(any());
+            return new IdentityAccountSnapshot(IdentityAccountState.ACTIVE, Instant.EPOCH);
+        }).given(identityAccountClient).getSnapshot(any());
 
         // When: 팀원 추가
         teamMemberService.addMember(teamId, target.userId(), master.userId());

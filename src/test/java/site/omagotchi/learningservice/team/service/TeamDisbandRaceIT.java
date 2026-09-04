@@ -14,9 +14,12 @@ import site.omagotchi.learningservice.team.application.TeamMasterService;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountSnapshot;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.support.TeamTestFixture;
+
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -60,12 +63,12 @@ class TeamDisbandRaceIT {
         TeamTestFixture.Member target = fixture.createActiveMember(cohortId);
         Long teamId = teamService.create(cohortId, "해체 레이스 팀", master.userId()).teamId();
 
-        // getState는 사전 권한 검사 이후, 쓰기 작업이 팀 락을 잡기 직전의 결정적 주입 지점이다.
+        // getSnapshot은 사전 권한 검사 이후, 쓰기 작업이 팀 락을 잡기 직전의 결정적 주입 지점이다.
         // addMember 바깥에는 트랜잭션이 없으므로 같은 스레드의 disband가 독립 트랜잭션으로 커밋된다.
         willAnswer(invocation -> {
             teamMasterService.disband(teamId, master.userId());
-            return IdentityAccountState.ACTIVE;
-        }).given(identityAccountClient).getState(target.userId());
+            return new IdentityAccountSnapshot(IdentityAccountState.ACTIVE, Instant.EPOCH);
+        }).given(identityAccountClient).getSnapshot(target.userId());
 
         // When & Then: 해체 이후 시작한 쓰기 작업이 요청을 거부
         assertThatThrownBy(() ->

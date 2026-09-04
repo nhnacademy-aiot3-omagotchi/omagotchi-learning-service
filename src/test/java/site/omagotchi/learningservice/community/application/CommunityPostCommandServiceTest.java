@@ -23,7 +23,7 @@ import site.omagotchi.learningservice.community.domain.CommunityPost;
 import site.omagotchi.learningservice.community.domain.CommunityPostAttachment;
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
 import site.omagotchi.learningservice.community.infrastructure.CommunityAttachmentProperties;
-import site.omagotchi.learningservice.community.infrastructure.CommunityPostAttachmentRepository;
+import site.omagotchi.learningservice.community.application.port.CommunityPostAttachmentPort;
 import site.omagotchi.learningservice.community.infrastructure.CommunityPostJpaRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
@@ -61,7 +61,7 @@ class CommunityPostCommandServiceTest {
     private CommunityPostJpaRepository communityPostRepository;
 
     @Mock
-    private CommunityPostAttachmentRepository attachmentRepository;
+    private CommunityPostAttachmentPort attachmentPort;
 
     @Mock
     private CohortAccessService cohortAccessService;
@@ -90,7 +90,7 @@ class CommunityPostCommandServiceTest {
     void setUp() {
         communityPostCommandService = new CommunityPostCommandService(
                 communityPostRepository,
-                attachmentRepository,
+                attachmentPort,
                 cohortAccessService,
                 cohortLockService,
                 attachmentStorage,
@@ -105,7 +105,7 @@ class CommunityPostCommandServiceTest {
     void createsFreePostForActiveMember() {
         givenActiveMember(true);
         givenSavedPostGetsId(1L);
-        given(attachmentRepository.saveAllAndFlush(List.of())).willReturn(List.of());
+        given(attachmentPort.saveAll(List.of())).willReturn(List.of());
 
         var result = communityPostCommandService.create(
                 USER_ID,
@@ -128,7 +128,7 @@ class CommunityPostCommandServiceTest {
     void createsNoticeForNoticeWriter() {
         givenNoticeWriter(true);
         givenSavedPostGetsId(1L);
-        given(attachmentRepository.saveAllAndFlush(List.of())).willReturn(List.of());
+        given(attachmentPort.saveAll(List.of())).willReturn(List.of());
 
         var result = communityPostCommandService.create(
                 USER_ID,
@@ -198,7 +198,7 @@ class CommunityPostCommandServiceTest {
         givenActiveMember(true);
         givenSavedPostGetsId(1L);
         given(attachmentStorage.store(attachmentFile)).willReturn(storedAttachment);
-        given(attachmentRepository.saveAllAndFlush(any())).willThrow(new RuntimeException("metadata failed"));
+        given(attachmentPort.saveAll(any())).willThrow(new RuntimeException("metadata failed"));
 
         assertThrows(
                 RuntimeException.class,
@@ -287,13 +287,13 @@ class CommunityPostCommandServiceTest {
         CommunityPostAttachment attachment = attachment(20L, 1L, "2026/08/08/file.png");
         givenFoundPost(post(1L, USER_ID, CommunityPostType.FREE));
         givenActiveMember(true);
-        given(attachmentRepository.findByIdAndPostId(20L, 1L)).willReturn(Optional.of(attachment));
+        given(attachmentPort.findByIdAndPostId(20L, 1L)).willReturn(Optional.of(attachment));
 
         TransactionSynchronizationManager.initSynchronization();
         try {
             communityPostCommandService.deleteAttachment(USER_ID, COHORT_ID, 1L, 20L);
 
-            verify(attachmentRepository).delete(attachment);
+            verify(attachmentPort).delete(attachment);
             verify(attachmentStorage, never()).delete(any());
 
             TransactionSynchronizationManager.getSynchronizations()
@@ -309,7 +309,7 @@ class CommunityPostCommandServiceTest {
     void rejectsAttachmentOfAnotherPost() {
         givenFoundPost(post(1L, USER_ID, CommunityPostType.FREE));
         givenActiveMember(true);
-        given(attachmentRepository.findByIdAndPostId(20L, 1L)).willReturn(Optional.empty());
+        given(attachmentPort.findByIdAndPostId(20L, 1L)).willReturn(Optional.empty());
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -317,7 +317,7 @@ class CommunityPostCommandServiceTest {
         );
 
         assertSame(CommunityErrorCode.ATTACHMENT_NOT_FOUND, exception.getErrorCode());
-        verify(attachmentRepository, never()).delete(any());
+        verify(attachmentPort, never()).delete(any());
         verify(attachmentStorage, never()).delete(any());
     }
 
@@ -332,7 +332,7 @@ class CommunityPostCommandServiceTest {
         );
 
         assertSame(CommunityErrorCode.POST_ACCESS_DENIED, exception.getErrorCode());
-        verify(attachmentRepository, never()).findByIdAndPostId(any(), any());
+        verify(attachmentPort, never()).findByIdAndPostId(any(), any());
         verify(attachmentStorage, never()).delete(any());
     }
 
@@ -341,7 +341,7 @@ class CommunityPostCommandServiceTest {
     void allowsNoticeWriterToUpdateOthersNotice() {
         givenFoundPost(post(1L, OTHER_USER_ID, CommunityPostType.NOTICE));
         givenNoticeWriter(true);
-        given(attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(1L)).willReturn(List.of());
+        given(attachmentPort.findByPostId(1L)).willReturn(List.of());
 
         var result = communityPostCommandService.update(
                 USER_ID,
@@ -372,7 +372,7 @@ class CommunityPostCommandServiceTest {
     void pinsPostForNoticeWriter() {
         givenNoticeWriter(true);
         givenFoundPost(post(1L, OTHER_USER_ID, CommunityPostType.NOTICE));
-        given(attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(1L)).willReturn(List.of());
+        given(attachmentPort.findByPostId(1L)).willReturn(List.of());
 
         var result = communityPostCommandService.pin(
                 USER_ID,
@@ -389,7 +389,7 @@ class CommunityPostCommandServiceTest {
     void unpinsPreviousPinBeforePinning() {
         givenNoticeWriter(true);
         givenFoundPost(post(1L, USER_ID, CommunityPostType.NOTICE));
-        given(attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(1L)).willReturn(List.of());
+        given(attachmentPort.findByPostId(1L)).willReturn(List.of());
 
         communityPostCommandService.pin(USER_ID, COHORT_ID, 1L, new PinCommunityPostCommand(true));
 
@@ -424,7 +424,7 @@ class CommunityPostCommandServiceTest {
     void doesNotUnpinOthersWhenUnpinning() {
         givenNoticeWriter(true);
         givenFoundPost(post(1L, USER_ID, CommunityPostType.NOTICE));
-        given(attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(1L)).willReturn(List.of());
+        given(attachmentPort.findByPostId(1L)).willReturn(List.of());
 
         communityPostCommandService.pin(USER_ID, COHORT_ID, 1L, new PinCommunityPostCommand(false));
 

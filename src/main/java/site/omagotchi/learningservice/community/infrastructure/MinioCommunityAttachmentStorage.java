@@ -49,12 +49,16 @@ public class MinioCommunityAttachmentStorage implements CommunityAttachmentStora
         CommunityAttachmentThumbnail.Generated generatedThumbnail =
                 thumbnail.generate(target.storageKey(), attachmentFile);
 
-        boolean originalStored = false;
+        // 성공 여부가 아니라 "시도 여부"를 남긴다. putObject 가 IOException 이나 응답 확인 실패로
+        // 끝나면 원격 객체가 생겼는지 알 수 없어서, 성공한 것만 지우면 고아 객체가 남는다.
+        boolean originalAttempted = false;
+        boolean thumbnailAttempted = false;
         try (InputStream inputStream = attachmentFile.openStream();
              InputStream thumbnailStream = new ByteArrayInputStream(generatedThumbnail.bytes())) {
             // 크기를 넘겨야 클라이언트가 전체를 메모리에 담지 않고 바로 흘려보낸다.
+            originalAttempted = true;
             putObject(target.storageKey(), target.contentType(), attachmentFile.sizeBytes(), inputStream);
-            originalStored = true;
+            thumbnailAttempted = true;
             putObject(
                     generatedThumbnail.storageKey(),
                     CommunityAttachmentThumbnail.CONTENT_TYPE,
@@ -62,8 +66,11 @@ public class MinioCommunityAttachmentStorage implements CommunityAttachmentStora
                     thumbnailStream
             );
         } catch (MinioException | IOException exception) {
-            if (originalStored) {
+            // 지우는 순서는 파생 → 원본. 삭제는 없는 객체에도 안전하다.
+            if (thumbnailAttempted) {
                 removeQuietly(generatedThumbnail.storageKey(), exception);
+            }
+            if (originalAttempted) {
                 removeQuietly(target.storageKey(), exception);
             }
             throw new IllegalArgumentException(

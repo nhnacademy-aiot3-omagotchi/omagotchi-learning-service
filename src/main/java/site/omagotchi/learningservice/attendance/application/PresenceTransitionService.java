@@ -207,15 +207,21 @@ public class PresenceTransitionService {
         end(current, transitionAt);
     }
 
-    public void closeAttendance(Long attendanceId, Instant at) {
+    /**
+     * 출결의 열린 체류 구간을 닫는다.
+     *
+     * @return 이번 호출로 열린 구간을 닫았으면 {@code true}
+     */
+    public boolean closeAttendance(Long attendanceId, Instant at) {
         lockAttendance(attendanceId);
         Instant transitionAt = requireTime(at);
         List<PresenceInterval> openIntervals = findOpenIntervals(attendanceId);
         if (openIntervals.isEmpty()) {
-            return;
+            return false;
         }
 
         end(requireSingle(openIntervals), transitionAt);
+        return true;
     }
 
     private AttendanceRecord lockAttendance(Long attendanceId) {

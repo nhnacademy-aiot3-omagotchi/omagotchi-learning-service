@@ -2,6 +2,10 @@ server:
   port: 0
 
 spring:
+  ai:
+    ollama:
+      # 실제 접속하지 않는다 (컨텍스트 기동만 통과시키는 값)
+      base-url: http://localhost:11434
   servlet:
     multipart:
       max-file-size: 5MB

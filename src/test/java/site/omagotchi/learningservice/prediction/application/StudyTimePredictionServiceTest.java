@@ -7,10 +7,13 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.prediction.application.dto.StudyTimePredictionRequest;
+import site.omagotchi.learningservice.prediction.application.exception.PredictionClientException;
 import site.omagotchi.learningservice.prediction.application.port.PredictionClient;
 import site.omagotchi.learningservice.prediction.application.port.PredictionFeatureSnapshotReader;
 import site.omagotchi.learningservice.prediction.application.result.PredictionFeatureSnapshot;
@@ -25,6 +28,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.BDDMockito.given;
@@ -32,7 +36,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 @DisplayName("공부시간 예측 흐름")
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class StudyTimePredictionServiceTest {
 
     private static final UUID USER_ID = UUID.fromString(
@@ -65,7 +69,7 @@ class StudyTimePredictionServiceTest {
 
     @Test
     @DisplayName("현재 KST 집계일의 전날까지 피처를 조회하고 예측 요청 정상 처리")
-    void readsFeaturesAfterValidatingActiveMembership() {
+    void readsFeaturesAfterValidatingActiveMembership(CapturedOutput output) {
         PredictionFeatureSnapshot snapshot = emptySnapshot();
         StudyTimePredictionRequest request = emptyRequest();
         StudyTimePredictionResult expected = new StudyTimePredictionResult(
@@ -103,11 +107,16 @@ class StudyTimePredictionServiceTest {
                 .read(USER_ID, COHORT_ID, COHORT_MEMBERSHIP_ID, FEATURE_DATE);
         inOrder.verify(requestAssembler).assemble(snapshot);
         inOrder.verify(predictionClient).predict(request, REQUEST_ID);
+        assertThat(output.getOut())
+                .contains("공부시간 예측을 완료했습니다.")
+                .contains("userIdMasked=00000000, cohortId=10, featureDate=1999-12-31")
+                .contains("elapsedMs=")
+                .contains("modelVersion=study-time-model");
     }
 
     @Test
     @DisplayName("활성 소속 없음 예외")
-    void doesNotReadFeaturesWhenActiveMembershipDoesNotExist() {
+    void doesNotReadFeaturesWhenActiveMembershipDoesNotExist(CapturedOutput output) {
         BusinessException expected = new BusinessException(CohortErrorCode.COHORT_NOT_FOUND);
         given(cohortAccessService.requireActiveMembershipId(COHORT_ID, USER_ID))
                 .willThrow(expected);
@@ -119,6 +128,42 @@ class StudyTimePredictionServiceTest {
 
         assertSame(expected, actual);
         verifyNoInteractions(featureSnapshotReader, requestAssembler, predictionClient, clock);
+        assertThat(output.getOut())
+                .doesNotContain("공부시간 예측에 실패했습니다.");
+    }
+
+    @Test
+    @DisplayName("prediction-service 실패를 사용자 문맥과 함께 기록하고 그대로 전달")
+    void rethrowsPredictionClientFailureAfterLoggingContext(CapturedOutput output) {
+        PredictionFeatureSnapshot snapshot = emptySnapshot();
+        StudyTimePredictionRequest request = emptyRequest();
+        PredictionClientException expected = PredictionClientException.timeout(
+                new IllegalStateException("timeout")
+        );
+        given(cohortAccessService.requireActiveMembershipId(COHORT_ID, USER_ID))
+                .willReturn(COHORT_MEMBERSHIP_ID);
+        given(clock.instant()).willReturn(CURRENT_TIME);
+        given(featureSnapshotReader.read(
+                USER_ID,
+                COHORT_ID,
+                COHORT_MEMBERSHIP_ID,
+                FEATURE_DATE
+        )).willReturn(snapshot);
+        given(requestAssembler.assemble(snapshot)).willReturn(request);
+        given(predictionClient.predict(request, REQUEST_ID)).willThrow(expected);
+
+        PredictionClientException actual = assertThrows(
+                PredictionClientException.class,
+                () -> predictionService.predict(USER_ID, COHORT_ID, REQUEST_ID)
+        );
+
+        assertSame(expected, actual);
+        assertThat(output.getOut())
+                .contains("공부시간 예측에 실패했습니다.")
+                .contains("userIdMasked=00000000, cohortId=10, featureDate=1999-12-31")
+                .contains("reason=TIMEOUT")
+                .contains("elapsedMs=")
+                .doesNotContain("timeout");
     }
 
     private PredictionFeatureSnapshot emptySnapshot() {

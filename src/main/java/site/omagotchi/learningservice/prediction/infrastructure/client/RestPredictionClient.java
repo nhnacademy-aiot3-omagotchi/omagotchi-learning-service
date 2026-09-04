@@ -20,6 +20,7 @@ import site.omagotchi.learningservice.prediction.application.result.StudyTimePre
 import java.net.http.HttpTimeoutException;
 import java.net.SocketTimeoutException;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 @Slf4j
@@ -46,7 +47,25 @@ public class RestPredictionClient implements PredictionClient {
             StudyTimePredictionRequest request,
             String requestId
     ) {
-        validateRequest(request);
+        try {
+            validateRequest(request);
+        } catch (ConstraintViolationException | IllegalArgumentException exception) {
+            int violationCount = exception instanceof ConstraintViolationException validationException
+                    ? validationException.getConstraintViolations().size()
+                    : 0;
+
+            // 내부에서 조립한 prediction 요청의 계약 위반이다.
+            // 요청 DTO와 위반 값은 개인정보·운영 데이터 노출을 막기 위해 기록하지 않는다.
+            log.error(
+                    "prediction-service 요청 계약을 위반했습니다. "
+                            + "violationCount={}, exception={}",
+                    violationCount,
+                    exception.getClass().getName()
+            );
+            throw exception;
+        }
+
+        long startedAtNanos = System.nanoTime();
 
         try {
             RestClient.RequestBodySpec requestSpec = restClient.post()
@@ -60,67 +79,100 @@ public class RestPredictionClient implements PredictionClient {
                     .body(request)
                     .retrieve()
                     .toEntity(PredictionServiceResponse.class);
+
+            int responseStatus = responseEntity.getStatusCode().value();
+
             if (!responseEntity.getStatusCode().is2xxSuccessful()) {
                 throw badResponse(
-                        responseEntity.getStatusCode().value(),
+                        responseStatus,
                         BadResponseType.NON_SUCCESS_STATUS,
-                        null
+                        null,
+                        startedAtNanos
                 );
             }
-            PredictionServiceResponse response = responseEntity.getBody();
 
+            PredictionServiceResponse response = responseEntity.getBody();
             if (response == null) {
                 // 빈 성공 본문은 기능별 필드 해석 이전에 판별 가능한 HTTP 계약 위반이다.
                 throw badResponse(
-                        responseEntity.getStatusCode().value(),
+                        responseStatus,
                         BadResponseType.EMPTY_BODY,
-                        null
+                        null,
+                        startedAtNanos
                 );
             }
 
-            return validateResponse(
+            StudyTimePredictionResult result = validateResponse(
                     response,
-                    responseEntity.getStatusCode().value()
+                    responseStatus,
+                    startedAtNanos
             );
+
+            log.info(
+                    "prediction-service 공부시간 예측 호출에 성공했습니다. "
+                            + "status={}, elapsedMs={}, modelVersion={}",
+                    responseStatus,
+                    elapsedMillis(startedAtNanos),
+                    result.modelVersion()
+            );
+            return result;
         } catch (RestClientResponseException exception) {
             // learning-service가 만든 내부 요청의 4xx도 외부 사용자 오류로 전달하지 않는다.
             throw badResponse(
                     exception.getStatusCode().value(),
                     BadResponseType.NON_SUCCESS_STATUS,
-                    exception
+                    exception,
+                    startedAtNanos
             );
         } catch (ResourceAccessException exception) {
             if (hasTimeoutCause(exception)) {
+                log.warn(
+                        "prediction-service 공부시간 예측 호출 시간이 초과되었습니다. "
+                                + "elapsedMs={}, exception={}",
+                        elapsedMillis(startedAtNanos),
+                        exception.getClass().getName()
+                );
                 throw PredictionClientException.timeout(exception);
             }
+
+            log.error(
+                    "prediction-service 공부시간 예측 호출에 실패했습니다. "
+                            + "reason=UNAVAILABLE, elapsedMs={}, exception={}",
+                    elapsedMillis(startedAtNanos),
+                    exception.getClass().getName()
+            );
             throw PredictionClientException.unavailable(exception);
         } catch (RestClientException exception) {
             // JSON 역직렬화·지원하지 않는 Content-Type 등은 응답 의미가 아니라 프로토콜 실패다.
             throw badResponse(
                     null,
                     BadResponseType.UNREADABLE_BODY,
-                    exception
+                    exception,
+                    startedAtNanos
             );
         }
     }
 
     private StudyTimePredictionResult validateResponse(
             PredictionServiceResponse response,
-            int responseStatus
+            int responseStatus,
+            long startedAtNanos
     ) {
         Double predictedStudyHours = response.predictedStudyHours();
         if (predictedStudyHours == null) {
             throw badResponse(
                     responseStatus,
                     BadResponseType.MISSING_PREDICTED_STUDY_HOURS,
-                    null
+                    null,
+                    startedAtNanos
             );
         }
         if (!Double.isFinite(predictedStudyHours)) {
             throw badResponse(
                     responseStatus,
                     BadResponseType.NON_FINITE_PREDICTED_STUDY_HOURS,
-                    null
+                    null,
+                    startedAtNanos
             );
         }
         if (predictedStudyHours < 0.0
@@ -128,14 +180,16 @@ public class RestPredictionClient implements PredictionClient {
             throw badResponse(
                     responseStatus,
                     BadResponseType.OUT_OF_RANGE_PREDICTED_STUDY_HOURS,
-                    null
+                    null,
+                    startedAtNanos
             );
         }
         if (!StringUtils.hasText(response.modelVersion())) {
             throw badResponse(
                     responseStatus,
                     BadResponseType.MISSING_MODEL_VERSION,
-                    null
+                    null,
+                    startedAtNanos
             );
         }
         return new StudyTimePredictionResult(
@@ -147,18 +201,25 @@ public class RestPredictionClient implements PredictionClient {
     private PredictionClientException badResponse(
             Integer responseStatus,
             BadResponseType responseError,
-            Throwable cause
+            Throwable cause,
+            long startedAtNanos
     ) {
         String status = responseStatus == null ? "unknown" : responseStatus.toString();
         String causeType = cause == null ? "none" : cause.getClass().getName();
-        // 구조화 응답 오류 로그에는 downstream 본문을 넣지 않고 상태와 실패 유형만 기록한다.
+        // 응답 본문은 기록하지 않고 상태와 실패 유형만 남긴다.
         log.error(
-                "Prediction service response error: status={}, failure={}, cause={}",
+                "prediction-service 응답이 올바르지 않습니다. "
+                        + "status={}, failure={}, elapsedMs={}, exception={}",
                 status,
                 responseError,
+                elapsedMillis(startedAtNanos),
                 causeType
         );
         return PredictionClientException.badResponse(responseStatus, cause);
+    }
+
+    private long elapsedMillis(long startedAtNanos) {
+        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
     }
 
     private void validateRequest(StudyTimePredictionRequest request) {

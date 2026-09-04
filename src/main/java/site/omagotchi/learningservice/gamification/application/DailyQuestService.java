@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.gamification.application;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.gamification.application.port.DailyQuestIssueRepository;
@@ -23,11 +24,13 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -195,9 +198,20 @@ public class DailyQuestService {
                 .filter(template -> !existingCodes.contains(template.getCode()))
                 .map(template -> newQuest(userId, questDate, template))
                 .toList();
+
         // 미리 걸러도 두 요청이 같은 순간에 "없음"으로 읽을 수 있다.
         // 남은 충돌은 저장소가 ON CONFLICT로 흡수한다.
-        dailyQuestIssueRepository.issueIfAbsent(quests);
+        int insertedCount = dailyQuestIssueRepository.issueIfAbsent(quests);
+        if (!quests.isEmpty()) {
+            log.info(
+                    "일일 퀘스트 발급을 시도했습니다. "
+                            + "userIdMasked={}, questDate={}, candidateCount={}, insertedCount={}",
+                    maskUserId(userId),
+                    questDate,
+                    quests.size(),
+                    insertedCount
+            );
+        }
     }
 
     private UserDailyQuest newQuest(UUID userId, LocalDate questDate, QuestTemplate template) {
@@ -248,5 +262,12 @@ public class DailyQuestService {
                 QuestTemplate.create(QuestType.ROUTINE, ROUTINE_REVIEW_CODE, "오늘 학습 돌아보기", 1, 20, 4),
                 QuestTemplate.create(QuestType.LLM, LLM_QUEST_CODE, "AI 추천 퀘스트", 1, 40, 5)
         );
+    }
+
+    private String maskUserId(UUID userId) {
+        if (Objects.isNull(userId)) {
+            return "none";
+        }
+        return userId.toString().substring(0, 8);
     }
 }

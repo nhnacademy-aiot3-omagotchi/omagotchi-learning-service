@@ -27,6 +27,7 @@ import site.omagotchi.learningservice.prediction.application.result.StudyTimePre
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
@@ -63,7 +64,7 @@ class RestPredictionClientTest {
 
     @Test
     @DisplayName("유효한 요청과 Request ID 전달 후 정상 응답 반환")
-    void returnsResponseAfterSendingValidRequest() {
+    void returnsResponseAfterSendingValidRequest(CapturedOutput output) {
         // Given
         server.expect(requestTo(PREDICTION_URL))
                 .andExpect(method(HttpMethod.POST))
@@ -82,12 +83,17 @@ class RestPredictionClientTest {
         // Then
         assertEquals(7.21, result.predictedStudyHours());
         assertEquals("study-time-model", result.modelVersion());
+        assertThat(output.getOut())
+                .contains("prediction-service 공부시간 예측 호출에 성공했습니다.")
+                .contains("status=200")
+                .contains("elapsedMs=")
+                .contains("modelVersion=study-time-model");
         server.verify();
     }
 
     @Test
     @DisplayName("요청 DTO 계약 위반 시 송신 전 예외")
-    void rejectsInvalidRequestBeforeSending() {
+    void rejectsInvalidRequestBeforeSending(CapturedOutput output) {
         // Given
         StudyTimePredictionRequest invalidRequest = validRequest(12.0);
 
@@ -99,6 +105,10 @@ class RestPredictionClientTest {
 
         // Then
         assertEquals(1, exception.getConstraintViolations().size());
+        assertThat(output.getOut())
+                .contains("prediction-service 요청 계약을 위반했습니다.")
+                .contains("violationCount=1")
+                .contains("exception=jakarta.validation.ConstraintViolationException");
         server.verify();
     }
 
@@ -121,7 +131,7 @@ class RestPredictionClientTest {
 
     @Test
     @DisplayName("null 요청 시 호출 계약 위반 예외")
-    void rejectsNullRequestBeforeSending() {
+    void rejectsNullRequestBeforeSending(CapturedOutput output) {
         // When
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
@@ -130,6 +140,10 @@ class RestPredictionClientTest {
 
         // Then
         assertEquals("예측 요청은 null일 수 없습니다.", exception.getMessage());
+        assertThat(output.getOut())
+                .contains("prediction-service 요청 계약을 위반했습니다.")
+                .contains("violationCount=0")
+                .contains("exception=java.lang.IllegalArgumentException");
         server.verify();
     }
 
@@ -238,9 +252,12 @@ class RestPredictionClientTest {
         // Then
         assertEquals(Reason.BAD_RESPONSE, exception.getReason());
         assertEquals(200, exception.getResponseStatus());
-        org.assertj.core.api.Assertions.assertThat(output.getOut())
-                .contains("Prediction service response error: status=200")
-                .contains("failure=OUT_OF_RANGE_PREDICTED_STUDY_HOURS");
+        assertThat(output.getOut())
+                .contains("prediction-service 응답이 올바르지 않습니다.")
+                .contains("status=200")
+                .contains("failure=OUT_OF_RANGE_PREDICTED_STUDY_HOURS")
+                .contains("elapsedMs=")
+                .contains("exception=none");
         server.verify();
     }
 
@@ -288,7 +305,7 @@ class RestPredictionClientTest {
 
     @Test
     @DisplayName("연결 실패를 의존 서비스 사용 불가로 변환")
-    void convertsConnectionFailure() {
+    void convertsConnectionFailure(CapturedOutput output) {
         // Given
         RestPredictionClient failingClient = clientThrowing(
                 new ConnectException("connection refused")
@@ -304,11 +321,17 @@ class RestPredictionClientTest {
         assertEquals(Reason.UNAVAILABLE, exception.getReason());
         assertInstanceOf(ResourceAccessException.class, exception.getCause());
         assertInstanceOf(ConnectException.class, exception.getCause().getCause());
+        assertThat(output.getOut())
+                .contains("prediction-service 공부시간 예측 호출에 실패했습니다.")
+                .contains("reason=UNAVAILABLE")
+                .contains("elapsedMs=")
+                .contains("exception=org.springframework.web.client.ResourceAccessException")
+                .doesNotContain("connection refused");
     }
 
     @Test
     @DisplayName("응답 시간 초과를 의존 서비스 timeout으로 변환")
-    void convertsTimeout() {
+    void convertsTimeout(CapturedOutput output) {
         // Given
         RestPredictionClient failingClient = clientThrowing(
                 new SocketTimeoutException("read timed out")
@@ -324,6 +347,11 @@ class RestPredictionClientTest {
         assertEquals(Reason.TIMEOUT, exception.getReason());
         assertInstanceOf(ResourceAccessException.class, exception.getCause());
         assertInstanceOf(SocketTimeoutException.class, exception.getCause().getCause());
+        assertThat(output.getOut())
+                .contains("prediction-service 공부시간 예측 호출 시간이 초과되었습니다.")
+                .contains("elapsedMs=")
+                .contains("exception=org.springframework.web.client.ResourceAccessException")
+                .doesNotContain("read timed out");
     }
 
     private RestPredictionClient clientThrowing(java.io.IOException failure) {

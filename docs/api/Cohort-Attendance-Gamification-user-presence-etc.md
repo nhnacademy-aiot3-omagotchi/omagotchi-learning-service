@@ -283,12 +283,11 @@ PATCH /api/cohorts/{cohort-id}/attendance-records/{attendance-id}/status
 }
 ```
 
-`check-in`, `check-out`, 조회 응답:
+`check-in`, `check-out`, `me` 응답. 대상이 요청자 자신이라 소속·계정 식별자를 담지 않는다:
 
 ```json
 {
   "id": 10,
-  "cohortMembershipId": 100,
   "attendanceDate": "2026-08-10",
   "autoStatus": "LATE",
   "finalStatus": "PRESENT",
@@ -299,6 +298,39 @@ PATCH /api/cohorts/{cohort-id}/attendance-records/{attendance-id}/status
   "version": 2,
   "createdAt": "2026-08-10T00:10:00Z",
   "updatedAt": "2026-08-10T09:05:00Z"
+}
+```
+
+기수 관리자의 일자별 조회(`GET .../attendance-records?date=`)만 응답이 다르다.
+남의 기록을 여럿 늘어놓는 화면이라 행과 구성원을 이을 열쇠가 필요해
+`cohortMembershipId`·`userId`·`nickname`을 더 담는다. 본인 조회와 같은 응답을 쓰면
+그 열쇠가 사용자 응답으로도 함께 나가므로 나눠 둔다.
+
+`nickname`은 대표 캐릭터가 있어야 생기는 부가 정보라 `null`일 수 있고,
+소속이 사라진 행은 `userId`도 `null`이다. 둘 다 없다고 행을 빼지 않는다 —
+관리자에게는 이름 없는 출결이 출결 없음보다 낫다.
+
+```json
+{
+  "items": [
+    {
+      "id": 10,
+      "cohortMembershipId": 100,
+      "userId": "2b9f8741-87b3-42ee-8ca8-1462e95c7c01",
+      "nickname": "지우",
+      "attendanceDate": "2026-08-10",
+      "autoStatus": "LATE",
+      "finalStatus": "PRESENT",
+      "checkedInAt": "2026-08-10T00:10:00Z",
+      "checkedOutAt": "2026-08-10T09:00:00Z",
+      "lateMinutes": 10,
+      "earlyLeaveMinutes": 0,
+      "version": 2,
+      "createdAt": "2026-08-10T00:10:00Z",
+      "updatedAt": "2026-08-10T09:05:00Z"
+    }
+  ],
+  "page": { "number": 0, "size": 100, "totalElements": 1, "totalPages": 1 }
 }
 ```
 

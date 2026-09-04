@@ -47,13 +47,22 @@ public class SpaceEnvironmentService {
     private static final int DEFAULT_INTERVAL_SECONDS = 60;
 
     /**
+     * 수집 주기로 인정하는 상한.
+     *
+     * <p>{@code SensorDevice} 는 주기의 상한을 검사하지 않아 몇 시간짜리 값도 저장될 수 있다.
+     * 그대로 두면 신선도 기준이 조회 폭보다 길어져, 유효한 값이 조회 구간 밖으로 밀려
+     * 값 없음이 된다. 그래서 더 느린 기기도 이 주기로 본다.</p>
+     */
+    private static final int MAX_INTERVAL_SECONDS = 7_200;
+
+    /**
      * 시계열을 거슬러 볼 최대 폭.
      *
-     * <p>기기 주기에 상한이 없어 설정을 잘못 넣으면 조회 구간이 며칠로 벌어진다. 판정 자체는
-     * 기기별로 하므로 이 상한은 질의 폭만 막는다 — 주기가 2시간을 넘는 기기는 이 창 밖의
-     * 값을 아예 읽지 않으므로 값 없음이 된다.</p>
+     * <p>상한 주기 × 배수와 같은 값이다. 이렇게 묶어 두면 어떤 기기의 신선도 기준도 조회 폭을
+     * 넘지 못하므로, {@code isStale} 이 받아들일 값이 조회 단계에서 먼저 잘리는 일이 없다.</p>
      */
-    private static final Duration MAX_LOOKBACK = Duration.ofHours(6);
+    private static final Duration MAX_LOOKBACK =
+            Duration.ofSeconds((long) MAX_INTERVAL_SECONDS * DISCONNECT_MULTIPLIER);
 
     private final SensorDeviceRepository sensorDeviceRepository;
     private final SpaceSeriesRepository spaceSeriesRepository;
@@ -124,25 +133,29 @@ public class SpaceEnvironmentService {
         return environments;
     }
 
-    /** 그 기기가 이 시간까지 안 보내면 끊긴 것으로 본다. */
+    /** 그 기기가 이 시간까지 안 보내면 끊긴 것으로 본다. 상한을 넘는 주기는 상한으로 본다. */
     private static Duration freshnessOf(SensorDevice device) {
         Integer interval = device.getExpectedIntervalSeconds();
         long seconds = interval == null || interval <= 0 ? DEFAULT_INTERVAL_SECONDS : interval;
-        return Duration.ofSeconds(seconds).multipliedBy(DISCONNECT_MULTIPLIER);
+        return Duration.ofSeconds(Math.min(seconds, MAX_INTERVAL_SECONDS))
+                .multipliedBy(DISCONNECT_MULTIPLIER);
     }
 
     private static boolean isStale(SensorReadingSnapshot reading, SensorDevice device, Instant now) {
         return reading.time().isBefore(now.minus(freshnessOf(device)));
     }
 
-    /** 한 번의 질의가 모든 기기를 담으려면 가장 느린 기기의 기준까지 거슬러 봐야 한다. */
+    /**
+     * 한 번의 질의가 모든 기기를 담으려면 가장 느린 기기의 기준까지 거슬러 봐야 한다.
+     *
+     * <p>{@code freshnessOf} 가 주기를 {@code MAX_INTERVAL_SECONDS} 로 자르므로 결과는 언제나
+     * {@code MAX_LOOKBACK} 이하다 — 조회 폭이 신선도 기준보다 짧아지는 구간이 생기지 않는다.</p>
+     */
     private static Duration longestFreshness(Collection<SensorDevice> devices) {
-        Duration longest = devices.stream()
+        return devices.stream()
                 .map(SpaceEnvironmentService::freshnessOf)
                 .max(Comparator.naturalOrder())
                 .orElse(Duration.ofSeconds((long) DEFAULT_INTERVAL_SECONDS * DISCONNECT_MULTIPLIER));
-
-        return longest.compareTo(MAX_LOOKBACK) > 0 ? MAX_LOOKBACK : longest;
     }
 
     /**

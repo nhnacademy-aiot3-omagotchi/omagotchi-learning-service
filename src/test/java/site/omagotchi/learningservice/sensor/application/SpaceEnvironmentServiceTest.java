@@ -211,6 +211,45 @@ class SpaceEnvironmentServiceTest {
     }
 
     @Test
+    @DisplayName("수집 주기 상한(2시간)인 기기는 6시간까지 거슬러 본다")
+    void looksBackSixHoursForTheSlowestAllowedInterval() {
+        givenCohortSpaces(List.of(LAB_ID));
+        givenActiveDevices(device("0011223344556677", LAB_ID, 7_200));
+        when(spaceSeriesRepository.findLatestReadings(any())).thenReturn(List.of());
+
+        service.getCohortEnvironments(COHORT_ID, REQUESTER_ID);
+
+        ArgumentCaptor<SpaceEnvironmentQuery> captor =
+                ArgumentCaptor.forClass(SpaceEnvironmentQuery.class);
+        verify(spaceSeriesRepository).findLatestReadings(captor.capture());
+        assertEquals(NOW.minus(Duration.ofHours(6)), captor.getValue().from());
+    }
+
+    @Test
+    @DisplayName("상한을 넘는 주기여도 조회 폭과 판정 기준이 어긋나지 않는다")
+    void clampsIntervalsBeyondTheCapSoTheWindowAlwaysCoversThem() {
+        // given: 도메인이 주기 상한을 검사하지 않아 3시간짜리 기기도 저장될 수 있다.
+        // 기준만 9시간으로 늘리면 조회 폭(6시간)이 짧아 유효한 값이 먼저 잘려 나간다.
+        givenCohortSpaces(List.of(LAB_ID));
+        givenActiveDevices(device("0011223344556677", LAB_ID, 10_800));
+        when(spaceSeriesRepository.findLatestReadings(any())).thenReturn(List.of(
+                // 조회 폭을 벗어난 7시간 전 값. 실제로는 오지 않지만 와도 받아들이면 안 된다
+                reading("0011223344556677", "co2", 400.0, "2026-09-04T03:30:00Z")
+        ));
+
+        SpaceEnvironmentResult lab = service.getCohortEnvironments(COHORT_ID, REQUESTER_ID).getFirst();
+
+        ArgumentCaptor<SpaceEnvironmentQuery> captor =
+                ArgumentCaptor.forClass(SpaceEnvironmentQuery.class);
+        verify(spaceSeriesRepository).findLatestReadings(captor.capture());
+
+        // 조회 폭은 상한 주기 × 3 에서 멈추고, 판정도 같은 기준을 쓴다
+        assertEquals(NOW.minus(Duration.ofHours(6)), captor.getValue().from());
+        assertNull(lab.co2());
+        assertEquals(1, lab.deviceCount());
+    }
+
+    @Test
     @DisplayName("자기 수집 주기 × 3을 넘긴 값은 현재 값으로 쓰지 않는다")
     void dropsReadingsOlderThanTheirOwnDeviceThreshold() {
         // given: 1분 주기 기기(임계 3분)와 10분 주기 기기(임계 30분)가 같은 공간에 있고

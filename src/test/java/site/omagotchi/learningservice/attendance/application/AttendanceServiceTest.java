@@ -30,6 +30,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -49,8 +50,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 @DisplayName("출결")
-import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
-
 @ExtendWith(MockitoExtension.class)
 class AttendanceServiceTest {
 

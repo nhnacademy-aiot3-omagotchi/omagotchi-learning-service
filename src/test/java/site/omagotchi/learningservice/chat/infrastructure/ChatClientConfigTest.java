@@ -20,6 +20,8 @@ import org.springframework.ai.ollama.api.OllamaApi;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.boot.http.client.autoconfigure.HttpClientAutoConfiguration;
+import org.springframework.boot.http.client.autoconfigure.imperative.ImperativeHttpClientAutoConfiguration;
+import org.springframework.boot.http.client.autoconfigure.reactive.ReactiveHttpClientAutoConfiguration;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.webclient.autoconfigure.WebClientAutoConfiguration;
@@ -133,6 +135,8 @@ class ChatClientConfigTest {
                 .withUserConfiguration(OllamaApiConfig.class)
                 .withConfiguration(AutoConfigurations.of(
                         HttpClientAutoConfiguration.class,
+                        ImperativeHttpClientAutoConfiguration.class,
+                        ReactiveHttpClientAutoConfiguration.class,
                         RestClientAutoConfiguration.class,
                         WebClientAutoConfiguration.class
                 ))
@@ -144,15 +148,37 @@ class ChatClientConfigTest {
                 });
     }
 
+    @Test
+    @DisplayName("Ollama 읽기 타임아웃 설정이 없으면 Context 시작에 실패한다")
+    void failsWithoutOllamaReadTimeout() {
+        this.contextRunner
+                .withUserConfiguration(OllamaApiConfig.class)
+                .withConfiguration(AutoConfigurations.of(
+                        HttpClientAutoConfiguration.class,
+                        ImperativeHttpClientAutoConfiguration.class,
+                        ReactiveHttpClientAutoConfiguration.class,
+                        RestClientAutoConfiguration.class,
+                        WebClientAutoConfiguration.class
+                ))
+                // 연결 타임아웃만 채워 두 값이 각각 필수임을 확인한다
+                .withPropertyValues("ollama.connect-timeout=2s")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasMessageContaining("ollama.read-timeout");
+                });
+    }
+
     /**
-     * OllamaApiConfig는 컨텍스트의 RestClient·WebClient 빌더를 받아 쓰므로
-     * 그 둘을 만드는 자동구성까지 함께 올려야 실제 배선과 같아진다.
+     * OllamaApiConfig는 컨텍스트의 RestClient·WebClient 빌더를 받아 쓰므로, 그 둘을 만드는 자동구성까지 함께 올려야 실제 배선과 같아진다.
      */
     private ApplicationContextRunner ollamaApiConfigRunner() {
         return this.contextRunner
                 .withUserConfiguration(OllamaApiConfig.class)
                 .withConfiguration(AutoConfigurations.of(
                         HttpClientAutoConfiguration.class,
+                        ImperativeHttpClientAutoConfiguration.class,
+                        ReactiveHttpClientAutoConfiguration.class,
                         RestClientAutoConfiguration.class,
                         WebClientAutoConfiguration.class
                 ))

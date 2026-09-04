@@ -62,17 +62,6 @@ public class TelegramUserLink {
         return link;
     }
 
-    public void reconnect(Long telegramUserId, Long telegramChatId) {
-        OffsetDateTime now = OffsetDateTime.now();
-
-        this.telegramUserId = telegramUserId;
-        this.telegramChatId = telegramChatId;
-        this.notificationEnabled = true;
-        this.linkedAt = now;
-        this.disconnectedAt = null;
-        this.updatedAt = now;
-    }
-
     /**
      * 지금 이 연동으로 알림을 보낼 수 있는지.
      */

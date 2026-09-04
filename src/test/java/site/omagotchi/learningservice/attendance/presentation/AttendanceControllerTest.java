@@ -244,6 +244,8 @@ class AttendanceControllerTest {
         return new AttendanceRecordResult(
                 10L,
                 20L,
+                UUID.fromString("00000000-0000-0000-0000-0000000000aa"),
+                "테스트닉",
                 LocalDate.of(2026, 8, 20),
                 AttendanceStatus.PRESENT,
                 AttendanceStatus.PRESENT,

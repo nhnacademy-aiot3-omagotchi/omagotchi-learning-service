@@ -49,6 +49,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 @DisplayName("출결")
+import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+
 @ExtendWith(MockitoExtension.class)
 class AttendanceServiceTest {
 
@@ -98,6 +100,9 @@ class AttendanceServiceTest {
 
     @Mock
     private Clock clock;
+
+    @Mock
+    private CharacterGrowthService characterGrowthService;
 
     @InjectMocks
     private AttendanceService attendanceService;

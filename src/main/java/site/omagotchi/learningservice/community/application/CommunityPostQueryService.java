@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentDownload;
+import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentPreview;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentStorage;
 import site.omagotchi.learningservice.community.application.port.CommunityPostQueryPort;
 import site.omagotchi.learningservice.community.application.query.CommunityPostDetail;
@@ -130,6 +131,32 @@ public class CommunityPostQueryService {
                 attachment.sizeBytes(),
                 communityAttachmentStorage.load(attachment.storageKey())
         );
+    }
+
+    /**
+     * 다운로드와 같은 권한·소속 검사를 적용하되 미리보기용 파생 객체를 우선 사용한다.
+     * 배포 전에 저장된 객체는 썸네일이 없으므로 원본으로 폴백한다.
+     */
+    public CommunityAttachmentPreview previewAttachment(
+            UUID userId,
+            Long cohortId,
+            Long postId,
+            Long attachmentId
+    ) {
+        cohortAccessService.requireActiveMembership(cohortId, userId);
+        CommunityPostDetail post = findVisiblePost(cohortId, postId);
+        var attachment = post.attachments().stream()
+                .filter(candidate -> candidate.attachmentId().equals(attachmentId))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(CommunityErrorCode.ATTACHMENT_NOT_FOUND));
+
+        var thumbnailResource = communityAttachmentStorage.loadThumbnail(attachment.storageKey());
+        return thumbnailResource
+                .map(resource -> new CommunityAttachmentPreview("image/jpeg", resource))
+                .orElseGet(() -> new CommunityAttachmentPreview(
+                        attachment.contentType(),
+                        communityAttachmentStorage.load(attachment.storageKey())
+                ));
     }
 
     private CommunityPostDetail findVisiblePost(Long cohortId, Long postId) {

@@ -8,6 +8,8 @@ import org.mockito.Mock;
 import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.unit.DataSize;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
 import site.omagotchi.learningservice.cohort.application.CohortLockService;
@@ -18,9 +20,10 @@ import site.omagotchi.learningservice.community.application.command.CreateCommun
 import site.omagotchi.learningservice.community.application.command.PinCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.command.UpdateCommunityPostCommand;
 import site.omagotchi.learningservice.community.domain.CommunityPost;
+import site.omagotchi.learningservice.community.domain.CommunityPostAttachment;
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
 import site.omagotchi.learningservice.community.infrastructure.CommunityAttachmentProperties;
-import site.omagotchi.learningservice.community.infrastructure.CommunityPostAttachmentRepository;
+import site.omagotchi.learningservice.community.application.port.CommunityPostAttachmentPort;
 import site.omagotchi.learningservice.community.infrastructure.CommunityPostJpaRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
@@ -58,7 +61,7 @@ class CommunityPostCommandServiceTest {
     private CommunityPostJpaRepository communityPostRepository;
 
     @Mock
-    private CommunityPostAttachmentRepository attachmentRepository;
+    private CommunityPostAttachmentPort attachmentPort;
 
     @Mock
     private CohortAccessService cohortAccessService;
@@ -87,7 +90,7 @@ class CommunityPostCommandServiceTest {
     void setUp() {
         communityPostCommandService = new CommunityPostCommandService(
                 communityPostRepository,
-                attachmentRepository,
+                attachmentPort,
                 cohortAccessService,
                 cohortLockService,
                 attachmentStorage,
@@ -102,7 +105,7 @@ class CommunityPostCommandServiceTest {
     void createsFreePostForActiveMember() {
         givenActiveMember(true);
         givenSavedPostGetsId(1L);
-        given(attachmentRepository.saveAllAndFlush(List.of())).willReturn(List.of());
+        given(attachmentPort.saveAll(List.of())).willReturn(List.of());
 
         var result = communityPostCommandService.create(
                 USER_ID,
@@ -125,7 +128,7 @@ class CommunityPostCommandServiceTest {
     void createsNoticeForNoticeWriter() {
         givenNoticeWriter(true);
         givenSavedPostGetsId(1L);
-        given(attachmentRepository.saveAllAndFlush(List.of())).willReturn(List.of());
+        given(attachmentPort.saveAll(List.of())).willReturn(List.of());
 
         var result = communityPostCommandService.create(
                 USER_ID,
@@ -195,7 +198,7 @@ class CommunityPostCommandServiceTest {
         givenActiveMember(true);
         givenSavedPostGetsId(1L);
         given(attachmentStorage.store(attachmentFile)).willReturn(storedAttachment);
-        given(attachmentRepository.saveAllAndFlush(any())).willThrow(new RuntimeException("metadata failed"));
+        given(attachmentPort.saveAll(any())).willThrow(new RuntimeException("metadata failed"));
 
         assertThrows(
                 RuntimeException.class,
@@ -279,11 +282,66 @@ class CommunityPostCommandServiceTest {
     }
 
     @Test
+    @DisplayName("작성자는 첨부파일 metadata를 지우고 커밋 뒤 저장소 객체를 정리한다")
+    void deletesOwnAttachmentAfterCommit() {
+        CommunityPostAttachment attachment = attachment(20L, 1L, "2026/08/08/file.png");
+        givenFoundPost(post(1L, USER_ID, CommunityPostType.FREE));
+        givenActiveMember(true);
+        given(attachmentPort.findByIdAndPostId(20L, 1L)).willReturn(Optional.of(attachment));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            communityPostCommandService.deleteAttachment(USER_ID, COHORT_ID, 1L, 20L);
+
+            verify(attachmentPort).delete(attachment);
+            verify(attachmentStorage, never()).delete(any());
+
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
+            verify(attachmentStorage).delete("2026/08/08/file.png");
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    @DisplayName("게시글에 속하지 않은 첨부파일은 찾을 수 없다")
+    void rejectsAttachmentOfAnotherPost() {
+        givenFoundPost(post(1L, USER_ID, CommunityPostType.FREE));
+        givenActiveMember(true);
+        given(attachmentPort.findByIdAndPostId(20L, 1L)).willReturn(Optional.empty());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> communityPostCommandService.deleteAttachment(USER_ID, COHORT_ID, 1L, 20L)
+        );
+
+        assertSame(CommunityErrorCode.ATTACHMENT_NOT_FOUND, exception.getErrorCode());
+        verify(attachmentPort, never()).delete(any());
+        verify(attachmentStorage, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("다른 사용자의 자유글 첨부파일은 삭제할 수 없다")
+    void rejectsDeletingOthersAttachment() {
+        givenFoundPost(post(1L, OTHER_USER_ID, CommunityPostType.FREE));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> communityPostCommandService.deleteAttachment(USER_ID, COHORT_ID, 1L, 20L)
+        );
+
+        assertSame(CommunityErrorCode.POST_ACCESS_DENIED, exception.getErrorCode());
+        verify(attachmentPort, never()).findByIdAndPostId(any(), any());
+        verify(attachmentStorage, never()).delete(any());
+    }
+
+    @Test
     @DisplayName("공지는 작성자가 아니어도 MENTOR·MANAGER가 수정한다")
     void allowsNoticeWriterToUpdateOthersNotice() {
         givenFoundPost(post(1L, OTHER_USER_ID, CommunityPostType.NOTICE));
         givenNoticeWriter(true);
-        given(attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(1L)).willReturn(List.of());
+        given(attachmentPort.findByPostId(1L)).willReturn(List.of());
 
         var result = communityPostCommandService.update(
                 USER_ID,
@@ -314,7 +372,7 @@ class CommunityPostCommandServiceTest {
     void pinsPostForNoticeWriter() {
         givenNoticeWriter(true);
         givenFoundPost(post(1L, OTHER_USER_ID, CommunityPostType.NOTICE));
-        given(attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(1L)).willReturn(List.of());
+        given(attachmentPort.findByPostId(1L)).willReturn(List.of());
 
         var result = communityPostCommandService.pin(
                 USER_ID,
@@ -331,7 +389,7 @@ class CommunityPostCommandServiceTest {
     void unpinsPreviousPinBeforePinning() {
         givenNoticeWriter(true);
         givenFoundPost(post(1L, USER_ID, CommunityPostType.NOTICE));
-        given(attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(1L)).willReturn(List.of());
+        given(attachmentPort.findByPostId(1L)).willReturn(List.of());
 
         communityPostCommandService.pin(USER_ID, COHORT_ID, 1L, new PinCommunityPostCommand(true));
 
@@ -366,7 +424,7 @@ class CommunityPostCommandServiceTest {
     void doesNotUnpinOthersWhenUnpinning() {
         givenNoticeWriter(true);
         givenFoundPost(post(1L, USER_ID, CommunityPostType.NOTICE));
-        given(attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(1L)).willReturn(List.of());
+        given(attachmentPort.findByPostId(1L)).willReturn(List.of());
 
         communityPostCommandService.pin(USER_ID, COHORT_ID, 1L, new PinCommunityPostCommand(false));
 
@@ -429,5 +487,18 @@ class CommunityPostCommandServiceTest {
         CommunityPost post = CommunityPost.create(type, "제목", "내용", authorUserId, COHORT_ID);
         ReflectionTestUtils.setField(post, "id", postId);
         return post;
+    }
+
+    private CommunityPostAttachment attachment(Long attachmentId, Long postId, String storageKey) {
+        CommunityPostAttachment attachment = CommunityPostAttachment.create(
+                postId,
+                storageKey,
+                "image.png",
+                "image/png",
+                1L,
+                0
+        );
+        ReflectionTestUtils.setField(attachment, "id", attachmentId);
+        return attachment;
     }
 }

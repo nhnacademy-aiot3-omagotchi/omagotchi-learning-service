@@ -20,7 +20,7 @@ import site.omagotchi.learningservice.community.domain.CommunityPost;
 import site.omagotchi.learningservice.community.domain.CommunityPostAttachment;
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
 import site.omagotchi.learningservice.community.infrastructure.CommunityAttachmentProperties;
-import site.omagotchi.learningservice.community.infrastructure.CommunityPostAttachmentRepository;
+import site.omagotchi.learningservice.community.application.port.CommunityPostAttachmentPort;
 import site.omagotchi.learningservice.community.infrastructure.CommunityPostJpaRepository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
@@ -42,7 +42,7 @@ import java.util.UUID;
 public class CommunityPostCommandService {
 
     private final CommunityPostJpaRepository communityPostRepository;
-    private final CommunityPostAttachmentRepository attachmentRepository;
+    private final CommunityPostAttachmentPort attachmentPort;
     private final CohortAccessService cohortAccessService;
     private final CohortLockService cohortLockService;
     private final CommunityAttachmentStorage attachmentStorage;
@@ -93,10 +93,10 @@ public class CommunityPostCommandService {
         List<CommunityPostAttachment> attachments = command.replaceAttachments()
                 ? replaceAttachments(
                 post.getId(),
-                attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(post.getId()),
+                attachmentPort.findByPostId(post.getId()),
                 command.attachments()
         )
-                : attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(post.getId());
+                : attachmentPort.findByPostId(post.getId());
         // validateManagePermission을 통과했으므로 관리 권한이 있다.
         return CommunityPostDetail.from(post, toMetadata(attachments))
                 .withViewer(communityAuthorNames.of(post.getAuthorUserId()), true);
@@ -106,12 +106,23 @@ public class CommunityPostCommandService {
     public void delete(UUID userId, Long cohortId, Long postId) {
         CommunityPost post = findActivePost(cohortId, postId);
         validateManagePermission(userId, cohortId, post);
-        List<CommunityPostAttachment> attachments = attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(
+        List<CommunityPostAttachment> attachments = attachmentPort.findByPostId(
                 post.getId()
         );
         post.delete(clock.instant());
-        attachmentRepository.deleteByPostId(post.getId());
+        attachmentPort.deleteByPostId(post.getId());
         deleteStoredAttachmentsAfterCommit(attachments);
+    }
+
+    @Transactional
+    public void deleteAttachment(UUID userId, Long cohortId, Long postId, Long attachmentId) {
+        CommunityPost post = findActivePost(cohortId, postId);
+        validateManagePermission(userId, cohortId, post);
+        CommunityPostAttachment attachment = attachmentPort.findByIdAndPostId(attachmentId, post.getId())
+                .orElseThrow(() -> new BusinessException(CommunityErrorCode.ATTACHMENT_NOT_FOUND));
+
+        attachmentPort.delete(attachment);
+        deleteStoredAttachmentsAfterCommit(List.of(attachment));
     }
 
     /**
@@ -143,7 +154,7 @@ public class CommunityPostCommandService {
         // 수정·삭제할 수 있는 건 아니다.
         return CommunityPostDetail.from(
                 post,
-                toMetadata(attachmentRepository.findByPostIdOrderByDisplayOrderAscIdAsc(post.getId()))
+                toMetadata(attachmentPort.findByPostId(post.getId()))
         ).withViewer(
                 communityAuthorNames.of(post.getAuthorUserId()),
                 post.isNotice() || post.isAuthor(userId)
@@ -225,7 +236,7 @@ public class CommunityPostCommandService {
             }
 
             if (!existingAttachments.isEmpty()) {
-                attachmentRepository.deleteByPostId(postId);
+                attachmentPort.deleteByPostId(postId);
             }
             List<CommunityPostAttachment> attachments = storedAttachments.stream()
                     .map(attachment -> CommunityPostAttachment.create(
@@ -237,7 +248,7 @@ public class CommunityPostCommandService {
                             attachment.displayOrder()
                     ))
                     .toList();
-            List<CommunityPostAttachment> savedAttachments = attachmentRepository.saveAllAndFlush(attachments);
+            List<CommunityPostAttachment> savedAttachments = attachmentPort.saveAll(attachments);
             deleteStoredAttachmentsAfterCommit(existingAttachments);
             return savedAttachments;
         } catch (RuntimeException exception) {

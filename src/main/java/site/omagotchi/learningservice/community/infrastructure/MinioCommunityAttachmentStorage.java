@@ -5,6 +5,7 @@ import io.minio.GetObjectResponse;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import io.minio.errors.ErrorResponseException;
 import io.minio.errors.MinioException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
@@ -14,8 +15,10 @@ import site.omagotchi.learningservice.community.application.attachment.Community
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentStorage;
 import site.omagotchi.learningservice.community.application.attachment.StoredCommunityAttachment;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Optional;
 
 /**
  * 커뮤니티 첨부파일을 MinIO 버킷에 저장한다.
@@ -38,22 +41,41 @@ public class MinioCommunityAttachmentStorage implements CommunityAttachmentStora
     private final MinioClient minioClient;
     private final CommunityAttachmentProperties properties;
     private final CommunityAttachmentPolicy policy;
+    private final CommunityAttachmentThumbnail thumbnail;
 
     @Override
     public StoredCommunityAttachment store(CommunityAttachmentFile attachmentFile) {
         CommunityAttachmentTarget target = policy.prepare(attachmentFile);
+        CommunityAttachmentThumbnail.Generated generatedThumbnail =
+                thumbnail.generate(target.storageKey(), attachmentFile);
 
-        try (InputStream inputStream = attachmentFile.openStream()) {
+        // 성공 여부가 아니라 "시도 여부"를 남긴다. putObject 가 IOException 이나 응답 확인 실패로
+        // 끝나면 원격 객체가 생겼는지 알 수 없어서, 성공한 것만 지우면 고아 객체가 남는다.
+        boolean originalAttempted = false;
+        boolean thumbnailAttempted = false;
+        try (InputStream inputStream = attachmentFile.openStream();
+             InputStream thumbnailStream = new ByteArrayInputStream(generatedThumbnail.bytes())) {
             // 크기를 넘겨야 클라이언트가 전체를 메모리에 담지 않고 바로 흘려보낸다.
-            minioClient.putObject(PutObjectArgs.builder()
-                    .bucket(properties.bucket())
-                    .object(target.storageKey())
-                    .stream(inputStream, attachmentFile.sizeBytes(), null)
-                    .contentType(target.contentType())
-                    .build());
+            originalAttempted = true;
+            putObject(target.storageKey(), target.contentType(), attachmentFile.sizeBytes(), inputStream);
+            thumbnailAttempted = true;
+            putObject(
+                    generatedThumbnail.storageKey(),
+                    CommunityAttachmentThumbnail.CONTENT_TYPE,
+                    generatedThumbnail.bytes().length,
+                    thumbnailStream
+            );
         } catch (MinioException | IOException exception) {
+            // 지우는 순서는 파생 → 원본. 삭제는 없는 객체에도 안전하다.
+            if (thumbnailAttempted) {
+                removeQuietly(generatedThumbnail.storageKey(), exception);
+            }
+            if (originalAttempted) {
+                removeQuietly(target.storageKey(), exception);
+            }
             throw new IllegalArgumentException(
-                    "첨부파일 업로드에 실패했습니다. bucket=%s, key=%s".formatted(properties.bucket(), target.storageKey()),
+                    "첨부파일 또는 썸네일 업로드에 실패했습니다. bucket=%s, key=%s"
+                            .formatted(properties.bucket(), target.storageKey()),
                     exception
             );
         }
@@ -74,11 +96,7 @@ public class MinioCommunityAttachmentStorage implements CommunityAttachmentStora
     @Override
     public Resource load(String storageKey) {
         try {
-            GetObjectResponse response = minioClient.getObject(GetObjectArgs.builder()
-                    .bucket(properties.bucket())
-                    .object(storageKey)
-                    .build());
-            return new InputStreamResource(response);
+            return loadObject(storageKey);
         } catch (MinioException exception) {
             throw new IllegalArgumentException(
                     "첨부파일을 읽지 못했습니다. bucket=%s, key=%s".formatted(properties.bucket(), storageKey),
@@ -87,18 +105,100 @@ public class MinioCommunityAttachmentStorage implements CommunityAttachmentStora
         }
     }
 
+    /**
+     * 신규 첨부파일은 파생 키의 JPEG를 반환한다. 배포 이전 객체에 썸네일이 없는 경우만
+     * empty로 돌려서 서비스가 원본을 미리보기로 사용할 수 있게 한다.
+     */
+    @Override
+    public Optional<Resource> loadThumbnail(String storageKey) {
+        String thumbnailStorageKey = thumbnail.storageKey(storageKey);
+        try {
+            return Optional.of(loadObject(thumbnailStorageKey));
+        } catch (ErrorResponseException exception) {
+            if (isMissingObject(exception)) {
+                return Optional.empty();
+            }
+            throw loadFailure(thumbnailStorageKey, exception);
+        } catch (MinioException exception) {
+            throw loadFailure(thumbnailStorageKey, exception);
+        }
+    }
+
     @Override
     public void delete(String storageKey) {
+        IllegalArgumentException failure = null;
         try {
-            minioClient.removeObject(RemoveObjectArgs.builder()
-                    .bucket(properties.bucket())
-                    .object(storageKey)
-                    .build());
+            removeObject(storageKey);
         } catch (MinioException exception) {
-            throw new IllegalArgumentException(
-                    "첨부파일을 지우지 못했습니다. bucket=%s, key=%s".formatted(properties.bucket(), storageKey),
-                    exception
-            );
+            failure = deleteFailure(storageKey, exception);
         }
+
+        String thumbnailStorageKey = thumbnail.storageKey(storageKey);
+        try {
+            removeObject(thumbnailStorageKey);
+        } catch (MinioException exception) {
+            IllegalArgumentException thumbnailFailure = deleteFailure(thumbnailStorageKey, exception);
+            if (failure == null) {
+                failure = thumbnailFailure;
+            } else {
+                failure.addSuppressed(thumbnailFailure);
+            }
+        }
+
+        if (failure != null) {
+            throw failure;
+        }
+    }
+
+    private void putObject(String storageKey, String contentType, long size, InputStream inputStream)
+            throws MinioException {
+        minioClient.putObject(PutObjectArgs.builder()
+                .bucket(properties.bucket())
+                .object(storageKey)
+                .stream(inputStream, size, null)
+                .contentType(contentType)
+                .build());
+    }
+
+    private Resource loadObject(String storageKey) throws MinioException {
+        GetObjectResponse response = minioClient.getObject(GetObjectArgs.builder()
+                .bucket(properties.bucket())
+                .object(storageKey)
+                .build());
+        return new InputStreamResource(response);
+    }
+
+    private void removeObject(String storageKey) throws MinioException {
+        minioClient.removeObject(RemoveObjectArgs.builder()
+                .bucket(properties.bucket())
+                .object(storageKey)
+                .build());
+    }
+
+    private void removeQuietly(String storageKey, Exception uploadFailure) {
+        try {
+            removeObject(storageKey);
+        } catch (MinioException cleanupFailure) {
+            uploadFailure.addSuppressed(cleanupFailure);
+        }
+    }
+
+    private boolean isMissingObject(ErrorResponseException exception) {
+        String code = exception.errorResponse() == null ? null : exception.errorResponse().code();
+        return "NoSuchKey".equals(code) || "NoSuchObject".equals(code);
+    }
+
+    private IllegalArgumentException loadFailure(String storageKey, MinioException exception) {
+        return new IllegalArgumentException(
+                "첨부파일을 읽지 못했습니다. bucket=%s, key=%s".formatted(properties.bucket(), storageKey),
+                exception
+        );
+    }
+
+    private IllegalArgumentException deleteFailure(String storageKey, MinioException exception) {
+        return new IllegalArgumentException(
+                "첨부파일을 지우지 못했습니다. bucket=%s, key=%s".formatted(properties.bucket(), storageKey),
+                exception
+        );
     }
 }

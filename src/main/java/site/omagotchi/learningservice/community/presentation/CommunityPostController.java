@@ -110,6 +110,18 @@ public class CommunityPostController {
                 .body(download.resource());
     }
 
+    @DeleteMapping("/{post-id}/attachments/{attachment-id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteAttachment(
+            JwtAuthenticationToken authentication,
+            @PathVariable("cohort-id") Long cohortId,
+            @PathVariable("post-id") Long postId,
+            @PathVariable("attachment-id") Long attachmentId
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        communityPostCommandService.deleteAttachment(user.userId(), cohortId, postId, attachmentId);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CommunityPostDetailResponse create(

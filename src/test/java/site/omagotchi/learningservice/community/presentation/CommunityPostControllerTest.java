@@ -194,6 +194,19 @@ class CommunityPostControllerTest {
     }
 
     @Test
+    @DisplayName("첨부파일 삭제 요청을 서비스에 위임한다")
+    void deletesAttachment() throws Exception {
+        mockMvc.perform(delete(
+                        "/api/v1/cohorts/{cohort-id}/community/posts/{post-id}/attachments/{attachment-id}",
+                        COHORT_ID, 10L, 20L
+                )
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isNoContent());
+
+        verify(communityPostCommandService).deleteAttachment(USER_ID, COHORT_ID, 10L, 20L);
+    }
+
+    @Test
     @DisplayName("게시글 생성은 소속 기수를 경로에서 받고 본문 지정은 받지 않는다")
     void createsPostWithCohortFromPath() throws Exception {
         given(communityPostCommandService.create(

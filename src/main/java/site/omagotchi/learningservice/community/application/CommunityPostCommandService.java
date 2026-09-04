@@ -114,6 +114,17 @@ public class CommunityPostCommandService {
         deleteStoredAttachmentsAfterCommit(attachments);
     }
 
+    @Transactional
+    public void deleteAttachment(UUID userId, Long cohortId, Long postId, Long attachmentId) {
+        CommunityPost post = findActivePost(cohortId, postId);
+        validateManagePermission(userId, cohortId, post);
+        CommunityPostAttachment attachment = attachmentRepository.findByIdAndPostId(attachmentId, post.getId())
+                .orElseThrow(() -> new BusinessException(CommunityErrorCode.ATTACHMENT_NOT_FOUND));
+
+        attachmentRepository.delete(attachment);
+        deleteStoredAttachmentsAfterCommit(List.of(attachment));
+    }
+
     /**
      * 고정은 기수 게시판의 운영 행위다. 공지를 쓸 수 있는 MANAGER·MENTOR가 수행한다.
      *

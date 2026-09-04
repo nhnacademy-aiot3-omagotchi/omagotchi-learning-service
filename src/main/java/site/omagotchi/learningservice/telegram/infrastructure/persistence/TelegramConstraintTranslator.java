@@ -13,8 +13,8 @@ import java.util.Locale;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class TelegramConstraintTranslator {
 
-    private static final String UQ_CHAT = "uq_telegram_user_links_chat";
-    private static final String UQ_TELEGRAM_USER = "uq_telegram_user_links_telegram_user";
+    private static final String UQ_CHAT = "uq_telegram_user_links_active_chat";
+    private static final String UQ_TELEGRAM_USER = "uq_telegram_user_links_active_telegram_user";
 
     public static RuntimeException translate(DataIntegrityViolationException exception) {
         String name = extractConstraintName(exception);

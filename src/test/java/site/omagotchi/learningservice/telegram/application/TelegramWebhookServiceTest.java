@@ -201,6 +201,25 @@ class TelegramWebhookServiceTest {
     }
 
     /**
+     * 자기 계정으로 이미 연동해 둔 사용자가 다른 텔레그램으로 /start 를 보낸 경우다.
+     * "다른 사용자와 연결"과 구분되어야 한다 — 상대가 남이 아니라 자기 자신이고,
+     * 해제 주체도 자기라서 안내할 다음 행동이 다르다.
+     */
+    @Test
+    @DisplayName("이미 다른 텔레그램과 연동돼 있으면 해제 후 재시도를 안내한다.")
+    void explainsAlreadyLinkedUser() {
+        willThrow(new BusinessException(TelegramErrorCode.TELEGRAM_USER_ALREADY_LINKED))
+                .given(userLinkService).linkByWebhook(any());
+
+        service.handle(command("/start other"));
+
+        assertThat(reply())
+                .contains("이미 다른 텔레그램 계정과 연동")
+                .contains("해제")
+                .doesNotContain("일시적인 오류");
+    }
+
+    /**
      * 예상하지 못한 실패도 밖으로 내보내지 않는다. 텔레그램에게 5xx를 주면 같은 Update를
      * 계속 다시 보내는데, 재시도해도 결과가 같다.
      */

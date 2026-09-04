@@ -31,17 +31,17 @@ public class TelegramUserLinkJpaPersistence implements TelegramUserLinkRepositor
     }
 
     @Override
-    public Optional<TelegramUserLink> findByUserId(UUID userId) {
-        return userLinkJpaRepository.findByUserId(userId);
+    public Optional<TelegramUserLink> findActiveByUserId(UUID userId) {
+        return userLinkJpaRepository.findByUserIdAndDisconnectedAtIsNull(userId);
     }
 
     @Override
-    public Optional<TelegramUserLink> findByTelegramChatId(Long telegramChatId) {
-        return userLinkJpaRepository.findByTelegramChatId(telegramChatId);
+    public Optional<TelegramUserLink> findActiveByTelegramChatId(Long telegramChatId) {
+        return userLinkJpaRepository.findByTelegramChatIdAndDisconnectedAtIsNull(telegramChatId);
     }
 
     @Override
-    public Optional<TelegramUserLink> findByTelegramUserId(Long telegramUserId) {
-        return userLinkJpaRepository.findByTelegramUserId(telegramUserId);
+    public Optional<TelegramUserLink> findActiveByTelegramUserId(Long telegramUserId) {
+        return userLinkJpaRepository.findByTelegramUserIdAndDisconnectedAtIsNull(telegramUserId);
     }
 }

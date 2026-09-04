@@ -86,7 +86,7 @@ class IdentityRestAccountClientTest {
         );
         given(httpService.getAccounts(expectedRequest)).willReturn(ResponseEntity.ok(List.of(
                 new IdentityAccountResponse(firstId, "첫 사용자", IdentityAccountState.ACTIVE),
-                new IdentityAccountResponse(secondId, "둘째 사용자", IdentityAccountState.LOCKED)
+                new IdentityAccountResponse(secondId, "둘째 사용자", IdentityAccountState.DISABLED)
         )));
 
         // When: 표시 이름 일괄 조회

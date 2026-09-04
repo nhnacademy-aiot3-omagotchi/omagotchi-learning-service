@@ -114,6 +114,27 @@ class MinioCommunityAttachmentStorageTest {
     }
 
     @Test
+    @DisplayName("원본 업로드가 실패해도 시도한 객체를 정리한다")
+    void cleansUpAttemptedObjectWhenOriginalUploadFails() throws Exception {
+        // putObject 는 실패했을 때 원격 객체가 생겼는지 보장하지 않는다.
+        // 성공한 것만 지우면 이 경로에서 고아 객체가 남는다.
+        MinioException cause = new MinioException("original upload failed");
+        willThrow(cause).given(minioClient).putObject(any());
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> storage().store(attachmentFile(
+                        new MockMultipartFile("attachments", "image.png", "image/png", pngBytes()), 0
+                ))
+        );
+
+        ArgumentCaptor<RemoveObjectArgs> captor = ArgumentCaptor.forClass(RemoveObjectArgs.class);
+        // 썸네일은 시도조차 하지 않았으므로 원본만 지운다
+        verify(minioClient, times(1)).removeObject(captor.capture());
+        assertTrue(captor.getValue().object().startsWith("2026/08/08/"));
+    }
+
+    @Test
     @DisplayName("썸네일 업로드가 실패하면 저장된 원본과 파생 객체를 정리한다")
     void cleansUpObjectsWhenThumbnailUploadFails() throws Exception {
         MinioException cause = new MinioException("thumbnail upload failed");

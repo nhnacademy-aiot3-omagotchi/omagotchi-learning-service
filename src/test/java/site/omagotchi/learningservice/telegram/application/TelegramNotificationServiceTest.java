@@ -50,7 +50,7 @@ class TelegramNotificationServiceTest {
     @Test
     @DisplayName("연동된 사용자에게는 그 사람의 개인 채팅으로 보낸다.")
     void sendsToLinkedUsersOwnChat() {
-        given(userLinkRepository.findByUserId(RECIPIENT)).willReturn(Optional.of(linkedUser()));
+        given(userLinkRepository.findActiveByUserId(RECIPIENT)).willReturn(Optional.of(linkedUser()));
 
         boolean sent = service.send(RECIPIENT, TEXT);
 
@@ -65,7 +65,7 @@ class TelegramNotificationServiceTest {
     @Test
     @DisplayName("미연동 사용자에게는 발송하지 않고 false를 반환한다.")
     void skipsUnlinkedUser() {
-        given(userLinkRepository.findByUserId(RECIPIENT)).willReturn(Optional.empty());
+        given(userLinkRepository.findActiveByUserId(RECIPIENT)).willReturn(Optional.empty());
 
         boolean sent = service.send(RECIPIENT, TEXT);
 
@@ -79,7 +79,7 @@ class TelegramNotificationServiceTest {
     void skipsUserWithNotificationDisabled() {
         TelegramUserLink link = linkedUser();
         link.changeNotificationEnabled(false);
-        given(userLinkRepository.findByUserId(RECIPIENT)).willReturn(Optional.of(link));
+        given(userLinkRepository.findActiveByUserId(RECIPIENT)).willReturn(Optional.of(link));
 
         boolean sent = service.send(RECIPIENT, TEXT);
 
@@ -96,7 +96,7 @@ class TelegramNotificationServiceTest {
     void skipsDisconnectedUser() {
         TelegramUserLink link = linkedUser();
         link.disconnect();
-        given(userLinkRepository.findByUserId(RECIPIENT)).willReturn(Optional.of(link));
+        given(userLinkRepository.findActiveByUserId(RECIPIENT)).willReturn(Optional.of(link));
 
         boolean sent = service.send(RECIPIENT, TEXT);
 
@@ -111,7 +111,7 @@ class TelegramNotificationServiceTest {
     @Test
     @DisplayName("발송 실패는 호출부로 전파한다.")
     void propagatesSendFailure() {
-        given(userLinkRepository.findByUserId(RECIPIENT)).willReturn(Optional.of(linkedUser()));
+        given(userLinkRepository.findActiveByUserId(RECIPIENT)).willReturn(Optional.of(linkedUser()));
         willThrow(new IllegalStateException("발송 실패"))
                 .given(messageSender).send(anyLong(), anyString());
 

@@ -24,8 +24,8 @@ class TelegramConstraintTranslatorTest {
     @ParameterizedTest(name = "{0}")
     @DisplayName("남의 텔레그램 계정이면 이미 연결됨 오류로 옮긴다.")
     @ValueSource(strings = {
-            "uq_telegram_user_links_chat",
-            "uq_telegram_user_links_telegram_user"
+            "uq_telegram_user_links_active_chat",
+            "uq_telegram_user_links_active_telegram_user"
     })
     void ownershipViolationBecomesAlreadyLinked(String constraint) {
         RuntimeException translated = TelegramConstraintTranslator.translate(violation(constraint));
@@ -44,7 +44,7 @@ class TelegramConstraintTranslatorTest {
     @Test
     @DisplayName("같은 계정 중복은 사용자 오류로 바꾸지 않는다.")
     void ownUserViolationStaysUnwrapped() {
-        DataIntegrityViolationException original = violation("uq_telegram_user_links_user");
+        DataIntegrityViolationException original = violation("uq_telegram_user_links_active_user");
 
         assertThat(TelegramConstraintTranslator.translate(original))
                 .isSameAs(original)

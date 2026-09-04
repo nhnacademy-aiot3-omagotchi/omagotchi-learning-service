@@ -6,6 +6,8 @@ import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import io.minio.errors.MinioException;
+import io.minio.errors.ErrorResponseException;
+import io.minio.messages.ErrorResponse;
 import okhttp3.Headers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,7 +21,13 @@ import site.omagotchi.learningservice.community.application.CommunityErrorCode;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentFile;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
+import javax.imageio.ImageIO;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -34,6 +42,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 
 @DisplayName("MinIO 커뮤니티 첨부파일 저장소")
 @ExtendWith(MockitoExtension.class)
@@ -54,8 +64,9 @@ class MinioCommunityAttachmentStorageTest {
         var stored = storage().store(attachmentFile(file, 2));
 
         ArgumentCaptor<PutObjectArgs> captor = ArgumentCaptor.forClass(PutObjectArgs.class);
-        verify(minioClient).putObject(captor.capture());
-        PutObjectArgs args = captor.getValue();
+        verify(minioClient, times(2)).putObject(captor.capture());
+        PutObjectArgs args = captor.getAllValues().get(0);
+        PutObjectArgs thumbnailArgs = captor.getAllValues().get(1);
         assertAll(
                 () -> assertEquals(BUCKET, args.bucket()),
                 () -> assertEquals(stored.storageKey(), args.object()),
@@ -64,7 +75,11 @@ class MinioCommunityAttachmentStorageTest {
                 () -> assertEquals("image.png", stored.originalFileName()),
                 () -> assertEquals("image/png", stored.contentType()),
                 () -> assertEquals(file.getSize(), stored.sizeBytes()),
-                () -> assertEquals(2, stored.displayOrder())
+                () -> assertEquals(2, stored.displayOrder()),
+                () -> assertEquals(BUCKET, thumbnailArgs.bucket()),
+                () -> assertTrue(thumbnailArgs.object().startsWith("_thumbnails/v1/480x300/2026/08/08/")),
+                () -> assertTrue(thumbnailArgs.object().endsWith(".jpg")),
+                () -> assertEquals("image/jpeg", thumbnailArgs.contentType().toString())
         );
     }
 
@@ -99,6 +114,30 @@ class MinioCommunityAttachmentStorageTest {
     }
 
     @Test
+    @DisplayName("썸네일 업로드가 실패하면 저장된 원본과 파생 객체를 정리한다")
+    void cleansUpObjectsWhenThumbnailUploadFails() throws Exception {
+        MinioException cause = new MinioException("thumbnail upload failed");
+        given(minioClient.putObject(any()))
+                .willReturn(null)
+                .willThrow(cause);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> storage().store(attachmentFile(
+                        new MockMultipartFile("attachments", "image.png", "image/png", pngBytes()), 0
+                ))
+        );
+
+        assertEquals(cause, exception.getCause());
+        ArgumentCaptor<RemoveObjectArgs> captor = ArgumentCaptor.forClass(RemoveObjectArgs.class);
+        verify(minioClient, times(2)).removeObject(captor.capture());
+        assertAll(
+                () -> assertTrue(captor.getAllValues().get(0).object().startsWith("_thumbnails/v1/480x300/")),
+                () -> assertTrue(captor.getAllValues().get(1).object().startsWith("2026/08/08/"))
+        );
+    }
+
+    @Test
     @DisplayName("객체 스트림을 그대로 흘려보낸다")
     void streamsObjectWithoutBuffering() throws Exception {
         byte[] content = {1, 2, 3};
@@ -116,15 +155,51 @@ class MinioCommunityAttachmentStorageTest {
     }
 
     @Test
+    @DisplayName("파생 키의 썸네일 객체 스트림을 반환한다")
+    void loadsThumbnailFromDerivedKey() throws Exception {
+        byte[] content = {4, 5, 6};
+        given(minioClient.getObject(any(GetObjectArgs.class))).willReturn(new GetObjectResponse(
+                Headers.of(),
+                BUCKET,
+                null,
+                "_thumbnails/v1/480x300/2026/08/08/key.jpg",
+                new ByteArrayInputStream(content)
+        ));
+
+        var resource = storage().loadThumbnail("2026/08/08/key.png").orElseThrow();
+
+        assertArrayEquals(content, resource.getInputStream().readAllBytes());
+        ArgumentCaptor<GetObjectArgs> captor = ArgumentCaptor.forClass(GetObjectArgs.class);
+        verify(minioClient).getObject(captor.capture());
+        assertEquals("_thumbnails/v1/480x300/2026/08/08/key.jpg", captor.getValue().object());
+    }
+
+    @Test
+    @DisplayName("기존 객체에 썸네일이 없으면 empty를 반환한다")
+    void returnsEmptyWhenLegacyAttachmentHasNoThumbnail() throws Exception {
+        ErrorResponseException missing = mock(ErrorResponseException.class);
+        ErrorResponse errorResponse = mock(ErrorResponse.class);
+        given(missing.errorResponse()).willReturn(errorResponse);
+        given(errorResponse.code()).willReturn("NoSuchKey");
+        given(minioClient.getObject(any(GetObjectArgs.class))).willThrow(missing);
+
+        assertTrue(storage().loadThumbnail("2026/08/08/key.png").isEmpty());
+    }
+
+    @Test
     @DisplayName("삭제는 같은 버킷의 객체를 지운다")
     void removesObject() throws Exception {
         storage().delete("2026/08/08/key.png");
 
         ArgumentCaptor<RemoveObjectArgs> captor = ArgumentCaptor.forClass(RemoveObjectArgs.class);
-        verify(minioClient).removeObject(captor.capture());
+        verify(minioClient, times(2)).removeObject(captor.capture());
         assertAll(
-                () -> assertEquals(BUCKET, captor.getValue().bucket()),
-                () -> assertEquals("2026/08/08/key.png", captor.getValue().object())
+                () -> assertEquals(BUCKET, captor.getAllValues().get(0).bucket()),
+                () -> assertEquals("2026/08/08/key.png", captor.getAllValues().get(0).object()),
+                () -> assertEquals(
+                        "_thumbnails/v1/480x300/2026/08/08/key.jpg",
+                        captor.getAllValues().get(1).object()
+                )
         );
     }
 
@@ -140,6 +215,7 @@ class MinioCommunityAttachmentStorageTest {
         );
 
         assertEquals(cause, exception.getCause());
+        verify(minioClient, times(2)).removeObject(any());
     }
 
     private MinioCommunityAttachmentStorage storage() {
@@ -153,7 +229,8 @@ class MinioCommunityAttachmentStorageTest {
         return new MinioCommunityAttachmentStorage(
                 minioClient,
                 properties,
-                new CommunityAttachmentPolicy(properties, clock)
+                new CommunityAttachmentPolicy(properties, clock),
+                new CommunityAttachmentThumbnail()
         );
     }
 
@@ -167,11 +244,17 @@ class MinioCommunityAttachmentStorageTest {
         );
     }
 
-    private byte[] pngBytes() {
-        return new byte[]{
-                (byte) 0x89, 0x50, 0x4E, 0x47,
-                0x0D, 0x0A, 0x1A, 0x0A,
-                0x00, 0x00, 0x00, 0x00
-        };
+    private byte[] pngBytes() throws IOException {
+        BufferedImage image = new BufferedImage(800, 600, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = image.createGraphics();
+        try {
+            graphics.setColor(new Color(34, 91, 180, 180));
+            graphics.fillRect(0, 0, image.getWidth(), image.getHeight());
+        } finally {
+            graphics.dispose();
+        }
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", output);
+        return output.toByteArray();
     }
 }

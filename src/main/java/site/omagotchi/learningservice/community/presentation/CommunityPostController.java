@@ -110,6 +110,24 @@ public class CommunityPostController {
                 .body(download.resource());
     }
 
+    @GetMapping("/{post-id}/attachments/{attachment-id}/thumbnail")
+    public ResponseEntity<Resource> previewAttachment(
+            JwtAuthenticationToken authentication,
+            @PathVariable("cohort-id") Long cohortId,
+            @PathVariable("post-id") Long postId,
+            @PathVariable("attachment-id") Long attachmentId
+    ) {
+        AuthenticatedUser user = AuthenticatedUser.from(authentication);
+        var preview = communityPostQueryService.previewAttachment(
+                user.userId(), cohortId, postId, attachmentId
+        );
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(preview.contentType()))
+                .cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofMinutes(5)).cachePrivate())
+                .header("X-Content-Type-Options", "nosniff")
+                .body(preview.resource());
+    }
+
     @DeleteMapping("/{post-id}/attachments/{attachment-id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteAttachment(

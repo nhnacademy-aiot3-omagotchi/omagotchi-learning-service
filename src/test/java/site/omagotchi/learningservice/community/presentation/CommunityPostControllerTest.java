@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.community.application.CommunityPostCommandService;
 import site.omagotchi.learningservice.community.application.CommunityPostQueryService;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentDownload;
+import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentPreview;
 import site.omagotchi.learningservice.community.application.command.CreateCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.command.PinCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.command.UpdateCommunityPostCommand;
@@ -37,6 +38,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -191,6 +193,31 @@ class CommunityPostControllerTest {
                 .andExpect(content().bytes(new byte[]{1, 2, 3}));
 
         verify(communityPostQueryService).downloadAttachment(USER_ID, COHORT_ID, 10L, 20L);
+    }
+
+    @Test
+    @DisplayName("첨부파일 미리보기는 썸네일과 private 캐시 헤더를 반환한다")
+    void previewsAttachment() throws Exception {
+        given(communityPostQueryService.previewAttachment(USER_ID, COHORT_ID, 10L, 20L))
+                .willReturn(new CommunityAttachmentPreview(
+                        "image/jpeg",
+                        new ByteArrayResource(new byte[]{4, 5, 6})
+                ));
+
+        mockMvc.perform(get(
+                        "/api/v1/cohorts/{cohort-id}/community/posts/{post-id}/attachments/{attachment-id}/thumbnail",
+                        COHORT_ID, 10L, 20L
+                )
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CONTENT_TYPE, "image/jpeg"))
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, containsString("max-age=300")))
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, containsString("private")))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().doesNotExist(HttpHeaders.CONTENT_DISPOSITION))
+                .andExpect(content().bytes(new byte[]{4, 5, 6}));
+
+        verify(communityPostQueryService).previewAttachment(USER_ID, COHORT_ID, 10L, 20L);
     }
 
     @Test

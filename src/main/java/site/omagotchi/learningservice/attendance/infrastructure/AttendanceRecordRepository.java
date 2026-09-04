@@ -11,6 +11,7 @@ import site.omagotchi.learningservice.attendance.application.result.AttendanceCl
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -115,5 +116,27 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
             """)
     List<AttendanceCleanupTarget> findEndCleanupTargetsByCohortMembershipId(
             @Param("cohortMembershipId") Long cohortMembershipId
+    );
+
+    /** 기수 종료 정리 대상이 있는 소속만 ID 순서로 좁힌다. */
+    @Query("""
+            select distinct record.cohortMembershipId
+              from AttendanceRecord record
+             where record.cohortMembershipId in :cohortMembershipIds
+               and record.checkedInAt is not null
+               and record.checkedOutAt is null
+               and (
+                    record.autoStatus <> site.omagotchi.learningservice.attendance.domain.AttendanceStatus.MISSING_CHECK_OUT
+                    or exists (
+                        select presence.id
+                          from PresenceInterval presence
+                         where presence.attendanceId = record.id
+                           and presence.endedAt is null
+                    )
+               )
+             order by record.cohortMembershipId asc
+            """)
+    List<Long> findDistinctEndCleanupMembershipIds(
+            @Param("cohortMembershipIds") Collection<Long> cohortMembershipIds
     );
 }

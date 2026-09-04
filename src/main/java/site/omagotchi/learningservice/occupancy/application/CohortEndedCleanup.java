@@ -5,18 +5,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.attendance.application.CohortEndedAttendanceCleanup;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.sensor.application.CohortEndedSensorCleanup;
 import site.omagotchi.learningservice.space.application.CohortEndedSpaceCleanup;
 import site.omagotchi.learningservice.team.application.CohortEndedTeamCleanup;
 
-import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * 기수 종료 시 팀·알림·점유·공간을 정해진 순서로 정리한다 (CE-01~04, 명세 08).
+ * 기수 종료 시 팀·알림·점유·출결·센서·공간을 정해진 순서로 정리한다 (명세 08).
  * 진입점은 {@link site.omagotchi.learningservice.occupancy.presentation.CohortClosedListener}.
  *
  * <p>단일 클래스·단계별 격리·순서 예외의 근거는 ADR space-team/0015. 요지만 남긴다 —
@@ -38,20 +38,23 @@ public class CohortEndedCleanup {
     private final VacancyAlertService vacancyAlertService;
     private final RoomOccupancyRepository occupancyRepository;
     private final EndedMembershipOccupancyCleanup occupancyCleanup;
+    private final CohortEndedAttendanceCleanup attendanceCleanup;
     private final CohortEndedSensorCleanup sensorCleanup;
     private final CohortEndedSpaceCleanup spaceCleanup;
-    private final Clock clock;
 
     /**
-     * 종료된 기수를 5단계로 정리한다. 같은 기수에 두 번 호출해도 안전하다 — 각 단계가
+     * 종료된 기수를 6단계로 정리한다. 같은 기수에 두 번 호출해도 안전하다 — 각 단계가
      * 조건부 연산이라 두 번째는 대상이 없다 (명세 08 §5 "훅 중복 수신").
      *
      * <p><b>이 Method에 Transaction이 없는 것이 의도다.</b> 단계마다 자기 Transaction을
      * 열어야 부분 실패가 격리된다 — 여기에 하나로 두르면 마지막 단계의 실패가 팀 해체까지
      * 되돌리고, 기수 종료 자체를 막게 된다 (명세 08 §5 "기수 종료는 롤백하지 않음").</p>
+     *
+     * @param endedCohortId 종료된 기수
+     * @param closedAt      이벤트에 기록된 기수 종료 시각
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public void cleanUp(Long endedCohortId) {
+    public void cleanUp(Long endedCohortId, OffsetDateTime closedAt) {
 
         // 1단계 — 팀 정리 (CE-01). 실패해도 나머지 단계와 무관하다.
         try {
@@ -60,13 +63,14 @@ public class CohortEndedCleanup {
             log.error("기수 종료 팀 정리(CE-01)에 실패했습니다. cohortId={}", endedCohortId, exception);
         }
 
-        // CE-02·03의 대상은 멤버십 조인으로만 나온다 (명세 08 §1). 이 조회가 실패하면 둘 다
-        // 대상을 특정할 수 없으므로 함께 건너뛰고, 기수 단위인 CE-04만 진행한다.
+        // CE-02·03과 출결 정리의 대상은 멤버십 조인으로만 나온다 (명세 08 §1).
+        // 이 조회가 실패하면 셋 모두 대상을 특정할 수 없으므로 함께 건너뛰고,
+        // 기수 단위인 센서·공간 정리는 계속 진행한다.
         List<Long> membershipIds;
         try {
             membershipIds = cohortMembershipQueryService.findMembershipIds(endedCohortId);
         } catch (Exception exception) {
-            log.error("기수 종료 멤버십 조회에 실패해 알림 삭제(CE-02)·점유 종료(CE-03)를 건너뜁니다. cohortId={}",
+            log.error("기수 종료 멤버십 조회에 실패해 알림·점유·출결 정리를 건너뜁니다. cohortId={}",
                     endedCohortId, exception);
             membershipIds = null;
         }
@@ -79,17 +83,27 @@ public class CohortEndedCleanup {
             // 진행하면 종료 기수 학생에게 공실 알림이 나간다 (CE-05). 건너뛴 점유는 만료
             // 스케줄러가 정리한다.
             if (alertsCleared) {
-                releaseOccupancies(endedCohortId, membershipIds);
+                releaseOccupancies(endedCohortId, membershipIds, closedAt);
             } else {
                 log.warn("알림 삭제 실패로 점유 종료(CE-03)를 건너뜁니다 — 순서 역전 방지 (CE-05). cohortId={}",
                         endedCohortId);
             }
+
+            // 4단계 — 출결·체류 마감. CE-02 실패로 점유 정리를 건너뛰었더라도 일반
+            // PRESENT/AWAY 체류는 독립적으로 닫는다. 열린 MEETING은 출결 정리 내부에서
+            // 건너뛰고 정합성 스윕에 맡긴다.
+            try {
+                attendanceCleanup.closeAllByCohort(membershipIds, closedAt);
+            } catch (Exception exception) {
+                log.error("기수 종료 출결·체류 정리에 실패했습니다. cohortId={}",
+                        endedCohortId, exception);
+            }
         }
 
-        // 4단계 — 센서 회수 (CE-05). 5단계보다 반드시 먼저다 — 공간의 cohort_id가 지워진
+        // 5단계 — 센서 회수 (CE-05). 6단계보다 반드시 먼저다 — 공간의 cohort_id가 지워진
         // 뒤에는 대상 센서를 특정할 수 없고, 회수되지 못한 센서는 룰을 계속 발화시킨다.
         //
-        // 실패해도 5단계를 건너뛰지 않는다. cohort_id가 남으면 SensorDeviceService#claim의
+        // 실패해도 6단계를 건너뛰지 않는다. cohort_id가 남으면 SensorDeviceService#claim의
         // 고아 판정(findCohortId().isEmpty())을 통과하지 못해 다음 기수가 인계할 수 없고,
         // 이 기수의 멤버십은 이미 종료되어 아무도 손댈 수 없는 상태가 된다. CE-04에는 재시도
         // 수단이 없다 (CohortClosedListener javadoc). 회수 대상 EUI는 CE-05가 미리 남긴다.
@@ -100,7 +114,7 @@ public class CohortEndedCleanup {
                     endedCohortId, exception);
         }
 
-        // 5단계 — 공간 관리 주체 해제 (CE-04). 앞 단계와 무관하게 시도한다.
+        // 6단계 — 공간 관리 주체 해제 (CE-04). 앞 단계와 무관하게 시도한다.
         try {
             spaceCleanup.unassignSpaces(endedCohortId);
         } catch (Exception exception) {
@@ -128,11 +142,14 @@ public class CohortEndedCleanup {
      * 2단계가 이미 지웠다. 종료 기수 사람의 타 점유 참여는 MR-33이 막으므로 여기서
      * 다룰 일이 없다 (명세 08 §5 "발생 불가").</p>
      */
-    private void releaseOccupancies(Long endedCohortId, List<Long> membershipIds) {
+    private void releaseOccupancies(
+            Long endedCohortId,
+            List<Long> membershipIds,
+            OffsetDateTime endedAt
+    ) {
         List<RoomOccupancyRepository.ActiveOccupancy> occupancies =
                 occupancyRepository.findActiveSummariesByOccupierMembershipIds(membershipIds);
 
-        OffsetDateTime endedAt = OffsetDateTime.now(clock);
         int released = 0;
         for (RoomOccupancyRepository.ActiveOccupancy occupancy : occupancies) {
             try {

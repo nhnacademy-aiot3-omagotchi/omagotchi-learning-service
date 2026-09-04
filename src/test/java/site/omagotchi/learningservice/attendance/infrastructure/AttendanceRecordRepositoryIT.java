@@ -13,8 +13,10 @@ import org.springframework.test.context.ActiveProfiles;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -61,7 +63,73 @@ class AttendanceRecordRepositoryIT {
                 .containsExactly(LocalDate.of(2026, 8, 20));
     }
 
+    @Test
+    @DisplayName("소속 종료 정리는 미해결 출결과 열린 체류 고아만 ID 순서로 조회한다")
+    void findsOnlyEndCleanupTargets() {
+        Long membershipId = saveMembership(UUID.randomUUID());
+        Long otherMembershipId = saveMembership(UUID.randomUUID());
+        Instant checkedInAt = Instant.parse("2026-08-18T00:00:00Z");
+
+        Long unresolved = saveAttendance(
+                membershipId,
+                LocalDate.of(2026, 8, 18),
+                checkedInAt,
+                null,
+                "PRESENT"
+        );
+        saveAttendance(
+                membershipId,
+                LocalDate.of(2026, 8, 19),
+                checkedInAt,
+                null,
+                "MISSING_CHECK_OUT"
+        );
+        Long missingWithOpenPresence = saveAttendance(
+                membershipId,
+                LocalDate.of(2026, 8, 20),
+                checkedInAt,
+                null,
+                "MISSING_CHECK_OUT"
+        );
+        saveOpenPresence(missingWithOpenPresence, checkedInAt);
+        saveAttendance(
+                membershipId,
+                LocalDate.of(2026, 8, 21),
+                null,
+                null,
+                "PENDING"
+        );
+        saveAttendance(
+                membershipId,
+                LocalDate.of(2026, 8, 22),
+                checkedInAt,
+                checkedInAt.plusSeconds(60),
+                "PRESENT"
+        );
+        saveAttendance(
+                otherMembershipId,
+                LocalDate.of(2026, 8, 18),
+                checkedInAt,
+                null,
+                "PRESENT"
+        );
+
+        var targets = attendanceRecordRepository
+                .findEndCleanupTargetsByCohortMembershipId(membershipId);
+
+        assertThat(targets)
+                .extracting(target -> target.attendanceId())
+                .containsExactly(unresolved, missingWithOpenPresence);
+        assertThat(targets)
+                .extracting(target -> target.cohortMembershipId())
+                .containsOnly(membershipId);
+    }
+
     private Long saveMembership() {
+        return saveMembership(USER_ID);
+    }
+
+    private Long saveMembership(UUID userId) {
         Long cohortId = jdbcTemplate.queryForObject("""
                         insert into learning_service.cohorts (
                             name, description, start_date, end_date, status, created_by_user_id
@@ -76,7 +144,7 @@ class AttendanceRecordRepositoryIT {
                         """,
                 Long.class,
                 cohortId,
-                USER_ID,
+                userId,
                 OffsetDateTime.parse("2026-08-01T00:00:00Z"),
                 OffsetDateTime.parse("2026-08-01T00:00:00Z"),
                 ADMIN_ID
@@ -91,6 +159,42 @@ class AttendanceRecordRepositoryIT {
                         """,
                 membershipId,
                 date
+        );
+    }
+
+    private Long saveAttendance(
+            Long membershipId,
+            LocalDate date,
+            Instant checkedInAt,
+            Instant checkedOutAt,
+            String status
+    ) {
+        return jdbcTemplate.queryForObject("""
+                        insert into learning_service.attendance_records (
+                            cohort_membership_id, attendance_date,
+                            checked_in_at, checked_out_at,
+                            auto_status, final_status
+                        ) values (?, ?, ?, ?, ?, ?)
+                        returning id
+                        """,
+                Long.class,
+                membershipId,
+                date,
+                checkedInAt == null ? null : checkedInAt.atOffset(ZoneOffset.UTC),
+                checkedOutAt == null ? null : checkedOutAt.atOffset(ZoneOffset.UTC),
+                status,
+                status
+        );
+    }
+
+    private void saveOpenPresence(Long attendanceId, Instant startedAt) {
+        jdbcTemplate.update("""
+                        insert into learning_service.presence_intervals (
+                            attendance_id, state, started_at
+                        ) values (?, 'PRESENT', ?)
+                        """,
+                attendanceId,
+                startedAt.atOffset(ZoneOffset.UTC)
         );
     }
 }

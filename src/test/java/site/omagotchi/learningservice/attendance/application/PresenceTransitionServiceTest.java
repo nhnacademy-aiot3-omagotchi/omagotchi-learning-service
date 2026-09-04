@@ -420,11 +420,29 @@ class PresenceTransitionServiceTest {
         stubAttendance(attendance(false));
         stubOpenIntervals(current);
 
-        service.closeAttendance(ATTENDANCE_ID, at);
+        boolean closed = service.closeAttendance(ATTENDANCE_ID, at);
 
+        assertThat(closed).isTrue();
         assertThat(current.getEndedAt()).isEqualTo(at);
         verify(presenceIntervalRepository).save(current);
         verify(presenceIntervalRepository, never()).delete(any(PresenceInterval.class));
+    }
+
+    @Test
+    @DisplayName("열린 체류 구간이 없는 출결 마감은 변경 없음으로 응답한다")
+    void returnsFalseWithoutOpenInterval() {
+        stubAttendance(attendance(false));
+        when(presenceIntervalRepository
+                .findByAttendanceIdAndEndedAtIsNullOrderByStartedAtAscIdAsc(ATTENDANCE_ID))
+                .thenReturn(List.of());
+
+        boolean closed = service.closeAttendance(
+                ATTENDANCE_ID,
+                Instant.parse("2026-08-31T04:00:00Z")
+        );
+
+        assertThat(closed).isFalse();
+        verify(presenceIntervalRepository, never()).save(any(PresenceInterval.class));
     }
 
     @Test

@@ -14,15 +14,8 @@ import site.omagotchi.learningservice.space.application.SpaceCohortQueryService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
+import java.util.Collection;
 import java.util.stream.Collectors;
 
 /**
@@ -42,13 +35,25 @@ public class SpaceEnvironmentService {
     private static final List<String> MEASUREMENTS = List.of("co2", "temperature", "humidity");
 
     /**
-     * 이보다 오래된 값은 현재 값으로 보지 않는다.
+     * 값이 아직 현재 값인지 보는 기준 = 수집 주기 × 3.
      *
-     * <p>없으면 센서가 죽은 공간의 어제 값이 현재 값처럼 보인다. 기기 수집 주기
-     * ({@code expectedIntervalSeconds}, 보통 분 단위)보다 넉넉히 잡아 한두 번 걸러도
-     * 값이 사라지지 않게 한다.</p>
+     * <p>Rule Service 의 끊김 판정({@code DisconnectDetectorNode})과 같은 규칙이다. 기준이
+     * 서로 다르면 한 화면은 "정상"이라 하고 다른 화면은 알림을 보내는 상태가 생긴다.
+     * 주기는 기기마다 다르므로 판정도 기기별로 한다.</p>
      */
-    private static final Duration FRESHNESS = Duration.ofMinutes(30);
+    private static final int DISCONNECT_MULTIPLIER = 3;
+
+    /** 주기를 모르는 기기의 기본값. Rule Service 의 기본 주기와 같다. */
+    private static final int DEFAULT_INTERVAL_SECONDS = 60;
+
+    /**
+     * 시계열을 거슬러 볼 최대 폭.
+     *
+     * <p>기기 주기에 상한이 없어 설정을 잘못 넣으면 조회 구간이 며칠로 벌어진다. 판정 자체는
+     * 기기별로 하므로 이 상한은 질의 폭만 막는다 — 주기가 2시간을 넘는 기기는 이 창 밖의
+     * 값을 아예 읽지 않으므로 값 없음이 된다.</p>
+     */
+    private static final Duration MAX_LOOKBACK = Duration.ofHours(6);
 
     private final SensorDeviceRepository sensorDeviceRepository;
     private final SpaceSeriesRepository spaceSeriesRepository;
@@ -72,39 +77,40 @@ public class SpaceEnvironmentService {
 
         // 운영 중인 기기만 본다. 회수·비활성 기기는 평균에 섞이지 않는다
         List<SensorDevice> devices = sensorDeviceRepository.findActiveBySpaceIds(spaceIds);
-        Map<String, Long> spaceIdByEui = devices.stream()
+        Map<String, SensorDevice> deviceByEui = devices.stream()
                 .filter(device -> Objects.nonNull(device.getSpaceId()))
                 .collect(Collectors.toMap(
                         SensorDevice::getDeviceEui,
-                        SensorDevice::getSpaceId,
+                        device -> device,
                         (left, right) -> left));
 
         Map<Long, Integer> deviceCountBySpace = new HashMap<>();
-        for (Long spaceId : spaceIdByEui.values()) {
-            deviceCountBySpace.merge(spaceId, 1, Integer::sum);
+        for (SensorDevice device : deviceByEui.values()) {
+            deviceCountBySpace.merge(device.getSpaceId(), 1, Integer::sum);
         }
 
-        if (spaceIdByEui.isEmpty()) {
+        if (deviceByEui.isEmpty()) {
             return spaceIds.stream().map(spaceId -> empty(spaceId, 0)).toList();
         }
 
+        // 질의는 가장 느린 기기에 맞춰 한 번만 하고, 버릴지는 기기별 기준으로 가른다
         Instant now = clock.instant();
         List<SensorReadingSnapshot> readings = spaceSeriesRepository.findLatestReadings(
                 new SpaceEnvironmentQuery(
-                        spaceIdByEui.keySet(),
+                        deviceByEui.keySet(),
                         MEASUREMENTS,
-                        now.minus(FRESHNESS),
+                        now.minus(longestFreshness(deviceByEui.values())),
                         now
                 )
         );
 
         Map<Long, Aggregate> bySpace = new LinkedHashMap<>();
         for (SensorReadingSnapshot reading : readings) {
-            Long spaceId = spaceIdByEui.get(reading.deviceEui());
-            if (spaceId == null) {
+            SensorDevice device = deviceByEui.get(reading.deviceEui());
+            if (device == null || isStale(reading, device, now)) {
                 continue;
             }
-            bySpace.computeIfAbsent(spaceId, key -> new Aggregate()).add(reading);
+            bySpace.computeIfAbsent(device.getSpaceId(), key -> new Aggregate()).add(reading);
         }
 
         List<SpaceEnvironmentResult> environments = new ArrayList<>();
@@ -116,6 +122,27 @@ public class SpaceEnvironmentService {
                     : aggregate.toResult(spaceId, deviceCount));
         }
         return environments;
+    }
+
+    /** 그 기기가 이 시간까지 안 보내면 끊긴 것으로 본다. */
+    private static Duration freshnessOf(SensorDevice device) {
+        Integer interval = device.getExpectedIntervalSeconds();
+        long seconds = interval == null || interval <= 0 ? DEFAULT_INTERVAL_SECONDS : interval;
+        return Duration.ofSeconds(seconds).multipliedBy(DISCONNECT_MULTIPLIER);
+    }
+
+    private static boolean isStale(SensorReadingSnapshot reading, SensorDevice device, Instant now) {
+        return reading.time().isBefore(now.minus(freshnessOf(device)));
+    }
+
+    /** 한 번의 질의가 모든 기기를 담으려면 가장 느린 기기의 기준까지 거슬러 봐야 한다. */
+    private static Duration longestFreshness(Collection<SensorDevice> devices) {
+        Duration longest = devices.stream()
+                .map(SpaceEnvironmentService::freshnessOf)
+                .max(Comparator.naturalOrder())
+                .orElse(Duration.ofSeconds((long) DEFAULT_INTERVAL_SECONDS * DISCONNECT_MULTIPLIER));
+
+        return longest.compareTo(MAX_LOOKBACK) > 0 ? MAX_LOOKBACK : longest;
     }
 
     /**

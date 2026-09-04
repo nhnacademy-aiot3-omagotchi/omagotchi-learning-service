@@ -83,10 +83,10 @@ class SpaceEnvironmentServiceTest {
                 device("8899aabbccddeeff", LAB_ID)
         );
         when(spaceSeriesRepository.findLatestReadings(any())).thenReturn(List.of(
-                reading("0011223344556677", "co2", 600.0, "2026-09-04T10:20:00Z"),
-                reading("8899aabbccddeeff", "co2", 700.0, "2026-09-04T10:25:00Z"),
-                reading("0011223344556677", "temperature", 23.0, "2026-09-04T10:20:00Z"),
-                reading("8899aabbccddeeff", "temperature", 24.0, "2026-09-04T10:25:00Z")
+                reading("0011223344556677", "co2", 600.0, "2026-09-04T10:28:00Z"),
+                reading("8899aabbccddeeff", "co2", 700.0, "2026-09-04T10:29:00Z"),
+                reading("0011223344556677", "temperature", 23.0, "2026-09-04T10:28:00Z"),
+                reading("8899aabbccddeeff", "temperature", 24.0, "2026-09-04T10:29:00Z")
         ));
 
         // when
@@ -101,7 +101,7 @@ class SpaceEnvironmentServiceTest {
         // 아무 기기도 보고하지 않은 항목은 비운다
         assertNull(lab.humidity());
         // 측정 시각은 그 공간에서 가장 최근에 들어온 값의 시각이다
-        assertEquals(Instant.parse("2026-09-04T10:25:00Z"), lab.measuredAt());
+        assertEquals(Instant.parse("2026-09-04T10:29:00Z"), lab.measuredAt());
         assertEquals(2, lab.deviceCount());
     }
 
@@ -115,8 +115,8 @@ class SpaceEnvironmentServiceTest {
                 device("8899aabbccddeeff", LAB_ID)
         );
         when(spaceSeriesRepository.findLatestReadings(any())).thenReturn(List.of(
-                reading("0011223344556677", "co2", 800.0, "2026-09-04T10:20:00Z"),
-                reading("8899aabbccddeeff", "humidity", 45.0, "2026-09-04T10:21:00Z")
+                reading("0011223344556677", "co2", 800.0, "2026-09-04T10:28:00Z"),
+                reading("8899aabbccddeeff", "humidity", 45.0, "2026-09-04T10:29:00Z")
         ));
 
         SpaceEnvironmentResult lab = service.getCohortEnvironments(COHORT_ID, REQUESTER_ID).getFirst();
@@ -133,7 +133,7 @@ class SpaceEnvironmentServiceTest {
         givenCohortSpaces(List.of(LAB_ID, MEETING_ID));
         givenActiveDevices(device("0011223344556677", LAB_ID));
         when(spaceSeriesRepository.findLatestReadings(any())).thenReturn(List.of(
-                reading("0011223344556677", "co2", 612.0, "2026-09-04T10:20:00Z")
+                reading("0011223344556677", "co2", 612.0, "2026-09-04T10:29:00Z")
         ));
 
         List<SpaceEnvironmentResult> results = service.getCohortEnvironments(COHORT_ID, REQUESTER_ID);
@@ -174,8 +174,8 @@ class SpaceEnvironmentServiceTest {
                 device("8899aabbccddeeff", MEETING_ID)
         );
         when(spaceSeriesRepository.findLatestReadings(any())).thenReturn(List.of(
-                reading("0011223344556677", "co2", 612.0, "2026-09-04T10:20:00Z"),
-                reading("8899aabbccddeeff", "co2", 704.0, "2026-09-04T10:21:00Z")
+                reading("0011223344556677", "co2", 612.0, "2026-09-04T10:28:00Z"),
+                reading("8899aabbccddeeff", "co2", 704.0, "2026-09-04T10:29:00Z")
         ));
 
         List<SpaceEnvironmentResult> results = service.getCohortEnvironments(COHORT_ID, REQUESTER_ID);
@@ -187,10 +187,13 @@ class SpaceEnvironmentServiceTest {
     }
 
     @Test
-    @DisplayName("조회 구간은 최근 30분이고 활성 기기만 대상으로 한다")
-    void asksOnlyForFreshReadingsOfActiveDevices() {
+    @DisplayName("조회 구간은 가장 느린 기기의 수집 주기 × 3까지 거슬러 본다")
+    void asksBackAsFarAsTheSlowestDeviceNeeds() {
         givenCohortSpaces(List.of(LAB_ID));
-        givenActiveDevices(device("0011223344556677", LAB_ID));
+        givenActiveDevices(
+                device("0011223344556677", LAB_ID, 60),
+                device("8899aabbccddeeff", LAB_ID, 600)
+        );
         when(spaceSeriesRepository.findLatestReadings(any())).thenReturn(List.of());
 
         service.getCohortEnvironments(COHORT_ID, REQUESTER_ID);
@@ -200,11 +203,52 @@ class SpaceEnvironmentServiceTest {
         verify(spaceSeriesRepository).findLatestReadings(captor.capture());
         SpaceEnvironmentQuery query = captor.getValue();
 
-        // 오래된 값이 현재 값으로 보이지 않도록 구간을 끊는다
+        // 10분 주기 기기가 있으면 30분까지 본다. 빠른 기기는 뒤에서 따로 걸러진다
         assertEquals(NOW.minus(Duration.ofMinutes(30)), query.from());
         assertEquals(NOW, query.to());
-        assertEquals(Set.of("0011223344556677"), query.deviceEuis());
+        assertEquals(Set.of("0011223344556677", "8899aabbccddeeff"), query.deviceEuis());
         assertEquals(List.of("co2", "temperature", "humidity"), query.measurement());
+    }
+
+    @Test
+    @DisplayName("자기 수집 주기 × 3을 넘긴 값은 현재 값으로 쓰지 않는다")
+    void dropsReadingsOlderThanTheirOwnDeviceThreshold() {
+        // given: 1분 주기 기기(임계 3분)와 10분 주기 기기(임계 30분)가 같은 공간에 있고
+        // 둘 다 5분 전 값을 마지막으로 보냈다
+        givenCohortSpaces(List.of(LAB_ID));
+        givenActiveDevices(
+                device("0011223344556677", LAB_ID, 60),
+                device("8899aabbccddeeff", LAB_ID, 600)
+        );
+        when(spaceSeriesRepository.findLatestReadings(any())).thenReturn(List.of(
+                reading("0011223344556677", "co2", 400.0, "2026-09-04T10:25:00Z"),
+                reading("8899aabbccddeeff", "co2", 800.0, "2026-09-04T10:25:00Z")
+        ));
+
+        SpaceEnvironmentResult lab = service.getCohortEnvironments(COHORT_ID, REQUESTER_ID).getFirst();
+
+        // 빠른 기기 값은 이미 끊긴 것으로 보고 버린다 — Rule Service 의 끊김 판정과 같은 기준
+        assertEquals(800.0, lab.co2());
+        assertEquals(Instant.parse("2026-09-04T10:25:00Z"), lab.measuredAt());
+        // 기기 수는 배치 기준이라 그대로다. 값이 하나뿐인 것과는 다른 정보다
+        assertEquals(2, lab.deviceCount());
+    }
+
+    @Test
+    @DisplayName("모든 기기가 기준을 넘기면 값 없이 기기 수만 남는다")
+    void leavesSpaceEmptyWhenEveryDeviceIsStale() {
+        givenCohortSpaces(List.of(LAB_ID));
+        givenActiveDevices(device("0011223344556677", LAB_ID, 60));
+        when(spaceSeriesRepository.findLatestReadings(any())).thenReturn(List.of(
+                reading("0011223344556677", "co2", 400.0, "2026-09-04T10:20:00Z")
+        ));
+
+        SpaceEnvironmentResult lab = service.getCohortEnvironments(COHORT_ID, REQUESTER_ID).getFirst();
+
+        // 화면은 "센서 없음"이 아니라 "측정 대기"로 말해야 한다
+        assertNull(lab.co2());
+        assertNull(lab.measuredAt());
+        assertEquals(1, lab.deviceCount());
     }
 
     @Test
@@ -247,7 +291,12 @@ class SpaceEnvironmentServiceTest {
     }
 
     private static SensorDevice device(String deviceEui, Long spaceId) {
-        return SensorDevice.create(deviceEui, spaceId, "CO2-01", "센서 " + deviceEui, null, 60, NOW);
+        return device(deviceEui, spaceId, 60);
+    }
+
+    private static SensorDevice device(String deviceEui, Long spaceId, int expectedIntervalSeconds) {
+        return SensorDevice.create(
+                deviceEui, spaceId, "CO2-01", "센서 " + deviceEui, null, expectedIntervalSeconds, NOW);
     }
 
     private static SensorReadingSnapshot reading(

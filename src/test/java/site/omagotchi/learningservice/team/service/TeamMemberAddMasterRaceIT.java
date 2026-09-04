@@ -14,11 +14,14 @@ import site.omagotchi.learningservice.team.application.TeamMasterService;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamService;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountSnapshot;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.team.domain.TeamMemberRole;
 import site.omagotchi.learningservice.team.support.TeamTestFixture;
+
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -40,7 +43,7 @@ import static org.mockito.BDDMockito.willAnswer;
  * <p>교차 순서는 스레드 타이밍이 아니라 <b>주입 지점</b>으로 결정적으로 만든다.
  * {@code addMember}의 실행 순서가
  * {@code requireMaster → validateAccount → TeamMemberAddition.add}이므로,
- * {@link IdentityAccountClient#getState}가 정확히 "Identity 조회 전 접근 제어 이후, 락 획득 이전"이다.
+ * {@link IdentityAccountClient#getSnapshot}이 정확히 "Identity 조회 전 접근 제어 이후, 락 획득 이전"이다.
  * 그 안에서 위임을 커밋시키면 재현하려는 창이 그대로 열린다.</p>
  */
 @SpringBootTest
@@ -87,8 +90,8 @@ class TeamMemberAddMasterRaceIT {
         // addMember가 Identity 조회 전 접근 제어를 마치고 락을 잡기 직전에 위임을 커밋시킨다.
         willAnswer(invocation -> {
             teamMasterService.delegate(teamId, successorMemberId, master.userId());
-            return IdentityAccountState.ACTIVE;
-        }).given(identityAccountClient).getState(any());
+            return new IdentityAccountSnapshot(IdentityAccountState.ACTIVE, Instant.EPOCH);
+        }).given(identityAccountClient).getSnapshot(any());
 
         // When & Then: 위임으로 권한을 잃은 이전 MASTER의 추가 요청 거부
         assertThatThrownBy(() ->

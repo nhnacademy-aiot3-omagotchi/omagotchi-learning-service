@@ -1,15 +1,17 @@
 package site.omagotchi.learningservice.team.application;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.team.domain.Team;
-import site.omagotchi.learningservice.team.domain.TeamMember;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountSnapshot;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
+import site.omagotchi.learningservice.team.domain.Team;
+import site.omagotchi.learningservice.team.domain.TeamMember;
 
 import java.util.UUID;
 
@@ -29,6 +31,7 @@ import java.util.UUID;
  * <p>탈퇴·제외는 전부 물리 삭제다. 소프트 삭제하면 옛 행이
  * {@code uq_team_members_membership}을 계속 점유해 재가입이 영구히 불가능해진다.</p>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -100,7 +103,6 @@ public class TeamMemberService {
         teamMemberRepository.delete(target);
     }
 
-
     /**
      * 탈퇴 (GR-07, GR-08, GR-13).
      * 일반 팀원은 즉시 나간다. 마스터는 팀원이 남아 있으면 409로 거부하고,
@@ -127,9 +129,6 @@ public class TeamMemberService {
         teamMemberRepository.delete(member);
     }
 
-
-//---------------------------------내부 헬퍼---------------------------------------------------
-
     /**
      * 대상 계정의 존재·미탈퇴를 확인한다 (GR-11).
      *
@@ -141,8 +140,14 @@ public class TeamMemberService {
      * 건너뛰면 탈퇴 계정도 그대로 팀에 들어간다 — DB가 대신 막아주지 않는다.</p>
      */
     private void validateAccount(UUID targetUserId) {
-        IdentityAccountState state = identityAccountClient.getState(targetUserId);
-        if (state == IdentityAccountState.WITHDRAWN) {
+        IdentityAccountSnapshot snapshot = identityAccountClient.getSnapshot(targetUserId);
+        if (snapshot.status() == IdentityAccountState.WITHDRAWN) {
+            log.info(
+                    "팀원 추가 계정 상태 거부 targetUserId={}, status={}, statusChangedAt={}",
+                    targetUserId,
+                    snapshot.status(),
+                    snapshot.statusChangedAt()
+            );
             throw new BusinessException(TeamErrorCode.ACCOUNT_WITHDRAWN);
         }
     }

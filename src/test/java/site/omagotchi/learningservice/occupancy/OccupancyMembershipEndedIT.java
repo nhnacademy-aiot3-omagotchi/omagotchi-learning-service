@@ -275,7 +275,7 @@ class OccupancyMembershipEndedIT {
      * <p>{@code @Async}라 커밋 직후 다른 Thread에서 돌기 때문에 결과를 기다린다.</p>
      */
     @Test
-    @DisplayName("소속을 종료하면 이벤트가 점유 정리까지 이어진다.")
+    @DisplayName("소속을 종료하면 점유 정리 후 출결 마감까지 이어진다.")
     void membershipEndedEventReachesOccupancyCleanup() {
         Long cohortId = fixture.createCohort("소속종료-배선");
         OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
@@ -285,10 +285,37 @@ class OccupancyMembershipEndedIT {
         Long occupancyId = activeOccupancyId(roomId);
 
         membershipService.end(occupier.membershipId());
+        OffsetDateTime endedAt = membershipEndedAt(occupier.membershipId());
 
-        awaitUntil(() -> "RELEASED".equals(occupancyStatusOrNull(occupancyId)),
-                "소속 종료 이벤트가 점유 정리로 이어지지 않았습니다");
+        awaitUntil(
+                () -> "RELEASED".equals(occupancyStatusOrNull(occupancyId))
+                        && "MISSING_CHECK_OUT".equals(
+                                attendanceStatusOrNull(occupier.membershipId())),
+                "소속 종료 이벤트가 점유·출결 정리로 이어지지 않았습니다"
+        );
         assertThat(openParticipantRows(occupancyId)).isZero();
+        assertThat(openPresenceRows(occupier.membershipId())).isZero();
+        assertThat(attendanceCheckedOutAt(occupier.membershipId())).isNull();
+        assertThat(latestPresenceEndedAt(occupier.membershipId())).isEqualTo(endedAt);
+    }
+
+    @Test
+    @DisplayName("점유하지 않은 일반 재실도 소속 종료 이벤트로 마감된다.")
+    void membershipEndedEventClosesSimplePresence() {
+        Long cohortId = fixture.createCohort("소속종료-일반재실");
+        OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
+
+        membershipService.end(member.membershipId());
+        OffsetDateTime endedAt = membershipEndedAt(member.membershipId());
+
+        awaitUntil(
+                () -> "MISSING_CHECK_OUT".equals(
+                        attendanceStatusOrNull(member.membershipId())),
+                "소속 종료 이벤트가 일반 재실 출결을 마감하지 않았습니다"
+        );
+        assertThat(openPresenceRows(member.membershipId())).isZero();
+        assertThat(attendanceCheckedOutAt(member.membershipId())).isNull();
+        assertThat(latestPresenceEndedAt(member.membershipId())).isEqualTo(endedAt);
     }
 
     // ────────────────────────────── 정합성 스윕 ──────────────────────────────
@@ -448,6 +475,60 @@ class OccupancyMembershipEndedIT {
                 .stream()
                 .findFirst()
                 .orElse(null);
+    }
+
+    private String attendanceStatusOrNull(Long membershipId) {
+        return jdbcTemplate.queryForList("""
+                        SELECT auto_status
+                          FROM learning_service.attendance_records
+                         WHERE cohort_membership_id = ?
+                         ORDER BY id DESC
+                         LIMIT 1
+                        """, String.class, membershipId)
+                .stream()
+                .findFirst()
+                .orElse(null);
+    }
+
+    private int openPresenceRows(Long membershipId) {
+        return count("""
+                SELECT count(*)
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                 WHERE attendance.cohort_membership_id = ?
+                   AND presence.ended_at IS NULL
+                """, membershipId);
+    }
+
+    private Object attendanceCheckedOutAt(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT checked_out_at
+                  FROM learning_service.attendance_records
+                 WHERE cohort_membership_id = ?
+                 ORDER BY id DESC
+                 LIMIT 1
+                """, Object.class, membershipId);
+    }
+
+    private OffsetDateTime latestPresenceEndedAt(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT presence.ended_at
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                 WHERE attendance.cohort_membership_id = ?
+                 ORDER BY presence.id DESC
+                 LIMIT 1
+                """, OffsetDateTime.class, membershipId);
+    }
+
+    private OffsetDateTime membershipEndedAt(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT ended_at
+                  FROM learning_service.cohort_memberships
+                 WHERE id = ?
+                """, OffsetDateTime.class, membershipId);
     }
 
     private Object occupancyEndedAt(Long occupancyId) {

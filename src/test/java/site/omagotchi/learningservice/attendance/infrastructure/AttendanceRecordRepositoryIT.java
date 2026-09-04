@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -123,6 +124,10 @@ class AttendanceRecordRepositoryIT {
         assertThat(targets)
                 .extracting(target -> target.cohortMembershipId())
                 .containsOnly(membershipId);
+
+        assertThat(attendanceRecordRepository.findDistinctEndCleanupMembershipIds(
+                List.of(otherMembershipId, membershipId)
+        )).containsExactly(membershipId, otherMembershipId);
     }
 
     private Long saveMembership() {

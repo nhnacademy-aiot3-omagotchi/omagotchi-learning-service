@@ -28,6 +28,7 @@ import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSen
 import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 import site.omagotchi.learningservice.team.application.TeamService;
 
+import java.time.OffsetDateTime;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -203,11 +204,11 @@ class CohortClosedTriggerIT {
     }
 
     /**
-     * 트리거가 실제로 4단계에 닿는지 — 관리자 명령 하나로 팀·알림·점유·실습실이 모두
+     * 트리거가 실제로 6단계에 닿는지 — 관리자 명령 하나로 팀·알림·점유·출결·실습실이 모두
      * 정리돼야 한다. 각 단계의 세부 규칙은 {@code CohortEndedCleanupIT}가 본다.
      */
     @Test
-    @DisplayName("기수 종료 한 번으로 팀·알림·점유·실습실이 모두 정리된다.")
+    @DisplayName("기수 종료 한 번으로 팀·알림·점유·출결·실습실이 모두 정리된다.")
     void oneStatusChangeDrivesEveryCleanupStep() {
         Long cohortId = fixture.createCohort("트리거-전체정리");
         OccupancyTestFixture.Member manager = fixture.createActiveMember(cohortId);
@@ -230,6 +231,12 @@ class CohortClosedTriggerIT {
         assertThat(waitingAlertRows(roomId)).isZero();
         assertThat(openParticipantRows(occupancyId)).isZero();
         assertThat(occupancyStatus(occupancyId)).isEqualTo("RELEASED");
+        assertThat(attendanceStatus(manager.membershipId())).isEqualTo("MISSING_CHECK_OUT");
+        assertThat(attendanceStatus(occupier.membershipId())).isEqualTo("MISSING_CHECK_OUT");
+        assertThat(attendanceStatus(waiter.membershipId())).isEqualTo("MISSING_CHECK_OUT");
+        assertThat(openPresenceRows(cohortId)).isZero();
+        assertThat(latestPresenceEndedAt(waiter.membershipId()))
+                .isEqualTo(membershipEndedAt(waiter.membershipId()));
         assertThat(spaceCohortId(labId)).isNull();
         // 회의실도 유형을 가리지 않고 관리 주체가 해제된다 — 그렇지 않으면 종료 기수를
         // 가리킨 채 동결된다. 인수·삭제 순환은 SpaceManagementLifecycleIT가 다룬다.
@@ -349,6 +356,49 @@ class CohortClosedTriggerIT {
                 SELECT count(*) FROM learning_service.occupancy_participants
                  WHERE occupancy_id = ? AND left_at IS NULL
                 """, occupancyId);
+    }
+
+    private String attendanceStatus(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT auto_status
+                  FROM learning_service.attendance_records
+                 WHERE cohort_membership_id = ?
+                 ORDER BY id DESC
+                 LIMIT 1
+                """, String.class, membershipId);
+    }
+
+    private int openPresenceRows(Long cohortId) {
+        return count("""
+                SELECT count(*)
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                  JOIN learning_service.cohort_memberships membership
+                    ON membership.id = attendance.cohort_membership_id
+                 WHERE membership.cohort_id = ?
+                   AND presence.ended_at IS NULL
+                """, cohortId);
+    }
+
+    private OffsetDateTime latestPresenceEndedAt(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT presence.ended_at
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                 WHERE attendance.cohort_membership_id = ?
+                 ORDER BY presence.id DESC
+                 LIMIT 1
+                """, OffsetDateTime.class, membershipId);
+    }
+
+    private OffsetDateTime membershipEndedAt(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT ended_at
+                  FROM learning_service.cohort_memberships
+                 WHERE id = ?
+                """, OffsetDateTime.class, membershipId);
     }
 
     private int waitingAlertRows(Long spaceId) {

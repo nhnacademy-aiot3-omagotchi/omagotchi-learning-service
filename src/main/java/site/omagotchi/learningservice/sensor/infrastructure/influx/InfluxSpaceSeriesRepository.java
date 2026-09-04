@@ -7,7 +7,9 @@ import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.sensor.application.port.SpaceSeriesRepository;
+import site.omagotchi.learningservice.sensor.application.query.SpaceEnvironmentQuery;
 import site.omagotchi.learningservice.sensor.application.query.SpaceSeriesQuery;
+import site.omagotchi.learningservice.sensor.application.result.SensorReadingSnapshot;
 import site.omagotchi.learningservice.sensor.application.result.SensorRef;
 import site.omagotchi.learningservice.sensor.domain.SeriesBucket;
 import site.omagotchi.learningservice.sensor.application.result.SpaceSeries;
@@ -15,11 +17,13 @@ import site.omagotchi.learningservice.sensor.domain.SpaceSeriesPoint;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Repository
 public class InfluxSpaceSeriesRepository implements SpaceSeriesRepository {
@@ -41,8 +45,23 @@ public class InfluxSpaceSeriesRepository implements SpaceSeriesRepository {
           |> sort(columns: ["_time"])
         """;
 
+    /**
+     * 기기별 마지막 값. 계열마다 마지막 점 하나만 가져오므로 공간이 늘어도 질의는 한 번이다.
+     * location 태그로 묶지 않는다 — 그 태그는 게이트웨이가 보낸 이름이라 공간과 어긋날 수 있다.
+     */
+    private static final String LATEST_FLUX_TEMPLATE = """
+        from(bucket: "%s")
+          |> range(start: %s, stop: %s)
+          |> filter(fn: (r) => r._field == "value")
+          |> filter(fn: (r) => contains(value: r._measurement, set: [%s]))
+          |> filter(fn: (r) => contains(value: r.device_eui, set: [%s]))
+          |> group(columns: ["device_eui", "_measurement"])
+          |> last()
+        """;
+
     private static final Pattern LOCATION = Pattern.compile("^[가-힣A-Za-z0-9 _-]{1,32}$");
     private static final Pattern MEASUREMENT = Pattern.compile("^[A-Za-z0-9_]{1,32}$");
+    private static final Pattern DEVICE_EUI = Pattern.compile("^[A-Za-z0-9_-]{1,32}$");
 
     private final InfluxDBClient client;
     private final SensorInfluxProperties properties;
@@ -78,6 +97,50 @@ public class InfluxSpaceSeriesRepository implements SpaceSeriesRepository {
 
         return new SpaceSeries(query.location(), query.measurement(), query.window(),
                 query.from(), query.to(), sensors, points);
+    }
+
+    /** 시간축 없이 기기별 마지막 값만 읽는다. 공간 묶음과 평균은 서비스가 한다. */
+    @Override
+    public List<SensorReadingSnapshot> findLatestReadings(SpaceEnvironmentQuery query) {
+        if (query.deviceEuis().isEmpty() || query.measurement().isEmpty()) {
+            return List.of();
+        }
+        requireValid(query);
+
+        String flux = LATEST_FLUX_TEMPLATE.formatted(
+                properties.buckets().raw(),
+                query.from().toString(),
+                query.to().toString(),
+                toFluxSet(query.measurement()),
+                toFluxSet(query.deviceEuis()));
+
+        List<SensorReadingSnapshot> readings = new ArrayList<>();
+
+        for (FluxTable table : client.getQueryApi().query(flux, properties.org())) {
+            for (FluxRecord record : table.getRecords()) {
+                Instant time = record.getTime();
+                String deviceEui = text(record, "device_eui");
+                String measurement = record.getMeasurement();
+
+                if (time == null || deviceEui == null || measurement == null) {
+                    continue;
+                }
+                if (!(record.getValue() instanceof Number number)) {
+                    continue;
+                }
+
+                readings.add(new SensorReadingSnapshot(
+                        deviceEui, measurement, number.doubleValue(), time));
+            }
+        }
+
+        return readings;
+    }
+
+    private static String toFluxSet(Collection<String> values) {
+        return values.stream()
+                .map(value -> "\"" + value + "\"")
+                .collect(Collectors.joining(", "));
     }
 
     private List<SpaceSeriesPoint> fetch(SpaceSeriesQuery query, SeriesBucket bucket,
@@ -173,6 +236,14 @@ public class InfluxSpaceSeriesRepository implements SpaceSeriesRepository {
             throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
         }
         if (!MEASUREMENT.matcher(query.measurement()).matches()) {
+            throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
+        }
+    }
+
+    private void requireValid(SpaceEnvironmentQuery query) {
+        boolean valid = query.measurement().stream().allMatch(MEASUREMENT.asMatchPredicate())
+                && query.deviceEuis().stream().allMatch(DEVICE_EUI.asMatchPredicate());
+        if (!valid) {
             throw new BusinessException(CommonErrorCode.INVALID_REQUEST);
         }
     }

@@ -34,4 +34,7 @@ public interface SpaceCohortQueryPort {
 
     /** 삭제되지 않고 해당 기수에 배정된 공간 ID를 오름차순으로 조회한다. */
     List<Long> findSpaceIdsByCohortId(Long cohortId);
+
+    /** 관리 주체 기수가 없는 공간. 여러 기수가 함께 쓰는 공용 공간이다. */
+    List<Long> findUnassignedSpaceIds();
 }

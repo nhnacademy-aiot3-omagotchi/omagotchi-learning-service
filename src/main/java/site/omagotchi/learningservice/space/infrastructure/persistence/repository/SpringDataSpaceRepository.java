@@ -87,6 +87,16 @@ public interface SpringDataSpaceRepository
             """)
     List<Long> findIdsByCohortId(@Param("cohortId") Long cohortId);
 
+    /** 관리 주체 기수가 없는 공간. 회의실·도서관처럼 여러 기수가 함께 쓰는 공간이 여기 속한다. */
+    @Query("""
+            SELECT space.id
+              FROM SpaceJpaEntity space
+             WHERE space.cohortId IS NULL
+               AND space.deletedAt IS NULL
+             ORDER BY space.id
+            """)
+    List<Long> findUnassignedSpaceIds();
+
     @Query("""
                 SELECT (COUNT(space) > 0)
                   FROM SpaceJpaEntity space

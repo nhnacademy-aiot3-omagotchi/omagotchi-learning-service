@@ -143,8 +143,7 @@ public class TeamMemberService {
         IdentityAccountSnapshot snapshot = identityAccountClient.getSnapshot(targetUserId);
         if (snapshot.status() == IdentityAccountState.WITHDRAWN) {
             log.info(
-                    "팀원 추가 계정 상태 거부 targetUserId={}, status={}, statusChangedAt={}",
-                    targetUserId,
+                    "팀원 추가 계정 상태 거부 status={}, statusChangedAt={}",
                     snapshot.status(),
                     snapshot.statusChangedAt()
             );

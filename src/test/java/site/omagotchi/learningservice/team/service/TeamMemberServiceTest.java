@@ -16,10 +16,12 @@ import site.omagotchi.learningservice.team.application.TeamMemberService;
 import site.omagotchi.learningservice.team.application.TeamMembership;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountSnapshot;
 import site.omagotchi.learningservice.team.application.port.TeamMemberRepository;
 import site.omagotchi.learningservice.team.domain.Team;
 import site.omagotchi.learningservice.team.domain.TeamMember;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -105,7 +107,9 @@ class TeamMemberServiceTest {
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
-        given(identityAccountClient.getState(targetUserId)).willReturn(IdentityAccountState.ACTIVE);
+        given(identityAccountClient.getSnapshot(targetUserId)).willReturn(
+                new IdentityAccountSnapshot(IdentityAccountState.ACTIVE, Instant.EPOCH)
+        );
 
         // When: 팀원 추가
         teamMemberService.addMember(1L, targetUserId, userId);
@@ -115,7 +119,7 @@ class TeamMemberServiceTest {
         order.verify(accessSupport).requireActiveTeamCohortId(1L);
         order.verify(accessSupport).requireActiveMembership(1L, userId);
         order.verify(accessSupport).requireMaster(1L, 10L);
-        order.verify(identityAccountClient).getState(targetUserId);
+        order.verify(identityAccountClient).getSnapshot(targetUserId);
         order.verify(teamMemberAddition).add(1L, targetUserId, userId);
     }
 
@@ -135,7 +139,7 @@ class TeamMemberServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", TeamErrorCode.MASTER_REQUIRED);
 
         // Then: Identity 조회와 쓰기 트랜잭션 실행 안 함
-        verify(identityAccountClient, never()).getState(any());
+        verify(identityAccountClient, never()).getSnapshot(any());
         verify(teamMemberAddition, never()).add(any(), any(), any());
     }
 
@@ -148,7 +152,9 @@ class TeamMemberServiceTest {
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
-        given(identityAccountClient.getState(targetUserId)).willReturn(IdentityAccountState.WITHDRAWN);
+        given(identityAccountClient.getSnapshot(targetUserId)).willReturn(
+                new IdentityAccountSnapshot(IdentityAccountState.WITHDRAWN, Instant.EPOCH)
+        );
 
         // When & Then: 탈퇴 계정 오류 반환
         assertThatThrownBy(() -> teamMemberService.addMember(1L, targetUserId, userId))
@@ -167,7 +173,7 @@ class TeamMemberServiceTest {
         given(accessSupport.requireActiveTeamCohortId(1L)).willReturn(1L);
         given(accessSupport.requireActiveMembership(1L, userId)).willReturn(membership);
         given(accessSupport.requireMaster(1L, 10L)).willReturn(masterMember);
-        given(identityAccountClient.getState(targetUserId))
+        given(identityAccountClient.getSnapshot(targetUserId))
                 .willThrow(new BusinessException(TeamErrorCode.ACCOUNT_NOT_FOUND));
 
         // When & Then: 계정 미존재 오류 반환

@@ -11,12 +11,14 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.http.RestClientCallExecutor;
 import site.omagotchi.learningservice.team.application.TeamErrorCode;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountSnapshot;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
 import site.omagotchi.learningservice.team.infrastructure.identity.request.IdentityAccountBatchRequest;
 import site.omagotchi.learningservice.team.infrastructure.identity.request.IdentityAccountSearchRequest;
 import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountResponse;
 import site.omagotchi.learningservice.team.infrastructure.identity.response.IdentityAccountSearchResponse;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -33,6 +35,8 @@ import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.ArgumentMatchers.argThat;
 
 class IdentityRestAccountClientTest {
+
+    private static final Instant STATUS_CHANGED_AT = Instant.parse("2026-08-31T07:00:00Z");
 
     private final IdentityAccountHttpService httpService =
             mock(IdentityAccountHttpService.class);
@@ -51,14 +55,15 @@ class IdentityRestAccountClientTest {
         // Given: Identity가 반환한 실제 계정 상태
         UUID accountId = UUID.randomUUID();
         given(httpService.getAccount(accountId)).willReturn(ResponseEntity.ok(
-                new IdentityAccountResponse(accountId, "사용자", state)
+                new IdentityAccountResponse(accountId, "사용자", state, STATUS_CHANGED_AT)
         ));
 
-        // When: 계정 상태 조회
-        IdentityAccountState result = accountClient.getState(accountId);
+        // When: 계정 상태 스냅샷 조회
+        IdentityAccountSnapshot result = accountClient.getSnapshot(accountId);
 
-        // Then: 별도 상태로 축약하지 않은 동일 상태
-        assertThat(result).isEqualTo(state);
+        // Then: 상태와 상태 시작 시각 보존
+        assertThat(result.status()).isEqualTo(state);
+        assertThat(result.statusChangedAt()).isEqualTo(STATUS_CHANGED_AT);
     }
 
     @Test
@@ -72,7 +77,7 @@ class IdentityRestAccountClientTest {
         given(errorResolver.resolveAccountLookupError(exception)).willReturn(expected);
 
         // When & Then: 상태가 아닌 오류 계약으로 전파
-        assertThatThrownBy(() -> accountClient.getState(accountId)).isSameAs(expected);
+        assertThatThrownBy(() -> accountClient.getSnapshot(accountId)).isSameAs(expected);
     }
 
     @Test
@@ -85,8 +90,10 @@ class IdentityRestAccountClientTest {
                 List.of(firstId, secondId)
         );
         given(httpService.getAccounts(expectedRequest)).willReturn(ResponseEntity.ok(List.of(
-                new IdentityAccountResponse(firstId, "첫 사용자", IdentityAccountState.ACTIVE),
-                new IdentityAccountResponse(secondId, "둘째 사용자", IdentityAccountState.LOCKED)
+                new IdentityAccountResponse(
+                        firstId, "첫 사용자", IdentityAccountState.ACTIVE, STATUS_CHANGED_AT),
+                new IdentityAccountResponse(
+                        secondId, "둘째 사용자", IdentityAccountState.DISABLED, STATUS_CHANGED_AT)
         )));
 
         // When: 표시 이름 일괄 조회
@@ -109,7 +116,8 @@ class IdentityRestAccountClientTest {
         willAnswer(invocation -> {
             IdentityAccountBatchRequest request = invocation.getArgument(0);
             return ResponseEntity.ok(request.accountIds().stream()
-                    .map(id -> new IdentityAccountResponse(id, id.toString(), IdentityAccountState.ACTIVE))
+                    .map(id -> new IdentityAccountResponse(
+                            id, id.toString(), IdentityAccountState.ACTIVE, STATUS_CHANGED_AT))
                     .toList());
         }).given(httpService).getAccounts(any());
 
@@ -140,7 +148,8 @@ class IdentityRestAccountClientTest {
         willAnswer(invocation -> {
             IdentityAccountBatchRequest request = invocation.getArgument(0);
             return ResponseEntity.ok(request.accountIds().stream()
-                    .map(id -> new IdentityAccountResponse(id, id.toString(), IdentityAccountState.ACTIVE))
+                    .map(id -> new IdentityAccountResponse(
+                            id, id.toString(), IdentityAccountState.ACTIVE, STATUS_CHANGED_AT))
                     .toList());
         }).given(httpService).getAccounts(any());
     }
@@ -156,7 +165,8 @@ class IdentityRestAccountClientTest {
                         accountId,
                         "검색 사용자",
                         "search@example.com",
-                        IdentityAccountState.ACTIVE
+                        IdentityAccountState.ACTIVE,
+                        STATUS_CHANGED_AT
                 )
         )));
 
@@ -183,7 +193,8 @@ class IdentityRestAccountClientTest {
                     accountId,
                     displayName,
                     displayName + "@example.com",
-                    IdentityAccountState.ACTIVE
+                    IdentityAccountState.ACTIVE,
+                    STATUS_CHANGED_AT
             )));
         }).given(httpService).searchAccounts(any());
 
@@ -211,7 +222,8 @@ class IdentityRestAccountClientTest {
                                 accountId,
                                 displayName,
                                 displayName + "@example.com",
-                                IdentityAccountState.ACTIVE
+                                IdentityAccountState.ACTIVE,
+                                STATUS_CHANGED_AT
                         );
                     })
                     .toList());
@@ -233,12 +245,33 @@ class IdentityRestAccountClientTest {
                 new IdentityAccountResponse(
                         UUID.randomUUID(),
                         "다른 사용자",
-                        IdentityAccountState.ACTIVE
+                        IdentityAccountState.ACTIVE,
+                        STATUS_CHANGED_AT
                 )
         ));
 
         // When & Then: 성공 응답 계약 위반의 502 오류
-        assertThatThrownBy(() -> accountClient.getState(requestedId))
+        assertThatThrownBy(() -> accountClient.getSnapshot(requestedId))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isEqualTo(CommonErrorCode.DOWNSTREAM_INVALID_RESPONSE)
+                );
+    }
+
+    @Test
+    @DisplayName("Identity 상태 변경 시각 누락 응답 거절")
+    void rejectsMissingStatusChangedAt() {
+        UUID accountId = UUID.randomUUID();
+        given(httpService.getAccount(accountId)).willReturn(ResponseEntity.ok(
+                new IdentityAccountResponse(
+                        accountId,
+                        "사용자",
+                        IdentityAccountState.ACTIVE,
+                        null
+                )
+        ));
+
+        assertThatThrownBy(() -> accountClient.getSnapshot(accountId))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.getErrorCode())
                                 .isEqualTo(CommonErrorCode.DOWNSTREAM_INVALID_RESPONSE)

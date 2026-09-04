@@ -9,7 +9,7 @@ import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.http.RestClientCallExecutor;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountClient;
-import site.omagotchi.learningservice.team.application.port.IdentityAccountState;
+import site.omagotchi.learningservice.team.application.port.IdentityAccountSnapshot;
 import site.omagotchi.learningservice.team.application.port.IdentityAccountView;
 import site.omagotchi.learningservice.team.infrastructure.identity.request.IdentityAccountBatchRequest;
 import site.omagotchi.learningservice.team.infrastructure.identity.request.IdentityAccountSearchRequest;
@@ -26,7 +26,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-// Identity HTTP 응답을 Team Application의 계정 상태·표시 이름으로 변환하는 Outbound Adapter
+// Identity HTTP 응답의 팀 계정 상태·표시 이름 변환
 @Component
 @RequiredArgsConstructor
 public class IdentityRestAccountClient implements IdentityAccountClient {
@@ -43,9 +43,9 @@ public class IdentityRestAccountClient implements IdentityAccountClient {
     private final IdentityAccountErrorResolver errorResolver;
 
     @Override
-    public IdentityAccountState getState(UUID userId) {
+    public IdentityAccountSnapshot getSnapshot(UUID userId) {
         return callExecutor.execute(
-                () -> fetchAccountState(userId),
+                () -> fetchAccountSnapshot(userId),
                 exception -> {
                     throw errorResolver.resolveAccountLookupError(exception);
                 }
@@ -114,7 +114,7 @@ public class IdentityRestAccountClient implements IdentityAccountClient {
                 .toList();
     }
 
-    private IdentityAccountState fetchAccountState(UUID userId) {
+    private IdentityAccountSnapshot fetchAccountSnapshot(UUID userId) {
         ResponseEntity<IdentityAccountResponse> response = httpService.getAccount(userId);
         if (response.getStatusCode().value() != HttpStatus.OK.value()) {
             throw invalidResponse(
@@ -127,10 +127,12 @@ public class IdentityRestAccountClient implements IdentityAccountClient {
         if (account == null || !userId.equals(account.accountId())) {
             throw invalidResponse("단건 조회 응답의 계정 식별자 불일치");
         }
-        if (!StringUtils.hasText(account.displayName()) || account.status() == null) {
+        if (!StringUtils.hasText(account.displayName())
+                || account.status() == null
+                || account.statusChangedAt() == null) {
             throw invalidResponse("단건 조회 응답의 필수 필드 누락");
         }
-        return account.status();
+        return new IdentityAccountSnapshot(account.status(), account.statusChangedAt());
     }
 
     private Map<UUID, String> fetchDisplayNames(Set<UUID> requestedIds) {

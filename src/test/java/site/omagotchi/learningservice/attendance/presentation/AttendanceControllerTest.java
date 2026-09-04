@@ -164,7 +164,11 @@ class AttendanceControllerTest {
                         .param("size", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].id").value(10))
+                // 본인 조회는 대상이 요청자 자신이라 내부 식별자를 내보내지 않는다.
+                // 관리자 목록과 응답을 나눠 쓰는 이유가 이 단언이다.
                 .andExpect(jsonPath("$.items[0].cohortMembershipId").doesNotExist())
+                .andExpect(jsonPath("$.items[0].userId").doesNotExist())
+                .andExpect(jsonPath("$.items[0].nickname").doesNotExist())
                 .andExpect(jsonPath("$.items[0].attendanceDate").value("2026-08-20"))
                 .andExpect(jsonPath("$.items[0].autoStatus").value("PRESENT"))
                 .andExpect(jsonPath("$.items[0].finalStatus").value("PRESENT"))
@@ -200,6 +204,11 @@ class AttendanceControllerTest {
                 .andExpect(jsonPath("$.items[0].id").value(10))
                 .andExpect(jsonPath("$.items[0].attendanceDate").value("2026-08-20"))
                 .andExpect(jsonPath("$.items[0].finalStatus").value("PRESENT"))
+                // 관리자 목록은 남의 기록을 여럿 그린다. 이 셋이 빠지면 화면은 행과
+                // 구성원을 잇지 못하고 기록 번호밖에 표시하지 못한다.
+                .andExpect(jsonPath("$.items[0].cohortMembershipId").value(20))
+                .andExpect(jsonPath("$.items[0].userId").value("00000000-0000-0000-0000-0000000000aa"))
+                .andExpect(jsonPath("$.items[0].nickname").value("테스트닉"))
                 .andExpect(jsonPath("$.page.number").value(0))
                 .andExpect(jsonPath("$.page.size").value(10))
                 .andExpect(jsonPath("$.page.totalElements").value(12))
@@ -244,6 +253,8 @@ class AttendanceControllerTest {
         return new AttendanceRecordResult(
                 10L,
                 20L,
+                UUID.fromString("00000000-0000-0000-0000-0000000000aa"),
+                "테스트닉",
                 LocalDate.of(2026, 8, 20),
                 AttendanceStatus.PRESENT,
                 AttendanceStatus.PRESENT,

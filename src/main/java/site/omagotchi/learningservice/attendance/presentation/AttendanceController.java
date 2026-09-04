@@ -18,6 +18,7 @@ import site.omagotchi.learningservice.attendance.application.AttendanceService;
 import site.omagotchi.learningservice.attendance.application.CurrentPresenceQueryService;
 import site.omagotchi.learningservice.attendance.presentation.request.ChangeAttendanceStatusRequest;
 import site.omagotchi.learningservice.attendance.presentation.request.AttendanceSpaceRequest;
+import site.omagotchi.learningservice.attendance.presentation.response.AdminAttendanceRecordPageResponse;
 import site.omagotchi.learningservice.attendance.presentation.response.AttendanceRecordPageResponse;
 import site.omagotchi.learningservice.attendance.presentation.response.AttendanceRecordResponse;
 import site.omagotchi.learningservice.attendance.presentation.response.AttendanceSpaceMoveResponse;
@@ -118,9 +119,15 @@ public class AttendanceController {
                 AttendancePageQuery.of(from, to, page, size)
         ));
     }
-    // 기수 Id
+    /**
+     * 기수 관리자의 일자별 출결 목록.
+     *
+     * <p>본인 조회와 응답을 나눠 쓴다. 이쪽만 소속·계정 식별자를 담는다 —
+     * 남의 기록을 여럿 그리는 화면이라 행과 구성원을 잇는 열쇠가 필요하고,
+     * 같은 응답을 공유하면 그 열쇠가 본인 조회로도 함께 나간다.</p>
+     */
     @GetMapping
-    public AttendanceRecordPageResponse getDailyRecords(
+    public AdminAttendanceRecordPageResponse getDailyRecords(
             @PathVariable("cohort-id") Long cohortId,
             JwtAuthenticationToken authentication,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -128,7 +135,7 @@ public class AttendanceController {
             @RequestParam(required = false) Integer size
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
-        return AttendanceRecordPageResponse.from(attendanceService.getDailyRecords(
+        return AdminAttendanceRecordPageResponse.from(attendanceService.getDailyRecords(
                 cohortId,
                 user.userId(),
                 date,

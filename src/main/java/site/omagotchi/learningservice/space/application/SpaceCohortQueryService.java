@@ -39,4 +39,9 @@ public class SpaceCohortQueryService {
                 Objects.requireNonNull(cohortId, "cohortId")
         );
     }
+
+    /** 주인 없는 공간. 회의실·도서관처럼 기수와 무관하게 함께 쓰는 공간이다. */
+    public List<Long> findUnassignedSpaceIds() {
+        return spaceCohortQueryPort.findUnassignedSpaceIds();
+    }
 }

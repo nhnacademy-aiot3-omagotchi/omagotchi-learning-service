@@ -40,4 +40,9 @@ public class SpaceCohortJpaQueryReader implements SpaceCohortQueryPort {
     public List<Long> findSpaceIdsByCohortId(Long cohortId) {
         return springDataSpaceRepository.findIdsByCohortId(cohortId);
     }
+
+    @Override
+    public List<Long> findUnassignedSpaceIds() {
+        return springDataSpaceRepository.findUnassignedSpaceIds();
+    }
 }

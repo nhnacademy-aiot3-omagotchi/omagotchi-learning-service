@@ -262,6 +262,42 @@ class CommunityPostQueryServiceTest {
     }
 
     @Test
+    @DisplayName("미리보기는 파생 썸네일을 우선 반환한다")
+    void previewsAttachmentWithThumbnail() {
+        ByteArrayResource resource = new ByteArrayResource(new byte[]{4, 5, 6});
+        given(communityPostQueryPort.findVisiblePost(COHORT_ID, 10L))
+                .willReturn(Optional.of(postDetail(USER_ID)));
+        given(communityAttachmentStorage.loadThumbnail("2026/08/21/file.png"))
+                .willReturn(Optional.of(resource));
+
+        var result = communityPostQueryService.previewAttachment(USER_ID, COHORT_ID, 10L, 20L);
+
+        assertAll(
+                () -> assertEquals("image/jpeg", result.contentType()),
+                () -> assertSame(resource, result.resource())
+        );
+        verify(cohortAccessService).requireActiveMembership(COHORT_ID, USER_ID);
+    }
+
+    @Test
+    @DisplayName("기존 첨부파일에 썸네일이 없으면 원본으로 미리보기한다")
+    void previewsLegacyAttachmentWithOriginal() {
+        ByteArrayResource resource = new ByteArrayResource(new byte[]{1, 2, 3});
+        given(communityPostQueryPort.findVisiblePost(COHORT_ID, 10L))
+                .willReturn(Optional.of(postDetail(USER_ID)));
+        given(communityAttachmentStorage.loadThumbnail("2026/08/21/file.png"))
+                .willReturn(Optional.empty());
+        given(communityAttachmentStorage.load("2026/08/21/file.png")).willReturn(resource);
+
+        var result = communityPostQueryService.previewAttachment(USER_ID, COHORT_ID, 10L, 20L);
+
+        assertAll(
+                () -> assertEquals("image/png", result.contentType()),
+                () -> assertSame(resource, result.resource())
+        );
+    }
+
+    @Test
     @DisplayName("다른 게시글의 첨부파일 식별자는 거절한다")
     void rejectsAttachmentThatDoesNotBelongToVisiblePost() {
         given(communityPostQueryPort.findVisiblePost(COHORT_ID, 10L))

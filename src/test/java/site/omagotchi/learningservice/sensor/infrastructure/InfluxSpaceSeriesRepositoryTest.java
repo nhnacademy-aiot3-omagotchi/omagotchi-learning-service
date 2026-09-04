@@ -8,10 +8,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.sensor.application.query.SpaceEnvironmentQuery;
 import site.omagotchi.learningservice.sensor.application.query.SpaceSeriesQuery;
+import site.omagotchi.learningservice.sensor.application.result.SensorReadingSnapshot;
 import site.omagotchi.learningservice.sensor.application.result.SpaceSeries;
 import site.omagotchi.learningservice.sensor.domain.SeriesWindow;
 import site.omagotchi.learningservice.sensor.domain.SpaceSeriesPoint;
@@ -211,6 +214,87 @@ class InfluxSpaceSeriesRepositoryTest {
 
         try {
             repository.findSpaceSeries(badQuery);
+            fail("예외가 발생해야 하는데 발생하지 않았다");
+        } catch (BusinessException exception) {
+            verifyNoInteractions(client);
+        }
+    }
+
+    /** 현재 환경 조회 조건. 기기 목록만 테스트마다 다르다. */
+    private SpaceEnvironmentQuery latestQuery(Set<String> deviceEuis) {
+        return new SpaceEnvironmentQuery(
+                deviceEuis, List.of("co2", "temperature", "humidity"), FROM, NOW);
+    }
+
+    /** 현재 환경 조회 결과 레코드. 시계열과 달리 _measurement 를 함께 읽는다. */
+    private FluxRecord latestRecord(Instant time, String deviceEui, String measurement, Object value) {
+        FluxRecord fluxRecord = new FluxRecord(0);
+        fluxRecord.getValues().put("_time", time);
+        fluxRecord.getValues().put("device_eui", deviceEui);
+        fluxRecord.getValues().put("_measurement", measurement);
+        fluxRecord.getValues().put("_value", value);
+        return fluxRecord;
+    }
+
+    @Test
+    @DisplayName("기기별·항목별 마지막 값을 한 번의 조회로 읽는다")
+    void readsLatestReadingsInOneQuery() {
+        // given
+        Instant time = Instant.parse("2026-08-25T10:20:00Z");
+        when(client.getQueryApi()).thenReturn(queryApi);
+        when(queryApi.query(anyString(), anyString())).thenReturn(tableOf(
+                latestRecord(time, DEVICE_A, "co2", 612.0),
+                latestRecord(time, DEVICE_B, "temperature", 23.4)));
+
+        // when
+        List<SensorReadingSnapshot> readings =
+                repository.findLatestReadings(latestQuery(Set.of(DEVICE_A, DEVICE_B)));
+
+        // then
+        assertEquals(2, readings.size());
+        assertEquals(DEVICE_A, readings.get(0).deviceEui());
+        assertEquals("co2", readings.get(0).measurement());
+        assertEquals(612.0, readings.get(0).value());
+        assertEquals(time, readings.get(0).time());
+
+        // 공간이 몇 곳이든 조회는 한 번이다
+        verify(queryApi, times(1)).query(anyString(), anyString());
+
+        ArgumentCaptor<String> fluxCaptor = ArgumentCaptor.forClass(String.class);
+        verify(queryApi).query(fluxCaptor.capture(), anyString());
+        String flux = fluxCaptor.getValue();
+        assertTrue(flux.contains("raw-bucket"));
+        assertTrue(flux.contains(DEVICE_A));
+        assertTrue(flux.contains("last()"));
+    }
+
+    @Test
+    @DisplayName("값이 숫자가 아닌 레코드는 버린다")
+    void skipsNonNumericLatestRecords() {
+        when(client.getQueryApi()).thenReturn(queryApi);
+        when(queryApi.query(anyString(), anyString())).thenReturn(tableOf(
+                latestRecord(Instant.parse("2026-08-25T10:20:00Z"), DEVICE_A, "co2", null)));
+
+        List<SensorReadingSnapshot> readings =
+                repository.findLatestReadings(latestQuery(Set.of(DEVICE_A)));
+
+        assertTrue(readings.isEmpty());
+    }
+
+    @Test
+    @DisplayName("운영 중인 기기가 없으면 현재 환경도 묻지 않는다")
+    void returnsEmptyLatestReadingsWithoutQuerying() {
+        List<SensorReadingSnapshot> readings = repository.findLatestReadings(latestQuery(Set.of()));
+
+        assertTrue(readings.isEmpty());
+        verifyNoInteractions(client);
+    }
+
+    @Test
+    @DisplayName("기기 식별자 형식이 틀리면 InfluxDB에 묻지 않고 예외를 던진다")
+    void rejectsInvalidDeviceEuiBeforeQuerying() {
+        try {
+            repository.findLatestReadings(latestQuery(Set.of("bad\"eui")));
             fail("예외가 발생해야 하는데 발생하지 않았다");
         } catch (BusinessException exception) {
             verifyNoInteractions(client);

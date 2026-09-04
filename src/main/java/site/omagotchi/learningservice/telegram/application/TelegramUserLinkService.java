@@ -71,16 +71,19 @@ public class TelegramUserLinkService {
 
         validateTelegramChatOwnership(token.getUserId(), startCommand.telegramChatId(), startCommand.telegramUserId());
 
-        TelegramUserLink link = userLinkRepository.findByUserId(token.getUserId())
-                .map(existing -> {
-                    existing.reconnect(startCommand.telegramUserId(), startCommand.telegramChatId());
-                    return existing;
-                })
-                .orElseGet(() -> TelegramUserLink.link(
-                        token.getUserId(),
-                        startCommand.telegramUserId(),
-                        startCommand.telegramChatId()
-                ));
+        Optional<TelegramUserLink> active = userLinkRepository.findActiveByUserId(token.getUserId());
+        if (active.isPresent()) {
+            token.markUsed(now);
+            return TelegramUserLinkResult.from(resolveRelink(active.get(), startCommand));
+        }
+
+        // 해제된 행을 되살리지 않고 새 행을 남긴다. 부분 유니크(V22)가 활성 행만 보므로
+        // 재연동이 막히지 않고, 연동·해제 이력이 순서대로 쌓인다.
+        TelegramUserLink link = TelegramUserLink.link(
+                token.getUserId(),
+                startCommand.telegramUserId(),
+                startCommand.telegramChatId()
+        );
 
         token.markUsed(now);
         return TelegramUserLinkResult.from(userLinkRepository.save(link));
@@ -91,8 +94,7 @@ public class TelegramUserLinkService {
             return Optional.empty();
         }
 
-        return userLinkRepository.findByTelegramChatId(telegramChatId)
-                .filter(link -> Objects.isNull(link.getDisconnectedAt()))
+        return userLinkRepository.findActiveByTelegramChatId(telegramChatId)
                 .map(TelegramUserLinkResult::from);
     }
 
@@ -116,14 +118,42 @@ public class TelegramUserLinkService {
         return TelegramUserLinkResult.from(link);
     }
 
+    /**
+     * 이미 활성 연동이 있는 사용자의 {@code /start} 를 저장 전에 가른다.
+     *
+     * <p>같은 텔레그램 계정이면 새 행을 만들지 않고 기존 연동을 그대로 돌려준다 — 딥링크를
+     * 두 번 눌렀거나 텔레그램이 같은 Update 를 재전송한 경우라 결과가 같아야 한다.</p>
+     *
+     * <p>다른 텔레그램 계정이면 업무 오류로 거절한다. 여기서 조용히 기존 연동을 돌려주면
+     * 봇이 "연동이 완료되었습니다"라고 답하는데 정작 그 대화로는 알림이 가지 않는다.
+     * 자동으로 해제하고 갈아끼우지도 않는다 — 사용자가 요청한 적 없는 해제다.</p>
+     *
+     * <p>이 검사가 없으면 {@code uq_telegram_user_links_active_user} 위반으로 떨어지고,
+     * 웹훅은 재시도해도 낫지 않을 실패를 "일시적인 오류"로 안내하게 된다.</p>
+     */
+    private TelegramUserLink resolveRelink(TelegramUserLink active, WebhookStartCommand startCommand) {
+        boolean sameTelegramAccount =
+                Objects.equals(active.getTelegramChatId(), startCommand.telegramChatId())
+                        && Objects.equals(active.getTelegramUserId(), startCommand.telegramUserId());
+
+        if (!sameTelegramAccount) {
+            throw new BusinessException(TelegramErrorCode.TELEGRAM_USER_ALREADY_LINKED);
+        }
+        return active;
+    }
+
+    /**
+     * 조회가 연동 중인 행만 보므로, 앞서 해제한 사용자의 행은 이 검증을 막지 않는다.
+     * 해제는 곧 그 텔레그램 계정을 놓아준다는 뜻이다.
+     */
     private void validateTelegramChatOwnership(UUID userId, Long telegramChatId, Long telegramUserId) {
-        userLinkRepository.findByTelegramChatId(telegramChatId)
+        userLinkRepository.findActiveByTelegramChatId(telegramChatId)
                 .filter(link -> !link.getUserId().equals(userId))
                 .ifPresent(link -> {
                     throw new BusinessException(TelegramErrorCode.TELEGRAM_CHAT_ALREADY_LINKED);
                 });
 
-        userLinkRepository.findByTelegramUserId(telegramUserId)
+        userLinkRepository.findActiveByTelegramUserId(telegramUserId)
                 .filter(link -> !link.getUserId().equals(userId))
                 .ifPresent(link -> {
                     throw new BusinessException(TelegramErrorCode.TELEGRAM_CHAT_ALREADY_LINKED);
@@ -155,8 +185,7 @@ public class TelegramUserLinkService {
         );
     }
     private TelegramUserLink requireActiveLink(UUID userId){
-        return userLinkRepository.findByUserId(userId)
-                .filter(link -> Objects.isNull(link.getDisconnectedAt()))
+        return userLinkRepository.findActiveByUserId(userId)
                 .orElseThrow(() -> new BusinessException(TelegramErrorCode.TELEGRAM_USER_LINK_NOT_FOUND));
     }
 

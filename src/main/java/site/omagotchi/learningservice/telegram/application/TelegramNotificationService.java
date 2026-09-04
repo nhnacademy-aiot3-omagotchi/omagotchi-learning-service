@@ -51,7 +51,7 @@ public class TelegramNotificationService {
      * <p>호출 스레드를 오래 붙잡으면 안 되는 경로(조치 알림)가 소비처다.</p>
      */
     public boolean send(UUID recipientUserId, String text, Duration timeout) {
-        Optional<TelegramUserLink> link = userLinkRepository.findByUserId(recipientUserId);
+        Optional<TelegramUserLink> link = userLinkRepository.findActiveByUserId(recipientUserId);
 
         if (link.isEmpty()) {
             log.debug("텔레그램 미연동 사용자라 발송하지 않습니다. recipientUserId={}", recipientUserId);

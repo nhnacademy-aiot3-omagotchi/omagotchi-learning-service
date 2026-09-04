@@ -203,6 +203,14 @@ public class TelegramWebhookService {
             return "이 텔레그램 계정은 이미 다른 사용자와 연결되어 있습니다.";
         }
 
+        if (code == TelegramErrorCode.TELEGRAM_USER_ALREADY_LINKED) {
+            return """
+                    이미 다른 텔레그램 계정과 연동되어 있습니다.
+
+                    서비스 설정 화면에서 기존 연동을 해제한 뒤
+                    새 링크로 다시 시작해 주세요.""";
+        }
+
         // /start 인데 토큰이 없는 경우 등
         return "서비스 설정 화면에서 [연동하기]를 눌러 받은 링크로 시작해 주세요.";
     }

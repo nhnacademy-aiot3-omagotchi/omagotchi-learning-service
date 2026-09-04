@@ -50,7 +50,7 @@ class TelegramNotificationServiceTest {
     @Test
     @DisplayName("연동된 사용자에게는 그 사람의 개인 채팅으로 보낸다.")
     void sendsToLinkedUsersOwnChat() {
-        given(userLinkRepository.findByUserId(RECIPIENT)).willReturn(Optional.of(linkedUser()));
+        given(userLinkRepository.findActiveByUserId(RECIPIENT)).willReturn(Optional.of(linkedUser()));
 
         boolean sent = service.send(RECIPIENT, TEXT);
 
@@ -65,7 +65,7 @@ class TelegramNotificationServiceTest {
     @Test
     @DisplayName("미연동 사용자에게는 발송하지 않고 false를 반환한다.")
     void skipsUnlinkedUser() {
-        given(userLinkRepository.findByUserId(RECIPIENT)).willReturn(Optional.empty());
+        given(userLinkRepository.findActiveByUserId(RECIPIENT)).willReturn(Optional.empty());
 
         boolean sent = service.send(RECIPIENT, TEXT);
 
@@ -79,7 +79,7 @@ class TelegramNotificationServiceTest {
     void skipsUserWithNotificationDisabled() {
         TelegramUserLink link = linkedUser();
         link.changeNotificationEnabled(false);
-        given(userLinkRepository.findByUserId(RECIPIENT)).willReturn(Optional.of(link));
+        given(userLinkRepository.findActiveByUserId(RECIPIENT)).willReturn(Optional.of(link));
 
         boolean sent = service.send(RECIPIENT, TEXT);
 
@@ -90,13 +90,16 @@ class TelegramNotificationServiceTest {
     /**
      * 연동 해제는 알림 끔과 다른 상태다 — 연결 자체가 끊긴 것이라 다시 연동해야 한다.
      * 한 판정에 묶여 있으면 둘 중 하나만 확인하는 실수가 생긴다.
+     *
+     * <p>{@link TelegramUserLinkRepository#findActiveByUserId}는 해제된 행을 절대 반환하지
+     * 않는다 — 해제 여부는 조회 단계({@code findByUserIdAndDisconnectedAtIsNull})에서 이미
+     * {@code Optional.empty()}로 걸러진다. 그래서 이 Test는 해제된 {@link TelegramUserLink}를
+     * 흉내 내는 대신, 활성 연동이 없다는 사실 자체가 발송하지 않는 이유임을 검증한다.</p>
      */
     @Test
-    @DisplayName("연동을 해제한 사용자에게는 발송하지 않고 false를 반환한다.")
+    @DisplayName("연동을 해제한 사용자는 활성 연동이 없어 발송 대상에서 제외된다.")
     void skipsDisconnectedUser() {
-        TelegramUserLink link = linkedUser();
-        link.disconnect();
-        given(userLinkRepository.findByUserId(RECIPIENT)).willReturn(Optional.of(link));
+        given(userLinkRepository.findActiveByUserId(RECIPIENT)).willReturn(Optional.empty());
 
         boolean sent = service.send(RECIPIENT, TEXT);
 
@@ -111,7 +114,7 @@ class TelegramNotificationServiceTest {
     @Test
     @DisplayName("발송 실패는 호출부로 전파한다.")
     void propagatesSendFailure() {
-        given(userLinkRepository.findByUserId(RECIPIENT)).willReturn(Optional.of(linkedUser()));
+        given(userLinkRepository.findActiveByUserId(RECIPIENT)).willReturn(Optional.of(linkedUser()));
         willThrow(new IllegalStateException("발송 실패"))
                 .given(messageSender).send(anyLong(), anyString());
 

@@ -1,11 +1,12 @@
 package site.omagotchi.learningservice.attendance.infrastructure;
 
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.repository.query.Param;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceCleanupTarget;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
@@ -117,6 +118,47 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
     List<AttendanceCleanupTarget> findEndCleanupTargetsByCohortMembershipId(
             @Param("cohortMembershipId") Long cohortMembershipId
     );
+
+    /**
+     * 종료 소속 출결 정합성 스윕의 커서 조회.
+     *
+     * <p>{@code cohort_memberships}를 조인하지 않는다. 이 저장소는 출결 쪽의 미해결 후보만
+     * 반환하고, 소속 활성 여부는 Application이 기수 기능의 공개 조회 계약에 묻는다.</p>
+     *
+     * <p>이미 {@code MISSING_CHECK_OUT}으로 확정됐더라도 열린 체류가 남았으면 다시
+     * 반환한다. 상태 확정과 체류 마감 사이에 부분 실패가 있었던 행도 복구해야 하기
+     * 때문이다.</p>
+     */
+    @Query("""
+            select new site.omagotchi.learningservice.attendance.application.result.AttendanceCleanupTarget(
+                       record.id, record.cohortMembershipId)
+              from AttendanceRecord record
+             where record.id > :afterAttendanceId
+               and record.checkedInAt is not null
+               and record.checkedOutAt is null
+               and (
+                    record.autoStatus <> site.omagotchi.learningservice.attendance.domain.AttendanceStatus.MISSING_CHECK_OUT
+                    or exists (
+                        select presence.id
+                          from PresenceInterval presence
+                         where presence.attendanceId = record.id
+                           and presence.endedAt is null
+                    )
+               )
+             order by record.id asc
+            """)
+    List<AttendanceCleanupTarget> findEndCleanupTargetsPageAfter(
+            @Param("afterAttendanceId") Long afterAttendanceId,
+            Pageable pageable
+    );
+
+    /** JPQL에 없는 {@code LIMIT}을 크기만 지정한 {@link Pageable}로 적용한다. */
+    default List<AttendanceCleanupTarget> findEndCleanupTargetsAfter(
+            Long afterAttendanceId,
+            int limit
+    ) {
+        return findEndCleanupTargetsPageAfter(afterAttendanceId, PageRequest.ofSize(limit));
+    }
 
     /** 기수 종료 정리 대상이 있는 소속만 ID 순서로 좁힌다. */
     @Query("""

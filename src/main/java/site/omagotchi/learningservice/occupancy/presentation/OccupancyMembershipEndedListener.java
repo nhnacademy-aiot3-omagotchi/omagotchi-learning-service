@@ -27,8 +27,9 @@ import site.omagotchi.learningservice.occupancy.application.EndedMembershipPrese
  * <p><b>{@code @Async}인 이유</b>: 후속 정리 실패가 소속 종료를 롤백시키면 안 된다.
  * 계정이 삭제됐는데 정리에 실패했다고 삭제를 되돌리면 인증 파트와 상태가 어긋난다.</p>
  *
- * <p>출결 재처리 경로는 PR 3의 정합성 스윕이 담당한다. 이 리스너는 정상 이벤트 경로만
- * 소유한다.</p>
+ * <p>이 리스너는 정상 이벤트 경로만 소유한다. 이벤트 유실·일시 실패로 남은 출결은
+ * {@link site.omagotchi.learningservice.attendance.application.EndedMembershipAttendanceSweep}
+ * 이 주기적으로 다시 발견한다.</p>
  */
 @Component
 @RequiredArgsConstructor

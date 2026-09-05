@@ -9,8 +9,6 @@ import site.omagotchi.learningservice.attendance.application.result.AttendanceCl
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 
-import java.time.Clock;
-import java.time.OffsetDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -25,8 +23,9 @@ import java.util.Set;
  *
  * <p><b>기수 테이블을 직접 조인하지 않는다.</b> 출결 저장소는 미해결 후보만 반환하고,
  * 소속이 실제로 끝났는지는 {@link CohortMembershipQueryService}의 공개 계약에 묻는다.
- * 활성 소속을 정리하는 것이 이 배치의 가장 위험한 실패이므로, 조회 결과에 명시된 비활성
- * 소속만 {@link EndedMembershipAttendanceCleanup}에 넘긴다.</p>
+ * 활성 소속을 정리하는 것이 이 배치의 가장 위험한 실패이므로, 조회 결과에 명시된 ENDED
+ * 소속만 {@link EndedMembershipAttendanceCleanup}에 넘긴다. PENDING·REJECTED는 실제
+ * 마감의 ENDED 잠금 계약과 일치하지 않으므로 대상이 아니다.</p>
  */
 @Slf4j
 @Component
@@ -36,7 +35,6 @@ public class EndedMembershipAttendanceSweep {
     private final AttendanceRecordRepository attendanceRecordRepository;
     private final CohortMembershipQueryService cohortMembershipQueryService;
     private final EndedMembershipAttendanceCleanup attendanceCleanup;
-    private final Clock clock;
 
     /**
      * 미해결 출결을 ID 커서로 순회하고 종료 소속의 출결만 마감한다.
@@ -69,11 +67,12 @@ public class EndedMembershipAttendanceSweep {
                     .map(AttendanceCleanupTarget::cohortMembershipId)
                     .distinct()
                     .toList();
-            Set<Long> inactiveMembershipIds = cohortMembershipQueryService
-                    .findInactiveMembershipIds(membershipIds);
+            Set<Long> endedMembershipIds = cohortMembershipQueryService
+                    .findEndedMemberships(membershipIds)
+                    .keySet();
 
             for (Long membershipId : membershipIds) {
-                if (!inactiveMembershipIds.contains(membershipId)
+                if (!endedMembershipIds.contains(membershipId)
                         || !attemptedMembershipIds.add(membershipId)) {
                     continue;
                 }
@@ -101,7 +100,7 @@ public class EndedMembershipAttendanceSweep {
     /** 한 소속의 실패를 격리한다. 미해결 행이 남으므로 다음 주기에 다시 시도된다. */
     private int cleanUp(Long membershipId) {
         try {
-            return attendanceCleanup.cleanUp(membershipId, OffsetDateTime.now(clock));
+            return attendanceCleanup.cleanUp(membershipId);
         } catch (Exception exception) {
             log.error("종료 소속 출결 정합성 복구에 실패했습니다. membershipId={}",
                     membershipId, exception);

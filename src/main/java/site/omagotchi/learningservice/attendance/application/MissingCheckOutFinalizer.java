@@ -7,9 +7,8 @@ import site.omagotchi.learningservice.attendance.application.result.AttendanceCl
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
 import site.omagotchi.learningservice.cohort.application.CohortLockService;
+import site.omagotchi.learningservice.cohort.application.result.EndedMembershipLockView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
-
-import java.time.Instant;
 
 /**
  * 미퇴실 출결 한 건의 상태와 체류 구간을 원자적으로 마감한다.
@@ -41,16 +40,27 @@ public class MissingCheckOutFinalizer {
      * 두 경로 모두 이 시점에는 ENDED다. <b>대가는 소속 일괄 종료가 실패하면 출결 정리도 조용히
      * 건너뛴다는 것이다</b> — 그 경우 로그 없이 0건으로 끝난다.</p>
      *
+     * <p>체류 종료 시각도 잠긴 소속의 {@code endedAt}을 사용한다. 호출 경로가 전달한
+     * 이벤트 시각이나 스윕 발견 시각보다 DB에 보존된 실제 종료 시각이 정본이며, 이 값은
+     * ENDED 상태의 DB 제약으로 null이 될 수 없다.</p>
+     *
      * @return 체류 구간 또는 출결 상태 중 하나라도 이번 호출로 변경됐으면 {@code true}
      */
     @Transactional
-    public boolean finalizeOne(Long attendanceId, Long membershipId, Instant endedAt) {
-        if (cohortLockService.lockEndedMembership(membershipId).isEmpty()) {
+    public boolean finalizeOne(Long attendanceId, Long membershipId) {
+        EndedMembershipLockView endedMembership = cohortLockService
+                .lockEndedMembership(membershipId)
+                .orElse(null);
+        if (endedMembership == null) {
             return false;
         }
 
         AttendanceCloseResult closeResult = presenceTransitionService
-                .closeAttendanceUnlessMeeting(attendanceId, membershipId, endedAt);
+                .closeAttendanceUnlessMeeting(
+                        attendanceId,
+                        membershipId,
+                        endedMembership.endedAt().toInstant()
+                );
         if (closeResult == AttendanceCloseResult.MEETING_OPEN) {
             return false;
         }

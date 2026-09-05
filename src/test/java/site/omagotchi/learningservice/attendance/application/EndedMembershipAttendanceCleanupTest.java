@@ -8,7 +8,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceCleanupTarget;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
-import site.omagotchi.learningservice.attendance.infrastructure.PresenceIntervalRepository;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -27,9 +26,6 @@ class EndedMembershipAttendanceCleanupTest {
     private static final OffsetDateTime ENDED_AT = OffsetDateTime.parse("2026-09-04T18:00:00+09:00");
 
     @Mock
-    private PresenceIntervalRepository presenceIntervalRepository;
-
-    @Mock
     private AttendanceRecordRepository attendanceRecordRepository;
 
     @Mock
@@ -39,14 +35,24 @@ class EndedMembershipAttendanceCleanupTest {
     private EndedMembershipAttendanceCleanup cleanup;
 
     @Test
-    @DisplayName("열린 회의 구간이 있으면 점유 정리에 맡기고 아무것도 하지 않는다")
-    void skipsWhileMeetingIsOpen() {
-        when(presenceIntervalRepository.existsOpenMeetingByMembershipId(MEMBERSHIP_ID))
-                .thenReturn(true);
+    @DisplayName("Finalizer가 열린 회의 구간을 발견하면 그 출결은 정리 건수에서 제외한다")
+    void skipsAttendanceWhileMeetingIsOpen() {
+        AttendanceCleanupTarget target = new AttendanceCleanupTarget(101L, MEMBERSHIP_ID);
+        when(attendanceRecordRepository
+                .findEndCleanupTargetsByCohortMembershipId(MEMBERSHIP_ID))
+                .thenReturn(List.of(target));
+        when(missingCheckOutFinalizer.finalizeOne(
+                101L,
+                MEMBERSHIP_ID,
+                ENDED_AT.toInstant()
+        )).thenReturn(false);
 
         assertThat(cleanup.cleanUp(MEMBERSHIP_ID, ENDED_AT)).isZero();
-
-        verifyNoInteractions(attendanceRecordRepository, missingCheckOutFinalizer);
+        verify(missingCheckOutFinalizer).finalizeOne(
+                101L,
+                MEMBERSHIP_ID,
+                ENDED_AT.toInstant()
+        );
     }
 
     @Test
@@ -68,16 +74,18 @@ class EndedMembershipAttendanceCleanupTest {
         when(attendanceRecordRepository
                 .findEndCleanupTargetsByCohortMembershipId(MEMBERSHIP_ID))
                 .thenReturn(List.of(first, second));
-        when(missingCheckOutFinalizer.finalizeOne(101L, ENDED_AT.toInstant()))
+        when(missingCheckOutFinalizer.finalizeOne(101L, MEMBERSHIP_ID, ENDED_AT.toInstant()))
                 .thenReturn(true);
-        when(missingCheckOutFinalizer.finalizeOne(102L, ENDED_AT.toInstant()))
+        when(missingCheckOutFinalizer.finalizeOne(102L, MEMBERSHIP_ID, ENDED_AT.toInstant()))
                 .thenReturn(true);
 
         assertThat(cleanup.cleanUp(MEMBERSHIP_ID, ENDED_AT)).isEqualTo(2);
 
         var order = inOrder(missingCheckOutFinalizer);
-        order.verify(missingCheckOutFinalizer).finalizeOne(101L, ENDED_AT.toInstant());
-        order.verify(missingCheckOutFinalizer).finalizeOne(102L, ENDED_AT.toInstant());
+        order.verify(missingCheckOutFinalizer)
+                .finalizeOne(101L, MEMBERSHIP_ID, ENDED_AT.toInstant());
+        order.verify(missingCheckOutFinalizer)
+                .finalizeOne(102L, MEMBERSHIP_ID, ENDED_AT.toInstant());
     }
 
     @Test
@@ -88,14 +96,15 @@ class EndedMembershipAttendanceCleanupTest {
         when(attendanceRecordRepository
                 .findEndCleanupTargetsByCohortMembershipId(MEMBERSHIP_ID))
                 .thenReturn(List.of(first, second));
-        when(missingCheckOutFinalizer.finalizeOne(101L, ENDED_AT.toInstant()))
+        when(missingCheckOutFinalizer.finalizeOne(101L, MEMBERSHIP_ID, ENDED_AT.toInstant()))
                 .thenThrow(new IllegalStateException("첫 출결 실패"));
-        when(missingCheckOutFinalizer.finalizeOne(102L, ENDED_AT.toInstant()))
+        when(missingCheckOutFinalizer.finalizeOne(102L, MEMBERSHIP_ID, ENDED_AT.toInstant()))
                 .thenReturn(true);
 
         assertThat(cleanup.cleanUp(MEMBERSHIP_ID, ENDED_AT)).isEqualTo(1);
 
-        verify(missingCheckOutFinalizer).finalizeOne(102L, ENDED_AT.toInstant());
+        verify(missingCheckOutFinalizer)
+                .finalizeOne(102L, MEMBERSHIP_ID, ENDED_AT.toInstant());
     }
 
     @Test
@@ -105,10 +114,11 @@ class EndedMembershipAttendanceCleanupTest {
         when(attendanceRecordRepository
                 .findEndCleanupTargetsByCohortMembershipId(MEMBERSHIP_ID))
                 .thenReturn(List.of(target));
-        when(missingCheckOutFinalizer.finalizeOne(101L, ENDED_AT.toInstant()))
+        when(missingCheckOutFinalizer.finalizeOne(101L, MEMBERSHIP_ID, ENDED_AT.toInstant()))
                 .thenReturn(false);
 
         assertThat(cleanup.cleanUp(MEMBERSHIP_ID, ENDED_AT)).isZero();
-        verify(missingCheckOutFinalizer).finalizeOne(101L, ENDED_AT.toInstant());
+        verify(missingCheckOutFinalizer)
+                .finalizeOne(101L, MEMBERSHIP_ID, ENDED_AT.toInstant());
     }
 }

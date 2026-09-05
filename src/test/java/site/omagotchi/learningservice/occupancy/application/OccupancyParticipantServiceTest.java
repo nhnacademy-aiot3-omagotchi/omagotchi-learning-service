@@ -10,6 +10,7 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import site.omagotchi.learningservice.cohort.application.CohortLockService;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.attendance.application.AttendancePresenceQueryService;
@@ -78,6 +79,9 @@ class OccupancyParticipantServiceTest {
     private CohortMembershipQueryService cohortMembershipQueryService;
 
     @Mock
+    private CohortLockService cohortLockService;
+
+    @Mock
     private RoomOccupancyRepository occupancyRepository;
 
     @Mock
@@ -96,6 +100,7 @@ class OccupancyParticipantServiceTest {
                 spaceAccessService,
                 attendancePresenceQueryService,
                 cohortMembershipQueryService,
+                cohortLockService,
                 occupancyRepository,
                 participantRepository,
                 meetingPresenceCoordinator,
@@ -160,7 +165,7 @@ class OccupancyParticipantServiceTest {
         given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
         givenTargetPresent();
-        givenCohort(TARGET_MEMBERSHIP_ID, OTHER_COHORT_ID);
+        givenLockedCohort(TARGET_MEMBERSHIP_ID, OTHER_COHORT_ID);
 
         assertBusinessError(
                 OccupancyErrorCode.DIFFERENT_COHORT,
@@ -178,11 +183,11 @@ class OccupancyParticipantServiceTest {
         given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
         givenTargetPresent();
-        given(cohortMembershipQueryService.findActiveMembership(TARGET_MEMBERSHIP_ID))
+        given(cohortLockService.lockActiveMembership(TARGET_MEMBERSHIP_ID))
                 .willReturn(Optional.empty());
 
         assertBusinessError(
-                OccupancyErrorCode.DIFFERENT_COHORT,
+                OccupancyErrorCode.TARGET_MEMBERSHIP_NOT_ACTIVE,
                 () -> occupancyParticipantService.add(SPACE_ID, TARGET_USER_ID, OCCUPIER_USER_ID)
         );
     }
@@ -255,7 +260,7 @@ class OccupancyParticipantServiceTest {
         given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
         givenTargetPresent();
-        givenCohort(TARGET_MEMBERSHIP_ID, COHORT_ID);
+        givenLockedCohort(TARGET_MEMBERSHIP_ID, COHORT_ID);
 
         RoomOccupancy expired = occupancy();
         ReflectionTestUtils.setField(expired, "status", OccupancyStatus.EXPIRED);
@@ -283,7 +288,7 @@ class OccupancyParticipantServiceTest {
         given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
         givenTargetPresent();
-        givenCohort(TARGET_MEMBERSHIP_ID, COHORT_ID);
+        givenLockedCohort(TARGET_MEMBERSHIP_ID, COHORT_ID);
         given(occupancyRepository.lockById(OCCUPANCY_ID))
                 .willReturn(Optional.of(expiredButActiveOccupancy()));
 
@@ -405,8 +410,14 @@ class OccupancyParticipantServiceTest {
 
         occupancyParticipantService.add(SPACE_ID, TARGET_USER_ID, OCCUPIER_USER_ID);
 
-        InOrder order = inOrder(attendancePresenceQueryService, occupancyRepository, participantRepository);
+        InOrder order = inOrder(
+                attendancePresenceQueryService,
+                cohortLockService,
+                occupancyRepository,
+                participantRepository
+        );
         order.verify(attendancePresenceQueryService).findOpenPresence(TARGET_USER_ID);
+        order.verify(cohortLockService).lockActiveMembership(TARGET_MEMBERSHIP_ID);
         order.verify(occupancyRepository).lockById(OCCUPANCY_ID);
         order.verify(participantRepository).countActiveByOccupancyId(OCCUPANCY_ID);
         order.verify(participantRepository).save(any(OccupancyParticipant.class));
@@ -577,7 +588,7 @@ class OccupancyParticipantServiceTest {
         given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room()));
         givenCohort(OCCUPIER_MEMBERSHIP_ID, COHORT_ID);
         givenTargetPresent();
-        givenCohort(TARGET_MEMBERSHIP_ID, COHORT_ID);
+        givenLockedCohort(TARGET_MEMBERSHIP_ID, COHORT_ID);
         given(occupancyRepository.lockById(OCCUPANCY_ID)).willReturn(Optional.of(occupancy()));
     }
 
@@ -592,6 +603,11 @@ class OccupancyParticipantServiceTest {
 
     private void givenCohort(Long membershipId, Long cohortId) {
         given(cohortMembershipQueryService.findActiveMembership(membershipId)).willReturn(
+                Optional.of(new CohortMembershipView(membershipId, cohortId, TARGET_USER_ID)));
+    }
+
+    private void givenLockedCohort(Long membershipId, Long cohortId) {
+        given(cohortLockService.lockActiveMembership(membershipId)).willReturn(
                 Optional.of(new CohortMembershipView(membershipId, cohortId, TARGET_USER_ID)));
     }
 

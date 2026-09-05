@@ -94,6 +94,10 @@ class CohortEndedCleanupIT {
         roomOccupancyService.start(roomId, occupier.userId());
         Long occupancyId = activeOccupancyId(roomId);
         vacancyAlertService.request(roomId, null, waiter.userId());
+        // 훅은 상태 전이와 같은 Transaction에서 소속이 이미 ENDED가 된 뒤에 돈다. 출결 마감이
+        // 살아 있는 소속을 건드리지 않으려 ENDED를 요구하므로, 직접 호출하는 테스트도 같은
+        // 전제를 만들어야 한다.
+        endAllMemberships(cohortId);
 
         OffsetDateTime closedAt = now();
         cohortEndedCleanup.cleanUp(cohortId, closedAt);
@@ -176,6 +180,7 @@ class CohortEndedCleanupIT {
 
         willThrow(new IllegalStateException("알림 삭제 실패"))
                 .given(spiedVacancyAlertService).discardByMemberships(anyCollection());
+        endAllMemberships(cohortId);
 
         OffsetDateTime closedAt = now();
         assertThatCode(() -> cohortEndedCleanup.cleanUp(cohortId, closedAt))

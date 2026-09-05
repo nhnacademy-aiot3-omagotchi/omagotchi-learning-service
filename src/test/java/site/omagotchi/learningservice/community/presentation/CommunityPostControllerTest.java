@@ -24,6 +24,7 @@ import site.omagotchi.learningservice.community.application.query.CommunityPostD
 import site.omagotchi.learningservice.community.application.query.CommunityPostListItem;
 import site.omagotchi.learningservice.community.application.query.CommunityPostPage;
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
+import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
 import site.omagotchi.learningservice.global.security.JwtAuthorityConfig;
 import site.omagotchi.learningservice.global.security.JwtConfig;
 import site.omagotchi.learningservice.global.security.JwtProperties;
@@ -69,6 +70,9 @@ class CommunityPostControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockitoBean
+    private HttpErrorEventLogger errorEventLogger;
 
     @MockitoBean
     private CommunityPostQueryService communityPostQueryService;

@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
+import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
 import site.omagotchi.learningservice.study.application.StudyRecordCommandService;
 import site.omagotchi.learningservice.study.application.StudyRecordQueryService;
 import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
@@ -63,7 +64,9 @@ class StudyRecordControllerTest {
     @BeforeEach
     void setUpMockMvc() {
         mockMvc = standaloneSetup(studyRecordController)
-                .setControllerAdvice(new GlobalExceptionHandler())
+                .setControllerAdvice(new GlobalExceptionHandler(
+                        mock(HttpErrorEventLogger.class)
+                ))
                 .build();
     }
 

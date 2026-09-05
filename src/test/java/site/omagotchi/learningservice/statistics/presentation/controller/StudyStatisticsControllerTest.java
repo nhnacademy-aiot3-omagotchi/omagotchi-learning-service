@@ -17,6 +17,7 @@ import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
+import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
 import site.omagotchi.learningservice.statistics.application.CohortStatisticsService;
 import site.omagotchi.learningservice.statistics.application.MemberStatisticsService;
 import site.omagotchi.learningservice.statistics.application.result.*;
@@ -29,6 +30,7 @@ import java.util.UUID;
 import java.util.stream.IntStream;
 
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -64,7 +66,9 @@ class StudyStatisticsControllerTest {
     @BeforeEach
     void setUpMockMvc() {
         mockMvc = standaloneSetup(studyStatisticsController)
-                .setControllerAdvice(new GlobalExceptionHandler())
+                .setControllerAdvice(new GlobalExceptionHandler(
+                        mock(HttpErrorEventLogger.class)
+                ))
                 .build();
     }
 

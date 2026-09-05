@@ -10,6 +10,7 @@ import org.springframework.security.test.context.TestSecurityContextHolder;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
+import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
 import site.omagotchi.learningservice.team.application.TeamMasterService;
 import site.omagotchi.learningservice.team.application.TeamMemberCandidateQueryService;
 import site.omagotchi.learningservice.team.application.TeamMemberService;
@@ -65,7 +66,9 @@ class TeamControllerTest {
                         teamMemberService,
                         teamMasterService,
                         teamMemberCandidateQueryService))
-                .setControllerAdvice(new GlobalExceptionHandler())
+                .setControllerAdvice(new GlobalExceptionHandler(
+                        mock(HttpErrorEventLogger.class)
+                ))
                 // @AuthenticationPrincipal은 Security의 Resolver가 있어야 풀린다.
                 // standaloneSetup은 Spring Security 필터를 끼우지 않으므로 직접 등록한다.
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())

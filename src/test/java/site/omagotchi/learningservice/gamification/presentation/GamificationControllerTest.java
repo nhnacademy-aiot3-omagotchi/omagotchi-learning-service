@@ -19,6 +19,7 @@ import site.omagotchi.learningservice.gamification.application.command.CreateUse
 import site.omagotchi.learningservice.gamification.application.result.GameCharacterResult;
 import site.omagotchi.learningservice.gamification.application.result.UserCharacterResult;
 import site.omagotchi.learningservice.gamification.domain.AdvancementStage;
+import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
 import site.omagotchi.learningservice.global.security.JwtAuthorityConfig;
 import site.omagotchi.learningservice.global.security.JwtConfig;
 import site.omagotchi.learningservice.global.security.JwtProperties;
@@ -57,6 +58,9 @@ class GamificationControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockitoBean
+    private HttpErrorEventLogger errorEventLogger;
 
     @MockitoBean
     private CharacterOnboardingService characterOnboardingService;

@@ -7,6 +7,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
 import site.omagotchi.learningservice.space.application.result.SpaceListResult;
 import site.omagotchi.learningservice.space.application.SpaceQueryService;
 import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
@@ -36,6 +37,9 @@ class SpaceQueryControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockitoBean
+    private HttpErrorEventLogger errorEventLogger;
 
     @MockitoBean
     private SpaceQueryService spaceQueryService;

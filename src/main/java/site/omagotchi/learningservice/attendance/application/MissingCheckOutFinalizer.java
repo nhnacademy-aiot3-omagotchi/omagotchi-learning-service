@@ -10,6 +10,8 @@ import site.omagotchi.learningservice.cohort.application.CohortLockService;
 import site.omagotchi.learningservice.cohort.application.result.EndedMembershipLockView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
+import java.time.Instant;
+
 /**
  * 미퇴실 출결 한 건의 상태와 체류 구간을 원자적으로 마감한다.
  *
@@ -55,12 +57,49 @@ public class MissingCheckOutFinalizer {
             return false;
         }
 
+        return finalizeLockedEndedMembership(
+                attendanceId,
+                membershipId,
+                endedMembership.endedAt().toInstant()
+        );
+    }
+
+    /**
+     * ACTIVE 소속의 일일 미퇴실을 정책 마감 시각으로 확정한다.
+     *
+     * <p>소속 종료 전용인 {@link #finalizeOne(Long, Long)}과 달리 ACTIVE 소속을
+     * 잠근다. 점유·공간 전환도 같은 소속 행을 먼저 잠그므로 출결 마감과
+     * 새 MEETING 입실이 검사 사이에 교차하지 않는다.</p>
+     */
+    @Transactional
+    public boolean finalizeDaily(
+            Long attendanceId,
+            Long membershipId,
+            Instant deadline
+    ) {
+        if (cohortLockService.lockActiveMembership(membershipId).isEmpty()) {
+            return false;
+        }
+
         AttendanceCloseResult closeResult = presenceTransitionService
-                .closeAttendanceUnlessMeeting(
-                        attendanceId,
-                        membershipId,
-                        endedMembership.endedAt().toInstant()
-                );
+                .closeAttendanceAtDailyDeadline(attendanceId, membershipId, deadline);
+        return finalizeAttendance(attendanceId, closeResult);
+    }
+
+    private boolean finalizeLockedEndedMembership(
+            Long attendanceId,
+            Long membershipId,
+            Instant endedAt
+    ) {
+        AttendanceCloseResult closeResult = presenceTransitionService
+                .closeAttendanceUnlessMeeting(attendanceId, membershipId, endedAt);
+        return finalizeAttendance(attendanceId, closeResult);
+    }
+
+    private boolean finalizeAttendance(
+            Long attendanceId,
+            AttendanceCloseResult closeResult
+    ) {
         if (closeResult == AttendanceCloseResult.MEETING_OPEN) {
             return false;
         }

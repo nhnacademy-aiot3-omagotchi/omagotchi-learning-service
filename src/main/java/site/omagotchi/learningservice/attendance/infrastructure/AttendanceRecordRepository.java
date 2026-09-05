@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceCleanupTarget;
+import site.omagotchi.learningservice.attendance.application.result.DailyMissingCheckOutTarget;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 
 import java.time.LocalDate;
@@ -158,6 +159,46 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
             int limit
     ) {
         return findEndCleanupTargetsPageAfter(afterAttendanceId, PageRequest.ofSize(limit));
+    }
+
+    /**
+     * 일일 미퇴실 마감 후보를 출결 ID 커서로 순회한다.
+     *
+     * <p>여기서는 기수별 timezone과 예정 종료 시각을 알 수 없으므로 미해결
+     * 후보만 반환한다. 실제 마감 시각이 지났는지는 Application이 기수의
+     * 공개 정책 조회 결과로 판정한다.</p>
+     */
+    @Query("""
+            select new site.omagotchi.learningservice.attendance.application.result.DailyMissingCheckOutTarget(
+                       record.id, record.cohortMembershipId, record.attendanceDate)
+              from AttendanceRecord record
+             where record.id > :afterAttendanceId
+               and record.checkedInAt is not null
+               and record.checkedOutAt is null
+               and (
+                    record.autoStatus <> site.omagotchi.learningservice.attendance.domain.AttendanceStatus.MISSING_CHECK_OUT
+                    or exists (
+                        select presence.id
+                          from PresenceInterval presence
+                         where presence.attendanceId = record.id
+                           and presence.endedAt is null
+                    )
+               )
+             order by record.id asc
+            """)
+    List<DailyMissingCheckOutTarget> findDailyMissingCheckOutTargetsPageAfter(
+            @Param("afterAttendanceId") Long afterAttendanceId,
+            Pageable pageable
+    );
+
+    default List<DailyMissingCheckOutTarget> findDailyMissingCheckOutTargetsAfter(
+            Long afterAttendanceId,
+            int limit
+    ) {
+        return findDailyMissingCheckOutTargetsPageAfter(
+                afterAttendanceId,
+                PageRequest.ofSize(limit)
+        );
     }
 
     /** 기수 종료 정리 대상이 있는 소속만 ID 순서로 좁힌다. */

@@ -171,6 +171,22 @@ class AttendanceRecordRepositoryIT {
         assertThat(attendanceRecordRepository.findEndCleanupTargetsAfter(second, 10))
                 .extracting(target -> target.attendanceId())
                 .containsExactly(third);
+
+        assertThat(attendanceRecordRepository.findDailyMissingCheckOutTargetsAfter(first, 10))
+                .extracting(
+                        target -> target.attendanceId(),
+                        target -> target.attendanceDate()
+                )
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(
+                                second,
+                                LocalDate.of(2026, 8, 20)
+                        ),
+                        org.assertj.core.groups.Tuple.tuple(
+                                third,
+                                LocalDate.of(2026, 8, 21)
+                        )
+                );
     }
 
     private Long saveMembership() {

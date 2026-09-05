@@ -653,10 +653,10 @@ class OccupancyMembershipEndedIT {
                 """, OffsetDateTime.class, membershipId);
     }
 
-    private Object occupancyEndedAt(Long occupancyId) {
+    private OffsetDateTime occupancyEndedAt(Long occupancyId) {
         return jdbcTemplate.queryForObject("""
                 SELECT ended_at FROM learning_service.room_occupancies WHERE id = ?
-                """, Object.class, occupancyId);
+                """, OffsetDateTime.class, occupancyId);
     }
 
     private Long activeOccupancyId(Long spaceId) {

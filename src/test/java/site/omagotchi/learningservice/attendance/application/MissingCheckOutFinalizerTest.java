@@ -12,12 +12,14 @@ import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
 import site.omagotchi.learningservice.cohort.application.CohortLockService;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.cohort.application.result.EndedMembershipLockView;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -163,6 +165,50 @@ class MissingCheckOutFinalizerTest {
         assertThat(finalizer.finalizeOne(
                 ATTENDANCE_ID,
                 MEMBERSHIP_ID
+        )).isFalse();
+
+        verifyNoInteractions(presenceTransitionService, attendanceRecordRepository);
+    }
+
+    @Test
+    @DisplayName("일일 마감은 ACTIVE 소속을 잠그고 정책 마감 시각을 사용한다")
+    void finalizesDailyMissingCheckOutForActiveMembership() {
+        AttendanceRecord attendance = checkedInAttendance();
+        when(cohortLockService.lockActiveMembership(MEMBERSHIP_ID))
+                .thenReturn(Optional.of(new CohortMembershipView(
+                        MEMBERSHIP_ID,
+                        1L,
+                        UUID.randomUUID()
+                )));
+        when(presenceTransitionService.closeAttendanceAtDailyDeadline(
+                ATTENDANCE_ID,
+                MEMBERSHIP_ID,
+                ENDED_AT
+        )).thenReturn(AttendanceCloseResult.CLOSED);
+        when(attendanceRecordRepository.findById(ATTENDANCE_ID))
+                .thenReturn(Optional.of(attendance));
+
+        assertThat(finalizer.finalizeDaily(
+                ATTENDANCE_ID,
+                MEMBERSHIP_ID,
+                ENDED_AT
+        )).isTrue();
+
+        assertThat(attendance.getAutoStatus())
+                .isEqualTo(AttendanceStatus.MISSING_CHECK_OUT);
+        assertThat(attendance.getCheckedOutAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("일일 마감 직전 소속이 종료됐으면 종료 전용 정리에 맡긴다")
+    void skipsDailyFinalizationWhenMembershipIsNoLongerActive() {
+        when(cohortLockService.lockActiveMembership(MEMBERSHIP_ID))
+                .thenReturn(Optional.empty());
+
+        assertThat(finalizer.finalizeDaily(
+                ATTENDANCE_ID,
+                MEMBERSHIP_ID,
+                ENDED_AT
         )).isFalse();
 
         verifyNoInteractions(presenceTransitionService, attendanceRecordRepository);

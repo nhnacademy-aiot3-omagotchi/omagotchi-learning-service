@@ -130,6 +130,49 @@ class AttendanceRecordRepositoryIT {
         )).containsExactly(membershipId, otherMembershipId);
     }
 
+    @Test
+    @DisplayName("정합성 스윕 후보를 출결 ID 커서와 배치 크기로 조회한다")
+    void findsEndCleanupTargetsAfterCursor() {
+        Long membershipId = saveMembership(UUID.randomUUID());
+        Instant checkedInAt = Instant.parse("2026-08-18T00:00:00Z");
+
+        Long first = saveAttendance(
+                membershipId,
+                LocalDate.of(2026, 8, 18),
+                checkedInAt,
+                null,
+                "PRESENT"
+        );
+        saveAttendance(
+                membershipId,
+                LocalDate.of(2026, 8, 19),
+                checkedInAt,
+                null,
+                "MISSING_CHECK_OUT"
+        );
+        Long second = saveAttendance(
+                membershipId,
+                LocalDate.of(2026, 8, 20),
+                checkedInAt,
+                null,
+                "PRESENT"
+        );
+        Long third = saveAttendance(
+                membershipId,
+                LocalDate.of(2026, 8, 21),
+                checkedInAt,
+                null,
+                "PRESENT"
+        );
+
+        assertThat(attendanceRecordRepository.findEndCleanupTargetsAfter(first, 1))
+                .extracting(target -> target.attendanceId())
+                .containsExactly(second);
+        assertThat(attendanceRecordRepository.findEndCleanupTargetsAfter(second, 10))
+                .extracting(target -> target.attendanceId())
+                .containsExactly(third);
+    }
+
     private Long saveMembership() {
         return saveMembership(USER_ID);
     }

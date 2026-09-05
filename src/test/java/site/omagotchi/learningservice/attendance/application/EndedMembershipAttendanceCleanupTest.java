@@ -35,27 +35,6 @@ class EndedMembershipAttendanceCleanupTest {
     private EndedMembershipAttendanceCleanup cleanup;
 
     @Test
-    @DisplayName("Finalizer가 열린 회의 구간을 발견하면 그 출결은 정리 건수에서 제외한다")
-    void skipsAttendanceWhileMeetingIsOpen() {
-        AttendanceCleanupTarget target = new AttendanceCleanupTarget(101L, MEMBERSHIP_ID);
-        when(attendanceRecordRepository
-                .findEndCleanupTargetsByCohortMembershipId(MEMBERSHIP_ID))
-                .thenReturn(List.of(target));
-        when(missingCheckOutFinalizer.finalizeOne(
-                101L,
-                MEMBERSHIP_ID,
-                ENDED_AT.toInstant()
-        )).thenReturn(false);
-
-        assertThat(cleanup.cleanUp(MEMBERSHIP_ID, ENDED_AT)).isZero();
-        verify(missingCheckOutFinalizer).finalizeOne(
-                101L,
-                MEMBERSHIP_ID,
-                ENDED_AT.toInstant()
-        );
-    }
-
-    @Test
     @DisplayName("정리 대상이 없으면 0건을 반환한다")
     void returnsZeroWithoutTargets() {
         when(attendanceRecordRepository

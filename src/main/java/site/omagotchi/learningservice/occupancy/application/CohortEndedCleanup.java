@@ -92,6 +92,9 @@ public class CohortEndedCleanup {
             // 4단계 — 출결·체류 마감. CE-02 실패로 점유 정리를 건너뛰었더라도 일반
             // PRESENT/AWAY 체류는 독립적으로 닫는다. 열린 MEETING은 출결 정리 내부에서
             // 건너뛰고 정합성 스윕에 맡긴다.
+            //
+            // 이 단계만 소속이 ENDED인 건을 대상으로 삼는다 — 앞 단계들이 상태를 가리지
+            // 않는 것과 반대다. 근거는 MissingCheckOutFinalizer#finalizeOne javadoc.
             try {
                 attendanceCleanup.closeAllByCohort(membershipIds, closedAt);
             } catch (Exception exception) {

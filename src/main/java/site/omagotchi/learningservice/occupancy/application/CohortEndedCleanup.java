@@ -96,7 +96,7 @@ public class CohortEndedCleanup {
             // 이 단계만 소속이 ENDED인 건을 대상으로 삼는다 — 앞 단계들이 상태를 가리지
             // 않는 것과 반대다. 근거는 MissingCheckOutFinalizer#finalizeOne javadoc.
             try {
-                attendanceCleanup.closeAllByCohort(membershipIds, closedAt);
+                attendanceCleanup.closeAllByCohort(membershipIds);
             } catch (Exception exception) {
                 log.error("기수 종료 출결·체류 정리에 실패했습니다. cohortId={}",
                         endedCohortId, exception);

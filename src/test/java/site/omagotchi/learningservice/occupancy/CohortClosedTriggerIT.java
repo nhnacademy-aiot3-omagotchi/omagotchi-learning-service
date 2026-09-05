@@ -48,7 +48,7 @@ import static org.mockito.Mockito.verify;
  *
  * <p><b>정지는 이제 점유 시작까지 덮는다.</b> 활성 소속을 보는 경로(공실 신청·팀·참여자)에
  * 더해, 재실만 보던 점유 시작(MR-22)도 소속 잠금으로 막힌다 —
- * {@code endedCohortMemberCannotStartOccupancy}. 그래도 종료 직전에 시작된 점유와 훅 유실은
+ * {@code endedMembershipCannotStartOccupancy}. 그래도 종료 직전에 시작된 점유와 훅 유실은
  * 남으므로 멤버십 스윕이 받침으로 유지된다 —
  * {@code lingeringOccupancyFromLostHookIsSweptByMembershipSweep}.</p>
  */
@@ -157,15 +157,16 @@ class CohortClosedTriggerIT {
      * 그 사이 종료가 커밋된" 경합에서도 결과가 갈리지 않는다.</p>
      */
     @Test
-    @DisplayName("종료된 기수의 학생은 재실이 남아 있어도 점유를 시작할 수 없다.")
-    void endedCohortMemberCannotStartOccupancy() {
+    @DisplayName("종료된 소속은 재실이 남아 있어도 점유를 시작할 수 없다.")
+    void endedMembershipCannotStartOccupancy() {
         Long cohortId = fixture.createCohort("트리거-재실구멍");
         fixture.createActiveMember(cohortId);
         OccupancyTestFixture.Member student = fixture.createActiveStudent(cohortId);
         Long roomId = fixture.createMeetingRoom(cohortId, "트리거-재실구멍-회의실", 8);
 
-        activate(cohortId);
-        close(cohortId);
+        // 비동기 기수 종료 훅이 체류를 먼저 닫으면 NOT_PRESENT가 되어 검증 결과가 실행
+        // 타이밍에 따라 달라진다. 소속만 직접 끝내 열린 체류를 결정적으로 남긴다.
+        endMembership(student.membershipId());
 
         assertThatThrownBy(() -> roomOccupancyService.start(roomId, student.userId()))
                 .isInstanceOf(BusinessException.class)

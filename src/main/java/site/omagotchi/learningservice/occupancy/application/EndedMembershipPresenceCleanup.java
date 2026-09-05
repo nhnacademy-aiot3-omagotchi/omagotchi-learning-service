@@ -34,7 +34,7 @@ public class EndedMembershipPresenceCleanup {
         }
 
         try {
-            attendanceCleanup.cleanUp(membershipId, endedAt);
+            attendanceCleanup.cleanUp(membershipId);
         } catch (Exception exception) {
             log.error("소속 종료 출결·체류 정리에 실패했습니다. membershipId={}",
                     membershipId, exception);

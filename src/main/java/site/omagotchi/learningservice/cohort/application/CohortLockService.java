@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.port.CohortPersistence;
 import site.omagotchi.learningservice.cohort.application.result.CohortLockView;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
+import site.omagotchi.learningservice.cohort.application.result.EndedMembershipLockView;
 import site.omagotchi.learningservice.cohort.domain.Cohort;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
@@ -58,9 +59,9 @@ public class CohortLockService {
      * 먼저 잠그는 동시에, 잘못 호출된 정리가 살아 있는 소속을 마감하지 못하게 한다.</p>
      */
     @Transactional
-    public Optional<CohortMembershipView> lockEndedMembership(Long membershipId) {
+    public Optional<EndedMembershipLockView> lockEndedMembership(Long membershipId) {
         return lockMembershipEntity(membershipId, CohortMembershipStatus.ENDED)
-                .map(CohortMembershipView::from);
+                .map(EndedMembershipLockView::from);
     }
 
     private Optional<CohortMembership> lockMembershipEntity(

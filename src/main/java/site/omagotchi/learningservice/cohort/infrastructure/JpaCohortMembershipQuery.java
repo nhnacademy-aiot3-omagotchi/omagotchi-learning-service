@@ -9,14 +9,15 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -76,6 +77,15 @@ public class JpaCohortMembershipQuery implements CohortMembershipQuery {
     @Override public Map<Long,UUID> findUserIds(Collection<Long> ids) { return repository.findAllById(ids).stream().collect(java.util.stream.Collectors.toMap(CohortMembership::getId,CohortMembership::getUserId)); }
     @Override public Map<Long,Long> findCohortIds(Collection<Long> ids) { return repository.findAllById(ids).stream().collect(java.util.stream.Collectors.toMap(CohortMembership::getId,CohortMembership::getCohortId)); }
     @Override public Set<Long> findInactiveIds(Collection<Long> ids) { return repository.findAllById(ids).stream().filter(m->m.getStatus()!=CohortMembershipStatus.ACTIVE).map(CohortMembership::getId).collect(java.util.stream.Collectors.toUnmodifiableSet()); }
+    @Override
+    public Map<Long, OffsetDateTime> findEndedMemberships(Collection<Long> ids) {
+        return repository.findAllById(ids).stream()
+                .filter(membership -> membership.getStatus() == CohortMembershipStatus.ENDED)
+                .collect(java.util.stream.Collectors.toUnmodifiableMap(
+                        CohortMembership::getId,
+                        CohortMembership::getEndedAt
+                ));
+    }
 
     @Override
     public boolean existsActiveManagerByUserId(UUID userId) {

@@ -116,6 +116,9 @@ public class AttendanceService {
         if (record.getCheckedInAt() == null) {
             throw new BusinessException(AttendanceErrorCode.ATTENDANCE_CHECK_IN_REQUIRED);
         }
+        if (record.getAutoStatus() == AttendanceStatus.MISSING_CHECK_OUT) {
+            return AttendanceRecordResult.from(record);
+        }
         if (record.getCheckedOutAt() != null) {
             return AttendanceRecordResult.from(record);
         }
@@ -368,7 +371,8 @@ public class AttendanceService {
         if (record.getCheckedInAt() == null) {
             throw new BusinessException(AttendanceErrorCode.ATTENDANCE_CHECK_IN_REQUIRED);
         }
-        if (record.getCheckedOutAt() != null) {
+        if (record.getCheckedOutAt() != null
+                || record.getAutoStatus() == AttendanceStatus.MISSING_CHECK_OUT) {
             throw new BusinessException(AttendanceErrorCode.PRESENCE_TRANSITION_NOT_ALLOWED);
         }
         if (isInMeeting(membershipId)) {

@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.port.CohortMembershipQuery;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 
+import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -203,6 +204,27 @@ public class CohortMembershipQueryService {
             return Set.of();
         }
         return membershipQuery.findInactiveIds(membershipIds);
+    }
+
+    /**
+     * 주어진 식별자 중 ENDED 소속만 실제 종료 시각과 함께 반환한다.
+     *
+     * <p>출결 정합성 스윕은 {@link #findInactiveMembershipIds(Collection)}를 쓰지 않는다.
+     * 미퇴실 확정은 ENDED 소속만 허용하므로 PENDING·REJECTED까지 후보로 잡으면 마감은
+     * 거절되면서 같은 행이 매 주기 다시 검출되기 때문이다.</p>
+     *
+     * <p>종료 시각을 함께 돌려주는 이유는 이벤트가 유실된 스윕도 발견 시각이 아니라
+     * {@code cohort_memberships.ended_at}으로 점유·체류 이력을 닫게 하기 위함이다.</p>
+     *
+     * @return ENDED 소속 ID와 실제 종료 시각. ACTIVE·PENDING·REJECTED·없는 ID는 제외
+     */
+    public Map<Long, OffsetDateTime> findEndedMemberships(
+            Collection<Long> membershipIds
+    ) {
+        if (membershipIds == null || membershipIds.isEmpty()) {
+            return Map.of();
+        }
+        return membershipQuery.findEndedMemberships(membershipIds);
     }
 
     /**

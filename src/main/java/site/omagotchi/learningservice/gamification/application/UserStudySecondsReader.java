@@ -23,7 +23,11 @@ public class UserStudySecondsReader {
         try {
             return Optional.of(cohortAccessService.requireCurrentActiveMembership(userId).getCohortId());
         } catch (BusinessException exception) {
-            log.debug("활성 기수 소속이 없어 학습 시간 퀘스트 원본을 읽지 않는다. userId={}", userId);
+            log.debug(
+                    "활성 기수 소속이 없어 학습 시간 퀘스트 원본을 읽지 않습니다. "
+                            + "사용자(userIdMasked)={}",
+                    maskUserId(userId)
+            );
             return Optional.empty();
         }
     }
@@ -44,5 +48,12 @@ public class UserStudySecondsReader {
      */
     public boolean hasStudyRecordBefore(UUID userId, Long cohortId, LocalDate aggregationDate) {
         return studySecondsReader.hasStudyRecordBefore(userId, cohortId, aggregationDate);
+    }
+
+    private String maskUserId(UUID userId) {
+        if (userId == null) {
+            return "none";
+        }
+        return userId.toString().substring(0, 8);
     }
 }

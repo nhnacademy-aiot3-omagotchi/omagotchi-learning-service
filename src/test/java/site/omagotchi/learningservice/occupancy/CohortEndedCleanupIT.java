@@ -19,6 +19,8 @@ import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSen
 import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 import site.omagotchi.learningservice.team.application.TeamService;
 
+import java.time.Clock;
+import java.time.OffsetDateTime;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,7 +33,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 
 /**
- * 기수 종료 4단계 정리 (CE-01~04, 명세 08).
+ * 기수 종료 6단계 정리 (명세 08).
  *
  * <p><b>순서가 이 명세의 핵심이라 IT가 중심이다.</b> CE-02(알림 삭제)가 CE-03(점유 종료)보다
  * 먼저라는 계약은 관찰 가능한 결과로만 검증된다 — 종료 기수의 신청자는 공실 알림을 받지
@@ -60,6 +62,9 @@ class CohortEndedCleanupIT {
     @Autowired
     JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    Clock clock;
+
     @MockitoBean
     VacancyAlertSender vacancyAlertSender;
 
@@ -76,7 +81,7 @@ class CohortEndedCleanupIT {
     }
 
     @Test
-    @DisplayName("기수 종료는 팀·알림·점유·실습실을 한 번에 정리한다.")
+    @DisplayName("기수 종료는 팀·알림·점유·출결·실습실을 한 번에 정리한다.")
     void cleansTeamsAlertsOccupanciesAndLabs() {
         Long cohortId = fixture.createCohort("기수종료-통합");
         OccupancyTestFixture.Member master = fixture.createActiveMember(cohortId);
@@ -89,8 +94,13 @@ class CohortEndedCleanupIT {
         roomOccupancyService.start(roomId, occupier.userId());
         Long occupancyId = activeOccupancyId(roomId);
         vacancyAlertService.request(roomId, null, waiter.userId());
+        // 훅은 상태 전이와 같은 Transaction에서 소속이 이미 ENDED가 된 뒤에 돈다. 출결 마감이
+        // 살아 있는 소속을 건드리지 않으려 ENDED를 요구하므로, 직접 호출하는 테스트도 같은
+        // 전제를 만들어야 한다.
+        endAllMemberships(cohortId);
 
-        cohortEndedCleanup.cleanUp(cohortId);
+        OffsetDateTime closedAt = now();
+        cohortEndedCleanup.cleanUp(cohortId, closedAt);
 
         // CE-01 — 팀 소프트 삭제 + 팀원 물리 삭제
         assertThat(teamDeletedAt(teamId)).isNotNull();
@@ -100,6 +110,13 @@ class CohortEndedCleanupIT {
         // CE-03 — RELEASED + 참여자 마감
         assertThat(occupancyStatus(occupancyId)).isEqualTo("RELEASED");
         assertThat(openParticipantRows(occupancyId)).isZero();
+        // 출결 정리 — 점유자의 MEETING이 먼저 닫힌 뒤 모든 미퇴실 출결을 마감한다.
+        assertThat(attendanceStatus(master.membershipId())).isEqualTo("MISSING_CHECK_OUT");
+        assertThat(attendanceStatus(occupier.membershipId())).isEqualTo("MISSING_CHECK_OUT");
+        assertThat(attendanceStatus(waiter.membershipId())).isEqualTo("MISSING_CHECK_OUT");
+        assertThat(openPresenceRows(cohortId)).isZero();
+        assertThat(checkedOutAt(waiter.membershipId())).isNull();
+        assertThat(latestPresenceEndedAt(waiter.membershipId())).isEqualTo(closedAt);
         // CE-04 — 유형을 가리지 않고 관리 주체를 해제한다. 실습실만 풀고 회의실을 남기면
         // 회의실이 종료 기수를 가리킨 채 동결된다 — 관리 권한이 그 기수 매니저를 요구하는데
         // 기수 종료로 그런 사람이 없어지기 때문이다. 상세 시나리오는
@@ -127,7 +144,7 @@ class CohortEndedCleanupIT {
         vacancyAlertService.request(roomId, null, endedWaiter.userId());
         vacancyAlertService.request(roomId, null, survivingWaiter.userId());
 
-        cohortEndedCleanup.cleanUp(endedCohortId);
+        cohortEndedCleanup.cleanUp(endedCohortId, now());
 
         // 타 기수 대기자에게 발송될 때까지 기다린다 (커밋 후 비동기).
         awaitUntil(() -> waitingAlertRows(roomId) == 0,
@@ -149,7 +166,7 @@ class CohortEndedCleanupIT {
      * 앞 단계와 무관하게 진행된다.
      */
     @Test
-    @DisplayName("알림 삭제가 실패하면 점유 종료는 건너뛰고 실습실 해제는 진행한다.")
+    @DisplayName("알림 삭제가 실패해도 일반 재실 출결과 실습실 정리는 진행한다.")
     void skipsOccupancyReleaseWhenAlertDiscardFailsButStillUnassignsLabs() {
         Long cohortId = fixture.createCohort("기수종료-격리");
         OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
@@ -163,11 +180,20 @@ class CohortEndedCleanupIT {
 
         willThrow(new IllegalStateException("알림 삭제 실패"))
                 .given(spiedVacancyAlertService).discardByMemberships(anyCollection());
+        endAllMemberships(cohortId);
 
-        assertThatCode(() -> cohortEndedCleanup.cleanUp(cohortId)).doesNotThrowAnyException();
+        OffsetDateTime closedAt = now();
+        assertThatCode(() -> cohortEndedCleanup.cleanUp(cohortId, closedAt))
+                .doesNotThrowAnyException();
 
         assertThat(occupancyStatus(occupancyId)).isEqualTo("ACTIVE");
         assertThat(waitingAlertRows(roomId)).isEqualTo(1);
+        // 점유자의 열린 MEETING은 PR 3 스윕에 맡기고, 단순 PRESENT인 대기자는 바로 닫는다.
+        assertThat(attendanceStatus(occupier.membershipId())).isEqualTo("PRESENT");
+        assertThat(openPresenceRowsByMembership(occupier.membershipId())).isEqualTo(1);
+        assertThat(attendanceStatus(waiter.membershipId())).isEqualTo("MISSING_CHECK_OUT");
+        assertThat(openPresenceRowsByMembership(waiter.membershipId())).isZero();
+        assertThat(latestPresenceEndedAt(waiter.membershipId())).isEqualTo(closedAt);
         assertThat(spaceCohortId(labId)).isNull();
     }
 
@@ -189,10 +215,12 @@ class CohortEndedCleanupIT {
 
         endAllMemberships(cohortId);
 
-        cohortEndedCleanup.cleanUp(cohortId);
+        cohortEndedCleanup.cleanUp(cohortId, now());
 
         assertThat(occupancyStatus(occupancyId)).isEqualTo("RELEASED");
         assertThat(waitingAlertRows(roomId)).isZero();
+        assertThat(attendanceStatus(occupier.membershipId())).isEqualTo("MISSING_CHECK_OUT");
+        assertThat(attendanceStatus(waiter.membershipId())).isEqualTo("MISSING_CHECK_OUT");
     }
 
     /** 명세 08 §5 "훅 중복 수신 — 멱등". 각 단계가 조건부라 두 번째는 대상이 없다. */
@@ -208,11 +236,12 @@ class CohortEndedCleanupIT {
         roomOccupancyService.start(roomId, occupier.userId());
         Long occupancyId = activeOccupancyId(roomId);
 
-        cohortEndedCleanup.cleanUp(cohortId);
+        cohortEndedCleanup.cleanUp(cohortId, now());
         Object firstDeletedAt = teamDeletedAt(teamId);
         Object firstEndedAt = occupancyEndedAt(occupancyId);
 
-        assertThatCode(() -> cohortEndedCleanup.cleanUp(cohortId)).doesNotThrowAnyException();
+        assertThatCode(() -> cohortEndedCleanup.cleanUp(cohortId, now()))
+                .doesNotThrowAnyException();
 
         // 두 번째 실행이 종료 사유·시각을 덮어쓰지 않는다.
         assertThat(teamDeletedAt(teamId)).isEqualTo(firstDeletedAt);
@@ -235,6 +264,10 @@ class CohortEndedCleanupIT {
             }
         }
         throw new AssertionError(message);
+    }
+
+    private OffsetDateTime now() {
+        return OffsetDateTime.now(clock);
     }
 
     /** 점유·팀을 건드리지 않고 소속만 전부 끝낸다 — "종료 훅 시점의 상태"를 재현한다. */
@@ -282,6 +315,62 @@ class CohortEndedCleanupIT {
                 SELECT count(*) FROM learning_service.occupancy_participants
                  WHERE occupancy_id = ? AND left_at IS NULL
                 """, occupancyId);
+    }
+
+    private String attendanceStatus(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT auto_status
+                  FROM learning_service.attendance_records
+                 WHERE cohort_membership_id = ?
+                 ORDER BY id DESC
+                 LIMIT 1
+                """, String.class, membershipId);
+    }
+
+    private Object checkedOutAt(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT checked_out_at
+                  FROM learning_service.attendance_records
+                 WHERE cohort_membership_id = ?
+                 ORDER BY id DESC
+                 LIMIT 1
+                """, Object.class, membershipId);
+    }
+
+    private OffsetDateTime latestPresenceEndedAt(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT presence.ended_at
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                 WHERE attendance.cohort_membership_id = ?
+                 ORDER BY presence.id DESC
+                 LIMIT 1
+                """, OffsetDateTime.class, membershipId);
+    }
+
+    private int openPresenceRows(Long cohortId) {
+        return count("""
+                SELECT count(*)
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                  JOIN learning_service.cohort_memberships membership
+                    ON membership.id = attendance.cohort_membership_id
+                 WHERE membership.cohort_id = ?
+                   AND presence.ended_at IS NULL
+                """, cohortId);
+    }
+
+    private int openPresenceRowsByMembership(Long membershipId) {
+        return count("""
+                SELECT count(*)
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                 WHERE attendance.cohort_membership_id = ?
+                   AND presence.ended_at IS NULL
+                """, membershipId);
     }
 
     private int waitingAlertRows(Long spaceId) {

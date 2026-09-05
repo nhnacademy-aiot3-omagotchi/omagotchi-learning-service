@@ -9,7 +9,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.support.TransactionTemplate;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
+import site.omagotchi.learningservice.cohort.application.CohortLockService;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
 import site.omagotchi.learningservice.occupancy.application.EndedMembershipOccupancyCleanup;
 import site.omagotchi.learningservice.occupancy.application.EndedMembershipOccupancySweep;
@@ -24,12 +27,19 @@ import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSen
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -75,10 +85,16 @@ class OccupancyMembershipEndedIT {
     JdbcTemplate jdbcTemplate;
 
     @Autowired
+    TransactionTemplate transactionTemplate;
+
+    @Autowired
     Clock clock;
 
     @MockitoBean
     VacancyAlertSender vacancyAlertSender;
+
+    @MockitoSpyBean
+    CohortLockService cohortLockService;
 
     @BeforeEach
     void stubSuccessfulSendByDefault() {
@@ -275,7 +291,7 @@ class OccupancyMembershipEndedIT {
      * <p>{@code @Async}라 커밋 직후 다른 Thread에서 돌기 때문에 결과를 기다린다.</p>
      */
     @Test
-    @DisplayName("소속을 종료하면 이벤트가 점유 정리까지 이어진다.")
+    @DisplayName("소속을 종료하면 점유 정리 후 출결 마감까지 이어진다.")
     void membershipEndedEventReachesOccupancyCleanup() {
         Long cohortId = fixture.createCohort("소속종료-배선");
         OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
@@ -285,10 +301,101 @@ class OccupancyMembershipEndedIT {
         Long occupancyId = activeOccupancyId(roomId);
 
         membershipService.end(occupier.membershipId());
+        OffsetDateTime endedAt = membershipEndedAt(occupier.membershipId());
 
-        awaitUntil(() -> "RELEASED".equals(occupancyStatusOrNull(occupancyId)),
-                "소속 종료 이벤트가 점유 정리로 이어지지 않았습니다");
+        awaitUntil(
+                () -> "RELEASED".equals(occupancyStatusOrNull(occupancyId))
+                        && "MISSING_CHECK_OUT".equals(
+                                attendanceStatusOrNull(occupier.membershipId())),
+                "소속 종료 이벤트가 점유·출결 정리로 이어지지 않았습니다"
+        );
         assertThat(openParticipantRows(occupancyId)).isZero();
+        assertThat(openPresenceRows(occupier.membershipId())).isZero();
+        assertThat(attendanceCheckedOutAt(occupier.membershipId())).isNull();
+        assertThat(latestPresenceEndedAt(occupier.membershipId())).isEqualTo(endedAt);
+    }
+
+    @Test
+    @DisplayName("점유하지 않은 일반 재실도 소속 종료 이벤트로 마감된다.")
+    void membershipEndedEventClosesSimplePresence() {
+        Long cohortId = fixture.createCohort("소속종료-일반재실");
+        OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
+
+        membershipService.end(member.membershipId());
+        OffsetDateTime endedAt = membershipEndedAt(member.membershipId());
+
+        awaitUntil(
+                () -> "MISSING_CHECK_OUT".equals(
+                        attendanceStatusOrNull(member.membershipId())),
+                "소속 종료 이벤트가 일반 재실 출결을 마감하지 않았습니다"
+        );
+        assertThat(openPresenceRows(member.membershipId())).isZero();
+        assertThat(attendanceCheckedOutAt(member.membershipId())).isNull();
+        assertThat(latestPresenceEndedAt(member.membershipId())).isEqualTo(endedAt);
+    }
+
+    /**
+     * 점유가 ACTIVE 소속 행을 잡은 정확한 시점에 종료를 겹친다. 종료 UPDATE가 그 잠금을
+     * 기다리지 않으면, 정리 대상 조회와 미퇴실 확정 사이에 MEETING이 생길 수 있다.
+     */
+    @Test
+    @DisplayName("점유와 소속 종료가 겹치면 소속 잠금으로 직렬화한 뒤 체류를 일관되게 마감한다.")
+    void serializesMeetingEntryWithMembershipEnd() throws Exception {
+        Long cohortId = fixture.createCohort("소속종료-동시점유");
+        OccupancyTestFixture.Member member = fixture.createActiveMember(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "소속종료-동시점유-1", 8);
+
+        CountDownLatch membershipLocked = new CountDownLatch(1);
+        CountDownLatch allowOccupancyToContinue = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            Object locked = invocation.callRealMethod();
+            membershipLocked.countDown();
+            if (!allowOccupancyToContinue.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("점유 재개 신호를 기다리다 타임아웃했습니다");
+            }
+            return locked;
+        }).when(cohortLockService).lockActiveMembership(member.membershipId());
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        AtomicInteger endingConnectionPid = new AtomicInteger();
+        CountDownLatch endTransactionStarted = new CountDownLatch(1);
+        try {
+            Future<Long> occupancy = pool.submit(() ->
+                    roomOccupancyService.start(roomId, member.userId()).occupancyId());
+            assertThat(membershipLocked.await(10, TimeUnit.SECONDS)).isTrue();
+
+            Future<Boolean> membershipEnd = pool.submit(() -> transactionTemplate.execute(status -> {
+                endingConnectionPid.set(jdbcTemplate.queryForObject(
+                        "select pg_backend_pid()",
+                        Integer.class
+                ));
+                endTransactionStarted.countDown();
+                return membershipService.end(member.membershipId());
+            }));
+            assertThat(endTransactionStarted.await(10, TimeUnit.SECONDS)).isTrue();
+
+            awaitUntil(
+                    () -> isWaitingForDatabaseLock(endingConnectionPid.get()),
+                    "소속 종료가 점유의 소속 잠금을 기다리지 않았습니다"
+            );
+            assertThat(membershipEnd.isDone()).isFalse();
+
+            allowOccupancyToContinue.countDown();
+            Long occupancyId = occupancy.get(30, TimeUnit.SECONDS);
+            assertThat(membershipEnd.get(30, TimeUnit.SECONDS)).isTrue();
+
+            awaitUntil(
+                    () -> "RELEASED".equals(occupancyStatusOrNull(occupancyId))
+                            && "MISSING_CHECK_OUT".equals(
+                                    attendanceStatusOrNull(member.membershipId())),
+                    "직렬화 뒤 점유·출결 정리가 완료되지 않았습니다"
+            );
+            assertThat(openPresenceRows(member.membershipId())).isZero();
+            assertThat(openParticipantRows(occupancyId)).isZero();
+        } finally {
+            allowOccupancyToContinue.countDown();
+            pool.shutdownNow();
+        }
     }
 
     // ────────────────────────────── 정합성 스윕 ──────────────────────────────
@@ -425,6 +532,18 @@ class OccupancyMembershipEndedIT {
         return OffsetDateTime.now(clock);
     }
 
+    private boolean isWaitingForDatabaseLock(int processId) {
+        if (processId == 0) {
+            return false;
+        }
+        Boolean blocked = jdbcTemplate.queryForObject(
+                "select cardinality(pg_blocking_pids(?)) > 0",
+                Boolean.class,
+                processId
+        );
+        return Boolean.TRUE.equals(blocked);
+    }
+
     /** 점유를 건드리지 않고 소속만 끝낸다. "이미 ENDED인 상태로 도착"을 재현할 때 쓴다. */
     private void endMembership(Long membershipId) {
         jdbcTemplate.update("""
@@ -448,6 +567,60 @@ class OccupancyMembershipEndedIT {
                 .stream()
                 .findFirst()
                 .orElse(null);
+    }
+
+    private String attendanceStatusOrNull(Long membershipId) {
+        return jdbcTemplate.queryForList("""
+                        SELECT auto_status
+                          FROM learning_service.attendance_records
+                         WHERE cohort_membership_id = ?
+                         ORDER BY id DESC
+                         LIMIT 1
+                        """, String.class, membershipId)
+                .stream()
+                .findFirst()
+                .orElse(null);
+    }
+
+    private int openPresenceRows(Long membershipId) {
+        return count("""
+                SELECT count(*)
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                 WHERE attendance.cohort_membership_id = ?
+                   AND presence.ended_at IS NULL
+                """, membershipId);
+    }
+
+    private Object attendanceCheckedOutAt(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT checked_out_at
+                  FROM learning_service.attendance_records
+                 WHERE cohort_membership_id = ?
+                 ORDER BY id DESC
+                 LIMIT 1
+                """, Object.class, membershipId);
+    }
+
+    private OffsetDateTime latestPresenceEndedAt(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT presence.ended_at
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                 WHERE attendance.cohort_membership_id = ?
+                 ORDER BY presence.id DESC
+                 LIMIT 1
+                """, OffsetDateTime.class, membershipId);
+    }
+
+    private OffsetDateTime membershipEndedAt(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT ended_at
+                  FROM learning_service.cohort_memberships
+                 WHERE id = ?
+                """, OffsetDateTime.class, membershipId);
     }
 
     private Object occupancyEndedAt(Long occupancyId) {

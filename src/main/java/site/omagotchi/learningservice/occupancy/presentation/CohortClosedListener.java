@@ -29,12 +29,12 @@ public class CohortClosedListener {
     private final CohortEndedCleanup cohortEndedCleanup;
 
     /**
-     * 정해진 순서로 네 단계를 밟는다.
+     * 이벤트에 기록된 종료 시각으로 정해진 여섯 단계를 밟는다.
      */
     @Async(AsyncConfig.EVENT_EXECUTOR)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onCohortClosed(CohortClosedEvent event) {
         log.info("기수 종료 정리를 시작합니다. cohortId={}", event.cohortId());
-        cohortEndedCleanup.cleanUp(event.cohortId());
+        cohortEndedCleanup.cleanUp(event.cohortId(), event.closedAt());
     }
 }

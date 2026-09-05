@@ -7,23 +7,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import site.omagotchi.learningservice.attendance.application.CohortEndedAttendanceCleanup;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.occupancy.application.port.RoomOccupancyRepository;
 import site.omagotchi.learningservice.sensor.application.CohortEndedSensorCleanup;
 import site.omagotchi.learningservice.space.application.CohortEndedSpaceCleanup;
 import site.omagotchi.learningservice.team.application.CohortEndedTeamCleanup;
 
-import java.time.Clock;
-import java.time.Instant;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
@@ -31,7 +28,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
- * 기수 종료 5단계의 순서와 실패 정책 (CE-01~05, 명세 08).
+ * 기수 종료 6단계의 순서와 실패 정책 (명세 08).
  *
  * <p><b>순서는 여기서만 결정적으로 검증된다.</b> 통합 테스트는 관찰 가능한 결과(누가 알림을
  * 받았는가)를 보는데, 순서가 뒤집혀도 CE-02의 삭제가 비동기 발송보다 빠르면 결과가 같아
@@ -43,6 +40,10 @@ class CohortEndedCleanupTest {
 
     private static final Long COHORT_ID = 3L;
     private static final List<Long> MEMBERSHIP_IDS = List.of(10L, 11L);
+    private static final UUID OCCUPIER_USER_ID =
+            UUID.fromString("00000000-0000-0000-0000-000000000010");
+    private static final OffsetDateTime CLOSED_AT =
+            OffsetDateTime.parse("2026-07-24T10:00:00+09:00");
 
     @Mock
     private CohortEndedTeamCleanup teamCleanup;
@@ -60,6 +61,9 @@ class CohortEndedCleanupTest {
     private EndedMembershipOccupancyCleanup occupancyCleanup;
 
     @Mock
+    private CohortEndedAttendanceCleanup attendanceCleanup;
+
+    @Mock
     private CohortEndedSensorCleanup sensorCleanup;
 
     @Mock
@@ -75,9 +79,9 @@ class CohortEndedCleanupTest {
                 vacancyAlertService,
                 occupancyRepository,
                 occupancyCleanup,
+                attendanceCleanup,
                 sensorCleanup,
-                spaceCleanup,
-                Clock.fixed(Instant.parse("2026-07-24T01:00:00Z"), ZoneId.of("Asia/Seoul"))
+                spaceCleanup
         );
         // 조회 실패 테스트가 willThrow로 덮어쓰면 이 스텁이 미사용이 된다 — lenient로 둔다.
         org.mockito.Mockito.lenient()
@@ -90,17 +94,26 @@ class CohortEndedCleanupTest {
      * 발송이 방금 종료된 기수의 신청을 대기 중으로 보고 그 학생들에게 알림을 보낸다.
      */
     @Test
-    @DisplayName("팀 정리 → 알림 삭제 → 점유 종료 → 센서 회수 → 공간 해제 순서를 지킨다.")
+    @DisplayName("팀 → 알림 → 점유 → 출결 → 센서 → 공간 순서를 지킨다.")
     void keepsMandatedStepOrder() {
         givenOneActiveOccupancy();
 
-        cohortEndedCleanup.cleanUp(COHORT_ID);
+        cohortEndedCleanup.cleanUp(COHORT_ID, CLOSED_AT);
 
         InOrder order = inOrder(
-                teamCleanup, vacancyAlertService, occupancyRepository, sensorCleanup, spaceCleanup);
+                teamCleanup,
+                vacancyAlertService,
+                occupancyRepository,
+                occupancyCleanup,
+                attendanceCleanup,
+                sensorCleanup,
+                spaceCleanup
+        );
         order.verify(teamCleanup).disbandAllByCohort(COHORT_ID);
         order.verify(vacancyAlertService).discardByMemberships(MEMBERSHIP_IDS);
         order.verify(occupancyRepository).findActiveSummariesByOccupierMembershipIds(MEMBERSHIP_IDS);
+        order.verify(occupancyCleanup).cleanUp(10L, OCCUPIER_USER_ID, CLOSED_AT);
+        order.verify(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS, CLOSED_AT);
         // 센서 회수가 공간 해제보다 먼저다. 뒤집히면 spaces.cohort_id가 이미 NULL이라
         // 대상 센서를 하나도 찾지 못하고, 회수되지 못한 센서의 룰이 계속 발화한다.
         order.verify(sensorCleanup).deactivateSensors(COHORT_ID);
@@ -114,7 +127,7 @@ class CohortEndedCleanupTest {
         willThrow(new IllegalStateException("boom"))
                 .given(sensorCleanup).deactivateSensors(COHORT_ID);
 
-        cohortEndedCleanup.cleanUp(COHORT_ID);
+        cohortEndedCleanup.cleanUp(COHORT_ID, CLOSED_AT);
 
         verify(spaceCleanup).unassignSpaces(COHORT_ID);
     }
@@ -129,9 +142,11 @@ class CohortEndedCleanupTest {
         willThrow(new IllegalStateException("삭제 실패"))
                 .given(vacancyAlertService).discardByMemberships(anyCollection());
 
-        assertThatCode(() -> cohortEndedCleanup.cleanUp(COHORT_ID)).doesNotThrowAnyException();
+        assertThatCode(() -> cohortEndedCleanup.cleanUp(COHORT_ID, CLOSED_AT))
+                .doesNotThrowAnyException();
 
         verify(occupancyRepository, never()).findActiveSummariesByOccupierMembershipIds(anyCollection());
+        verify(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS, CLOSED_AT);
         verify(spaceCleanup).unassignSpaces(COHORT_ID);
     }
 
@@ -147,9 +162,11 @@ class CohortEndedCleanupTest {
         willThrow(new IllegalStateException("팀 정리 실패"))
                 .given(teamCleanup).disbandAllByCohort(COHORT_ID);
 
-        assertThatCode(() -> cohortEndedCleanup.cleanUp(COHORT_ID)).doesNotThrowAnyException();
+        assertThatCode(() -> cohortEndedCleanup.cleanUp(COHORT_ID, CLOSED_AT))
+                .doesNotThrowAnyException();
 
         verify(vacancyAlertService).discardByMemberships(MEMBERSHIP_IDS);
+        verify(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS, CLOSED_AT);
         verify(spaceCleanup).unassignSpaces(COHORT_ID);
     }
 
@@ -163,10 +180,12 @@ class CohortEndedCleanupTest {
         willThrow(new IllegalStateException("조회 실패"))
                 .given(cohortMembershipQueryService).findMembershipIds(COHORT_ID);
 
-        assertThatCode(() -> cohortEndedCleanup.cleanUp(COHORT_ID)).doesNotThrowAnyException();
+        assertThatCode(() -> cohortEndedCleanup.cleanUp(COHORT_ID, CLOSED_AT))
+                .doesNotThrowAnyException();
 
         verify(vacancyAlertService, never()).discardByMemberships(anyCollection());
         verify(occupancyRepository, never()).findActiveSummariesByOccupierMembershipIds(anyCollection());
+        verify(attendanceCleanup, never()).closeAllByCohort(any(), any());
         verify(spaceCleanup).unassignSpaces(COHORT_ID);
     }
 
@@ -183,17 +202,36 @@ class CohortEndedCleanupTest {
         willThrow(new IllegalStateException("정리 실패"))
                 .given(occupancyCleanup).cleanUp(org.mockito.ArgumentMatchers.eq(10L), any(), any());
 
-        assertThatCode(() -> cohortEndedCleanup.cleanUp(COHORT_ID)).doesNotThrowAnyException();
+        assertThatCode(() -> cohortEndedCleanup.cleanUp(COHORT_ID, CLOSED_AT))
+                .doesNotThrowAnyException();
 
         verify(occupancyCleanup).cleanUp(
                 org.mockito.ArgumentMatchers.eq(11L), org.mockito.ArgumentMatchers.eq(secondUser),
-                any(OffsetDateTime.class));
+                org.mockito.ArgumentMatchers.eq(CLOSED_AT));
+        verify(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS, CLOSED_AT);
+        verify(spaceCleanup).unassignSpaces(COHORT_ID);
+    }
+
+    @Test
+    @DisplayName("출결 정리 단계가 실패해도 센서 회수와 공간 해제는 진행한다.")
+    void attendanceCleanupFailureDoesNotBlockLaterSteps() {
+        willThrow(new IllegalStateException("출결 정리 실패"))
+                .given(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS, CLOSED_AT);
+
+        assertThatCode(() -> cohortEndedCleanup.cleanUp(COHORT_ID, CLOSED_AT))
+                .doesNotThrowAnyException();
+
+        verify(sensorCleanup).deactivateSensors(COHORT_ID);
         verify(spaceCleanup).unassignSpaces(COHORT_ID);
     }
 
     private void givenOneActiveOccupancy() {
         given(occupancyRepository.findActiveSummariesByOccupierMembershipIds(MEMBERSHIP_IDS))
                 .willReturn(List.of(
-                        new RoomOccupancyRepository.ActiveOccupancy(100L, 10L, UUID.randomUUID())));
+                        new RoomOccupancyRepository.ActiveOccupancy(
+                                100L,
+                                10L,
+                                OCCUPIER_USER_ID
+                        )));
     }
 }

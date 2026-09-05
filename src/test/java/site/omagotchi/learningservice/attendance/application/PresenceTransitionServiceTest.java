@@ -9,6 +9,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import site.omagotchi.learningservice.attendance.application.result.AttendanceCloseResult;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
 import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
@@ -420,11 +421,93 @@ class PresenceTransitionServiceTest {
         stubAttendance(attendance(false));
         stubOpenIntervals(current);
 
-        service.closeAttendance(ATTENDANCE_ID, at);
+        boolean closed = service.closeAttendance(ATTENDANCE_ID, at);
 
+        assertThat(closed).isTrue();
         assertThat(current.getEndedAt()).isEqualTo(at);
         verify(presenceIntervalRepository).save(current);
         verify(presenceIntervalRepository, never()).delete(any(PresenceInterval.class));
+    }
+
+    @Test
+    @DisplayName("열린 체류 구간이 없는 출결 마감은 변경 없음으로 응답한다")
+    void returnsFalseWithoutOpenInterval() {
+        stubAttendance(attendance(false));
+        when(presenceIntervalRepository
+                .findByAttendanceIdAndEndedAtIsNullOrderByStartedAtAscIdAsc(ATTENDANCE_ID))
+                .thenReturn(List.of());
+
+        boolean closed = service.closeAttendance(
+                ATTENDANCE_ID,
+                Instant.parse("2026-08-31T04:00:00Z")
+        );
+
+        assertThat(closed).isFalse();
+        verify(presenceIntervalRepository, never()).save(any(PresenceInterval.class));
+    }
+
+    @Test
+    @DisplayName("미퇴실 확정용 마감은 잠금 뒤 열린 MEETING을 닫지 않고 알린다")
+    void preservesOpenMeetingForOccupancyCleanup() {
+        PresenceInterval meeting = presence(
+                PresenceState.MEETING,
+                MEETING_ID,
+                "2026-08-31T02:00:00Z"
+        );
+        stubAttendance(attendance(false));
+        stubOpenIntervals(meeting);
+
+        AttendanceCloseResult result = service.closeAttendanceUnlessMeeting(
+                ATTENDANCE_ID,
+                MEMBERSHIP_ID,
+                Instant.parse("2026-08-31T04:00:00Z")
+        );
+
+        assertThat(result).isEqualTo(AttendanceCloseResult.MEETING_OPEN);
+        assertThat(meeting.getEndedAt()).isNull();
+        verify(attendanceRecordRepository).findByIdForUpdate(ATTENDANCE_ID);
+        verify(presenceIntervalRepository, never()).save(any(PresenceInterval.class));
+    }
+
+    @Test
+    @DisplayName("미퇴실 확정용 마감은 열린 PRESENT를 닫고 CLOSED를 반환한다")
+    void closesOpenPresentForMissingCheckOut() {
+        Instant at = Instant.parse("2026-08-31T04:00:00Z");
+        PresenceInterval present = presence(
+                PresenceState.PRESENT,
+                LAB_A_ID,
+                "2026-08-31T02:00:00Z"
+        );
+        stubAttendance(attendance(false));
+        stubOpenIntervals(present);
+
+        AttendanceCloseResult result = service.closeAttendanceUnlessMeeting(
+                ATTENDANCE_ID,
+                MEMBERSHIP_ID,
+                at
+        );
+
+        assertThat(result).isEqualTo(AttendanceCloseResult.CLOSED);
+        assertThat(present.getEndedAt()).isEqualTo(at);
+        verify(presenceIntervalRepository).save(present);
+    }
+
+    @Test
+    @DisplayName("미퇴실 확정용 마감은 열린 구간이 없으면 ALREADY_CLOSED를 반환한다")
+    void reportsAlreadyClosedForMissingCheckOut() {
+        stubAttendance(attendance(false));
+        when(presenceIntervalRepository
+                .findByAttendanceIdAndEndedAtIsNullOrderByStartedAtAscIdAsc(ATTENDANCE_ID))
+                .thenReturn(List.of());
+
+        AttendanceCloseResult result = service.closeAttendanceUnlessMeeting(
+                ATTENDANCE_ID,
+                MEMBERSHIP_ID,
+                Instant.parse("2026-08-31T04:00:00Z")
+        );
+
+        assertThat(result).isEqualTo(AttendanceCloseResult.ALREADY_CLOSED);
+        verify(presenceIntervalRepository, never()).save(any(PresenceInterval.class));
     }
 
     @Test

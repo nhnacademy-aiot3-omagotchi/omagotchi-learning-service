@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.AttendancePresenceQueryService;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
+import site.omagotchi.learningservice.cohort.application.CohortLockService;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
@@ -29,9 +30,9 @@ import java.util.UUID;
  * {@code uq_occupancy_participants_one_active}가 계정 기준이라 그 사용자가 영구히
  * 다른 회의에 참여할 수 없게 된다.</p>
  *
- * <p>락 순서는 {@code room_occupancies} 하나뿐이다. 점유 시작이 spaces → room_occupancies
- * 순으로 잡으므로 부분집합이라 데드락이 없다. {@code spaces}는 정원을 읽기만 하고
- * 락을 잡지 않는다 — 정원이 바뀌어도 이미 들어온 참여자를 쫓아내지는 않기 때문이다.</p>
+ * <p>참여자 추가의 락 순서는 cohort_memberships → room_occupancies → attendance_records다.
+ * {@code spaces}는 정원을 읽기만 하고 락을 잡지 않는다 — 정원이 바뀌어도 이미 들어온
+ * 참여자를 쫓아내지는 않기 때문이다.</p>
  *
  * <p>기수 정합(MR-33)이 이 클래스의 핵심 책임이다. 스키마 v1.3에서 {@code cohort_id}
  * 컬럼과 복합 FK를 제거했으므로 DB가 "참여자의 기수 = 점유자의 기수"를 보장하지 않는다.
@@ -46,6 +47,7 @@ public class OccupancyParticipantService {
     private final SpaceAccessService spaceAccessService;
     private final AttendancePresenceQueryService attendancePresenceQueryService;
     private final CohortMembershipQueryService cohortMembershipQueryService;
+    private final CohortLockService cohortLockService;
     private final RoomOccupancyRepository occupancyRepository;
     private final OccupancyParticipantRepository participantRepository;
     private final MeetingPresenceCoordinator meetingPresenceCoordinator;
@@ -91,11 +93,14 @@ public class OccupancyParticipantService {
         OpenPresenceView presence = attendancePresenceQueryService.findOpenPresence(targetUserId)
                 .orElseThrow(() -> new BusinessException(OccupancyErrorCode.TARGET_NOT_PRESENT));
 
-        // MR-33. 재실 구간에서 온 "실제로 저장할 멤버십"의 기수를 비교한다.
+        // MR-33. 재실 구간에서 온 "실제로 저장할 멤버십"을 잠근 뒤 기수를 비교한다.
         // 대상 계정이 점유자 기수에 소속돼 있는지만 보면, 다기수 담당자가 다른 기수
         // 멤버십으로 출근한 경우 검증을 통과한 기수와 저장되는 기수가 어긋난다.
-        if (!occupierCohortId.equals(cohortIdOf(presence.cohortMembershipId(),
-                OccupancyErrorCode.DIFFERENT_COHORT))) {
+        CohortMembershipView lockedTargetMembership = cohortLockService
+                .lockActiveMembership(presence.cohortMembershipId())
+                .orElseThrow(() -> new BusinessException(
+                        OccupancyErrorCode.TARGET_MEMBERSHIP_NOT_ACTIVE));
+        if (!occupierCohortId.equals(lockedTargetMembership.cohortId())) {
             throw new BusinessException(OccupancyErrorCode.DIFFERENT_COHORT);
         }
 

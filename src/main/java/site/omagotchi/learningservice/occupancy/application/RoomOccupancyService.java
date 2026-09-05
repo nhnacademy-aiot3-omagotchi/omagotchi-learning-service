@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.AttendancePresenceQueryService;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
+import site.omagotchi.learningservice.cohort.application.CohortLockService;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
 import site.omagotchi.learningservice.occupancy.application.port.OccupancyEventPublisher;
@@ -25,8 +26,9 @@ import java.util.UUID;
 /**
  * 회의실 점유 시작 (MR-01, 08, 09, 10, 11, 20, 22, 27, 35 / RM-13).
  *
- * <p><b>락 순서는 항상 spaces → room_occupancies 로 고정한다.</b> 연장·반납(#7)과
- * 참여자 추가(#6)도 같은 순서를 따라야 하며, 어기면 데드락이 난다.</p>
+ * <p><b>점유 시작의 락 순서는 cohort_memberships → spaces → attendance_records다.</b>
+ * 소속 종료와 MEETING 생성을 직렬화하려 소속을 먼저 잡고, 기존 공간·출결 잠금 순서를
+ * 그 뒤에 유지한다.</p>
  *
  * <p>검증을 락 밖에서 먼저 끝내고 락 구간에는 확인과 INSERT만 남긴다 —
  * 재실 조회는 출결 모듈 호출이라 락 안에 넣으면 그 시간만큼 같은 회의실의 다른
@@ -56,6 +58,7 @@ public class RoomOccupancyService {
 
     private final SpaceAccessService spaceAccessService;
     private final AttendancePresenceQueryService attendancePresenceQueryService;
+    private final CohortLockService cohortLockService;
     private final RoomOccupancyRepository occupancyRepository;
     private final OccupancyParticipantRepository participantRepository;
     private final MeetingPresenceCoordinator meetingPresenceCoordinator;
@@ -91,6 +94,12 @@ public class RoomOccupancyService {
         OpenPresenceView presence = findOpenPresence(userId);                      // MR-22
 
         // ── 락 구간 ──────────────────────────────────────────────
+        // 재실 조회 뒤 소속 종료가 먼저 커밋됐으면 여기서 막힌다. 반대로 이 요청이
+        // 먼저 잠그면 종료 UPDATE가 점유와 MEETING 저장 커밋까지 기다린다.
+        cohortLockService.lockActiveMembership(presence.cohortMembershipId())
+                .orElseThrow(() -> new BusinessException(
+                        OccupancyErrorCode.MEMBERSHIP_NOT_ACTIVE));
+
         // 활성 조건을 쿼리에 넣지 않고 락 획득 후 확인한다. 그래야 "비활성화 커밋 직후
         // 도착한 요청"을 404가 아니라 400으로 정확히 잡는다.
         SpaceAccessView locked = spaceAccessService.lock(spaceId)

@@ -84,10 +84,11 @@ class RestPredictionClientTest {
         assertEquals(7.21, result.predictedStudyHours());
         assertEquals("study-time-model", result.modelVersion());
         assertThat(output.getOut())
-                .contains("prediction-service 공부시간 예측 호출에 성공했습니다.")
-                .contains("status=200")
-                .contains("elapsedMs=")
-                .contains("modelVersion=study-time-model");
+                .contains("prediction-service 공부시간 예측 호출 성공:")
+                .contains("응답상태(status)=200")
+                .contains("prediction-service 소요시간(downstreamElapsedMs)=")
+                .doesNotContain("예측시간(predictedStudyHours)")
+                .doesNotContain("모델(modelVersion)");
         server.verify();
     }
 
@@ -106,9 +107,9 @@ class RestPredictionClientTest {
         // Then
         assertEquals(1, exception.getConstraintViolations().size());
         assertThat(output.getOut())
-                .contains("prediction-service 요청 계약을 위반했습니다.")
-                .contains("violationCount=1")
-                .contains("exception=jakarta.validation.ConstraintViolationException");
+                .contains("prediction-service 요청 계약 위반:")
+                .contains("위반수(violationCount)=1건")
+                .contains("예외유형(exception)=jakarta.validation.ConstraintViolationException");
         server.verify();
     }
 
@@ -141,9 +142,9 @@ class RestPredictionClientTest {
         // Then
         assertEquals("예측 요청은 null일 수 없습니다.", exception.getMessage());
         assertThat(output.getOut())
-                .contains("prediction-service 요청 계약을 위반했습니다.")
-                .contains("violationCount=0")
-                .contains("exception=java.lang.IllegalArgumentException");
+                .contains("prediction-service 요청 계약 위반:")
+                .contains("위반수(violationCount)=0건")
+                .contains("예외유형(exception)=java.lang.IllegalArgumentException");
         server.verify();
     }
 
@@ -253,11 +254,12 @@ class RestPredictionClientTest {
         assertEquals(Reason.BAD_RESPONSE, exception.getReason());
         assertEquals(200, exception.getResponseStatus());
         assertThat(output.getOut())
-                .contains("prediction-service 응답이 올바르지 않습니다.")
-                .contains("status=200")
-                .contains("failure=OUT_OF_RANGE_PREDICTED_STUDY_HOURS")
-                .contains("elapsedMs=")
-                .contains("exception=none");
+                .contains("prediction-service 응답 계약 위반:")
+                .contains("응답상태(status)=200")
+                .contains("실패상세(failure)=범위를 벗어난 예측시간"
+                        + "(OUT_OF_RANGE_PREDICTED_STUDY_HOURS)")
+                .contains("prediction-service 소요시간(downstreamElapsedMs)=")
+                .contains("예외유형(exception)=없음(none)");
         server.verify();
     }
 
@@ -322,10 +324,11 @@ class RestPredictionClientTest {
         assertInstanceOf(ResourceAccessException.class, exception.getCause());
         assertInstanceOf(ConnectException.class, exception.getCause().getCause());
         assertThat(output.getOut())
-                .contains("prediction-service 공부시간 예측 호출에 실패했습니다.")
-                .contains("reason=UNAVAILABLE")
-                .contains("elapsedMs=")
-                .contains("exception=org.springframework.web.client.ResourceAccessException")
+                .contains("prediction-service 공부시간 예측 호출 실패:")
+                .contains("실패사유(reason)=서비스 연결 불가(UNAVAILABLE)")
+                .contains("prediction-service 소요시간(downstreamElapsedMs)=")
+                .contains("예외유형(exception)="
+                        + "org.springframework.web.client.ResourceAccessException")
                 .doesNotContain("connection refused");
     }
 
@@ -348,9 +351,11 @@ class RestPredictionClientTest {
         assertInstanceOf(ResourceAccessException.class, exception.getCause());
         assertInstanceOf(SocketTimeoutException.class, exception.getCause().getCause());
         assertThat(output.getOut())
-                .contains("prediction-service 공부시간 예측 호출 시간이 초과되었습니다.")
-                .contains("elapsedMs=")
-                .contains("exception=org.springframework.web.client.ResourceAccessException")
+                .contains("prediction-service 공부시간 예측 호출 시간 초과:")
+                .contains("실패사유(reason)=시간 초과(TIMEOUT)")
+                .contains("prediction-service 소요시간(downstreamElapsedMs)=")
+                .contains("예외유형(exception)="
+                        + "org.springframework.web.client.ResourceAccessException")
                 .doesNotContain("read timed out");
     }
 

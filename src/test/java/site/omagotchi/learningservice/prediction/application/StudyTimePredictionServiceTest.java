@@ -108,10 +108,12 @@ class StudyTimePredictionServiceTest {
         inOrder.verify(requestAssembler).assemble(snapshot);
         inOrder.verify(predictionClient).predict(request, REQUEST_ID);
         assertThat(output.getOut())
-                .contains("공부시간 예측을 완료했습니다.")
-                .contains("userIdMasked=00000000, cohortId=10, featureDate=1999-12-31")
-                .contains("elapsedMs=")
-                .contains("modelVersion=study-time-model");
+                .contains("공부시간 예측 완료:")
+                .contains("사용자(userIdMasked)=00000000, 기수(cohortId)=10")
+                .contains("피처 기준일(featureDate)=1999-12-31")
+                .contains("예측시간(predictedStudyHours)=7.21시간")
+                .contains("소요시간(elapsedMs)=")
+                .contains("모델(modelVersion)=study-time-model");
     }
 
     @Test
@@ -129,7 +131,7 @@ class StudyTimePredictionServiceTest {
         assertSame(expected, actual);
         verifyNoInteractions(featureSnapshotReader, requestAssembler, predictionClient, clock);
         assertThat(output.getOut())
-                .doesNotContain("공부시간 예측에 실패했습니다.");
+                .doesNotContain("공부시간 예측 실패:");
     }
 
     @Test
@@ -159,10 +161,11 @@ class StudyTimePredictionServiceTest {
 
         assertSame(expected, actual);
         assertThat(output.getOut())
-                .contains("공부시간 예측에 실패했습니다.")
-                .contains("userIdMasked=00000000, cohortId=10, featureDate=1999-12-31")
-                .contains("reason=TIMEOUT")
-                .contains("elapsedMs=")
+                .contains("공부시간 예측 실패:")
+                .contains("사용자(userIdMasked)=00000000, 기수(cohortId)=10")
+                .contains("피처 기준일(featureDate)=1999-12-31")
+                .contains("실패사유(reason)=시간 초과(TIMEOUT)")
+                .contains("소요시간(elapsedMs)=")
                 .doesNotContain("timeout");
     }
 

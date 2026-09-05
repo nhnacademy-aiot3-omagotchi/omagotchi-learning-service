@@ -6,7 +6,6 @@ package site.omagotchi.learningservice.team.application.port;
  */
 public enum IdentityAccountState {
     ACTIVE,
-    LOCKED,
     DISABLED,
     WITHDRAWN
 }

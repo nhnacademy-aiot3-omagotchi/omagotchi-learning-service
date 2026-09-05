@@ -15,18 +15,25 @@ public final class QuestTargetPolicy {
     private static final int SECONDS_PER_HOUR = 3600;
 
     /**
-     * @param predictedStudyHours 모델이 예측한 공부 시간(시간 단위)
-     * @return 상·하한으로 클립한 목표 시간(초)
+     * 예측값에 도전 계수를 적용한 중간값과 상·하한 보정 결과를 함께 반환한다.
      */
-    public static int targetSecondsOf(
+    public static Calculation calculate(
             double predictedStudyHours,
             double challengeCoefficient,
             int minTargetSeconds,
             int maxTargetSeconds
     ) {
         double challenged = predictedStudyHours * challengeCoefficient * SECONDS_PER_HOUR;
-        long rounded = Math.round(challenged);
-        return clamp(rounded, minTargetSeconds, maxTargetSeconds);
+        long calculatedTargetSeconds = Math.round(challenged);
+        int targetSeconds = clamp(calculatedTargetSeconds, minTargetSeconds, maxTargetSeconds);
+
+        Adjustment adjustment = adjustmentOf(
+                calculatedTargetSeconds,
+                minTargetSeconds,
+                maxTargetSeconds
+        );
+
+        return new Calculation(calculatedTargetSeconds, targetSeconds, adjustment);
     }
 
     /**
@@ -36,5 +43,32 @@ public final class QuestTargetPolicy {
     public static int clamp(long targetSeconds, int minTargetSeconds, int maxTargetSeconds) {
         long bounded = Math.min(Math.max(targetSeconds, minTargetSeconds), maxTargetSeconds);
         return Math.toIntExact(bounded);
+    }
+
+    public static Adjustment adjustmentOf(
+            long calculatedTargetSeconds,
+            int minTargetSeconds,
+            int maxTargetSeconds
+    ) {
+        if (calculatedTargetSeconds < minTargetSeconds) {
+            return Adjustment.MIN_CLAMP;
+        }
+        if (calculatedTargetSeconds > maxTargetSeconds) {
+            return Adjustment.MAX_CLAMP;
+        }
+        return Adjustment.NONE;
+    }
+
+    public enum Adjustment {
+        NONE,
+        MIN_CLAMP,
+        MAX_CLAMP
+    }
+
+    public record Calculation(
+            long calculatedTargetSeconds,
+            int targetSeconds,
+            Adjustment adjustment
+    ) {
     }
 }

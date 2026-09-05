@@ -39,6 +39,10 @@ public enum OccupancyErrorCode implements ErrorCode {
             "출석(재실) 상태에서만 회의실을 점유할 수 있습니다."),                    // MR-22
     TARGET_NOT_PRESENT(ErrorType.AUTHORIZATION, "OCCUPANCY_TARGET_NOT_PRESENT",
             "재실 상태인 사용자만 참여자로 추가할 수 있습니다."),                     // MR-19
+    MEMBERSHIP_NOT_ACTIVE(ErrorType.AUTHORIZATION, "OCCUPANCY_MEMBERSHIP_NOT_ACTIVE",
+            "종료된 기수 소속으로는 회의실을 이용할 수 없습니다."),                   // 명세 08 §5
+    TARGET_MEMBERSHIP_NOT_ACTIVE(ErrorType.AUTHORIZATION, "OCCUPANCY_TARGET_MEMBERSHIP_NOT_ACTIVE",
+            "종료된 기수 소속인 사용자는 참여자로 추가할 수 없습니다."),              // 명세 08 §5
     NOT_OCCUPIER(ErrorType.AUTHORIZATION, "OCCUPANCY_NOT_OCCUPIER",
             "점유자만 참여자를 관리할 수 있습니다."),                                 // MR-29, MR-31
     PARTICIPANT_ACCESS_DENIED(ErrorType.AUTHORIZATION, "OCCUPANCY_PARTICIPANT_ACCESS_DENIED",

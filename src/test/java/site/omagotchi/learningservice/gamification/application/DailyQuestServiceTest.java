@@ -96,7 +96,7 @@ class DailyQuestServiceTest {
         dailyQuestService.getOrCreateDailyQuests(USER_ID);
 
         verify(dailyQuestIssueRepository).issueIfAbsent(List.of());
-        assertThat(output.getOut()).doesNotContain("일일 퀘스트 발급을 시도했습니다.");
+        assertThat(output.getOut()).doesNotContain("일일 퀘스트 발급 시도 완료:");
     }
 
     @Test
@@ -111,9 +111,30 @@ class DailyQuestServiceTest {
         dailyQuestService.getOrCreateDailyQuests(USER_ID);
 
         assertThat(output.getOut())
-                .contains("일일 퀘스트 발급을 시도했습니다.")
-                .contains("userIdMasked=00000000, questDate=2026-08-05")
-                .contains("candidateCount=5, insertedCount=5")
+                .contains("일일 퀘스트 발급 시도 완료:")
+                .contains("사용자(userIdMasked)=00000000")
+                .contains("퀘스트 날짜(questDate)=2026-08-05")
+                .contains("발급후보(candidateCount)=5건")
+                .contains("신규발급(insertedCount)=5건")
+                .contains("동시충돌(conflictCount)=0건")
+                .doesNotContain(USER_ID.toString());
+    }
+
+    @Test
+    @DisplayName("동시 요청 충돌로 저장되지 않은 퀘스트 건수를 기록한다")
+    void logsDailyQuestIssueConflictCount(CapturedOutput output) {
+        when(userDailyQuestRepository.findByUserIdAndQuestDateOrderByIdAsc(USER_ID, today))
+                .thenReturn(List.of());
+        when(studyTimeQuestTargetResolver.resolve(USER_ID, today))
+                .thenReturn(StudyTimeQuestTarget.model(TARGET_SECONDS, "study-time-test"));
+        when(dailyQuestIssueRepository.issueIfAbsent(any())).thenReturn(3);
+
+        dailyQuestService.getOrCreateDailyQuests(USER_ID);
+
+        assertThat(output.getOut())
+                .contains("발급후보(candidateCount)=5건")
+                .contains("신규발급(insertedCount)=3건")
+                .contains("동시충돌(conflictCount)=2건")
                 .doesNotContain(USER_ID.toString());
     }
 

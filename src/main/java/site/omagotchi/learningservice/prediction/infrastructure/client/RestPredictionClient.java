@@ -57,8 +57,8 @@ public class RestPredictionClient implements PredictionClient {
             // 내부에서 조립한 prediction 요청의 계약 위반이다.
             // 요청 DTO와 위반 값은 개인정보·운영 데이터 노출을 막기 위해 기록하지 않는다.
             log.error(
-                    "prediction-service 요청 계약을 위반했습니다. "
-                            + "violationCount={}, exception={}",
+                    "prediction-service 요청 계약 위반: "
+                            + "위반수(violationCount)={}건, 예외유형(exception)={}",
                     violationCount,
                     exception.getClass().getName()
             );
@@ -109,11 +109,11 @@ public class RestPredictionClient implements PredictionClient {
             );
 
             log.info(
-                    "prediction-service 공부시간 예측 호출에 성공했습니다. "
-                            + "status={}, elapsedMs={}, modelVersion={}",
+                    "prediction-service 공부시간 예측 호출 성공: "
+                            + "응답상태(status)={}, "
+                            + "prediction-service 소요시간(downstreamElapsedMs)={}ms",
                     responseStatus,
-                    elapsedMillis(startedAtNanos),
-                    result.modelVersion()
+                    elapsedMillis(startedAtNanos)
             );
             return result;
         } catch (RestClientResponseException exception) {
@@ -127,8 +127,10 @@ public class RestPredictionClient implements PredictionClient {
         } catch (ResourceAccessException exception) {
             if (hasTimeoutCause(exception)) {
                 log.warn(
-                        "prediction-service 공부시간 예측 호출 시간이 초과되었습니다. "
-                                + "elapsedMs={}, exception={}",
+                        "prediction-service 공부시간 예측 호출 시간 초과: "
+                                + "실패사유(reason)=시간 초과(TIMEOUT), "
+                                + "prediction-service 소요시간(downstreamElapsedMs)={}ms, "
+                                + "예외유형(exception)={}",
                         elapsedMillis(startedAtNanos),
                         exception.getClass().getName()
                 );
@@ -136,8 +138,10 @@ public class RestPredictionClient implements PredictionClient {
             }
 
             log.error(
-                    "prediction-service 공부시간 예측 호출에 실패했습니다. "
-                            + "reason=UNAVAILABLE, elapsedMs={}, exception={}",
+                    "prediction-service 공부시간 예측 호출 실패: "
+                            + "실패사유(reason)=서비스 연결 불가(UNAVAILABLE), "
+                            + "prediction-service 소요시간(downstreamElapsedMs)={}ms, "
+                            + "예외유형(exception)={}",
                     elapsedMillis(startedAtNanos),
                     exception.getClass().getName()
             );
@@ -204,13 +208,20 @@ public class RestPredictionClient implements PredictionClient {
             Throwable cause,
             long startedAtNanos
     ) {
-        String status = responseStatus == null ? "unknown" : responseStatus.toString();
-        String causeType = cause == null ? "none" : cause.getClass().getName();
+        String status = responseStatus == null
+                ? "알 수 없음(unknown)"
+                : responseStatus.toString();
+        String causeType = cause == null
+                ? "없음(none)"
+                : cause.getClass().getName();
         // 응답 본문은 기록하지 않고 상태와 실패 유형만 남긴다.
         log.error(
-                "prediction-service 응답이 올바르지 않습니다. "
-                        + "status={}, failure={}, elapsedMs={}, exception={}",
+                "prediction-service 응답 계약 위반: "
+                        + "응답상태(status)={}, 실패상세(failure)={}({}), "
+                        + "prediction-service 소요시간(downstreamElapsedMs)={}ms, "
+                        + "예외유형(exception)={}",
                 status,
+                badResponseDescription(responseError),
                 responseError,
                 elapsedMillis(startedAtNanos),
                 causeType
@@ -249,6 +260,18 @@ public class RestPredictionClient implements PredictionClient {
             cause = cause.getCause();
         }
         return false;
+    }
+
+    private String badResponseDescription(BadResponseType responseError) {
+        return switch (responseError) {
+            case NON_SUCCESS_STATUS -> "성공이 아닌 HTTP 상태";
+            case EMPTY_BODY -> "응답 본문 없음";
+            case UNREADABLE_BODY -> "응답 본문 해석 불가";
+            case MISSING_PREDICTED_STUDY_HOURS -> "예측시간 누락";
+            case NON_FINITE_PREDICTED_STUDY_HOURS -> "유한하지 않은 예측시간";
+            case OUT_OF_RANGE_PREDICTED_STUDY_HOURS -> "범위를 벗어난 예측시간";
+            case MISSING_MODEL_VERSION -> "모델 버전 누락";
+        };
     }
 
     private record PredictionServiceResponse(

@@ -12,6 +12,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.attendance.application.AttendancePresenceQueryService;
 import site.omagotchi.learningservice.attendance.application.result.OpenPresenceView;
+import site.omagotchi.learningservice.cohort.application.CohortLockService;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
 import site.omagotchi.learningservice.occupancy.application.event.RoomVacatedEvent;
@@ -68,6 +70,9 @@ class RoomOccupancyServiceTest {
     private AttendancePresenceQueryService attendancePresenceQueryService;
 
     @Mock
+    private CohortLockService cohortLockService;
+
+    @Mock
     private RoomOccupancyRepository occupancyRepository;
 
     @Mock
@@ -88,6 +93,7 @@ class RoomOccupancyServiceTest {
         roomOccupancyService = new RoomOccupancyService(
                 spaceAccessService,
                 attendancePresenceQueryService,
+                cohortLockService,
                 occupancyRepository,
                 participantRepository,
                 meetingPresenceCoordinator,
@@ -227,6 +233,28 @@ class RoomOccupancyServiceTest {
     }
 
     @Test
+    @DisplayName("재실 조회 뒤 소속이 종료됐으면 공간을 잠그기 전에 점유를 거절한다.")
+    void rejectsMembershipEndedAfterPresenceQuery() {
+        given(spaceAccessService.find(SPACE_ID)).willReturn(Optional.of(room(true, true)));
+        given(attendancePresenceQueryService.findOpenPresence(USER_ID))
+                .willReturn(Optional.of(new OpenPresenceView(
+                        ATTENDANCE_ID,
+                        MEMBERSHIP_ID,
+                        NOW
+                )));
+        given(cohortLockService.lockActiveMembership(MEMBERSHIP_ID))
+                .willReturn(Optional.empty());
+
+        assertBusinessError(
+                OccupancyErrorCode.MEMBERSHIP_NOT_ACTIVE,
+                () -> roomOccupancyService.start(SPACE_ID, USER_ID)
+        );
+
+        verify(spaceAccessService, never()).lock(SPACE_ID);
+        verify(occupancyRepository, never()).save(any(RoomOccupancy.class));
+    }
+
+    @Test
     @DisplayName("이미 사용 중인 회의실은 점유할 수 없다.")
     void cannotOccupyAlreadyOccupiedRoom() {
         givenLockedRoom();
@@ -294,9 +322,14 @@ class RoomOccupancyServiceTest {
 
         roomOccupancyService.start(SPACE_ID, USER_ID);
 
-        InOrder order = inOrder(spaceAccessService, attendancePresenceQueryService);
+        InOrder order = inOrder(
+                spaceAccessService,
+                attendancePresenceQueryService,
+                cohortLockService
+        );
         order.verify(spaceAccessService).find(SPACE_ID);
         order.verify(attendancePresenceQueryService).findOpenPresence(USER_ID);
+        order.verify(cohortLockService).lockActiveMembership(MEMBERSHIP_ID);
         order.verify(spaceAccessService).lock(SPACE_ID);
     }
 
@@ -413,6 +446,12 @@ class RoomOccupancyServiceTest {
                         ATTENDANCE_ID,
                         MEMBERSHIP_ID,
                         NOW
+                )));
+        given(cohortLockService.lockActiveMembership(MEMBERSHIP_ID))
+                .willReturn(Optional.of(new CohortMembershipView(
+                        MEMBERSHIP_ID,
+                        3L,
+                        USER_ID
                 )));
     }
 

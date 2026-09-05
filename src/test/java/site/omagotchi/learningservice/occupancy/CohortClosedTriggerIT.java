@@ -28,6 +28,7 @@ import site.omagotchi.learningservice.occupancy.application.port.VacancyAlertSen
 import site.omagotchi.learningservice.occupancy.support.OccupancyTestFixture;
 import site.omagotchi.learningservice.team.application.TeamService;
 
+import java.time.OffsetDateTime;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,9 +46,11 @@ import static org.mockito.Mockito.verify;
  * 명세 §5는 "종료 후 잔여 요청 → 활성 멤버십이 없으므로 403"을 전제하는데, 소속을 함께
  * 끝내지 않으면 그 전제가 아예 성립하지 않는다.</p>
  *
- * <p><b>정지는 완전하지 않다.</b> 활성 소속을 보는 경로(공실 신청·팀·참여자)는 막히지만
- * 점유 시작은 재실을 본다 (MR-22). 그 구멍과 받침을 함께 고정해 두었다 —
- * {@code occupancyStartedAfterCloseIsSweptByMembershipSweep}.</p>
+ * <p><b>정지는 이제 점유 시작까지 덮는다.</b> 활성 소속을 보는 경로(공실 신청·팀·참여자)에
+ * 더해, 재실만 보던 점유 시작(MR-22)도 소속 잠금으로 막힌다 —
+ * {@code endedCohortMemberCannotStartOccupancy}. 그래도 종료 직전에 시작된 점유와 훅 유실은
+ * 남으므로 멤버십 스윕이 받침으로 유지된다 —
+ * {@code lingeringOccupancyFromLostHookIsSweptByMembershipSweep}.</p>
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -143,18 +146,19 @@ class CohortClosedTriggerIT {
     }
 
     /**
-     * <b>소속 종료가 모든 경로를 막지는 못한다.</b> 점유 시작은 활성 소속이 아니라
-     * <b>재실</b>을 본다 (MR-22) — 종료 시점에 출근 중이던 학생은 정리가 도는 동안에도
-     * 새 점유를 시작할 수 있고, 그 점유는 CE-03의 대상 조회를 이미 지나쳐 잔존한다.
+     * <b>예전에는 여기가 구멍이었다.</b> 점유 시작이 활성 소속이 아니라 <b>재실</b>만 봤기
+     * 때문에(MR-22), 종료 시점에 출근 중이던 학생은 정리가 도는 동안 새 점유를 시작할 수
+     * 있었고 그 점유는 CE-03의 대상 조회를 이미 지나쳐 잔존했다. 멤버십 스윕이 뒤늦게
+     * 받치는 것이 유일한 방어였다.
      *
-     * <p>이 구멍을 점유 시작에 소속 검사를 더해 막지 않은 것은, 기존 멤버십 스윕이
-     * 이미 받치기 때문이다 — 새 점유가 달고 있는 소속이 ENDED라 스윕이 비활성으로 보고
-     * 정리한다. 여기서 검증하는 것이 그 받침이며, 이것이 성립하지 않으면 점유 시작에
-     * 소속 검사를 넣어야 한다.</p>
+     * <p>지금은 두 겹으로 막힌다 — 종료 훅이 체류 구간을 마감해 재실 자체가 사라지고,
+     * 점유 시작이 소속 행을 잠근 뒤 ACTIVE를 재확인한다. 이 테스트가 보는 것은 후자다.
+     * 소속 잠금은 종료의 벌크 UPDATE와 같은 행에서 직렬화되므로, "재실 조회는 통과했는데
+     * 그 사이 종료가 커밋된" 경합에서도 결과가 갈리지 않는다.</p>
      */
     @Test
-    @DisplayName("종료 후 재실로 시작된 점유는 멤버십 스윕이 정리한다.")
-    void occupancyStartedAfterCloseIsSweptByMembershipSweep() {
+    @DisplayName("종료된 기수의 학생은 재실이 남아 있어도 점유를 시작할 수 없다.")
+    void endedCohortMemberCannotStartOccupancy() {
         Long cohortId = fixture.createCohort("트리거-재실구멍");
         fixture.createActiveMember(cohortId);
         OccupancyTestFixture.Member student = fixture.createActiveStudent(cohortId);
@@ -163,9 +167,34 @@ class CohortClosedTriggerIT {
         activate(cohortId);
         close(cohortId);
 
-        // 재실이 살아 있어 점유 시작이 통과한다 — 이것이 구멍이다.
+        assertThatThrownBy(() -> roomOccupancyService.start(roomId, student.userId()))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isEqualTo(OccupancyErrorCode.MEMBERSHIP_NOT_ACTIVE));
+    }
+
+    /**
+     * <b>스윕은 여전히 필요하다.</b> 점유 시작이 막히면서 "종료 후 시작된 점유"는 더 이상
+     * 생기지 않지만, 종료 <b>직전</b>에 시작돼 CE-03의 대상 조회를 지나친 점유나 훅 자체가
+     * 유실된 경우의 잔여는 그대로 남는다. 그 받침이 아직 성립하는지를 고정한다.
+     *
+     * <p>훅 유실은 {@code staleAlertIsDiscardedInsteadOfSentWhenHookWasLost}와 같은 방식으로
+     * 소속만 끝내 재현한다 — 정리가 돌지 않은 것과 관측 가능한 상태가 같다.</p>
+     */
+    @Test
+    @DisplayName("훅이 유실돼 남은 점유는 멤버십 스윕이 정리한다.")
+    void lingeringOccupancyFromLostHookIsSweptByMembershipSweep() {
+        Long cohortId = fixture.createCohort("트리거-점유잔여");
+        fixture.createActiveMember(cohortId);
+        OccupancyTestFixture.Member student = fixture.createActiveStudent(cohortId);
+        Long roomId = fixture.createMeetingRoom(cohortId, "트리거-점유잔여-회의실", 8);
+
         roomOccupancyService.start(roomId, student.userId());
         Long occupancyId = activeOccupancyId(roomId);
+
+        // 훅이 돌지 않은 채 소속만 끝난 상태 — 점유가 ACTIVE로 남는다.
+        endMembership(student.membershipId());
+        assertThat(occupancyStatus(occupancyId)).isEqualTo("ACTIVE");
 
         occupancySweep.sweep(100);
 
@@ -203,11 +232,11 @@ class CohortClosedTriggerIT {
     }
 
     /**
-     * 트리거가 실제로 4단계에 닿는지 — 관리자 명령 하나로 팀·알림·점유·실습실이 모두
+     * 트리거가 실제로 6단계에 닿는지 — 관리자 명령 하나로 팀·알림·점유·출결·실습실이 모두
      * 정리돼야 한다. 각 단계의 세부 규칙은 {@code CohortEndedCleanupIT}가 본다.
      */
     @Test
-    @DisplayName("기수 종료 한 번으로 팀·알림·점유·실습실이 모두 정리된다.")
+    @DisplayName("기수 종료 한 번으로 팀·알림·점유·출결·실습실이 모두 정리된다.")
     void oneStatusChangeDrivesEveryCleanupStep() {
         Long cohortId = fixture.createCohort("트리거-전체정리");
         OccupancyTestFixture.Member manager = fixture.createActiveMember(cohortId);
@@ -230,6 +259,12 @@ class CohortClosedTriggerIT {
         assertThat(waitingAlertRows(roomId)).isZero();
         assertThat(openParticipantRows(occupancyId)).isZero();
         assertThat(occupancyStatus(occupancyId)).isEqualTo("RELEASED");
+        assertThat(attendanceStatus(manager.membershipId())).isEqualTo("MISSING_CHECK_OUT");
+        assertThat(attendanceStatus(occupier.membershipId())).isEqualTo("MISSING_CHECK_OUT");
+        assertThat(attendanceStatus(waiter.membershipId())).isEqualTo("MISSING_CHECK_OUT");
+        assertThat(openPresenceRows(cohortId)).isZero();
+        assertThat(latestPresenceEndedAt(waiter.membershipId()))
+                .isEqualTo(membershipEndedAt(waiter.membershipId()));
         assertThat(spaceCohortId(labId)).isNull();
         // 회의실도 유형을 가리지 않고 관리 주체가 해제된다 — 그렇지 않으면 종료 기수를
         // 가리킨 채 동결된다. 인수·삭제 순환은 SpaceManagementLifecycleIT가 다룬다.
@@ -349,6 +384,49 @@ class CohortClosedTriggerIT {
                 SELECT count(*) FROM learning_service.occupancy_participants
                  WHERE occupancy_id = ? AND left_at IS NULL
                 """, occupancyId);
+    }
+
+    private String attendanceStatus(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT auto_status
+                  FROM learning_service.attendance_records
+                 WHERE cohort_membership_id = ?
+                 ORDER BY id DESC
+                 LIMIT 1
+                """, String.class, membershipId);
+    }
+
+    private int openPresenceRows(Long cohortId) {
+        return count("""
+                SELECT count(*)
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                  JOIN learning_service.cohort_memberships membership
+                    ON membership.id = attendance.cohort_membership_id
+                 WHERE membership.cohort_id = ?
+                   AND presence.ended_at IS NULL
+                """, cohortId);
+    }
+
+    private OffsetDateTime latestPresenceEndedAt(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT presence.ended_at
+                  FROM learning_service.presence_intervals presence
+                  JOIN learning_service.attendance_records attendance
+                    ON attendance.id = presence.attendance_id
+                 WHERE attendance.cohort_membership_id = ?
+                 ORDER BY presence.id DESC
+                 LIMIT 1
+                """, OffsetDateTime.class, membershipId);
+    }
+
+    private OffsetDateTime membershipEndedAt(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT ended_at
+                  FROM learning_service.cohort_memberships
+                 WHERE id = ?
+                """, OffsetDateTime.class, membershipId);
     }
 
     private int waitingAlertRows(Long spaceId) {

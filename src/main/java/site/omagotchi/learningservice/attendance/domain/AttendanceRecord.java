@@ -118,9 +118,27 @@ public class AttendanceRecord {
         this.finalStatus = AttendanceStatus.ABSENT;
     }
 
-    public void markMissingCheckOut() {
+    /**
+     * 체크인은 했지만 정상 퇴실하지 못한 출결을 관리자 확인 대상으로 확정한다.
+     *
+     * <p>{@code checkedOutAt}은 채우지 않는다. 실제 퇴실 시각을 알 수 없다는 사실을
+     * 보존하고, 현재 재실 여부는 별도의 체류 구간 마감으로 해소한다.</p>
+     *
+     * <p>정합성 정리와 이벤트 재수신에서 반복 호출될 수 있으므로 멱등하다. 특히 이미
+     * {@code MISSING_CHECK_OUT}으로 자동 판정된 뒤 관리자가 최종 상태를 교정했다면,
+     * 재실행이 그 교정을 다시 덮어쓰지 않는다.</p>
+     *
+     * @return 이번 호출로 상태를 변경했으면 {@code true}
+     */
+    public boolean markMissingCheckOut() {
+        if (checkedInAt == null
+                || checkedOutAt != null
+                || autoStatus == AttendanceStatus.MISSING_CHECK_OUT) {
+            return false;
+        }
         this.autoStatus = AttendanceStatus.MISSING_CHECK_OUT;
         this.finalStatus = AttendanceStatus.MISSING_CHECK_OUT;
+        return true;
     }
 
     public void overrideFinalStatus(AttendanceStatus nextStatus) {

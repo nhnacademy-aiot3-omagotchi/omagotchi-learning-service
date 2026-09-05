@@ -203,13 +203,17 @@ public class DailyQuestService {
         // 남은 충돌은 저장소가 ON CONFLICT로 흡수한다.
         int insertedCount = dailyQuestIssueRepository.issueIfAbsent(quests);
         if (!quests.isEmpty()) {
+            int conflictCount = quests.size() - insertedCount;
             log.info(
-                    "일일 퀘스트 발급을 시도했습니다. "
-                            + "userIdMasked={}, questDate={}, candidateCount={}, insertedCount={}",
+                    "일일 퀘스트 발급 시도 완료: "
+                            + "사용자(userIdMasked)={}, 퀘스트 날짜(questDate)={}, "
+                            + "발급후보(candidateCount)={}건, 신규발급(insertedCount)={}건, "
+                            + "동시충돌(conflictCount)={}건",
                     maskUserId(userId),
                     questDate,
                     quests.size(),
-                    insertedCount
+                    insertedCount,
+                    conflictCount
             );
         }
     }

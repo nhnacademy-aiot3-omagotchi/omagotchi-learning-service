@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.attendance.application;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.omagotchi.learningservice.attendance.application.result.AttendanceCloseResult;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.domain.PresenceInterval;
 import site.omagotchi.learningservice.attendance.domain.PresenceState;
@@ -207,15 +208,49 @@ public class PresenceTransitionService {
         end(current, transitionAt);
     }
 
-    public void closeAttendance(Long attendanceId, Instant at) {
+    /**
+     * 출결의 열린 체류 구간을 닫는다.
+     *
+     * @return 이번 호출로 열린 구간을 닫았으면 {@code true}
+     */
+    public boolean closeAttendance(Long attendanceId, Instant at) {
         lockAttendance(attendanceId);
         Instant transitionAt = requireTime(at);
         List<PresenceInterval> openIntervals = findOpenIntervals(attendanceId);
         if (openIntervals.isEmpty()) {
-            return;
+            return false;
         }
 
         end(requireSingle(openIntervals), transitionAt);
+        return true;
+    }
+
+    /**
+     * 미퇴실 확정용 마감. 출결 행을 잠근 뒤 열린 MEETING이면 닫지 않고 알린다.
+     *
+     * <p>상태 검사와 구간 종료가 같은 출결 행 잠금 안에서 일어나므로, 검사 직후
+     * {@link #enterMeeting}이 끼어드는 창이 없다.</p>
+     */
+    public AttendanceCloseResult closeAttendanceUnlessMeeting(
+            Long attendanceId,
+            Long expectedMembershipId,
+            Instant at
+    ) {
+        AttendanceRecord attendance = lockAttendance(attendanceId);
+        ensureMembership(attendance, expectedMembershipId);
+        Instant transitionAt = requireTime(at);
+        List<PresenceInterval> openIntervals = findOpenIntervals(attendanceId);
+        if (openIntervals.isEmpty()) {
+            return AttendanceCloseResult.ALREADY_CLOSED;
+        }
+
+        PresenceInterval current = requireSingle(openIntervals);
+        if (current.getState() == PresenceState.MEETING) {
+            return AttendanceCloseResult.MEETING_OPEN;
+        }
+
+        end(current, transitionAt);
+        return AttendanceCloseResult.CLOSED;
     }
 
     private AttendanceRecord lockAttendance(Long attendanceId) {

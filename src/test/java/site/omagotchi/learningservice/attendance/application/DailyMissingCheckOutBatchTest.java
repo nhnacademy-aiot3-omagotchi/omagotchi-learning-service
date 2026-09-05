@@ -34,7 +34,10 @@ class DailyMissingCheckOutBatchTest {
     private static final Long SEOUL_MEMBERSHIP_ID = 10L;
     private static final Long NEW_YORK_MEMBERSHIP_ID = 20L;
     private static final LocalDate ATTENDANCE_DATE = LocalDate.of(2026, 9, 5);
-    private static final Instant SEOUL_DEADLINE = Instant.parse("2026-09-05T09:00:00Z");
+    /** 예정 종료 18:00 KST + 유예 3시간 = 21:00 KST. */
+    private static final Instant SEOUL_DEADLINE = Instant.parse("2026-09-05T12:00:00Z");
+    /** 유예 전이라 아직 마감하지 않는 시각 — 예정 종료 18:00 KST 정각. */
+    private static final Instant SEOUL_SCHEDULED_END = Instant.parse("2026-09-05T09:00:00Z");
 
     @Mock
     private AttendanceRecordRepository attendanceRecordRepository;
@@ -53,7 +56,7 @@ class DailyMissingCheckOutBatchTest {
     }
 
     @Test
-    @DisplayName("기수 timezone의 예정 종료 시각에 도달한 출결만 마감한다")
+    @DisplayName("기수 timezone의 마감 시각에 도달한 출결만 마감한다")
     void closesOnlyAttendancesWhoseLocalDeadlineHasArrived() {
         DailyMissingCheckOutTarget seoul = target(1L, SEOUL_MEMBERSHIP_ID);
         DailyMissingCheckOutTarget newYork = target(2L, NEW_YORK_MEMBERSHIP_ID);
@@ -81,8 +84,27 @@ class DailyMissingCheckOutBatchTest {
     }
 
     @Test
-    @DisplayName("예정 종료 1초 전에는 마감하지 않는다")
-    void doesNotCloseBeforeScheduledEnd() {
+    @DisplayName("예정 종료 정각에는 유예가 남아 마감하지 않는다")
+    void doesNotCloseWhileGraceRemains() {
+        batch = batchAt(SEOUL_SCHEDULED_END);
+        DailyMissingCheckOutTarget target = target(1L, SEOUL_MEMBERSHIP_ID);
+        given(attendanceRecordRepository.findDailyMissingCheckOutTargetsAfter(0L, BATCH_SIZE))
+                .willReturn(List.of(target));
+        given(attendancePolicyService.findActiveDailyClosingPolicies(
+                List.of(SEOUL_MEMBERSHIP_ID)))
+                .willReturn(Map.of(
+                        SEOUL_MEMBERSHIP_ID,
+                        policy(SEOUL_MEMBERSHIP_ID, "Asia/Seoul")
+                ));
+
+        assertThat(batch.closeDueAttendances(BATCH_SIZE)).isZero();
+
+        verify(finalizer, never()).finalizeDaily(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("마감 시각 1초 전에는 마감하지 않는다")
+    void doesNotCloseBeforeDeadline() {
         batch = batchAt(SEOUL_DEADLINE.minusSeconds(1));
         DailyMissingCheckOutTarget target = target(1L, SEOUL_MEMBERSHIP_ID);
         given(attendanceRecordRepository.findDailyMissingCheckOutTargetsAfter(0L, BATCH_SIZE))

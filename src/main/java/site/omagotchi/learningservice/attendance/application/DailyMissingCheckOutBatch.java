@@ -19,9 +19,10 @@ import java.util.Map;
 /**
  * 기수별 예정 종료 시각을 지난 ACTIVE 소속의 미퇴실 출결을 마감한다.
  *
- * <p>유예시간은 없다. 실행 시각이 아니라 각 출결의
- * {@code attendanceDate + scheduledEndTime}으로 체류 구간을 닫아, 배치가
- * 늦게 돌아도 학습 시간이 과대 계상되지 않게 한다.</p>
+ * <p>마감 시각은 각 출결의 {@code attendanceDate + scheduledEndTime + 유예}이며,
+ * 배치 실행 시각이 아니다. 그래서 서버가 늦게 떠도 그날의 마감 시각으로 닫혀
+ * 체류가 실행 지연만큼 늘어나지 않는다. 유예 길이와 그 근거는
+ * {@link DailyAttendanceClosingPolicyView}에 있다.</p>
  *
  * <p>소속 종료 스윕과 같은 미해결 출결에서 출발하지만, 현재 ACTIVE인
  * 소속만 마감한다. 종료 소속의 실제 {@code endedAt}을 정책 시각으로

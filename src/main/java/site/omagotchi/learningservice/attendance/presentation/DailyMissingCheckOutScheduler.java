@@ -19,7 +19,7 @@ public class DailyMissingCheckOutScheduler {
     private int batchSize;
 
     /**
-     * 기본 1분 주기로 돌아 예정 종료 직후 최대 1분 내에 마감한다.
+     * 기본 1분 주기로 돌아 마감 시각(예정 종료 + 유예) 직후 최대 1분 내에 마감한다.
      * 중복 실행은 소속·출결 행 잠금과 멱등 상태 전이로 흡수한다.
      */
     @Scheduled(

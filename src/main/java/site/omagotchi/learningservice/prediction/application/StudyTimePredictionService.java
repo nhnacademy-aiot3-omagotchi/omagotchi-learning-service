@@ -58,24 +58,29 @@ public class StudyTimePredictionService {
             StudyTimePredictionResult result = predictionClient.predict(request, requestId);
 
             log.info(
-                    "공부시간 예측을 완료했습니다. "
-                            + "userIdMasked={}, cohortId={}, featureDate={}, "
-                            + "elapsedMs={}, modelVersion={}",
+                    "공부시간 예측 완료: "
+                            + "사용자(userIdMasked)={}, 기수(cohortId)={}, "
+                            + "피처 기준일(featureDate)={}, "
+                            + "예측시간(predictedStudyHours)={}시간, "
+                            + "소요시간(elapsedMs)={}ms, 모델(modelVersion)={}",
                     userIdMasked,
                     cohortId,
                     featureDate,
+                    result.predictedStudyHours(),
                     elapsedMillis(startedAtNanos),
                     result.modelVersion()
             );
             return result;
         } catch (PredictionClientException exception) {
             log.warn(
-                    "공부시간 예측에 실패했습니다. "
-                            + "userIdMasked={}, cohortId={}, featureDate={}, "
-                            + "reason={}, elapsedMs={}",
+                    "공부시간 예측 실패: "
+                            + "사용자(userIdMasked)={}, 기수(cohortId)={}, "
+                            + "피처 기준일(featureDate)={}, 실패사유(reason)={}({}), "
+                            + "소요시간(elapsedMs)={}ms",
                     userIdMasked,
                     cohortId,
                     featureDate,
+                    failureReasonDescription(exception.getReason()),
                     exception.getReason(),
                     elapsedMillis(startedAtNanos)
             );
@@ -95,5 +100,13 @@ public class StudyTimePredictionService {
 
     private long elapsedMillis(long startedAtNanos) {
         return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAtNanos);
+    }
+
+    private String failureReasonDescription(PredictionClientException.Reason reason) {
+        return switch (reason) {
+            case BAD_RESPONSE -> "잘못된 응답";
+            case UNAVAILABLE -> "서비스 연결 불가";
+            case TIMEOUT -> "시간 초과";
+        };
     }
 }

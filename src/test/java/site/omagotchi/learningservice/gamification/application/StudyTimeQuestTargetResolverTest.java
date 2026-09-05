@@ -72,9 +72,54 @@ class StudyTimeQuestTargetResolverTest {
                 () -> assertEquals("study-time-2026-08-16", target.modelVersion())
         );
         assertThat(output.getOut())
-                .contains("예측으로 학습 시간 퀘스트 목표를 산정했습니다.")
-                .contains("userIdMasked=00000000, cohortId=7, targetSeconds=15840")
-                .contains("modelVersion=study-time-2026-08-16")
+                .contains("학습 시간 퀘스트 목표 산정: ")
+                .contains("예측 4.0시간 → 도전계수 1.1배 → 계산 4시간 24분")
+                .contains("→ 보정 없음 → 최종 4시간 24분")
+                .contains("사용자(userIdMasked)=00000000, 기수(cohortId)=7")
+                .contains("계산초(calculatedTargetSeconds)=15840")
+                .contains("정책범위(minTargetSeconds/maxTargetSeconds)=12600/41400")
+                .contains("보정(adjustment)=보정 없음(NONE), 최종초(targetSeconds)=15840")
+                .contains("모델(modelVersion)=study-time-2026-08-16")
+                .doesNotContain(USER_ID.toString());
+    }
+
+    @Test
+    @DisplayName("예측 목표가 하한보다 작으면 최소 목표 적용 과정을 기록한다")
+    void logsMinimumClampCalculation(CapturedOutput output) {
+        when(userStudySecondsReader.findActiveCohortId(USER_ID)).thenReturn(Optional.of(COHORT_ID));
+        when(userStudySecondsReader.hasStudyRecordBefore(USER_ID, COHORT_ID, QUEST_DATE)).thenReturn(true);
+        when(studyTimePredictionService.predict(USER_ID, COHORT_ID, null))
+                .thenReturn(new StudyTimePredictionResult(2.178, "study-time-2026-08-16"));
+
+        StudyTimeQuestTarget target = resolver.resolve(USER_ID, QUEST_DATE);
+
+        assertEquals(MIN_SECONDS, target.targetSeconds());
+        assertThat(output.getOut())
+                .contains("예측 2.178시간 → 도전계수 1.1배 → 계산 2시간 23분 45초")
+                .contains("→ 최소 목표 3시간 30분 적용 → 최종 3시간 30분")
+                .contains("계산초(calculatedTargetSeconds)=8625")
+                .contains("보정(adjustment)=최소 목표 3시간 30분 적용(MIN_CLAMP)")
+                .contains("최종초(targetSeconds)=12600")
+                .doesNotContain(USER_ID.toString());
+    }
+
+    @Test
+    @DisplayName("예측 목표가 상한보다 크면 최대 목표 적용 과정을 기록한다")
+    void logsMaximumClampCalculation(CapturedOutput output) {
+        when(userStudySecondsReader.findActiveCohortId(USER_ID)).thenReturn(Optional.of(COHORT_ID));
+        when(userStudySecondsReader.hasStudyRecordBefore(USER_ID, COHORT_ID, QUEST_DATE)).thenReturn(true);
+        when(studyTimePredictionService.predict(USER_ID, COHORT_ID, null))
+                .thenReturn(new StudyTimePredictionResult(11.5, "study-time-2026-08-16"));
+
+        StudyTimeQuestTarget target = resolver.resolve(USER_ID, QUEST_DATE);
+
+        assertEquals(MAX_SECONDS, target.targetSeconds());
+        assertThat(output.getOut())
+                .contains("예측 11.5시간 → 도전계수 1.1배 → 계산 12시간 39분")
+                .contains("→ 최대 목표 11시간 30분 적용 → 최종 11시간 30분")
+                .contains("계산초(calculatedTargetSeconds)=45540")
+                .contains("보정(adjustment)=최대 목표 11시간 30분 적용(MAX_CLAMP)")
+                .contains("최종초(targetSeconds)=41400")
                 .doesNotContain(USER_ID.toString());
     }
 
@@ -97,9 +142,14 @@ class StudyTimeQuestTargetResolverTest {
         );
         assertThat(output.getOut())
                 .contains("prediction-service 호출 실패로 학습 시간 퀘스트 목표를 규칙으로 폴백합니다.")
-                .contains("userIdMasked=00000000, cohortId=7, reason=TIMEOUT")
-                .contains("규칙으로 학습 시간 퀘스트 목표를 산정했습니다.")
-                .contains("targetSeconds=19800")
+                .contains("사용자(userIdMasked)=00000000, 기수(cohortId)=7")
+                .contains("실패사유(reason)=시간 초과(TIMEOUT)")
+                .contains("규칙 기반 학습 시간 퀘스트 목표 산정:")
+                .contains("최근 등원일 평균 5시간 0분 → 도전계수 1.1배")
+                .contains("→ 계산 5시간 30분 → 보정 없음 → 최종 5시간 30분")
+                .contains("평균초(attendedAverageSeconds)=18000")
+                .contains("보정(adjustment)=보정 없음(NONE)")
+                .contains("최종초(targetSeconds)=19800")
                 .doesNotContain(USER_ID.toString());
     }
 
@@ -121,9 +171,9 @@ class StudyTimeQuestTargetResolverTest {
         );
         assertThat(output.getOut())
                 .contains("예측 목표 산정 중 예상하지 못한 오류가 발생해 규칙으로 폴백합니다.")
-                .contains("exception=java.lang.IllegalStateException")
+                .contains("예외유형(exception)=java.lang.IllegalStateException")
                 .contains("최근 등원 학습 이력이 없어 학습 시간 퀘스트 목표를 기본값으로 산정합니다.")
-                .contains("targetSeconds=12600")
+                .contains("기본목표(targetSeconds)=12600초(3시간 30분)")
                 .doesNotContain(USER_ID.toString());
     }
 
@@ -140,7 +190,9 @@ class StudyTimeQuestTargetResolverTest {
         );
         assertThat(output.getOut())
                 .contains("활성 기수 소속이 없어 학습 시간 퀘스트 목표를 기본값으로 산정합니다.")
-                .contains("userIdMasked=00000000, questDate=2026-08-05, targetSeconds=12600")
+                .contains("사용자(userIdMasked)=00000000")
+                .contains("퀘스트 날짜(questDate)=2026-08-05")
+                .contains("기본목표(targetSeconds)=12600초(3시간 30분)")
                 .doesNotContain(USER_ID.toString());
     }
 
@@ -161,7 +213,9 @@ class StudyTimeQuestTargetResolverTest {
         verify(userStudySecondsReader, never()).recentAttendedAverageSeconds(USER_ID, COHORT_ID, QUEST_DATE);
         assertThat(output.getOut())
                 .contains("확정 학습 기록이 없어 학습 시간 퀘스트 목표를 기본값으로 산정합니다.")
-                .contains("userIdMasked=00000000, cohortId=7, questDate=2026-08-05, targetSeconds=12600")
+                .contains("사용자(userIdMasked)=00000000, 기수(cohortId)=7")
+                .contains("퀘스트 날짜(questDate)=2026-08-05")
+                .contains("기본목표(targetSeconds)=12600초(3시간 30분)")
                 .doesNotContain(USER_ID.toString());
     }
 
@@ -179,8 +233,12 @@ class StudyTimeQuestTargetResolverTest {
 
         assertEquals(MAX_SECONDS, target.targetSeconds());
         assertThat(output.getOut())
-                .contains("규칙으로 학습 시간 퀘스트 목표를 산정했습니다.")
-                .contains("userIdMasked=00000000, cohortId=7, questDate=2026-08-05, targetSeconds=41400")
+                .contains("규칙 기반 학습 시간 퀘스트 목표 산정:")
+                .contains("최근 등원일 평균 11시간 6분 40초 → 도전계수 1.1배")
+                .contains("→ 계산 12시간 13분 20초")
+                .contains("→ 최대 목표 11시간 30분 적용 → 최종 11시간 30분")
+                .contains("보정(adjustment)=최대 목표 11시간 30분 적용(MAX_CLAMP)")
+                .contains("최종초(targetSeconds)=41400")
                 .doesNotContain(USER_ID.toString());
     }
 
@@ -199,7 +257,7 @@ class StudyTimeQuestTargetResolverTest {
         assertEquals(QuestTargetSource.RULE_B2, target.source());
         assertThat(output.getOut())
                 .contains("prediction-service가 유효한 학습 시간 예측값을 반환하지 않아 규칙으로 폴백합니다.")
-                .contains("userIdMasked=00000000, cohortId=7")
+                .contains("사용자(userIdMasked)=00000000, 기수(cohortId)=7")
                 .doesNotContain(USER_ID.toString());
     }
 
@@ -218,8 +276,9 @@ class StudyTimeQuestTargetResolverTest {
         assertEquals(QuestTargetSource.DEFAULT, target.source());
         assertThat(output.getOut())
                 .contains("규칙으로 학습 시간 퀘스트 목표를 산정하지 못해 기본값으로 폴백합니다.")
-                .contains("userIdMasked=00000000, cohortId=7, questDate=2026-08-05")
-                .contains("exception=java.lang.IllegalStateException")
+                .contains("사용자(userIdMasked)=00000000, 기수(cohortId)=7")
+                .contains("퀘스트 날짜(questDate)=2026-08-05")
+                .contains("예외유형(exception)=java.lang.IllegalStateException")
                 .doesNotContain(USER_ID.toString());
     }
 }

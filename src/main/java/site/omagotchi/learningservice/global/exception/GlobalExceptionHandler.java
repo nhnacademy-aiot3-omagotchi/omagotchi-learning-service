@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import site.omagotchi.learningservice.global.requestid.RequestIdContext;
 
 @Slf4j
 @RestControllerAdvice
@@ -130,7 +131,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 errorCode.code(),
                 message,
                 ((ServletWebRequest) request).getRequest().getRequestURI(),
-                null
+                RequestIdContext.currentValue()
         );
         // 요청 URI는 HTML이 아닌 JSON 문자열로 직렬화되므로 XSS 실행 문맥이 아님
         return new ResponseEntity<>(
@@ -179,7 +180,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                         errorCode.code(),
                         errorCode.message(),
                         request.getRequestURI(),
-                        null
+                        RequestIdContext.currentValue()
                 ));
     }
 }

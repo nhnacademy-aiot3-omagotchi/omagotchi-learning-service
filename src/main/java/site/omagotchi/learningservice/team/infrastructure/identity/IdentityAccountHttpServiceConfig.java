@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.support.RestClientHttpServiceGroupConfigurer;
 import org.springframework.web.service.registry.ImportHttpServices;
+import site.omagotchi.learningservice.global.requestid.RequestIdRestClientInterceptor;
 
 import java.nio.charset.StandardCharsets;
 
@@ -21,14 +22,16 @@ class IdentityAccountHttpServiceConfig {
     RestClientHttpServiceGroupConfigurer identityAccountHttpServiceConfigurer(
             IdentityClientCredentialProperties properties
     ) {
+        RequestIdRestClientInterceptor interceptor = new RequestIdRestClientInterceptor();
         return groups -> groups
                 .filterByName(GROUP_NAME)
-                .forEachClient((group, builder) -> builder.defaultHeaders(headers ->
-                        headers.setBasicAuth(
+                .forEachClient((group, builder) -> builder
+                        .requestInterceptor(interceptor)
+                        .defaultHeaders(headers -> headers.setBasicAuth(
                                 properties.username(),
                                 properties.password(),
                                 StandardCharsets.UTF_8
-                        )
-                ));
+                        ))
+                );
     }
 }

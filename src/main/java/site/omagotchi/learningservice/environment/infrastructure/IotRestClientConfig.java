@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import site.omagotchi.learningservice.environment.application.EnvironmentProperties;
+import site.omagotchi.learningservice.global.requestid.RequestIdRestClientInterceptor;
 
 import java.time.Duration;
 
@@ -19,6 +20,9 @@ public class IotRestClientConfig {
         factory.setConnectTimeout((int) timeout.toMillis());
         factory.setReadTimeout((int) timeout.toMillis());
 
-        return builder.requestFactory(factory).build();
+        return builder
+                .requestFactory(factory)
+                .requestInterceptor(new RequestIdRestClientInterceptor())
+                .build();
     }
 }

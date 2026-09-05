@@ -418,6 +418,7 @@ class OccupancyMembershipEndedIT {
         roomOccupancyService.start(roomId, occupier.userId());
         Long occupancyId = activeOccupancyId(roomId);
         endMembership(occupier.membershipId());
+        OffsetDateTime endedAt = membershipEndedAt(occupier.membershipId());
 
         // 출결 스윕이 먼저 와도 열린 MEETING과 출결 상태를 잘못 닫지 않는다.
         attendanceSweep.sweep(200);
@@ -432,6 +433,8 @@ class OccupancyMembershipEndedIT {
         assertThat(attendanceStatus(occupier.membershipId()))
                 .isEqualTo("MISSING_CHECK_OUT");
         assertThat(openPresenceRows(occupier.membershipId())).isZero();
+        assertThat(occupancyEndedAt(occupancyId)).isEqualTo(endedAt);
+        assertThat(latestPresenceEndedAt(occupier.membershipId())).isEqualTo(endedAt);
         assertThat(attendanceCheckedOutAt(occupier.membershipId())).isNull();
     }
 

@@ -12,12 +12,12 @@ import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
 import site.omagotchi.learningservice.cohort.application.CohortLockService;
-import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
+import site.omagotchi.learningservice.cohort.application.result.EndedMembershipLockView;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,7 +33,9 @@ class MissingCheckOutFinalizerTest {
 
     private static final Long ATTENDANCE_ID = 10L;
     private static final Long MEMBERSHIP_ID = 20L;
-    private static final Instant ENDED_AT = Instant.parse("2026-09-04T09:00:00Z");
+    private static final OffsetDateTime MEMBERSHIP_ENDED_AT =
+            OffsetDateTime.parse("2026-09-04T09:00:00Z");
+    private static final Instant ENDED_AT = MEMBERSHIP_ENDED_AT.toInstant();
 
     @Mock
     private PresenceTransitionService presenceTransitionService;
@@ -50,10 +52,9 @@ class MissingCheckOutFinalizerTest {
     @BeforeEach
     void stubMembershipLock() {
         lenient().when(cohortLockService.lockEndedMembership(MEMBERSHIP_ID))
-                .thenReturn(Optional.of(new CohortMembershipView(
+                .thenReturn(Optional.of(new EndedMembershipLockView(
                         MEMBERSHIP_ID,
-                        1L,
-                        UUID.randomUUID()
+                        MEMBERSHIP_ENDED_AT
                 )));
     }
 
@@ -70,7 +71,7 @@ class MissingCheckOutFinalizerTest {
         when(attendanceRecordRepository.findById(ATTENDANCE_ID))
                 .thenReturn(Optional.of(attendance));
 
-        assertThat(finalizer.finalizeOne(ATTENDANCE_ID, MEMBERSHIP_ID, ENDED_AT)).isTrue();
+        assertThat(finalizer.finalizeOne(ATTENDANCE_ID, MEMBERSHIP_ID)).isTrue();
 
         assertThat(attendance.getAutoStatus()).isEqualTo(AttendanceStatus.MISSING_CHECK_OUT);
         assertThat(attendance.getFinalStatus()).isEqualTo(AttendanceStatus.MISSING_CHECK_OUT);
@@ -90,7 +91,7 @@ class MissingCheckOutFinalizerTest {
         when(attendanceRecordRepository.findById(ATTENDANCE_ID))
                 .thenReturn(Optional.of(attendance));
 
-        assertThat(finalizer.finalizeOne(ATTENDANCE_ID, MEMBERSHIP_ID, ENDED_AT)).isTrue();
+        assertThat(finalizer.finalizeOne(ATTENDANCE_ID, MEMBERSHIP_ID)).isTrue();
         assertThat(attendance.getAutoStatus()).isEqualTo(AttendanceStatus.MISSING_CHECK_OUT);
     }
 
@@ -109,7 +110,7 @@ class MissingCheckOutFinalizerTest {
         when(attendanceRecordRepository.findById(ATTENDANCE_ID))
                 .thenReturn(Optional.of(attendance));
 
-        assertThat(finalizer.finalizeOne(ATTENDANCE_ID, MEMBERSHIP_ID, ENDED_AT)).isTrue();
+        assertThat(finalizer.finalizeOne(ATTENDANCE_ID, MEMBERSHIP_ID)).isTrue();
         assertThat(attendance.getAutoStatus()).isEqualTo(AttendanceStatus.MISSING_CHECK_OUT);
         assertThat(attendance.getFinalStatus()).isEqualTo(AttendanceStatus.PRESENT);
     }
@@ -127,8 +128,7 @@ class MissingCheckOutFinalizerTest {
 
         assertThatThrownBy(() -> finalizer.finalizeOne(
                 ATTENDANCE_ID,
-                MEMBERSHIP_ID,
-                ENDED_AT
+                MEMBERSHIP_ID
         ))
                 .isInstanceOf(IllegalStateException.class);
 
@@ -148,8 +148,7 @@ class MissingCheckOutFinalizerTest {
 
         assertThat(finalizer.finalizeOne(
                 ATTENDANCE_ID,
-                MEMBERSHIP_ID,
-                ENDED_AT
+                MEMBERSHIP_ID
         )).isFalse();
 
         verify(attendanceRecordRepository, never()).findById(ATTENDANCE_ID);
@@ -163,8 +162,7 @@ class MissingCheckOutFinalizerTest {
 
         assertThat(finalizer.finalizeOne(
                 ATTENDANCE_ID,
-                MEMBERSHIP_ID,
-                ENDED_AT
+                MEMBERSHIP_ID
         )).isFalse();
 
         verifyNoInteractions(presenceTransitionService, attendanceRecordRepository);

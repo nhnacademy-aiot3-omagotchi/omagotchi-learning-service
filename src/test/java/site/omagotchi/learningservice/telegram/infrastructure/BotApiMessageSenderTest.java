@@ -39,6 +39,22 @@ class BotApiMessageSenderTest {
 
     // ────────────────────────────── 제한 시간 발송 ──────────────────────────────
 
+    @Test
+    @DisplayName("비동기 발송은 Telegram 응답을 기다리지 않고 작업을 반환한다.")
+    void sendsWithoutWaitingForTelegramResponse() throws Exception {
+        CompletableFuture<Message> response = new CompletableFuture<>();
+        given(absSender.executeAsync(any(SendMessage.class))).willReturn(response);
+
+        BotApiMessageSender sender = new BotApiMessageSender(absSender);
+
+        CompletableFuture<Void> delivery = sender.sendAsync(CHAT_ID, "본문")
+                .toCompletableFuture();
+
+        assertThat(delivery).isNotDone();
+        response.complete(messageWithId());
+        assertThatCode(delivery::join).doesNotThrowAnyException();
+    }
+
     /**
      * 조치 알림은 MQ 리스너 위에서 돈다. <b>발송이 늦어져도 호출 스레드가 제한 시간보다
      * 오래 묶이면 안 된다</b> — 그 보장이 이 메서드의 존재 이유다.

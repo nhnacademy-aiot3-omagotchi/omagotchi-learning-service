@@ -13,6 +13,7 @@ import site.omagotchi.learningservice.telegram.domain.TelegramUserLink;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -56,6 +57,30 @@ class TelegramNotificationServiceTest {
 
         assertThat(sent).isTrue();
         verify(messageSender).send(CHAT_ID, TEXT);
+    }
+
+    @Test
+    @DisplayName("비동기 발송은 연동된 사용자의 개인 채팅으로 작업을 넘긴다.")
+    void sendsToLinkedUsersOwnChatAsynchronously() {
+        given(userLinkRepository.findActiveByUserId(RECIPIENT)).willReturn(Optional.of(linkedUser()));
+        given(messageSender.sendAsync(CHAT_ID, TEXT))
+                .willReturn(CompletableFuture.completedFuture(null));
+
+        boolean sent = service.sendAsync(RECIPIENT, TEXT).toCompletableFuture().join();
+
+        assertThat(sent).isTrue();
+        verify(messageSender).sendAsync(CHAT_ID, TEXT);
+    }
+
+    @Test
+    @DisplayName("비동기 발송도 미연동 사용자는 즉시 건너뛴다.")
+    void skipsUnlinkedUserAsynchronously() {
+        given(userLinkRepository.findActiveByUserId(RECIPIENT)).willReturn(Optional.empty());
+
+        boolean sent = service.sendAsync(RECIPIENT, TEXT).toCompletableFuture().join();
+
+        assertThat(sent).isFalse();
+        verify(messageSender, never()).sendAsync(anyLong(), anyString());
     }
 
     /**

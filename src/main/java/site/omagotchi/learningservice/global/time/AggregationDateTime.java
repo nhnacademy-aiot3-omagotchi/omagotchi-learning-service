@@ -6,6 +6,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.Objects;
 
 /**
  * 서비스 전체에서 사용하는 KST 04:00 집계일 기준.
@@ -52,5 +54,35 @@ public final class AggregationDateTime {
 
     public static Instant startOfAggregationDate(LocalDate aggregationDate) {
         return aggregationDate.atTime(DAILY_RESET_TIME).atZone(ZONE_ID).toInstant();
+    }
+
+    /**
+     * KST 04:00부터 다음 날 04:00까지인 집계 구간 안에서 주어진 지역 시각을 찾는다.
+     *
+     * <p>집계일을 달력 날짜로 그대로 붙이면 04:00 이전 정책 시각이 집계 구간의 전날로
+     * 계산된다. 예를 들어 9월 5일 집계일의 KST 03:00은 9월 6일 03:00이어야 한다.</p>
+     */
+    public static ZonedDateTime dateTimeWithin(
+            LocalDate aggregationDate,
+            LocalTime localTime,
+            ZoneId zoneId
+    ) {
+        Objects.requireNonNull(aggregationDate, "aggregationDate는 필수입니다.");
+        Objects.requireNonNull(localTime, "localTime은 필수입니다.");
+        Objects.requireNonNull(zoneId, "zoneId는 필수입니다.");
+
+        Instant startsAt = startOfAggregationDate(aggregationDate);
+        Instant endsAt = startOfAggregationDate(aggregationDate.plusDays(1));
+        LocalDate firstLocalDate = startsAt.atZone(zoneId).toLocalDate();
+        ZonedDateTime candidate = firstLocalDate.atTime(localTime).atZone(zoneId);
+
+        if (candidate.toInstant().isBefore(startsAt)) {
+            candidate = candidate.plusDays(1);
+        }
+        if (!candidate.toInstant().isBefore(endsAt)) {
+            throw new IllegalArgumentException("집계 구간 안에서 지역 시각을 찾을 수 없습니다.");
+        }
+
+        return candidate;
     }
 }

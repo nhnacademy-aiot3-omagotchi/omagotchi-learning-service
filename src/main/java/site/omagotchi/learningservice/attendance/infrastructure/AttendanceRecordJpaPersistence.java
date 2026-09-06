@@ -10,6 +10,7 @@ import site.omagotchi.learningservice.attendance.application.port.AttendanceReco
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -85,6 +86,20 @@ public class AttendanceRecordJpaPersistence implements AttendanceRecordQueryRepo
         return toPage(attendanceRecordRepository.findByAttendanceDateAndCohortMembershipIdIn(
                 attendanceDate, cohortMembershipIds, pageable
         ));
+    }
+
+    @Override
+    public List<AttendanceRecord> findDailyRecords(
+            LocalDate attendanceDate,
+            Collection<Long> cohortMembershipIds
+    ) {
+        if (cohortMembershipIds == null || cohortMembershipIds.isEmpty()) {
+            return List.of();
+        }
+        return attendanceRecordRepository.findByAttendanceDateAndCohortMembershipIdIn(
+                attendanceDate,
+                cohortMembershipIds
+        );
     }
 
     private static AttendanceRecordPage toPage(Page<AttendanceRecord> records) {

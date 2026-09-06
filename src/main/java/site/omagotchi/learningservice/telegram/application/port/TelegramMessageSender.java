@@ -1,11 +1,19 @@
 package site.omagotchi.learningservice.telegram.application.port;
 
 import java.time.Duration;
+import java.util.concurrent.CompletionStage;
 
 public interface TelegramMessageSender {
 
     /** 설정된 read 타임아웃까지 기다린다. */
     void send(Long chatId, String text);
+
+    /**
+     * Telegram 클라이언트 실행기에 발송을 맡기고 응답을 기다리지 않고 반환한다.
+     *
+     * @return Telegram이 발송 성공 응답을 주면 완료되고 실패하면 예외로 완료되는 작업
+     */
+    CompletionStage<Void> sendAsync(Long chatId, String text);
 
     /**
      * <b>{@code timeout} 안에 돌아온다.</b> 호출 스레드가 그보다 오래 묶이지 않는 것이 계약이다.

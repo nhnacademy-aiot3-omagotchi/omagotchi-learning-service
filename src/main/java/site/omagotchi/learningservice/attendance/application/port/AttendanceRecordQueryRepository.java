@@ -3,6 +3,7 @@ package site.omagotchi.learningservice.attendance.application.port;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -36,6 +37,12 @@ public interface AttendanceRecordQueryRepository {
             List<Long> cohortMembershipIds,
             int page,
             int size
+    );
+
+    /** 특정 일자의 여러 소속 출결 기록을 알림 판정용으로 일괄 조회한다. */
+    List<AttendanceRecord> findDailyRecords(
+            LocalDate attendanceDate,
+            Collection<Long> cohortMembershipIds
     );
 
     /**

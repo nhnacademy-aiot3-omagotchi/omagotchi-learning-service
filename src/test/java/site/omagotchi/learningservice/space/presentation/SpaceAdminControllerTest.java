@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
+import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
 import site.omagotchi.learningservice.space.application.SpaceCommandService;
 import site.omagotchi.learningservice.space.application.SpaceErrorCode;
 import site.omagotchi.learningservice.space.application.command.CreateSpaceCommand;
@@ -53,7 +54,9 @@ class SpaceAdminControllerTest {
         );
 
         mockMvc = standaloneSetup(controller)
-                .setControllerAdvice(new GlobalExceptionHandler())
+                .setControllerAdvice(new GlobalExceptionHandler(
+                        mock(HttpErrorEventLogger.class)
+                ))
                 .defaultRequest(get("/")
                         .principal(authentication(
                                 USER_ID, GlobalRole.USER)))

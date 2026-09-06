@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
+import site.omagotchi.learningservice.global.requestid.RequestIdContext;
 import site.omagotchi.learningservice.sensor.application.ThresholdRuleService;
 import site.omagotchi.learningservice.sensor.application.result.ApplySpaceThresholdResult;
 import site.omagotchi.learningservice.sensor.application.result.SpaceThresholdResult;
@@ -30,14 +31,13 @@ public class ThresholdRuleController {
     public CreateThresholdRuleResponse create(
             @PathVariable Long cohortId,
             @Valid @RequestBody CreateThresholdRuleRequest request,
-            JwtAuthenticationToken authentication,
-            @RequestHeader(value = "X-Request-ID", required = false) String requestId
+            JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
         Long ruleId = thresholdRuleService.create(
                 cohortId,
                 user.userId(),
-                requestId,
+                RequestIdContext.currentOrGenerate().value(),
                 request.toCommand()
         );
 
@@ -49,15 +49,14 @@ public class ThresholdRuleController {
             @PathVariable Long cohortId,
             @PathVariable Long ruleId,
             @Valid @RequestBody UpdateThresholdRuleRequest request,
-            JwtAuthenticationToken authentication,
-            @RequestHeader(value = "X-Request-ID", required = false) String requestId
+            JwtAuthenticationToken authentication
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
 
         UpdateThresholdRuleResult result = thresholdRuleService.update(
                 cohortId,
                 user.userId(),
-                requestId,
+                RequestIdContext.currentOrGenerate().value(),
                 ruleId,
                 request.toCommand()
         );
@@ -106,8 +105,7 @@ public class ThresholdRuleController {
             @PathVariable Long cohortId,
             @PathVariable Long spaceId,
             @Valid @RequestBody ApplySpaceThresholdRequest request,
-            JwtAuthenticationToken authentication,
-            @RequestHeader(value = "X-Request-ID", required = false) String requestId
+            JwtAuthenticationToken authentication
     ) {
 
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
@@ -115,7 +113,7 @@ public class ThresholdRuleController {
         ApplySpaceThresholdResult result = thresholdRuleService.applyToSpace(
                 cohortId,
                 user.userId(),
-                requestId,
+                RequestIdContext.currentOrGenerate().value(),
                 spaceId,
                 request.toCommand()
         );

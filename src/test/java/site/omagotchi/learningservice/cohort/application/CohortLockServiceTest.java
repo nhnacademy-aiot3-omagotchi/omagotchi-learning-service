@@ -12,6 +12,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortMembership;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -76,6 +77,7 @@ class CohortLockServiceTest {
     @Test
     @DisplayName("종료 정리는 ENDED 조건으로 소속 행을 잠근다")
     void locksEndedMembershipForCleanup() {
+        OffsetDateTime endedAt = OffsetDateTime.parse("2026-09-04T09:00:00Z");
         CohortMembership membership = CohortMembership.activeManager(
                 3L,
                 UUID.randomUUID(),
@@ -87,12 +89,17 @@ class CohortLockServiceTest {
                 "status",
                 CohortMembershipStatus.ENDED
         );
+        ReflectionTestUtils.setField(membership, "endedAt", endedAt);
         when(cohortMembershipRepository.findWithLockByIdAndStatus(
                 MEMBERSHIP_ID,
                 CohortMembershipStatus.ENDED
         )).thenReturn(Optional.of(membership));
 
-        assertThat(service.lockEndedMembership(MEMBERSHIP_ID)).isPresent();
+        assertThat(service.lockEndedMembership(MEMBERSHIP_ID))
+                .hasValueSatisfying(view -> {
+                    assertThat(view.membershipId()).isEqualTo(MEMBERSHIP_ID);
+                    assertThat(view.endedAt()).isEqualTo(endedAt);
+                });
 
         verify(cohortMembershipRepository).findWithLockByIdAndStatus(
                 MEMBERSHIP_ID,

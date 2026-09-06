@@ -8,6 +8,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.cohort.application.port.CohortMembershipQuery;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -48,5 +49,17 @@ class CohortMembershipQueryServiceTest {
         assertThat(service.findCohortIds(List.of())).isEmpty();
         verify(membershipQuery, never()).findUserIds(List.of());
         verify(membershipQuery, never()).findCohortIds(List.of());
+    }
+    @Test void delegatesEndedMembershipBatchQuery() {
+        OffsetDateTime endedAt = OffsetDateTime.parse("2026-09-04T09:00:00Z");
+        given(membershipQuery.findEndedMemberships(List.of(10L)))
+                .willReturn(Map.of(10L, endedAt));
+
+        assertThat(service.findEndedMemberships(List.of(10L)))
+                .containsEntry(10L, endedAt);
+    }
+    @Test void skipsEmptyEndedMembershipBatchQuery() {
+        assertThat(service.findEndedMemberships(List.of())).isEmpty();
+        verify(membershipQuery, never()).findEndedMemberships(List.of());
     }
 }

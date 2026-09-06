@@ -116,7 +116,8 @@ class CohortEndedCleanupIT {
         assertThat(attendanceStatus(waiter.membershipId())).isEqualTo("MISSING_CHECK_OUT");
         assertThat(openPresenceRows(cohortId)).isZero();
         assertThat(checkedOutAt(waiter.membershipId())).isNull();
-        assertThat(latestPresenceEndedAt(waiter.membershipId())).isEqualTo(closedAt);
+        assertThat(latestPresenceEndedAt(waiter.membershipId()))
+                .isEqualTo(membershipEndedAt(waiter.membershipId()));
         // CE-04 — 유형을 가리지 않고 관리 주체를 해제한다. 실습실만 풀고 회의실을 남기면
         // 회의실이 종료 기수를 가리킨 채 동결된다 — 관리 권한이 그 기수 매니저를 요구하는데
         // 기수 종료로 그런 사람이 없어지기 때문이다. 상세 시나리오는
@@ -193,7 +194,8 @@ class CohortEndedCleanupIT {
         assertThat(openPresenceRowsByMembership(occupier.membershipId())).isEqualTo(1);
         assertThat(attendanceStatus(waiter.membershipId())).isEqualTo("MISSING_CHECK_OUT");
         assertThat(openPresenceRowsByMembership(waiter.membershipId())).isZero();
-        assertThat(latestPresenceEndedAt(waiter.membershipId())).isEqualTo(closedAt);
+        assertThat(latestPresenceEndedAt(waiter.membershipId()))
+                .isEqualTo(membershipEndedAt(waiter.membershipId()));
         assertThat(spaceCohortId(labId)).isNull();
     }
 
@@ -346,6 +348,14 @@ class CohortEndedCleanupIT {
                  WHERE attendance.cohort_membership_id = ?
                  ORDER BY presence.id DESC
                  LIMIT 1
+                """, OffsetDateTime.class, membershipId);
+    }
+
+    private OffsetDateTime membershipEndedAt(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT ended_at
+                  FROM learning_service.cohort_memberships
+                 WHERE id = ?
                 """, OffsetDateTime.class, membershipId);
     }
 

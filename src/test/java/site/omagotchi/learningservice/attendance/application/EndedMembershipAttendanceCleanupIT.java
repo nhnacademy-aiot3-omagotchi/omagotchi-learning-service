@@ -63,7 +63,7 @@ class EndedMembershipAttendanceCleanupIT {
         );
         savePresence(attendanceWithPresence, STARTED_AT);
 
-        assertThat(cleanup.cleanUp(membershipId, ENDED_AT)).isEqualTo(2);
+        assertThat(cleanup.cleanUp(membershipId)).isEqualTo(2);
 
         assertThat(openPresenceCount(attendanceWithPresence)).isZero();
         assertThat(presenceEndedAt(attendanceWithPresence)).isEqualTo(ENDED_AT);
@@ -73,14 +73,16 @@ class EndedMembershipAttendanceCleanupIT {
         assertThat(attendanceStatus(notCheckedIn)).isEqualTo("PENDING");
         assertThat(attendanceStatus(alreadyMissing)).isEqualTo("MISSING_CHECK_OUT");
 
-        assertThat(cleanup.cleanUp(membershipId, ENDED_AT.plusMinutes(5))).isZero();
+        assertThat(cleanup.cleanUp(membershipId)).isZero();
         assertThat(presenceEndedAt(attendanceWithPresence)).isEqualTo(ENDED_AT);
     }
 
     @Test
     @DisplayName("체류 종료 시각이 잘못된 한 건은 출결 상태도 바꾸지 않는다")
     void keepsAttendanceUnchangedWhenPresenceCloseFails() {
-        Long membershipId = saveEndedMembership();
+        OffsetDateTime endedBeforePresence = STARTED_AT.minusSeconds(1)
+                .atOffset(ZoneOffset.UTC);
+        Long membershipId = saveEndedMembership(endedBeforePresence);
         Long attendanceId = saveAttendance(
                 membershipId,
                 LocalDate.of(2026, 9, 4),
@@ -89,16 +91,17 @@ class EndedMembershipAttendanceCleanupIT {
         );
         savePresence(attendanceId, STARTED_AT);
 
-        assertThat(cleanup.cleanUp(
-                membershipId,
-                STARTED_AT.minusSeconds(1).atOffset(ZoneOffset.UTC)
-        )).isZero();
+        assertThat(cleanup.cleanUp(membershipId)).isZero();
 
         assertThat(openPresenceCount(attendanceId)).isEqualTo(1);
         assertThat(attendanceStatus(attendanceId)).isEqualTo("PRESENT");
     }
 
     private Long saveEndedMembership() {
+        return saveEndedMembership(ENDED_AT);
+    }
+
+    private Long saveEndedMembership(OffsetDateTime endedAt) {
         Long cohortId = jdbcTemplate.queryForObject("""
                         insert into learning_service.cohorts (
                             name, description, start_date, end_date, status, created_by_user_id
@@ -122,7 +125,7 @@ class EndedMembershipAttendanceCleanupIT {
                 OffsetDateTime.parse("2026-09-01T00:00:00Z"),
                 OffsetDateTime.parse("2026-09-01T00:00:00Z"),
                 ADMIN_ID,
-                ENDED_AT
+                endedAt
         );
     }
 

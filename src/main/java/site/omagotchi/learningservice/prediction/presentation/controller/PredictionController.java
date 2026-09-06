@@ -4,10 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import site.omagotchi.learningservice.global.auth.AuthenticatedUser;
+import site.omagotchi.learningservice.global.requestid.RequestIdContext;
 import site.omagotchi.learningservice.prediction.application.StudyTimePredictionService;
 import site.omagotchi.learningservice.prediction.presentation.response.StudyTimePredictionResponse;
 
@@ -21,13 +21,16 @@ public class PredictionController {
     @PostMapping("/study-time")
     public StudyTimePredictionResponse predictStudyTime(
             JwtAuthenticationToken authentication,
-            @PathVariable("cohort-id") Long cohortId,
-            @RequestHeader(value = "X-Request-ID", required = false) String requestId
+            @PathVariable("cohort-id") Long cohortId
     ) {
         AuthenticatedUser user = AuthenticatedUser.from(authentication);
 
         return StudyTimePredictionResponse.from(
-                predictionService.predict(user.userId(), cohortId, requestId)
+                predictionService.predict(
+                        user.userId(),
+                        cohortId,
+                        RequestIdContext.currentOrGenerate().value()
+                )
         );
     }
 }

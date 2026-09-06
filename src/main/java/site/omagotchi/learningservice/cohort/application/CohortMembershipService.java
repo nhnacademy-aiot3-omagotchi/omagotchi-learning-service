@@ -72,7 +72,8 @@ public class CohortMembershipService {
      */
     @Transactional
     public boolean end(Long membershipId) {
-        CohortMembership membership = membershipRepository.findById(membershipId)
+        // 입장과 같은 소속 행을 먼저 잠근 뒤 종료 시각 확정
+        CohortMembership membership = membershipRepository.findByIdForUpdate(membershipId)
                 .orElseThrow(() -> new BusinessException(CohortErrorCode.COHORT_MEMBERSHIP_NOT_FOUND));
 
         OffsetDateTime endedAt = OffsetDateTime.now();

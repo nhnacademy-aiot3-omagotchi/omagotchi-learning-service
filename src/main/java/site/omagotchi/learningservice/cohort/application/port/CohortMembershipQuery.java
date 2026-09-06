@@ -2,8 +2,10 @@ package site.omagotchi.learningservice.cohort.application.port;
 
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipSummaryResult;
 import site.omagotchi.learningservice.cohort.application.result.CohortMembershipView;
-import java.util.Collection;
 import site.omagotchi.learningservice.cohort.domain.CohortMembership;
+
+import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -28,4 +30,5 @@ public interface CohortMembershipQuery {
     Map<Long, UUID> findUserIds(Collection<Long> membershipIds);
     Map<Long, Long> findCohortIds(Collection<Long> membershipIds);
     Set<Long> findInactiveIds(Collection<Long> membershipIds);
+    Map<Long, OffsetDateTime> findEndedMemberships(Collection<Long> membershipIds);
 }

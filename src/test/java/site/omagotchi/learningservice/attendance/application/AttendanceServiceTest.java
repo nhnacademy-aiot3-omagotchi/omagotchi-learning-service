@@ -43,6 +43,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -335,6 +336,54 @@ class AttendanceServiceTest {
 
         assertEquals(checkOutAt, result.checkedOutAt());
         assertEquals(AttendanceStatus.PRESENT, result.autoStatus());
+    }
+
+    @Test
+    @DisplayName("일일 배치가 미퇴실로 확정한 뒤의 늦은 체크아웃은 상태를 덮어쓰지 않는다")
+    void preservesMissingCheckOutOnLateCheckOutRequest() {
+        Instant checkInAt = Instant.parse("2026-07-29T00:00:00Z");
+        AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
+        record.checkIn(checkInAt, AttendanceStatus.PRESENT, 0);
+        record.markMissingCheckOut();
+        givenActiveMembership();
+        given(clock.instant()).willReturn(Instant.parse("2026-07-29T09:01:00Z"));
+        given(attendanceRecordRepository.findWithLockByCohortMembershipIdAndAttendanceDate(
+                MEMBERSHIP_ID,
+                ATTENDANCE_DATE
+        )).willReturn(Optional.of(record));
+
+        var result = attendanceService.checkOut(COHORT_ID, USER_ID);
+
+        assertEquals(AttendanceStatus.MISSING_CHECK_OUT, result.autoStatus());
+        assertNull(result.checkedOutAt());
+        verifyNoInteractions(presenceTransitionService, attendancePolicyRepository);
+    }
+
+    @Test
+    @DisplayName("일일 배치가 마감한 출결에서는 체류 공간을 다시 열 수 없다")
+    void rejectsSpaceMoveAfterMissingCheckOutFinalization() {
+        Instant moveAt = Instant.parse("2026-07-29T09:01:00Z");
+        AttendanceRecord record = AttendanceRecord.start(MEMBERSHIP_ID, ATTENDANCE_DATE);
+        record.checkIn(Instant.parse("2026-07-29T00:00:00Z"), AttendanceStatus.PRESENT, 0);
+        record.markMissingCheckOut();
+        givenActiveMembership();
+        given(clock.instant()).willReturn(moveAt);
+        given(attendanceRecordRepository.findByCohortMembershipIdAndAttendanceDate(
+                MEMBERSHIP_ID,
+                ATTENDANCE_DATE
+        )).willReturn(Optional.of(record));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> attendanceService.moveStudySpace(
+                        COHORT_ID,
+                        USER_ID,
+                        STUDY_SPACE_ID
+                )
+        );
+
+        assertSame(AttendanceErrorCode.PRESENCE_TRANSITION_NOT_ALLOWED, exception.getErrorCode());
+        verifyNoInteractions(studySpaceSelectionService, presenceTransitionService);
     }
 
     @Test

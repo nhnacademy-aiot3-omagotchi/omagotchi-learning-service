@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
 import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
+import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
 import site.omagotchi.learningservice.occupancy.application.OccupancyErrorCode;
 import site.omagotchi.learningservice.occupancy.application.OccupancyParticipantService;
 import site.omagotchi.learningservice.occupancy.application.OccupancyParticipantQueryService;
@@ -58,7 +59,9 @@ class OccupancyParticipantControllerTest {
         mockMvc = standaloneSetup(new OccupancyParticipantController(
                         occupancyParticipantService,
                         occupancyParticipantQueryService))
-                .setControllerAdvice(new GlobalExceptionHandler())
+                .setControllerAdvice(new GlobalExceptionHandler(
+                        mock(HttpErrorEventLogger.class)
+                ))
                 // @AuthenticationPrincipal은 Security의 Resolver가 있어야 풀린다.
                 // standaloneSetup은 Spring Security 필터를 끼우지 않으므로 직접 등록한다.
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())

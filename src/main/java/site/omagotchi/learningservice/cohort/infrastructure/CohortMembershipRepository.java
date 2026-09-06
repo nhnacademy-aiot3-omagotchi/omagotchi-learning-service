@@ -58,7 +58,7 @@ public interface CohortMembershipRepository extends
             from CohortMembership membership
             where membership.id = :id
             """)
-    Optional<CohortMembership> findWithLockById(Long id);
+    Optional<CohortMembership> findByIdForUpdate(Long id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

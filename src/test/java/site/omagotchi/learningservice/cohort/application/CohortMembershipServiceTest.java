@@ -107,7 +107,7 @@ class CohortMembershipServiceTest {
         Long membershipId = 100L;
         CohortMembership active = activeMembership(cohortId, membershipId);
 
-        when(membershipRepository.findWithLockById(membershipId)).thenReturn(Optional.of(active));
+        when(membershipRepository.findByIdForUpdate(membershipId)).thenReturn(Optional.of(active));
         when(membershipRepository.endActive(
                 org.mockito.ArgumentMatchers.eq(membershipId),
                 org.mockito.ArgumentMatchers.any()
@@ -137,7 +137,7 @@ class CohortMembershipServiceTest {
         Long membershipId = 100L;
         CohortMembership active = activeMembership(1L, membershipId);
 
-        when(membershipRepository.findWithLockById(membershipId)).thenReturn(Optional.of(active));
+        when(membershipRepository.findByIdForUpdate(membershipId)).thenReturn(Optional.of(active));
         when(membershipRepository.endActive(
                 org.mockito.ArgumentMatchers.eq(membershipId),
                 org.mockito.ArgumentMatchers.any()
@@ -152,7 +152,7 @@ class CohortMembershipServiceTest {
     @Test
     @DisplayName("없는 소속을 종료하려 하면 404로 끊는다")
     void endRejectsUnknownMembership() {
-        when(membershipRepository.findWithLockById(404L)).thenReturn(Optional.empty());
+        when(membershipRepository.findByIdForUpdate(404L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> membershipService.end(404L))
                 .isInstanceOf(BusinessException.class)

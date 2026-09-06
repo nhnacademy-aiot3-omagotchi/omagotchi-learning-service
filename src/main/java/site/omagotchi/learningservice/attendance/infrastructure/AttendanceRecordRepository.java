@@ -78,6 +78,11 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
             Pageable pageable
     );
 
+    List<AttendanceRecord> findByAttendanceDateAndCohortMembershipIdIn(
+            LocalDate attendanceDate,
+            Collection<Long> cohortMembershipIds
+    );
+
     @Query("""
             select distinct record.attendanceDate
             from AttendanceRecord record

@@ -12,6 +12,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
+import site.omagotchi.learningservice.global.requestid.RequestId;
 import site.omagotchi.learningservice.space.application.SpaceCommandService;
 import site.omagotchi.learningservice.space.application.SpaceQueryService;
 import site.omagotchi.learningservice.space.presentation.SpaceAdminController;
@@ -34,7 +36,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -69,6 +71,9 @@ class LearningSecurityMvcTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockitoBean
+    private HttpErrorEventLogger errorEventLogger;
 
     @MockitoBean
     private TelegramUserLinkService telegramUserLinkService;
@@ -221,7 +226,12 @@ class LearningSecurityMvcTest {
     @DisplayName("임계치 룰 생성은 JWT 사용자와 기수를 서비스에 전달")
     void passesJwtActorAndCohortWhenCreatingThresholdRule() throws Exception {
         String userToken = TestJwtKeyConfig.issue("USER");
-        given(thresholdRuleService.create(eq(1L), eq(USER_ID), isNull(), any()))
+        given(thresholdRuleService.create(
+                eq(1L),
+                eq(USER_ID),
+                argThat(RequestId::isValid),
+                any()
+        ))
                 .willReturn(10L);
 
         mockMvc.perform(post("/api/v1/cohorts/1/threshold-rules")
@@ -238,14 +248,25 @@ class LearningSecurityMvcTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.ruleId").value(10));
 
-        verify(thresholdRuleService).create(eq(1L), eq(USER_ID), isNull(), any());
+        verify(thresholdRuleService).create(
+                eq(1L),
+                eq(USER_ID),
+                argThat(RequestId::isValid),
+                any()
+        );
     }
 
     @Test
     @DisplayName("임계치 룰 수정은 JWT 사용자와 기수를 서비스에 전달")
     void passesJwtActorAndCohortWhenUpdatingThresholdRule() throws Exception {
         String userToken = TestJwtKeyConfig.issue("USER");
-        given(thresholdRuleService.update(eq(1L), eq(USER_ID), isNull(), eq(5L), any()))
+        given(thresholdRuleService.update(
+                eq(1L),
+                eq(USER_ID),
+                argThat(RequestId::isValid),
+                eq(5L),
+                any()
+        ))
                 .willReturn(new UpdateThresholdRuleResult(true, 2L));
 
         mockMvc.perform(patch("/api/v1/cohorts/1/threshold-rules/5")
@@ -261,8 +282,13 @@ class LearningSecurityMvcTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.changed").value(true));
 
-        verify(thresholdRuleService)
-                .update(eq(1L), eq(USER_ID), isNull(), eq(5L), any());
+        verify(thresholdRuleService).update(
+                eq(1L),
+                eq(USER_ID),
+                argThat(RequestId::isValid),
+                eq(5L),
+                any()
+        );
     }
 
     @Test

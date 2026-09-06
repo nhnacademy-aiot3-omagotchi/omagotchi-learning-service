@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+import site.omagotchi.learningservice.global.requestid.RequestIdRestClientInterceptor;
 
 import java.nio.charset.StandardCharsets;
 
@@ -29,6 +30,7 @@ public class PredictionRestClientConfig {
                         credentials.password(),
                         StandardCharsets.UTF_8
                 ))
+                .requestInterceptor(new RequestIdRestClientInterceptor())
                 .build();
     }
 }

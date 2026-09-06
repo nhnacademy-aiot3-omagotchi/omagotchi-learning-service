@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+import site.omagotchi.learningservice.global.requestid.RequestIdRestClientInterceptor;
 
 import java.time.Duration;
 
@@ -21,6 +22,7 @@ public class KmaRestClientConfig {
         return builder
                 .baseUrl(kmaProperties.baseUrl())
                 .requestFactory(factory)
+                .requestInterceptor(new RequestIdRestClientInterceptor())
                 .build();
     }
 }

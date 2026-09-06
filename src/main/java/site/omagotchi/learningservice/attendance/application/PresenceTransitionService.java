@@ -236,6 +236,41 @@ public class PresenceTransitionService {
             Long expectedMembershipId,
             Instant at
     ) {
+        return closeAttendanceUnlessMeeting(
+                attendanceId,
+                expectedMembershipId,
+                at,
+                false
+        );
+    }
+
+    /**
+     * 일일 미퇴실 마감용. 열린 MEETING은 보존하고 다음 주기에 재시도한다.
+     *
+     * <p>정책 마감 뒤에 회의가 끝나거나 공간을 전환하면 현재 구간이 마감
+     * 시각보다 뒤에 시작했을 수 있다. 그 경우에만 시작 시각으로 보정해 음수
+     * 구간을 막는다. 일반적으로는 {@code attendanceDate + scheduledEndTime}을
+     * 그대로 쓴다.</p>
+     */
+    public AttendanceCloseResult closeAttendanceAtDailyDeadline(
+            Long attendanceId,
+            Long expectedMembershipId,
+            Instant deadline
+    ) {
+        return closeAttendanceUnlessMeeting(
+                attendanceId,
+                expectedMembershipId,
+                deadline,
+                true
+        );
+    }
+
+    private AttendanceCloseResult closeAttendanceUnlessMeeting(
+            Long attendanceId,
+            Long expectedMembershipId,
+            Instant at,
+            boolean clampToCurrentIntervalStart
+    ) {
         AttendanceRecord attendance = lockAttendance(attendanceId);
         ensureMembership(attendance, expectedMembershipId);
         Instant transitionAt = requireTime(at);
@@ -249,7 +284,11 @@ public class PresenceTransitionService {
             return AttendanceCloseResult.MEETING_OPEN;
         }
 
-        end(current, transitionAt);
+        Instant effectiveTransitionAt = clampToCurrentIntervalStart
+                && current.getStartedAt().isAfter(transitionAt)
+                ? current.getStartedAt()
+                : transitionAt;
+        end(current, effectiveTransitionAt);
         return AttendanceCloseResult.CLOSED;
     }
 

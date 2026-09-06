@@ -511,6 +511,51 @@ class PresenceTransitionServiceTest {
     }
 
     @Test
+    @DisplayName("일일 미퇴실은 예정 종료 시각으로 열린 PRESENT를 닫는다")
+    void closesDailyMissingCheckOutAtScheduledDeadline() {
+        Instant deadline = Instant.parse("2026-08-31T04:00:00Z");
+        PresenceInterval present = presence(
+                PresenceState.PRESENT,
+                LAB_A_ID,
+                "2026-08-31T02:00:00Z"
+        );
+        stubAttendance(attendance(false));
+        stubOpenIntervals(present);
+
+        AttendanceCloseResult result = service.closeAttendanceAtDailyDeadline(
+                ATTENDANCE_ID,
+                MEMBERSHIP_ID,
+                deadline
+        );
+
+        assertThat(result).isEqualTo(AttendanceCloseResult.CLOSED);
+        assertThat(present.getEndedAt()).isEqualTo(deadline);
+    }
+
+    @Test
+    @DisplayName("마감 뒤 시작된 복귀 구간은 시작 시각에 맞춰 0초로 마감한다")
+    void clampsDailyDeadlineToCurrentIntervalStart() {
+        Instant deadline = Instant.parse("2026-08-31T04:00:00Z");
+        Instant resumedAt = Instant.parse("2026-08-31T04:30:00Z");
+        PresenceInterval present = presence(
+                PresenceState.PRESENT,
+                LAB_A_ID,
+                resumedAt.toString()
+        );
+        stubAttendance(attendance(false));
+        stubOpenIntervals(present);
+
+        AttendanceCloseResult result = service.closeAttendanceAtDailyDeadline(
+                ATTENDANCE_ID,
+                MEMBERSHIP_ID,
+                deadline
+        );
+
+        assertThat(result).isEqualTo(AttendanceCloseResult.CLOSED);
+        assertThat(present.getEndedAt()).isEqualTo(resumedAt);
+    }
+
+    @Test
     @DisplayName("소속 종료 회의 마감은 MEETING만 닫고 복귀 PRESENT를 만들지 않는다")
     void closesMeetingWithoutReturnForEndedMembership() {
         Instant at = Instant.parse("2026-08-31T04:00:00Z");

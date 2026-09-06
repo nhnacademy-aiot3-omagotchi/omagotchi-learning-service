@@ -8,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.attendance.application.result.AttendanceCleanupTarget;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
@@ -32,11 +31,10 @@ public class EndedMembershipAttendanceCleanup {
 
     /**
      * @param membershipId 끝난 소속
-     * @param endedAt      소속 종료 시각
      * @return 이번 호출로 체류 또는 출결 상태를 변경한 출결 수
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public int cleanUp(Long membershipId, OffsetDateTime endedAt) {
+    public int cleanUp(Long membershipId) {
         List<AttendanceCleanupTarget> targets = attendanceRecordRepository
                 .findEndCleanupTargetsByCohortMembershipId(membershipId);
         int cleaned = 0;
@@ -44,8 +42,7 @@ public class EndedMembershipAttendanceCleanup {
             try {
                 if (missingCheckOutFinalizer.finalizeOne(
                         target.attendanceId(),
-                        target.cohortMembershipId(),
-                        endedAt.toInstant()
+                        target.cohortMembershipId()
                 )) {
                     cleaned++;
                 }

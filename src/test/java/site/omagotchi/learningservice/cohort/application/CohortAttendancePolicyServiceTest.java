@@ -6,14 +6,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 import site.omagotchi.learningservice.cohort.application.command.SaveAttendancePolicyCommand;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
+import site.omagotchi.learningservice.cohort.domain.CohortMembership;
+import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
+import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
+import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -36,6 +42,9 @@ class CohortAttendancePolicyServiceTest {
 
     @Mock
     private CohortAttendancePolicyRepository attendancePolicyRepository;
+
+    @Mock
+    private CohortMembershipRepository membershipRepository;
 
     @Mock
     private CohortAccessService accessService;
@@ -99,6 +108,25 @@ class CohortAttendancePolicyServiceTest {
         assertEquals("Asia/Seoul", result.timezone());
     }
 
+    @Test
+    @DisplayName("일일 마감 정책은 ACTIVE 소속에만 공개한다")
+    void returnsDailyClosingPoliciesOnlyForActiveMemberships() {
+        CohortMembership active = membership(10L, CohortMembershipStatus.ACTIVE);
+        CohortMembership ended = membership(20L, CohortMembershipStatus.ENDED);
+        when(membershipRepository.findAllById(List.of(10L, 20L)))
+                .thenReturn(List.of(active, ended));
+        when(attendancePolicyRepository.findAllById(List.of(COHORT_ID)))
+                .thenReturn(List.of(policy()));
+
+        var policies = attendancePolicyService.findActiveDailyClosingPolicies(
+                List.of(10L, 20L)
+        );
+
+        assertEquals(1, policies.size());
+        assertEquals(LocalTime.of(18, 0), policies.get(10L).scheduledEndTime());
+        assertEquals("Asia/Seoul", policies.get(10L).timezone());
+    }
+
     private SaveAttendancePolicyCommand command() {
         return new SaveAttendancePolicyCommand(
                 "Asia/Seoul",
@@ -119,5 +147,16 @@ class CohortAttendancePolicyServiceTest {
                 30,
                 MANAGER_ID
         );
+    }
+
+    private CohortMembership membership(Long membershipId, CohortMembershipStatus status) {
+        CohortMembership membership = CohortMembership.pending(
+                COHORT_ID,
+                UUID.randomUUID(),
+                CohortMembershipRole.STUDENT
+        );
+        ReflectionTestUtils.setField(membership, "id", membershipId);
+        ReflectionTestUtils.setField(membership, "status", status);
+        return membership;
     }
 }

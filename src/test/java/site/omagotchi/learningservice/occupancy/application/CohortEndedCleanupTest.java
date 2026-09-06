@@ -113,7 +113,7 @@ class CohortEndedCleanupTest {
         order.verify(vacancyAlertService).discardByMemberships(MEMBERSHIP_IDS);
         order.verify(occupancyRepository).findActiveSummariesByOccupierMembershipIds(MEMBERSHIP_IDS);
         order.verify(occupancyCleanup).cleanUp(10L, OCCUPIER_USER_ID, CLOSED_AT);
-        order.verify(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS, CLOSED_AT);
+        order.verify(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS);
         // 센서 회수가 공간 해제보다 먼저다. 뒤집히면 spaces.cohort_id가 이미 NULL이라
         // 대상 센서를 하나도 찾지 못하고, 회수되지 못한 센서의 룰이 계속 발화한다.
         order.verify(sensorCleanup).deactivateSensors(COHORT_ID);
@@ -146,7 +146,7 @@ class CohortEndedCleanupTest {
                 .doesNotThrowAnyException();
 
         verify(occupancyRepository, never()).findActiveSummariesByOccupierMembershipIds(anyCollection());
-        verify(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS, CLOSED_AT);
+        verify(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS);
         verify(spaceCleanup).unassignSpaces(COHORT_ID);
     }
 
@@ -166,7 +166,7 @@ class CohortEndedCleanupTest {
                 .doesNotThrowAnyException();
 
         verify(vacancyAlertService).discardByMemberships(MEMBERSHIP_IDS);
-        verify(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS, CLOSED_AT);
+        verify(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS);
         verify(spaceCleanup).unassignSpaces(COHORT_ID);
     }
 
@@ -185,7 +185,7 @@ class CohortEndedCleanupTest {
 
         verify(vacancyAlertService, never()).discardByMemberships(anyCollection());
         verify(occupancyRepository, never()).findActiveSummariesByOccupierMembershipIds(anyCollection());
-        verify(attendanceCleanup, never()).closeAllByCohort(any(), any());
+        verify(attendanceCleanup, never()).closeAllByCohort(any());
         verify(spaceCleanup).unassignSpaces(COHORT_ID);
     }
 
@@ -208,7 +208,7 @@ class CohortEndedCleanupTest {
         verify(occupancyCleanup).cleanUp(
                 org.mockito.ArgumentMatchers.eq(11L), org.mockito.ArgumentMatchers.eq(secondUser),
                 org.mockito.ArgumentMatchers.eq(CLOSED_AT));
-        verify(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS, CLOSED_AT);
+        verify(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS);
         verify(spaceCleanup).unassignSpaces(COHORT_ID);
     }
 
@@ -216,7 +216,7 @@ class CohortEndedCleanupTest {
     @DisplayName("출결 정리 단계가 실패해도 센서 회수와 공간 해제는 진행한다.")
     void attendanceCleanupFailureDoesNotBlockLaterSteps() {
         willThrow(new IllegalStateException("출결 정리 실패"))
-                .given(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS, CLOSED_AT);
+                .given(attendanceCleanup).closeAllByCohort(MEMBERSHIP_IDS);
 
         assertThatCode(() -> cohortEndedCleanup.cleanUp(COHORT_ID, CLOSED_AT))
                 .doesNotThrowAnyException();

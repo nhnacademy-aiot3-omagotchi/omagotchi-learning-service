@@ -5,13 +5,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.command.SaveAttendancePolicyCommand;
 import site.omagotchi.learningservice.cohort.application.result.CohortAttendancePolicyResponse;
+import site.omagotchi.learningservice.cohort.application.result.DailyAttendanceClosingPolicyView;
 import site.omagotchi.learningservice.cohort.domain.CohortAttendancePolicy;
 import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.domain.CohortMembership;
+import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortAttendancePolicyRepository;
+import site.omagotchi.learningservice.cohort.infrastructure.CohortMembershipRepository;
 import site.omagotchi.learningservice.cohort.infrastructure.CohortRepository;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.UUID;
 
 @Service
@@ -21,7 +30,52 @@ public class CohortAttendancePolicyService {
 
     private final CohortRepository cohortRepository;
     private final CohortAttendancePolicyRepository attendancePolicyRepository;
+    private final CohortMembershipRepository membershipRepository;
     private final CohortAccessService accessService;
+
+    /**
+     * ACTIVE 소속의 일일 미퇴실 마감 정책을 일괄 조회한다.
+     *
+     * <p>정책이 없거나 ACTIVE가 아닌 소속은 결과에서 제외한다. 종료 소속은
+     * 종료 전용 정합성 스윕이 처리하며, 일일 배치가 같은 행을 다른 시각으로
+     * 마감하지 않는다.</p>
+     */
+    public Map<Long, DailyAttendanceClosingPolicyView> findActiveDailyClosingPolicies(
+            Collection<Long> membershipIds
+    ) {
+        if (membershipIds == null || membershipIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<CohortMembership> activeMemberships = membershipRepository.findAllById(membershipIds)
+                .stream()
+                .filter(membership -> membership.getStatus() == CohortMembershipStatus.ACTIVE)
+                .toList();
+        if (activeMemberships.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, CohortAttendancePolicy> policiesByCohortId = attendancePolicyRepository
+                .findAllById(activeMemberships.stream()
+                        .map(CohortMembership::getCohortId)
+                        .distinct()
+                        .toList())
+                .stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        CohortAttendancePolicy::getCohortId,
+                        Function.identity()
+                ));
+
+        return activeMemberships.stream()
+                .filter(membership -> policiesByCohortId.containsKey(membership.getCohortId()))
+                .collect(Collectors.toUnmodifiableMap(
+                        CohortMembership::getId,
+                        membership -> DailyAttendanceClosingPolicyView.from(
+                                membership,
+                                policiesByCohortId.get(membership.getCohortId())
+                        )
+                ));
+    }
 
     /**
      * 특정 기수의 출결 정책을 조회

@@ -8,7 +8,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.attendance.infrastructure.AttendanceRecordRepository;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,8 +21,6 @@ import static org.mockito.Mockito.when;
 class CohortEndedAttendanceCleanupTest {
 
     private static final List<Long> MEMBERSHIP_IDS = List.of(10L, 11L, 12L);
-    private static final OffsetDateTime ENDED_AT =
-            OffsetDateTime.parse("2026-09-04T18:00:00+09:00");
 
     @Mock
     private AttendanceRecordRepository attendanceRecordRepository;
@@ -39,14 +36,14 @@ class CohortEndedAttendanceCleanupTest {
     void cleansOnlyTargetMembershipsInOrder() {
         when(attendanceRecordRepository.findDistinctEndCleanupMembershipIds(MEMBERSHIP_IDS))
                 .thenReturn(List.of(10L, 12L));
-        when(membershipAttendanceCleanup.cleanUp(10L, ENDED_AT)).thenReturn(2);
-        when(membershipAttendanceCleanup.cleanUp(12L, ENDED_AT)).thenReturn(1);
+        when(membershipAttendanceCleanup.cleanUp(10L)).thenReturn(2);
+        when(membershipAttendanceCleanup.cleanUp(12L)).thenReturn(1);
 
-        assertThat(cleanup.closeAllByCohort(MEMBERSHIP_IDS, ENDED_AT)).isEqualTo(3);
+        assertThat(cleanup.closeAllByCohort(MEMBERSHIP_IDS)).isEqualTo(3);
 
         var order = inOrder(membershipAttendanceCleanup);
-        order.verify(membershipAttendanceCleanup).cleanUp(10L, ENDED_AT);
-        order.verify(membershipAttendanceCleanup).cleanUp(12L, ENDED_AT);
+        order.verify(membershipAttendanceCleanup).cleanUp(10L);
+        order.verify(membershipAttendanceCleanup).cleanUp(12L);
     }
 
     @Test
@@ -54,19 +51,19 @@ class CohortEndedAttendanceCleanupTest {
     void oneMembershipFailureDoesNotBlockOthers() {
         when(attendanceRecordRepository.findDistinctEndCleanupMembershipIds(MEMBERSHIP_IDS))
                 .thenReturn(List.of(10L, 11L));
-        when(membershipAttendanceCleanup.cleanUp(10L, ENDED_AT))
+        when(membershipAttendanceCleanup.cleanUp(10L))
                 .thenThrow(new IllegalStateException("첫 소속 실패"));
-        when(membershipAttendanceCleanup.cleanUp(11L, ENDED_AT)).thenReturn(1);
+        when(membershipAttendanceCleanup.cleanUp(11L)).thenReturn(1);
 
-        assertThat(cleanup.closeAllByCohort(MEMBERSHIP_IDS, ENDED_AT)).isEqualTo(1);
+        assertThat(cleanup.closeAllByCohort(MEMBERSHIP_IDS)).isEqualTo(1);
 
-        verify(membershipAttendanceCleanup).cleanUp(11L, ENDED_AT);
+        verify(membershipAttendanceCleanup).cleanUp(11L);
     }
 
     @Test
     @DisplayName("기수에 소속이 없으면 저장소도 조회하지 않는다")
     void emptyMembershipsNeedNoQuery() {
-        assertThat(cleanup.closeAllByCohort(List.of(), ENDED_AT)).isZero();
+        assertThat(cleanup.closeAllByCohort(List.of())).isZero();
 
         verifyNoInteractions(attendanceRecordRepository, membershipAttendanceCleanup);
     }

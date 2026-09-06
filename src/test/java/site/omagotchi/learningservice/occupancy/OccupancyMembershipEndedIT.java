@@ -12,6 +12,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
+import site.omagotchi.learningservice.attendance.application.EndedMembershipAttendanceSweep;
 import site.omagotchi.learningservice.cohort.application.CohortLockService;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
 import site.omagotchi.learningservice.occupancy.application.EndedMembershipOccupancyCleanup;
@@ -77,6 +78,9 @@ class OccupancyMembershipEndedIT {
 
     @Autowired
     EndedMembershipOccupancySweep occupancySweep;
+
+    @Autowired
+    EndedMembershipAttendanceSweep attendanceSweep;
 
     @Autowired
     CohortMembershipService membershipService;
@@ -405,7 +409,7 @@ class OccupancyMembershipEndedIT {
      * 않으므로, 리스너가 손대지 않은 고아 상태가 그대로 남는다.
      */
     @Test
-    @DisplayName("이벤트가 유실돼도 스윕이 점유를 정리한다.")
+    @DisplayName("이벤트가 유실돼도 점유와 출결 스윕이 순서와 무관하게 정합성을 복구한다.")
     void sweepCleansOrphanLeftByLostEvent() {
         Long cohortId = fixture.createCohort("스윕-점유");
         OccupancyTestFixture.Member occupier = fixture.createActiveMember(cohortId);
@@ -414,11 +418,24 @@ class OccupancyMembershipEndedIT {
         roomOccupancyService.start(roomId, occupier.userId());
         Long occupancyId = activeOccupancyId(roomId);
         endMembership(occupier.membershipId());
+        OffsetDateTime endedAt = membershipEndedAt(occupier.membershipId());
+
+        // 출결 스윕이 먼저 와도 열린 MEETING과 출결 상태를 잘못 닫지 않는다.
+        attendanceSweep.sweep(200);
+        assertThat(attendanceStatus(occupier.membershipId())).isEqualTo("PRESENT");
+        assertThat(openPresenceRows(occupier.membershipId())).isEqualTo(1);
 
         assertThat(occupancySweep.sweep(200)).isGreaterThanOrEqualTo(1);
+        assertThat(attendanceSweep.sweep(200)).isGreaterThanOrEqualTo(1);
 
         assertThat(occupancyStatus(occupancyId)).isEqualTo("RELEASED");
         assertThat(openParticipantRows(occupancyId)).isZero();
+        assertThat(attendanceStatus(occupier.membershipId()))
+                .isEqualTo("MISSING_CHECK_OUT");
+        assertThat(openPresenceRows(occupier.membershipId())).isZero();
+        assertThat(occupancyEndedAt(occupancyId)).isEqualTo(endedAt);
+        assertThat(latestPresenceEndedAt(occupier.membershipId())).isEqualTo(endedAt);
+        assertThat(attendanceCheckedOutAt(occupier.membershipId())).isNull();
     }
 
     /**
@@ -465,9 +482,12 @@ class OccupancyMembershipEndedIT {
         Long occupancyId = activeOccupancyId(roomId);
 
         occupancySweep.sweep(200);
+        attendanceSweep.sweep(200);
 
         assertThat(occupancyStatus(occupancyId)).isEqualTo("ACTIVE");
         assertThat(openParticipantRows(occupancyId)).isEqualTo(1);
+        assertThat(attendanceStatus(occupier.membershipId())).isEqualTo("PRESENT");
+        assertThat(openPresenceRows(occupier.membershipId())).isEqualTo(1);
     }
 
     /**
@@ -569,6 +589,16 @@ class OccupancyMembershipEndedIT {
                 .orElse(null);
     }
 
+    private String attendanceStatus(Long membershipId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT auto_status
+                  FROM learning_service.attendance_records
+                 WHERE cohort_membership_id = ?
+                 ORDER BY id DESC
+                 LIMIT 1
+                """, String.class, membershipId);
+    }
+
     private String attendanceStatusOrNull(Long membershipId) {
         return jdbcTemplate.queryForList("""
                         SELECT auto_status
@@ -623,10 +653,10 @@ class OccupancyMembershipEndedIT {
                 """, OffsetDateTime.class, membershipId);
     }
 
-    private Object occupancyEndedAt(Long occupancyId) {
+    private OffsetDateTime occupancyEndedAt(Long occupancyId) {
         return jdbcTemplate.queryForObject("""
                 SELECT ended_at FROM learning_service.room_occupancies WHERE id = ?
-                """, Object.class, occupancyId);
+                """, OffsetDateTime.class, occupancyId);
     }
 
     private Long activeOccupancyId(Long spaceId) {

@@ -242,8 +242,14 @@ sensor:
 
 omagotchi:
   scheduling:
-    # 끄면 만료된 점유가 정리되지 않는다. Test에서만 끈다
+    # 끄면 만료 정리와 정합성 스윕이 실행되지 않는다. Test에서만 끈다
     enabled: ${SCHEDULING_ENABLED:true}
+  attendance:
+    membership-sweep:
+      # 종료 소속 출결 정리가 유실됐을 때의 복구 지연 상한.
+      fixed-delay: ${ATTENDANCE_MEMBERSHIP_SWEEP_FIXED_DELAY:300000}
+      initial-delay: ${ATTENDANCE_MEMBERSHIP_SWEEP_INITIAL_DELAY:60000}
+      batch-size: ${ATTENDANCE_MEMBERSHIP_SWEEP_BATCH_SIZE:200}
   occupancy:
     expiry:
       # 만료 정리 주기. 공실 알림 지연의 상한이기도 하다

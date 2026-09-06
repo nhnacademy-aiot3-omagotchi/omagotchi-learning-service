@@ -11,6 +11,7 @@ import site.omagotchi.learningservice.occupancy.application.port.OccupancyPartic
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -34,8 +35,8 @@ import java.util.Set;
  * 안에서 {@code cleanUp}을 부르면 Spring Proxy를 거치지 않아 {@code @Transactional}이
  * 적용되지 않는다 — 건별 경계가 사라져 한 건의 실패가 배치 전체를 되돌린다.</p>
  *
- * <p><b>기수 파트 테이블을 직접 읽지 않는다.</b> 소속이 살아 있는지는
- * {@link CohortMembershipQueryService#findInactiveMembershipIds}에 묻는다. 점유가
+ * <p><b>기수 파트 테이블을 직접 읽지 않는다.</b> 소속이 살아 있는지와 ENDED 소속의 실제
+ * 종료 시각은 {@link CohortMembershipQueryService}에 묻는다. 점유가
  * {@code cohort_memberships}를 조인하면 남의 테이블을 알게 된다 (ADR 0013 §6).</p>
  */
 @Slf4j
@@ -68,9 +69,10 @@ public class EndedMembershipOccupancySweep {
      * 때문이다. 소속 유효성은 기수 파트에 물어야 알 수 있어 SQL로 걸러낼 수 없고,
      * {@code LIMIT}만 두면 앞쪽 배치만 반복해 뒤쪽에 닿지 못한다.</p>
      *
-     * <p>종료 시각으로 <b>지금</b>을 쓴다. 실제 소속 종료 시각은 이벤트가 유실된 이 경로에
-     * 남아 있지 않으며, 발견 시점을 쓰는 편이 "언제까지 방이 잠겨 있었는지"를 그대로
-     * 반영한다.</p>
+     * <p>ENDED 소속은 {@code cohort_memberships.ended_at}에 보존된 실제 종료 시각을 쓴다.
+     * 스윕 발견 시각을 쓰면 늦게 복구될수록 점유·MEETING 이력이 실제보다 길어진다.
+     * PENDING·REJECTED처럼 종료 시각이 없는 비활성 상태의 비정상 참여만 발견 시각으로
+     * 닫아 기존의 "열린 참여는 모두 ACTIVE" 복구 계약을 유지한다.</p>
      *
      * @param batchSize 한 배치에서 훑을 참여 행 수
      * @return 이번 실행으로 실제 점유를 종료시킨 건수
@@ -94,13 +96,19 @@ public class EndedMembershipOccupancySweep {
                     .findInactiveMembershipIds(openParticipations.stream()
                             .map(OccupancyParticipantRepository.OpenParticipation::cohortMembershipId)
                             .toList());
+            Map<Long, OffsetDateTime> endedMemberships = cohortMembershipQueryService
+                    .findEndedMemberships(inactiveMembershipIds);
 
             for (OccupancyParticipantRepository.OpenParticipation open : openParticipations) {
                 if (!inactiveMembershipIds.contains(open.cohortMembershipId())) {
                     continue;
                 }
                 detected++;
-                released += cleanUp(open) ? 1 : 0;
+                OffsetDateTime cleanupAt = endedMemberships.get(open.cohortMembershipId());
+                if (cleanupAt == null) {
+                    cleanupAt = OffsetDateTime.now(clock);
+                }
+                released += cleanUp(open, cleanupAt) ? 1 : 0;
             }
 
             cursor = openParticipations.getLast().participantId();
@@ -120,10 +128,13 @@ public class EndedMembershipOccupancySweep {
      * 처리했거나, 대상이 점유자가 아니라 참여자여서 종료시킬 점유가 없는 경우다. 후자도
      * 참여 행은 마감되므로 정리 자체는 일어난다.</p>
      */
-    private boolean cleanUp(OccupancyParticipantRepository.OpenParticipation open) {
+    private boolean cleanUp(
+            OccupancyParticipantRepository.OpenParticipation open,
+            OffsetDateTime cleanupAt
+    ) {
         try {
             return occupancyCleanup.cleanUp(
-                    open.cohortMembershipId(), open.userId(), OffsetDateTime.now(clock));
+                    open.cohortMembershipId(), open.userId(), cleanupAt);
         } catch (Exception exception) {
             // 여기서 다시 던지면 남은 대상이 이번 주기에 처리되지 않는다.
             // 행은 그대로 남아 다음 주기가 다시 집어 간다.

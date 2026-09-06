@@ -10,6 +10,8 @@ import site.omagotchi.learningservice.telegram.application.port.TelegramMessageS
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -34,6 +36,21 @@ public class BotApiMessageSender implements TelegramMessageSender {
         }
 
         requireDelivered(response, chatId);
+    }
+
+    @Override
+    public CompletionStage<Void> sendAsync(Long chatId, String text) {
+        try {
+            return sender.executeAsync(request(chatId, text))
+                    .thenAccept(response -> requireDelivered(response, chatId));
+        } catch (TelegramApiException exception) {
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException(
+                            "Telegram 비동기 발송을 시작하지 못했습니다. chatId=" + chatId,
+                            exception
+                    )
+            );
+        }
     }
 
     /**

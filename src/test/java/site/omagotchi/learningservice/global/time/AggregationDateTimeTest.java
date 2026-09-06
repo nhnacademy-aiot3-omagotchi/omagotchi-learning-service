@@ -8,6 +8,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -72,6 +74,30 @@ class AggregationDateTimeTest {
             );
 
             assertEquals(Instant.parse("2000-01-01T19:00:00Z"), start);
+        }
+
+        @Test
+        @DisplayName("KST 04시 이전 정책 시각은 집계일의 다음 달력 날짜로 변환")
+        void resolvesTimeBeforeResetToNextCalendarDate() {
+            ZonedDateTime dateTime = AggregationDateTime.dateTimeWithin(
+                    LocalDate.parse("2000-01-02"),
+                    LocalTime.of(3, 0),
+                    ZoneId.of("Asia/Seoul")
+            );
+
+            assertEquals(ZonedDateTime.parse("2000-01-03T03:00:00+09:00[Asia/Seoul]"), dateTime);
+        }
+
+        @Test
+        @DisplayName("KST 04시 이후 정책 시각은 집계일과 같은 달력 날짜로 변환")
+        void resolvesTimeFromResetToSameCalendarDate() {
+            ZonedDateTime dateTime = AggregationDateTime.dateTimeWithin(
+                    LocalDate.parse("2000-01-02"),
+                    LocalTime.of(4, 0),
+                    ZoneId.of("Asia/Seoul")
+            );
+
+            assertEquals(ZonedDateTime.parse("2000-01-02T04:00:00+09:00[Asia/Seoul]"), dateTime);
         }
     }
 }

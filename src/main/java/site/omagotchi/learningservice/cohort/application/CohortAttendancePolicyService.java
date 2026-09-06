@@ -33,6 +33,13 @@ public class CohortAttendancePolicyService {
     private final CohortMembershipRepository membershipRepository;
     private final CohortAccessService accessService;
 
+    /** 출결 알림 계산에 필요한 모든 기수 정책을 공개 조회 결과로 반환한다. */
+    public List<CohortAttendancePolicyResponse> findAllPolicies() {
+        return attendancePolicyRepository.findAll().stream()
+                .map(CohortAttendancePolicyResponse::from)
+                .toList();
+    }
+
     /**
      * ACTIVE 소속의 일일 미퇴실 마감 정책을 일괄 조회한다.
      *

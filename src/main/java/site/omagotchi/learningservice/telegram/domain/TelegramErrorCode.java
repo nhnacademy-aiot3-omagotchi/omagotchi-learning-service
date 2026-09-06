@@ -36,11 +36,6 @@ public enum TelegramErrorCode implements ErrorCode {
             ErrorType.CONFLICT,
             "TELEGRAM_USER_ALREADY_LINKED",
             "이미 다른 Telegram 계정과 연동되어 있습니다."
-    ),
-    ATTENDANCE_REMINDER_MEMBERSHIP_NOT_FOUND(
-            ErrorType.NOT_FOUND,
-            "ATTENDANCE_REMINDER_MEMBERSHIP_NOT_FOUND",
-            "출결 알림 대상 기수 소속을 찾을 수 없습니다."
     );
 
     private final ErrorType type;

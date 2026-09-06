@@ -61,6 +61,22 @@ class CohortServiceTest {
     private CohortService service;
 
     @Test
+    @DisplayName("다른 기능에 기수 이름만 공개한다")
+    void returnsCohortName() {
+        Cohort cohort = Cohort.create(
+                "AIoT 3기",
+                "설명",
+                LocalDate.of(2026, 8, 1),
+                LocalDate.of(2026, 12, 18),
+                ACTOR_ID
+        );
+        ReflectionTestUtils.setField(cohort, "id", COHORT_ID);
+        when(cohortPersistence.findById(COHORT_ID)).thenReturn(Optional.of(cohort));
+
+        assertThat(service.getCohortName(COHORT_ID)).isEqualTo("AIoT 3기");
+    }
+
+    @Test
     void validatesEveryActiveManagerBeforeChangingCohortPeriod() {
         Cohort cohort = Cohort.create(
                 "기존 기수",

@@ -11,6 +11,8 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 /**
  * 다른 Feature가 텔레그램으로 알림을 보내는 유일한 진입점.
@@ -43,6 +45,28 @@ public class TelegramNotificationService {
      */
     public boolean send(UUID recipientUserId, String text) {
         return send(recipientUserId, text, null);
+    }
+
+    /**
+     * 수신 가능 여부만 동기적으로 확인하고 Telegram 응답은 기다리지 않는다.
+     *
+     * <p>다수 수신자에게 보내는 배치가 한 사람의 네트워크 지연 때문에 멈추지 않아야 할 때
+     * 사용한다. 실제 전송은 Telegram 봇의 {@code max-threads} 실행기가 처리한다.</p>
+     */
+    public CompletionStage<Boolean> sendAsync(UUID recipientUserId, String text) {
+        Optional<TelegramUserLink> link = userLinkRepository.findActiveByUserId(recipientUserId);
+
+        if (link.isEmpty()) {
+            log.debug("텔레그램 미연동 사용자라 발송하지 않습니다. recipientUserId={}", recipientUserId);
+            return CompletableFuture.completedFuture(false);
+        }
+        if (!link.get().canReceiveNotification()) {
+            log.debug("텔레그램 알림을 받지 않는 사용자라 발송하지 않습니다. recipientUserId={}", recipientUserId);
+            return CompletableFuture.completedFuture(false);
+        }
+
+        Long chatId = link.get().getTelegramChatId();
+        return messageSender.sendAsync(chatId, text).thenApply(ignored -> true);
     }
 
     /**

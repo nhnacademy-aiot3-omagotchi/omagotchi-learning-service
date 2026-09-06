@@ -1,4 +1,4 @@
-package site.omagotchi.learningservice.telegram.domain;
+package site.omagotchi.learningservice.attendance.domain;
 
 public enum ReminderStatus {
     PENDING,

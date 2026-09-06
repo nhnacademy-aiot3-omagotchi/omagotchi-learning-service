@@ -8,9 +8,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -18,10 +15,8 @@ import java.time.ZoneOffset;
 import java.util.Objects;
 
 /** 한 사람에게 한 날짜의 출결 알림을 보냈다는 이력. */
-@Getter
 @Entity
 @Table(name = "attendance_reminders", schema = "learning_service")
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AttendanceReminder {
 
     @Id
@@ -67,6 +62,9 @@ public class AttendanceReminder {
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
+    protected AttendanceReminder() {
+    }
+
     /**
      * 발송 직전에 이력을 만든다. 이 행의 존재 자체가 발송 여부이므로 별도 중간 상태를
      * 거치지 않는다.
@@ -99,5 +97,57 @@ public class AttendanceReminder {
         reminder.createdAt = now;
         reminder.updatedAt = now;
         return reminder;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public Long getCohortMembershipId() {
+        return cohortMembershipId;
+    }
+
+    public LocalDate getAttendanceDate() {
+        return attendanceDate;
+    }
+
+    public ReminderType getReminderType() {
+        return reminderType;
+    }
+
+    public ReminderChannel getChannel() {
+        return channel;
+    }
+
+    public ReminderStatus getStatus() {
+        return status;
+    }
+
+    public OffsetDateTime getSentAt() {
+        return sentAt;
+    }
+
+    public OffsetDateTime getConfirmedAt() {
+        return confirmedAt;
+    }
+
+    public Long getTelegramMessageId() {
+        return telegramMessageId;
+    }
+
+    public Integer getAttemptCount() {
+        return attemptCount;
+    }
+
+    public String getLastError() {
+        return lastError;
+    }
+
+    public OffsetDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public OffsetDateTime getUpdatedAt() {
+        return updatedAt;
     }
 }

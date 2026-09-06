@@ -5,8 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceRecordQueryRepository;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceReminderPersistence;
+import site.omagotchi.learningservice.attendance.application.result.AttendanceReminderAttempt;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
-import site.omagotchi.learningservice.attendance.domain.AttendanceReminder;
 import site.omagotchi.learningservice.attendance.domain.AttendanceReminderSchedule;
 import site.omagotchi.learningservice.attendance.domain.ReminderType;
 import site.omagotchi.learningservice.cohort.application.CohortAttendancePolicyService;
@@ -44,6 +44,9 @@ public class AttendanceReminderService {
 
     static final Duration LEAD_TIME = Duration.ofMinutes(5);
     static final Duration WINDOW = Duration.ofMinutes(30);
+    private static final int LAST_ERROR_MAX_LENGTH = 500;
+    private static final String SKIPPED_REASON =
+            "텔레그램 미연동 또는 알림 비활성화로 발송을 건너뛰었습니다.";
     private static final DateTimeFormatter DISPLAY_FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss '('zzz')'", Locale.KOREA);
 
@@ -52,6 +55,7 @@ public class AttendanceReminderService {
     private final CohortService cohortService;
     private final AttendanceRecordQueryRepository attendanceRecordQueryRepository;
     private final AttendanceReminderPersistence reminderPersistence;
+    private final AttendanceReminderAttemptService reminderAttemptService;
     private final TelegramNotificationService telegramNotificationService;
     private final Clock clock;
 
@@ -87,7 +91,7 @@ public class AttendanceReminderService {
             if (!isInWindow(now, fireAt)) {
                 continue;
             }
-            sendDue(policy.cohortId(), attendanceDate, type, scheduledAt);
+            sendDue(policy.cohortId(), attendanceDate, type, scheduledAt, now);
         }
     }
 
@@ -95,7 +99,8 @@ public class AttendanceReminderService {
             Long cohortId,
             LocalDate attendanceDate,
             ReminderType type,
-            OffsetDateTime scheduledAt
+            OffsetDateTime scheduledAt,
+            OffsetDateTime now
     ) {
         List<CohortMembershipView> memberships =
                 membershipQueryService.findActiveMemberships(cohortId);
@@ -106,32 +111,33 @@ public class AttendanceReminderService {
         List<Long> membershipIds = memberships.stream()
                 .map(CohortMembershipView::membershipId)
                 .toList();
-        Set<Long> recordedMembershipIds = new HashSet<>(
-                reminderPersistence.findRecordedMembershipIds(
+        Set<Long> blockingMembershipIds = new HashSet<>(
+                reminderPersistence.findBlockingMembershipIds(
                         attendanceDate,
                         type,
                         TELEGRAM,
-                        membershipIds
+                        membershipIds,
+                        now.minus(AttendanceReminderAttemptService.PENDING_TIMEOUT)
                 )
         );
-        List<CohortMembershipView> unrecordedMemberships = memberships.stream()
-                .filter(membership -> !recordedMembershipIds.contains(membership.membershipId()))
+        List<CohortMembershipView> candidateMemberships = memberships.stream()
+                .filter(membership -> !blockingMembershipIds.contains(membership.membershipId()))
                 .toList();
-        if (unrecordedMemberships.isEmpty()) {
+        if (candidateMemberships.isEmpty()) {
             return;
         }
 
-        List<Long> unrecordedMembershipIds = unrecordedMemberships.stream()
+        List<Long> candidateMembershipIds = candidateMemberships.stream()
                 .map(CohortMembershipView::membershipId)
                 .toList();
         Map<Long, AttendanceRecord> recordsByMembershipId = recordsByMembershipId(
                 attendanceRecordQueryRepository.findDailyRecords(
                         attendanceDate,
-                        unrecordedMembershipIds
+                        candidateMembershipIds
                 )
         );
 
-        List<CohortMembershipView> targets = unrecordedMemberships.stream()
+        List<CohortMembershipView> targets = candidateMemberships.stream()
                 .filter(membership -> needsReminder(
                         type,
                         recordsByMembershipId.get(membership.membershipId())
@@ -144,7 +150,13 @@ public class AttendanceReminderService {
         String cohortName = cohortService.getCohortName(cohortId);
 
         for (CohortMembershipView membership : targets) {
-            if (!record(membership.membershipId(), attendanceDate, type)) {
+            var attempt = reminderAttemptService.start(
+                    membership.membershipId(),
+                    attendanceDate,
+                    type,
+                    TELEGRAM
+            );
+            if (attempt.isEmpty()) {
                 continue;
             }
             sendAsync(
@@ -152,7 +164,7 @@ public class AttendanceReminderService {
                     cohortName,
                     type,
                     scheduledAt,
-                    membership.membershipId()
+                    attempt.get()
             );
         }
     }
@@ -196,42 +208,85 @@ public class AttendanceReminderService {
         };
     }
 
-    private boolean record(Long membershipId, LocalDate attendanceDate, ReminderType type) {
-        boolean saved = reminderPersistence.saveIfAbsent(
-                AttendanceReminder.sent(membershipId, attendanceDate, type, TELEGRAM)
-        );
-        if (!saved) {
-            log.debug(
-                    "이미 기록된 출결 알림이라 중복 발송하지 않습니다. membershipId={}, "
-                            + "attendanceDate={}, type={}",
-                    membershipId,
-                    attendanceDate,
-                    type
-            );
-        }
-        return saved;
-    }
-
     private void sendAsync(
             UUID recipientUserId,
             String cohortName,
             ReminderType type,
             OffsetDateTime scheduledAt,
-            Long membershipId
+            AttendanceReminderAttempt attempt
     ) {
         try {
             telegramNotificationService.sendAsync(
                     recipientUserId,
                     messageOf(cohortName, type, scheduledAt)
             ).whenComplete((sent, exception) -> {
-                if (exception == null) {
+                if (exception != null) {
+                    recordFailure(attempt, exception);
                     return;
                 }
-                logDeliveryFailure(membershipId, type, exception);
+                if (Boolean.TRUE.equals(sent)) {
+                    markSent(attempt);
+                    return;
+                }
+                markSkipped(attempt);
             });
         } catch (Exception exception) {
-            logDeliveryFailure(membershipId, type, exception);
+            recordFailure(attempt, exception);
         }
+    }
+
+    private void markSent(AttendanceReminderAttempt attempt) {
+        try {
+            reminderAttemptService.markSent(attempt);
+        } catch (Exception exception) {
+            log.error(
+                    "출결 알림 성공 상태를 기록하지 못했습니다. membershipId={}, type={}",
+                    attempt.cohortMembershipId(),
+                    attempt.reminderType(),
+                    exception
+            );
+        }
+    }
+
+    private void markSkipped(AttendanceReminderAttempt attempt) {
+        try {
+            reminderAttemptService.markSkipped(attempt, SKIPPED_REASON);
+        } catch (Exception exception) {
+            log.error(
+                    "출결 알림 건너뜀 상태를 기록하지 못했습니다. membershipId={}, type={}",
+                    attempt.cohortMembershipId(),
+                    attempt.reminderType(),
+                    exception
+            );
+        }
+    }
+
+    private void recordFailure(AttendanceReminderAttempt attempt, Throwable exception) {
+        Throwable cause = unwrap(exception);
+        try {
+            reminderAttemptService.markFailed(attempt, failureMessage(cause));
+        } catch (Exception stateException) {
+            log.error(
+                    "출결 알림 실패 상태를 기록하지 못했습니다. membershipId={}, type={}",
+                    attempt.cohortMembershipId(),
+                    attempt.reminderType(),
+                    stateException
+            );
+        }
+        logDeliveryFailure(attempt.cohortMembershipId(), attempt.reminderType(), cause);
+    }
+
+    private String failureMessage(Throwable cause) {
+        String message = cause.toString();
+        return message.length() <= LAST_ERROR_MAX_LENGTH
+                ? message
+                : message.substring(0, LAST_ERROR_MAX_LENGTH);
+    }
+
+    private Throwable unwrap(Throwable exception) {
+        return exception instanceof CompletionException && exception.getCause() != null
+                ? exception.getCause()
+                : exception;
     }
 
     private static String messageOf(
@@ -267,15 +322,12 @@ public class AttendanceReminderService {
             ReminderType type,
             Throwable exception
     ) {
-        Throwable cause = exception instanceof CompletionException && exception.getCause() != null
-                ? exception.getCause()
-                : exception;
         log.warn(
-                "출결 알림 발송에 실패했습니다. 이력은 유지하고 재시도하지 않습니다. "
+                "출결 알림 발송에 실패했습니다. 다음 주기에 재시도합니다. "
                         + "membershipId={}, type={}",
                 membershipId,
                 type,
-                cause
+                exception
         );
     }
 }

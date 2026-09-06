@@ -1,7 +1,6 @@
 package site.omagotchi.learningservice.attendance.infrastructure;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceReminderPersistence;
 import site.omagotchi.learningservice.attendance.domain.AttendanceReminder;
@@ -9,8 +8,10 @@ import site.omagotchi.learningservice.attendance.domain.ReminderChannel;
 import site.omagotchi.learningservice.attendance.domain.ReminderType;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 /** 출결 알림 이력 DB 경계의 JPA 구현. */
 @Repository
@@ -20,31 +21,50 @@ public class AttendanceReminderJpaPersistence implements AttendanceReminderPersi
     private final AttendanceReminderRepository repository;
 
     @Override
-    public List<Long> findRecordedMembershipIds(
+    public List<Long> findBlockingMembershipIds(
             LocalDate attendanceDate,
             ReminderType reminderType,
             ReminderChannel channel,
-            Collection<Long> membershipIds
+            Collection<Long> membershipIds,
+            OffsetDateTime retryPendingBefore
     ) {
         if (membershipIds == null || membershipIds.isEmpty()) {
             return List.of();
         }
-        return repository.findRecordedMembershipIds(
+        return repository.findBlockingMembershipIds(
                 attendanceDate,
                 reminderType,
                 channel,
-                membershipIds
+                membershipIds,
+                retryPendingBefore
         );
     }
 
     @Override
-    public boolean saveIfAbsent(AttendanceReminder reminder) {
-        try {
-            // flush까지 끝내 유니크 제약을 발송보다 먼저 판정한다.
-            repository.saveAndFlush(reminder);
-            return true;
-        } catch (DataIntegrityViolationException exception) {
-            return false;
-        }
+    public boolean insertIfAbsent(AttendanceReminder reminder) {
+        return repository.insertPendingIfAbsent(
+                reminder.getCohortMembershipId(),
+                reminder.getAttendanceDate(),
+                reminder.getReminderType().name(),
+                reminder.getChannel().name(),
+                reminder.getAttemptCount(),
+                reminder.getCreatedAt(),
+                reminder.getUpdatedAt()
+        ) == 1;
+    }
+
+    @Override
+    public Optional<AttendanceReminder> findForUpdate(
+            Long cohortMembershipId,
+            LocalDate attendanceDate,
+            ReminderType reminderType,
+            ReminderChannel channel
+    ) {
+        return repository.findForUpdate(
+                cohortMembershipId,
+                attendanceDate,
+                reminderType,
+                channel
+        );
     }
 }

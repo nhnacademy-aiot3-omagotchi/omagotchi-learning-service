@@ -23,7 +23,11 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@Import({TestcontainersConfiguration.class, QueryDslConfig.class})
+@Import({
+        TestcontainersConfiguration.class,
+        QueryDslConfig.class,
+        AttendanceReminderJpaPersistence.class
+})
 @ActiveProfiles("test")
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -31,10 +35,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AttendanceReminderRepositoryIT {
 
     private static final LocalDate ATTENDANCE_DATE = LocalDate.of(2026, 9, 5);
-    private static final UUID USER_ID =
-            UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID ADMIN_ID =
             UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final OffsetDateTime NOW =
+            OffsetDateTime.parse("2026-09-05T00:00:00Z");
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -42,20 +46,49 @@ class AttendanceReminderRepositoryIT {
     @Autowired
     private AttendanceReminderRepository reminderRepository;
 
-    @Test
-    @DisplayName("같은 날짜와 유형에 이미 기록된 소속 ID를 조회한다")
-    void findsRecordedMembershipIds() {
-        Long membershipId = saveMembership();
-        reminderRepository.saveAndFlush(reminder(membershipId));
+    @Autowired
+    private AttendanceReminderJpaPersistence reminderPersistence;
 
-        List<Long> result = reminderRepository.findRecordedMembershipIds(
+    @Test
+    @DisplayName("SENT와 제한 시간 안의 PENDING만 중복 발송 차단 대상으로 조회한다")
+    void findsOnlyBlockingMembershipIds() {
+        Long sentMembershipId = saveMembership();
+        AttendanceReminder sent = reminder(sentMembershipId, NOW.minusMinutes(5));
+        sent.markSent(1, NOW.minusMinutes(4));
+        reminderRepository.save(sent);
+
+        Long pendingMembershipId = saveMembership();
+        reminderRepository.save(reminder(pendingMembershipId, NOW.minusSeconds(30)));
+
+        Long failedMembershipId = saveMembership();
+        AttendanceReminder failed = reminder(failedMembershipId, NOW.minusMinutes(2));
+        failed.markFailed(1, "telegram unavailable", NOW.minusMinutes(1));
+        reminderRepository.save(failed);
+
+        Long skippedMembershipId = saveMembership();
+        AttendanceReminder skipped = reminder(skippedMembershipId, NOW.minusMinutes(2));
+        skipped.markSkipped(1, "notifications disabled", NOW.minusMinutes(1));
+        reminderRepository.save(skipped);
+
+        Long stalePendingMembershipId = saveMembership();
+        reminderRepository.save(reminder(stalePendingMembershipId, NOW.minusMinutes(2)));
+        reminderRepository.flush();
+
+        List<Long> result = reminderRepository.findBlockingMembershipIds(
                 ATTENDANCE_DATE,
                 ReminderType.CHECK_IN_BEFORE_DEADLINE,
                 ReminderChannel.TELEGRAM,
-                List.of(membershipId)
+                List.of(
+                        sentMembershipId,
+                        pendingMembershipId,
+                        failedMembershipId,
+                        skippedMembershipId,
+                        stalePendingMembershipId
+                ),
+                NOW.minusMinutes(1)
         );
 
-        assertThat(result).containsExactly(membershipId);
+        assertThat(result).containsExactlyInAnyOrder(sentMembershipId, pendingMembershipId);
     }
 
     @Test
@@ -68,12 +101,26 @@ class AttendanceReminderRepositoryIT {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    @DisplayName("PENDING 이력 선점은 같은 발송 키에서 최초 한 번만 성공한다")
+    void insertsPendingReminderOnlyOnce() {
+        Long membershipId = saveMembership();
+
+        assertThat(reminderPersistence.insertIfAbsent(reminder(membershipId))).isTrue();
+        assertThat(reminderPersistence.insertIfAbsent(reminder(membershipId))).isFalse();
+    }
+
     private AttendanceReminder reminder(Long membershipId) {
-        return AttendanceReminder.sent(
+        return reminder(membershipId, NOW);
+    }
+
+    private AttendanceReminder reminder(Long membershipId, OffsetDateTime startedAt) {
+        return AttendanceReminder.pending(
                 membershipId,
                 ATTENDANCE_DATE,
                 ReminderType.CHECK_IN_BEFORE_DEADLINE,
-                ReminderChannel.TELEGRAM
+                ReminderChannel.TELEGRAM,
+                startedAt
         );
     }
 
@@ -93,7 +140,7 @@ class AttendanceReminderRepositoryIT {
                         """,
                 Long.class,
                 cohortId,
-                USER_ID,
+                UUID.randomUUID(),
                 OffsetDateTime.parse("2026-09-01T00:00:00Z"),
                 OffsetDateTime.parse("2026-09-01T00:00:00Z"),
                 ADMIN_ID

@@ -6,12 +6,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 import site.omagotchi.learningservice.attendance.domain.AttendanceReminder;
 import site.omagotchi.learningservice.attendance.domain.ReminderChannel;
 import site.omagotchi.learningservice.attendance.domain.ReminderType;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -28,29 +28,39 @@ class AttendanceReminderJpaPersistenceTest {
     private AttendanceReminderJpaPersistence persistence;
 
     @Test
-    @DisplayName("이력을 flush까지 저장하면 true를 반환한다")
-    void returnsTrueWhenHistoryIsSaved() {
+    @DisplayName("PENDING 이력이 삽입되면 true를 반환한다")
+    void returnsTrueWhenPendingHistoryIsInserted() {
         AttendanceReminder reminder = reminder();
-        given(repository.saveAndFlush(reminder)).willReturn(reminder);
+        given(repository.insertPendingIfAbsent(
+                reminder.getCohortMembershipId(),
+                reminder.getAttendanceDate(),
+                reminder.getReminderType().name(),
+                reminder.getChannel().name(),
+                reminder.getAttemptCount(),
+                reminder.getCreatedAt(),
+                reminder.getUpdatedAt()
+        )).willReturn(1);
 
-        assertThat(persistence.saveIfAbsent(reminder)).isTrue();
+        assertThat(persistence.insertIfAbsent(reminder)).isTrue();
     }
 
     @Test
-    @DisplayName("동일 이력의 유니크 제약 위반은 false로 반환한다")
-    void returnsFalseOnDuplicateHistory() {
-        given(repository.saveAndFlush(any()))
-                .willThrow(new DataIntegrityViolationException("duplicate"));
+    @DisplayName("동일 자연 키의 이력이 이미 있으면 false를 반환한다")
+    void returnsFalseWhenHistoryAlreadyExists() {
+        given(repository.insertPendingIfAbsent(
+                any(), any(), any(), any(), any(), any(), any()
+        )).willReturn(0);
 
-        assertThat(persistence.saveIfAbsent(reminder())).isFalse();
+        assertThat(persistence.insertIfAbsent(reminder())).isFalse();
     }
 
     private AttendanceReminder reminder() {
-        return AttendanceReminder.sent(
+        return AttendanceReminder.pending(
                 10L,
                 LocalDate.of(2026, 9, 5),
                 ReminderType.CHECK_IN_BEFORE_DEADLINE,
-                ReminderChannel.TELEGRAM
+                ReminderChannel.TELEGRAM,
+                OffsetDateTime.parse("2026-09-05T00:00:00Z")
         );
     }
 }

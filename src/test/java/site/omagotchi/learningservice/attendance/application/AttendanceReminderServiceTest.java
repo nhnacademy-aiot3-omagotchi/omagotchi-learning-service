@@ -8,8 +8,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceRecordQueryRepository;
 import site.omagotchi.learningservice.attendance.application.port.AttendanceReminderPersistence;
+import site.omagotchi.learningservice.attendance.application.result.AttendanceReminderAttempt;
 import site.omagotchi.learningservice.attendance.domain.AttendanceRecord;
-import site.omagotchi.learningservice.attendance.domain.AttendanceReminder;
 import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
 import site.omagotchi.learningservice.attendance.domain.ReminderChannel;
 import site.omagotchi.learningservice.attendance.domain.ReminderType;
@@ -25,8 +25,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -34,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.never;
@@ -73,6 +76,9 @@ class AttendanceReminderServiceTest {
     private AttendanceReminderPersistence reminderPersistence;
 
     @Mock
+    private AttendanceReminderAttemptService reminderAttemptService;
+
+    @Mock
     private TelegramNotificationService telegramNotificationService;
 
     @Test
@@ -87,6 +93,7 @@ class AttendanceReminderServiceTest {
                 cohortService,
                 attendanceRecordQueryRepository,
                 reminderPersistence,
+                reminderAttemptService,
                 telegramNotificationService
         );
     }
@@ -101,13 +108,16 @@ class AttendanceReminderServiceTest {
 
         serviceAt(CHECK_IN_WINDOW).sendDue();
 
-        ArgumentCaptor<AttendanceReminder> history =
-                ArgumentCaptor.forClass(AttendanceReminder.class);
-        verify(reminderPersistence).saveIfAbsent(history.capture());
-        assertThat(history.getValue().getCohortMembershipId()).isEqualTo(MEMBERSHIP_ID);
-        assertThat(history.getValue().getAttendanceDate()).isEqualTo(ATTENDANCE_DATE);
-        assertThat(history.getValue().getReminderType())
-                .isEqualTo(ReminderType.CHECK_IN_BEFORE_DEADLINE);
+        verify(reminderAttemptService).start(
+                MEMBERSHIP_ID,
+                ATTENDANCE_DATE,
+                ReminderType.CHECK_IN_BEFORE_DEADLINE,
+                ReminderChannel.TELEGRAM
+        );
+        verify(reminderAttemptService).markSent(attempt(
+                MEMBERSHIP_ID,
+                ReminderType.CHECK_IN_BEFORE_DEADLINE
+        ));
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(telegramNotificationService).sendAsync(eq(USER_ID), message.capture());
@@ -132,11 +142,6 @@ class AttendanceReminderServiceTest {
 
         serviceAt(AFTER_MIDNIGHT_CHECK_IN_WINDOW).sendDue();
 
-        ArgumentCaptor<AttendanceReminder> history =
-                ArgumentCaptor.forClass(AttendanceReminder.class);
-        verify(reminderPersistence).saveIfAbsent(history.capture());
-        assertThat(history.getValue().getAttendanceDate()).isEqualTo(ATTENDANCE_DATE);
-
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(telegramNotificationService).sendAsync(eq(USER_ID), message.capture());
         assertThat(message.getValue())
@@ -151,11 +156,12 @@ class AttendanceReminderServiceTest {
         given(policyService.findAllPolicies()).willReturn(List.of(policy()));
         given(membershipQueryService.findActiveMemberships(COHORT_ID))
                 .willReturn(List.of(membership));
-        given(reminderPersistence.findRecordedMembershipIds(
-                ATTENDANCE_DATE,
-                ReminderType.CHECK_IN_BEFORE_DEADLINE,
-                ReminderChannel.TELEGRAM,
-                List.of(MEMBERSHIP_ID)
+        given(reminderPersistence.findBlockingMembershipIds(
+                eq(ATTENDANCE_DATE),
+                eq(ReminderType.CHECK_IN_BEFORE_DEADLINE),
+                eq(ReminderChannel.TELEGRAM),
+                eq(List.of(MEMBERSHIP_ID)),
+                any(OffsetDateTime.class)
         )).willReturn(List.of());
         given(attendanceRecordQueryRepository.findDailyRecords(
                 ATTENDANCE_DATE,
@@ -164,8 +170,7 @@ class AttendanceReminderServiceTest {
 
         serviceAt(CHECK_IN_WINDOW).sendDue();
 
-        verifyNoInteractions(cohortService, telegramNotificationService);
-        verify(reminderPersistence, never()).saveIfAbsent(any());
+        verifyNoInteractions(cohortService, reminderAttemptService, telegramNotificationService);
     }
 
     @Test
@@ -193,36 +198,60 @@ class AttendanceReminderServiceTest {
     }
 
     @Test
-    @DisplayName("이미 이력이 있는 기수원은 다시 보내지 않는다")
-    void skipsAlreadyRecordedReminder() {
+    @DisplayName("SENT와 아직 진행 중인 이력이 있는 기수원은 다시 보내지 않는다")
+    void skipsBlockingReminder() {
         CohortMembershipView membership = membership(MEMBERSHIP_ID, USER_ID);
         given(policyService.findAllPolicies()).willReturn(List.of(policy()));
         given(membershipQueryService.findActiveMemberships(COHORT_ID))
                 .willReturn(List.of(membership));
-        given(reminderPersistence.findRecordedMembershipIds(
-                ATTENDANCE_DATE,
-                ReminderType.CHECK_IN_BEFORE_DEADLINE,
-                ReminderChannel.TELEGRAM,
-                List.of(MEMBERSHIP_ID)
+        given(reminderPersistence.findBlockingMembershipIds(
+                eq(ATTENDANCE_DATE),
+                eq(ReminderType.CHECK_IN_BEFORE_DEADLINE),
+                eq(ReminderChannel.TELEGRAM),
+                eq(List.of(MEMBERSHIP_ID)),
+                any(OffsetDateTime.class)
         )).willReturn(List.of(MEMBERSHIP_ID));
 
         serviceAt(CHECK_IN_WINDOW).sendDue();
 
         verifyNoInteractions(attendanceRecordQueryRepository, cohortService);
-        verify(reminderPersistence, never()).saveIfAbsent(any());
-        verifyNoInteractions(telegramNotificationService);
+        verifyNoInteractions(reminderAttemptService, telegramNotificationService);
     }
 
     @Test
-    @DisplayName("동시 실행이 이력을 먼저 만들었으면 보내지 않는다")
-    void concurrentRecordPreventsDuplicateSend() {
+    @DisplayName("다른 실행이 발송 시도를 먼저 획득했으면 보내지 않는다")
+    void concurrentAttemptPreventsDuplicateSend() {
         CohortMembershipView membership = membership(MEMBERSHIP_ID, USER_ID);
         prepareDue(ReminderType.CHECK_IN_BEFORE_DEADLINE, membership, List.of());
-        given(reminderPersistence.saveIfAbsent(any())).willReturn(false);
+        given(reminderAttemptService.start(
+                MEMBERSHIP_ID,
+                ATTENDANCE_DATE,
+                ReminderType.CHECK_IN_BEFORE_DEADLINE,
+                ReminderChannel.TELEGRAM
+        )).willReturn(Optional.empty());
 
         serviceAt(CHECK_IN_WINDOW).sendDue();
 
         verifyNoInteractions(telegramNotificationService);
+    }
+
+    @Test
+    @DisplayName("텔레그램이 false로 완료되면 SENT가 아니라 SKIPPED로 확정한다")
+    void marksSkippedWhenTelegramDoesNotSend() {
+        CohortMembershipView membership = membership(MEMBERSHIP_ID, USER_ID);
+        prepareDue(ReminderType.CHECK_IN_BEFORE_DEADLINE, membership, List.of());
+        given(telegramNotificationService.sendAsync(any(), any()))
+                .willReturn(CompletableFuture.completedFuture(false));
+
+        serviceAt(CHECK_IN_WINDOW).sendDue();
+
+        AttendanceReminderAttempt attempt = attempt(
+                MEMBERSHIP_ID,
+                ReminderType.CHECK_IN_BEFORE_DEADLINE
+        );
+        verify(reminderAttemptService).markSkipped(eq(attempt), any(String.class));
+        verify(reminderAttemptService, never()).markSent(any());
+        verify(reminderAttemptService, never()).markFailed(any(), any());
     }
 
     @Test
@@ -248,7 +277,13 @@ class AttendanceReminderServiceTest {
         );
 
         verify(telegramNotificationService, times(2)).sendAsync(any(), any());
-        verify(reminderPersistence, times(2)).saveIfAbsent(any());
+        verify(reminderAttemptService).markFailed(
+                eq(attempt(MEMBERSHIP_ID, ReminderType.CHECK_IN_BEFORE_DEADLINE)),
+                any(String.class)
+        );
+        verify(reminderAttemptService).markSent(
+                attempt(11L, ReminderType.CHECK_IN_BEFORE_DEADLINE)
+        );
     }
 
     @Test
@@ -262,20 +297,7 @@ class AttendanceReminderServiceTest {
         );
         CohortMembershipView membership = membership(MEMBERSHIP_ID, USER_ID);
         given(policyService.findAllPolicies()).willReturn(List.of(damaged, policy()));
-        given(membershipQueryService.findActiveMemberships(COHORT_ID))
-                .willReturn(List.of(membership));
-        given(reminderPersistence.findRecordedMembershipIds(
-                ATTENDANCE_DATE,
-                ReminderType.CHECK_IN_BEFORE_DEADLINE,
-                ReminderChannel.TELEGRAM,
-                List.of(MEMBERSHIP_ID)
-        )).willReturn(List.of());
-        given(attendanceRecordQueryRepository.findDailyRecords(
-                ATTENDANCE_DATE,
-                List.of(MEMBERSHIP_ID)
-        )).willReturn(List.of());
-        given(cohortService.getCohortName(COHORT_ID)).willReturn("AIoT 3기");
-        given(reminderPersistence.saveIfAbsent(any())).willReturn(true);
+        prepareDueQueries(ReminderType.CHECK_IN_BEFORE_DEADLINE, List.of(membership), List.of());
         given(telegramNotificationService.sendAsync(any(), any()))
                 .willReturn(CompletableFuture.completedFuture(true));
 
@@ -317,24 +339,41 @@ class AttendanceReminderServiceTest {
             List<AttendanceRecord> records,
             CohortAttendancePolicyResponse attendancePolicy
     ) {
+        given(policyService.findAllPolicies()).willReturn(List.of(attendancePolicy));
+        prepareDueQueries(type, memberships, records);
+    }
+
+    private void prepareDueQueries(
+            ReminderType type,
+            List<CohortMembershipView> memberships,
+            List<AttendanceRecord> records
+    ) {
         List<Long> membershipIds = memberships.stream()
                 .map(CohortMembershipView::membershipId)
                 .toList();
-        given(policyService.findAllPolicies()).willReturn(List.of(attendancePolicy));
         given(membershipQueryService.findActiveMemberships(COHORT_ID))
                 .willReturn(memberships);
-        given(reminderPersistence.findRecordedMembershipIds(
-                ATTENDANCE_DATE,
-                type,
-                ReminderChannel.TELEGRAM,
-                membershipIds
+        given(reminderPersistence.findBlockingMembershipIds(
+                eq(ATTENDANCE_DATE),
+                eq(type),
+                eq(ReminderChannel.TELEGRAM),
+                eq(membershipIds),
+                any(OffsetDateTime.class)
         )).willReturn(List.of());
         given(attendanceRecordQueryRepository.findDailyRecords(
                 ATTENDANCE_DATE,
                 membershipIds
         )).willReturn(records);
         given(cohortService.getCohortName(COHORT_ID)).willReturn("AIoT 3기");
-        given(reminderPersistence.saveIfAbsent(any())).willReturn(true);
+        given(reminderAttemptService.start(
+                anyLong(),
+                eq(ATTENDANCE_DATE),
+                eq(type),
+                eq(ReminderChannel.TELEGRAM)
+        )).willAnswer(invocation -> Optional.of(attempt(
+                invocation.getArgument(0),
+                type
+        )));
     }
 
     private AttendanceReminderService serviceAt(Instant instant) {
@@ -344,6 +383,7 @@ class AttendanceReminderServiceTest {
                 cohortService,
                 attendanceRecordQueryRepository,
                 reminderPersistence,
+                reminderAttemptService,
                 telegramNotificationService,
                 Clock.fixed(instant, ZoneOffset.UTC)
         );
@@ -387,6 +427,16 @@ class AttendanceReminderServiceTest {
 
     private CohortMembershipView membership(Long membershipId, UUID userId) {
         return new CohortMembershipView(membershipId, COHORT_ID, userId);
+    }
+
+    private AttendanceReminderAttempt attempt(Long membershipId, ReminderType type) {
+        return new AttendanceReminderAttempt(
+                membershipId,
+                ATTENDANCE_DATE,
+                type,
+                ReminderChannel.TELEGRAM,
+                1
+        );
     }
 
     private AttendanceRecord checkedInRecord() {

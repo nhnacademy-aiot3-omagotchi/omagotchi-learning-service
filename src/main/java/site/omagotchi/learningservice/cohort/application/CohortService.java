@@ -110,6 +110,11 @@ public class CohortService {
         return CohortResponse.from(cohort);
     }
 
+    /** 다른 Feature가 기수 domain에 의존하지 않고 표시 이름만 조회하는 공개 계약. */
+    public String getCohortName(Long cohortId) {
+        return getCohortOrThrow(cohortId).getName();
+    }
+
     /**
      * 기수명, 설명, 운영 기간을 수정한다.
      * 종료된 기수는 도메인 규칙에 따라 수정할 수 없다.

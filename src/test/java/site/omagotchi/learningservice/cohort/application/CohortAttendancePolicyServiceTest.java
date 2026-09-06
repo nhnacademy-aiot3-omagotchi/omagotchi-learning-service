@@ -53,6 +53,18 @@ class CohortAttendancePolicyServiceTest {
     private CohortAttendancePolicyService attendancePolicyService;
 
     @Test
+    @DisplayName("출결 알림용 전체 정책을 공개 조회 결과로 반환한다")
+    void returnsAllPoliciesForAttendanceReminder() {
+        when(attendancePolicyRepository.findAll()).thenReturn(List.of(policy()));
+
+        var policies = attendancePolicyService.findAllPolicies();
+
+        assertEquals(1, policies.size());
+        assertEquals(COHORT_ID, policies.getFirst().cohortId());
+        assertEquals("Asia/Seoul", policies.getFirst().timezone());
+    }
+
+    @Test
     @DisplayName("정책 조회 전 출결 정책 편집 권한을 확인한다")
     void requiresPolicyEditorWhenGettingPolicy() {
         when(attendancePolicyRepository.findById(COHORT_ID))

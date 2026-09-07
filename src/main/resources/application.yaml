@@ -13,6 +13,8 @@ ollama:
   read-timeout: ${OLLAMA_READ_TIMEOUT:60s}
 
 spring:
+  reactor:
+    context-propagation: auto
   autoconfigure:
     exclude:
       - org.springframework.ai.model.google.genai.autoconfigure.chat.GoogleGenAiChatAutoConfiguration
@@ -55,6 +57,7 @@ spring:
 
   task:
     execution:
+      propagate-context: true
       # AsyncConfig의 eventTaskExecutor와 Boot 기본 실행기를 분리한다 (ADR space-team/0012).
       # 지우면 applicationTaskExecutor가 사라져 이름 없는 @Async가 이벤트 실행기로 가는데,
       # 기동도 로그도 정상이라 드러나지 않는다. AsyncConfigTest가 이 값을 고정한다.

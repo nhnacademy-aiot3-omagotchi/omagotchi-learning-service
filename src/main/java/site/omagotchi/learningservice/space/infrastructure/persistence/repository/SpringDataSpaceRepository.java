@@ -17,6 +17,8 @@ public interface SpringDataSpaceRepository
     List<SpaceJpaEntity>
     findAllByDeletedAtIsNullOrderByIdAsc();
 
+    Optional<SpaceJpaEntity> findByIdAndDeletedAtIsNull(Long spaceId);
+
     @Query(
             value = """
                     SELECT EXISTS (

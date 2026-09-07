@@ -9,8 +9,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.application.result.SpaceListResult;
+import site.omagotchi.learningservice.space.application.result.SpacePresenceDetailResult;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceOperationalStatus;
 import site.omagotchi.learningservice.space.domain.SpaceType;
@@ -23,6 +25,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,6 +67,12 @@ class SpaceQueryServiceTest {
     @Mock
     private CohortAccessService cohortAccessService;
 
+    @Mock
+    private SpacePresenceQueryService spacePresenceQueryService;
+
+    @Mock
+    private CharacterGrowthService characterGrowthService;
+
     private SpaceQueryService spaceQueryService;
 
     @BeforeEach
@@ -71,7 +80,9 @@ class SpaceQueryServiceTest {
         spaceQueryService = new SpaceQueryService(
                 spaceRepository,
                 occupancyQueryService,
+                spacePresenceQueryService,
                 cohortAccessService,
+                characterGrowthService,
                 Clock.fixed(NOW, SEOUL)
         );
     }
@@ -262,6 +273,48 @@ class SpaceQueryServiceTest {
         verify(occupancyQueryService, times(1)).findActiveBySpaceIds(anyCollection(), any());
     }
 
+    @Test
+    @DisplayName("현재 인원도 공간 수와 무관하게 한 번에 집계한다")
+    void includesCurrentPresenceCountWithOneBatchLookup() {
+        when(spaceRepository.findAllNotDeleted())
+                .thenReturn(List.of(meeting(1L, SpaceOperationalStatus.ACTIVE)));
+        when(occupancyQueryService.findActiveBySpaceIds(anyCollection(), any()))
+                .thenReturn(Map.of());
+        when(spacePresenceQueryService.currentCounts(anyCollection()))
+                .thenReturn(Map.of(1L, 4L));
+
+        SpaceListResult result = spaceQueryService.getSpaceList(null).getFirst();
+
+        assertThat(result.currentPresenceCount()).isEqualTo(4L);
+        verify(spacePresenceQueryService, times(1)).currentCounts(anyCollection());
+    }
+
+    @Test
+    @DisplayName("공용 공간은 전체 인원과 선택 기수 명단을 분리해 공개한다")
+    void separatesVisibleCohortOccupantsFromOtherCohorts() {
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        when(spaceRepository.findById(1L))
+                .thenReturn(Optional.of(commonSpace(
+                        1L, SpaceType.STUDY, SpaceOperationalStatus.ACTIVE)));
+        when(spacePresenceQueryService.currentCount(1L)).thenReturn(3L);
+        when(spacePresenceQueryService.findCurrentUserIds(1L, MY_COHORT))
+                .thenReturn(List.of(first, second));
+        when(characterGrowthService.findRepresentativeNicknames(List.of(first, second)))
+                .thenReturn(Map.of(first, "첫째", second, "둘째"));
+
+        SpacePresenceDetailResult result = spaceQueryService.getCurrentPresences(
+                MY_COHORT, 1L, REQUESTER_ID);
+
+        assertThat(result.totalCount()).isEqualTo(3L);
+        assertThat(result.cohortCount()).isEqualTo(2L);
+        assertThat(result.otherCohortCount()).isEqualTo(1L);
+        assertThat(result.occupants())
+                .extracting(occupant -> occupant.displayName())
+                .containsExactly("첫째", "둘째");
+        verify(cohortAccessService).requireManager(MY_COHORT, REQUESTER_ID);
+    }
+
     private void stubMeetingWithOccupancy(Long occupierCohortId) {
         when(spaceRepository.findAllNotDeleted())
                 .thenReturn(List.of(meeting(1L, SpaceOperationalStatus.ACTIVE)));
@@ -290,10 +343,23 @@ class SpaceQueryServiceTest {
     }
 
     private static Space space(Long id, SpaceType type, SpaceOperationalStatus status) {
+        return space(id, MY_COHORT, type, status);
+    }
+
+    private static Space commonSpace(Long id, SpaceType type, SpaceOperationalStatus status) {
+        return space(id, null, type, status);
+    }
+
+    private static Space space(
+            Long id,
+            Long cohortId,
+            SpaceType type,
+            SpaceOperationalStatus status
+    ) {
         ZonedDateTime createdAt = ZonedDateTime.ofInstant(NOW, SEOUL);
         return Space.restore(
                 id,
-                MY_COHORT,
+                cohortId,
                 "공간 " + id,
                 type,
                 8,

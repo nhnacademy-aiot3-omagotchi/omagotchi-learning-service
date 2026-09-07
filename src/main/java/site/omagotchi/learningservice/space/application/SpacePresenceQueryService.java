@@ -10,9 +10,11 @@ import site.omagotchi.learningservice.global.time.AggregationDateTime;
 import java.time.Clock;
 import java.util.Collection;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * 공간 정책이 쓰는 현재 재실·복귀 예약 집계.
@@ -36,15 +38,7 @@ public class SpacePresenceQueryService {
     }
 
     public Map<Long, SpacePresenceSummary> summarize(Collection<Long> spaceIds) {
-        if (spaceIds == null || spaceIds.isEmpty()) {
-            return Map.of();
-        }
-
-        Set<Long> distinctSpaceIds = new LinkedHashSet<>();
-        spaceIds.stream()
-                .filter(Objects::nonNull)
-                .forEach(distinctSpaceIds::add);
-
+        Set<Long> distinctSpaceIds = distinctIds(spaceIds);
         if (distinctSpaceIds.isEmpty()) {
             return Map.of();
         }
@@ -52,6 +46,24 @@ public class SpacePresenceQueryService {
                 distinctSpaceIds,
                 AggregationDateTime.aggregationDate(clock.instant())
         );
+    }
+
+    public Map<Long, Long> currentCounts(Collection<Long> spaceIds) {
+        Set<Long> distinctSpaceIds = distinctIds(spaceIds);
+        if (distinctSpaceIds.isEmpty()) {
+            return Map.of();
+        }
+        return spacePresenceQueryPort.findCurrentCounts(
+                distinctSpaceIds,
+                AggregationDateTime.aggregationDate(clock.instant())
+        );
+    }
+
+    public long currentCount(Long spaceId) {
+        if (spaceId == null) {
+            return 0L;
+        }
+        return currentCounts(Set.of(spaceId)).getOrDefault(spaceId, 0L);
     }
 
     /** 대상 출결이 이미 이 LAB의 직접 체류 또는 회의 후 복귀 예약에 포함되는지 확인한다. */
@@ -64,5 +76,27 @@ public class SpacePresenceQueryService {
                 attendanceId,
                 AggregationDateTime.aggregationDate(clock.instant())
         );
+    }
+
+    public List<UUID> findCurrentUserIds(Long spaceId, Long cohortId) {
+        if (spaceId == null || cohortId == null) {
+            return List.of();
+        }
+        return spacePresenceQueryPort.findCurrentUserIds(
+                spaceId,
+                cohortId,
+                AggregationDateTime.aggregationDate(clock.instant())
+        );
+    }
+
+    private Set<Long> distinctIds(Collection<Long> spaceIds) {
+        if (spaceIds == null || spaceIds.isEmpty()) {
+            return Set.of();
+        }
+        Set<Long> distinctSpaceIds = new LinkedHashSet<>();
+        spaceIds.stream()
+                .filter(Objects::nonNull)
+                .forEach(distinctSpaceIds::add);
+        return distinctSpaceIds;
     }
 }

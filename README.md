@@ -117,6 +117,15 @@ echo "누락된 키:"; comm -23 /tmp/req.txt /tmp/have.txt
 - `test`: Testcontainers DB·테스트 Key, 외부 자원 미사용
 - `prod`: 운영 환경변수·Mount된 JWT Public Key, Eureka 활성화
 
+## 관측 운영 설정
+
+- 운영 메트릭: `/actuator/prometheus`의 인증 예외, Host Port 미노출·내부 Prometheus 조회
+  - 외부 Nginx의 관리 경로 차단, 같은 Host의 관리자·Docker 제어 권한 보유자에 대한 격리 보장 없음
+- 관측 식별: 운영 Compose의 `SERVICE_VERSION`·`SERVICE_NODE_NAME`·`SERVICE_ENVIRONMENT` 주입
+- Trace 전송: `TRACING_EXPORT_ENABLED` 기본 비활성, 운영 Compose의 실제 Collector 주소 주입
+  - Compose 밖에서 운영 실행 시 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`에 실제 Collector 주소 지정 필수
+- 공통 수집·접근 경계·운영 확인: [Infra 메트릭·Trace 가이드](https://github.com/nhnacademy-aiot3-omagotchi/omagotchi-infra/blob/main/observability/metrics-tracing.md#3-서비스-연결)
+
 ## HTTP 경계
 
 - 기본 Prefix: `/api/v1`

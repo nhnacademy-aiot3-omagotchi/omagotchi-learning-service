@@ -7,6 +7,8 @@ import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import io.minio.errors.ErrorResponseException;
 import io.minio.errors.MinioException;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -42,6 +44,7 @@ public class MinioCommunityAttachmentStorage implements CommunityAttachmentStora
     private final CommunityAttachmentProperties properties;
     private final CommunityAttachmentPolicy policy;
     private final CommunityAttachmentThumbnail thumbnail;
+    private final ObservationRegistry observationRegistry;
 
     @Override
     public StoredCommunityAttachment store(CommunityAttachmentFile attachmentFile) {
@@ -152,19 +155,23 @@ public class MinioCommunityAttachmentStorage implements CommunityAttachmentStora
 
     private void putObject(String storageKey, String contentType, long size, InputStream inputStream)
             throws MinioException {
-        minioClient.putObject(PutObjectArgs.builder()
-                .bucket(properties.bucket())
-                .object(storageKey)
-                .stream(inputStream, size, null)
-                .contentType(contentType)
-                .build());
+        // 업로드 I/O 측정, 객체 키·파일명·본문 제외
+        Observation.createNotStarted("storage.upload", observationRegistry).observeChecked(() ->
+                minioClient.putObject(PutObjectArgs.builder()
+                        .bucket(properties.bucket())
+                        .object(storageKey)
+                        .stream(inputStream, size, null)
+                        .contentType(contentType)
+                        .build()));
     }
 
     private Resource loadObject(String storageKey) throws MinioException {
-        GetObjectResponse response = minioClient.getObject(GetObjectArgs.builder()
-                .bucket(properties.bucket())
-                .object(storageKey)
-                .build());
+        // 다운로드 스트림 확보 시간만 측정, 응답 전송 완료 시간은 HTTP 계측 담당
+        GetObjectResponse response = Observation.createNotStarted("storage.download", observationRegistry)
+                .observeChecked(() -> minioClient.getObject(GetObjectArgs.builder()
+                        .bucket(properties.bucket())
+                        .object(storageKey)
+                        .build()));
         return new InputStreamResource(response);
     }
 

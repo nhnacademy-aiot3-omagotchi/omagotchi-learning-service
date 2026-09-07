@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.community.infrastructure;
 
+import io.micrometer.observation.ObservationRegistry;
 import io.minio.GetObjectArgs;
 import io.minio.GetObjectResponse;
 import io.minio.MinioClient;
@@ -251,7 +252,8 @@ class MinioCommunityAttachmentStorageTest {
                 minioClient,
                 properties,
                 new CommunityAttachmentPolicy(properties, clock),
-                new CommunityAttachmentThumbnail()
+                new CommunityAttachmentThumbnail(),
+                ObservationRegistry.NOOP
         );
     }
 

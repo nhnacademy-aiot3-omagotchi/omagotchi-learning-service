@@ -1,5 +1,6 @@
 package site.omagotchi.learningservice.community.infrastructure;
 
+import io.micrometer.observation.tck.TestObservationRegistry;
 import io.minio.GetObjectArgs;
 import io.minio.GetObjectResponse;
 import io.minio.MinioClient;
@@ -33,6 +34,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 
+import static io.micrometer.observation.tck.TestObservationRegistryAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -55,14 +57,18 @@ class MinioCommunityAttachmentStorageTest {
     private MinioClient minioClient;
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-08-08T00:00:00Z"), ZoneOffset.UTC);
+    private final TestObservationRegistry observationRegistry = TestObservationRegistry.create();
 
     @Test
     @DisplayName("검증에서 판정한 MIME과 서버 생성 키로 버킷에 올린다")
     void uploadsWithDetectedContentTypeAndGeneratedKey() throws Exception {
+        // Given
         MockMultipartFile file = new MockMultipartFile("attachments", "image.png", "image/png", pngBytes());
 
+        // When
         var stored = storage().store(attachmentFile(file, 2));
 
+        // Then
         ArgumentCaptor<PutObjectArgs> captor = ArgumentCaptor.forClass(PutObjectArgs.class);
         verify(minioClient, times(2)).putObject(captor.capture());
         PutObjectArgs args = captor.getAllValues().get(0);
@@ -81,6 +87,9 @@ class MinioCommunityAttachmentStorageTest {
                 () -> assertTrue(thumbnailArgs.object().endsWith(".jpg")),
                 () -> assertEquals("image/jpeg", thumbnailArgs.contentType().toString())
         );
+        assertThat(observationRegistry).hasNumberOfObservationsWithNameEqualTo("storage.upload", 2)
+                .forAllObservationsWithNameEqualTo("storage.upload",
+                        observation -> observation.doesNotHaveError().hasNoKeyValues());
     }
 
     @Test
@@ -100,9 +109,11 @@ class MinioCommunityAttachmentStorageTest {
     @Test
     @DisplayName("업로드 실패는 BusinessException으로 감싸지 않고 전파한다")
     void propagatesUploadFailure() throws Exception {
+        // Given
         MinioException cause = new MinioException("upload failed");
         willThrow(cause).given(minioClient).putObject(any());
 
+        // When
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
                 () -> storage().store(attachmentFile(
@@ -110,7 +121,11 @@ class MinioCommunityAttachmentStorageTest {
                 ))
         );
 
+        // Then
         assertEquals(cause, exception.getCause());
+        assertThat(observationRegistry).hasSingleObservationThat()
+                .hasNameEqualTo("storage.upload").hasBeenStarted().hasBeenStopped()
+                .hasError(cause).hasNoKeyValues();
     }
 
     @Test
@@ -161,6 +176,7 @@ class MinioCommunityAttachmentStorageTest {
     @Test
     @DisplayName("객체 스트림을 그대로 흘려보낸다")
     void streamsObjectWithoutBuffering() throws Exception {
+        // Given
         byte[] content = {1, 2, 3};
         given(minioClient.getObject(any(GetObjectArgs.class))).willReturn(new GetObjectResponse(
                 Headers.of(),
@@ -170,8 +186,13 @@ class MinioCommunityAttachmentStorageTest {
                 new ByteArrayInputStream(content)
         ));
 
+        // When
         var resource = storage().load("2026/08/08/key.png");
 
+        // Then: 본문 소비 이전에 종료된 스트림 확보 구간의 계측
+        assertThat(observationRegistry).hasSingleObservationThat()
+                .hasNameEqualTo("storage.download").hasBeenStarted().hasBeenStopped()
+                .doesNotHaveError().hasNoKeyValues();
         assertArrayEquals(content, resource.getInputStream().readAllBytes());
     }
 
@@ -251,7 +272,8 @@ class MinioCommunityAttachmentStorageTest {
                 minioClient,
                 properties,
                 new CommunityAttachmentPolicy(properties, clock),
-                new CommunityAttachmentThumbnail()
+                new CommunityAttachmentThumbnail(),
+                observationRegistry
         );
     }
 

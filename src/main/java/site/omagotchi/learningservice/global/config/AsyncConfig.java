@@ -5,6 +5,7 @@ import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
 import org.springframework.aop.interceptor.SimpleAsyncUncaughtExceptionHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.support.ContextPropagatingTaskDecorator;
 import org.springframework.scheduling.annotation.AsyncConfigurer;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -59,6 +60,8 @@ public class AsyncConfig {
     @Bean(EVENT_EXECUTOR)
     public ThreadPoolTaskExecutor eventTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        // 제출 시점의 Observation 복원과 작업 종료 후 실행 스레드 Context 정리
+        executor.setTaskDecorator(new ContextPropagatingTaskDecorator());
         executor.setCorePoolSize(2);
         executor.setMaxPoolSize(8);
         executor.setQueueCapacity(100);

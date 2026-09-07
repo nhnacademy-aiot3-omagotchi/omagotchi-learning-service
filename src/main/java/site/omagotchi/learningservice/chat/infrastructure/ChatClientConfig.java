@@ -1,6 +1,7 @@
 package site.omagotchi.learningservice.chat.infrastructure;
 
 import com.google.genai.Client;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -31,7 +32,8 @@ public class ChatClientConfig {
     public RoundRobinChatModel geminiRoundRobinChatModel(
             GeminiProperties geminiProperties,
             GoogleGenAiChatProperties chatProperties,
-            ToolCallingManager toolCallingManager
+            ToolCallingManager toolCallingManager,
+            ObservationRegistry observationRegistry
     ) {
         List<ChatModel> models = new ArrayList<>();
 
@@ -44,6 +46,8 @@ public class ChatClientConfig {
                     .genAiClient(genAiClient)
                     .options(chatProperties.toOptions())
                     .toolCallingManager(toolCallingManager)
+                    // 직접 생성한 모델과 HTTP 요청의 Trace 연결
+                    .observationRegistry(observationRegistry)
                     .build();
 
             models.add(model);
@@ -58,18 +62,20 @@ public class ChatClientConfig {
     public ChatClient geminiChatClient(
             ChatModel geminiRoundRobinChatModel,
             List<AiToolProvider> toolProviders,
-            ChatMemory chatMemory
+            ChatMemory chatMemory,
+            ObservationRegistry observationRegistry
     ) {
-        return this.buildChatClient(geminiRoundRobinChatModel, toolProviders, chatMemory);
+        return this.buildChatClient(geminiRoundRobinChatModel, toolProviders, chatMemory, observationRegistry);
     }
 
     @Bean
     public ChatClient ollamaChatClient(
             ChatModel ollamaChatModel,
             List<AiToolProvider> toolProviders,
-            ChatMemory chatMemory
+            ChatMemory chatMemory,
+            ObservationRegistry observationRegistry
     ) {
-        return this.buildChatClient(ollamaChatModel, toolProviders, chatMemory);
+        return this.buildChatClient(ollamaChatModel, toolProviders, chatMemory, observationRegistry);
     }
 
     /**
@@ -79,9 +85,11 @@ public class ChatClientConfig {
     private ChatClient buildChatClient(
             ChatModel chatModel,
             List<AiToolProvider> toolProviders,
-            ChatMemory chatMemory
+            ChatMemory chatMemory,
+            ObservationRegistry observationRegistry
     ) {
-        return ChatClient.builder(chatModel)
+        // 모델·도구 호출에 같은 Registry 사용, 대화·도구 원문 기록은 비활성 유지
+        return ChatClient.builder(chatModel, observationRegistry, null, null)
                 .defaultSystem(ChatSystemPrompt.DEFAULT)
                 .defaultTools(toolProviders.toArray())
                 // .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))로 대화방 ID 넘겨줘야 대화방별로 기억이 구분됨

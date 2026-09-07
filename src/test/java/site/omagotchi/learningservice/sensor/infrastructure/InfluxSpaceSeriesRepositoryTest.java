@@ -4,6 +4,7 @@ import com.influxdb.client.InfluxDBClient;
 import com.influxdb.client.QueryApi;
 import com.influxdb.query.FluxRecord;
 import com.influxdb.query.FluxTable;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -63,7 +64,7 @@ class InfluxSpaceSeriesRepositoryTest {
         SensorInfluxProperties properties = new SensorInfluxProperties(
                 "http://localhost:8086", "test-token", "test-org",
                 new SensorInfluxProperties.Buckets("raw-bucket", "avg1h-bucket", "avg1d-bucket"));
-        repository = new InfluxSpaceSeriesRepository(client, properties);
+        repository = new InfluxSpaceSeriesRepository(client, properties, ObservationRegistry.NOOP);
     }
 
     /** 조회 조건을 만든다. 포함 기기 목록만 테스트마다 다르다. */

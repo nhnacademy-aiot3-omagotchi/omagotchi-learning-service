@@ -4,6 +4,7 @@ import com.influxdb.client.InfluxDBClient;
 import com.influxdb.client.QueryApi;
 import com.influxdb.query.FluxRecord;
 import com.influxdb.query.FluxTable;
+import io.micrometer.observation.tck.TestObservationRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,9 +28,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import static io.micrometer.observation.tck.TestObservationRegistryAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -57,13 +61,14 @@ class InfluxSpaceSeriesRepositoryTest {
     private QueryApi queryApi;
 
     private InfluxSpaceSeriesRepository repository;
+    private final TestObservationRegistry observationRegistry = TestObservationRegistry.create();
 
     @BeforeEach
     void setUp() {
         SensorInfluxProperties properties = new SensorInfluxProperties(
                 "http://localhost:8086", "test-token", "test-org",
                 new SensorInfluxProperties.Buckets("raw-bucket", "avg1h-bucket", "avg1d-bucket"));
-        repository = new InfluxSpaceSeriesRepository(client, properties);
+        repository = new InfluxSpaceSeriesRepository(client, properties, observationRegistry);
     }
 
     /** 조회 조건을 만든다. 포함 기기 목록만 테스트마다 다르다. */
@@ -133,6 +138,9 @@ class InfluxSpaceSeriesRepositoryTest {
 
         // 조회는 확정·진행 중 두 번 일어난다
         verify(queryApi, times(2)).query(anyString(), anyString());
+        assertThat(observationRegistry).hasNumberOfObservationsWithNameEqualTo("influxdb.query", 2)
+                .forAllObservationsWithNameEqualTo("influxdb.query",
+                        observation -> observation.doesNotHaveError().hasNoKeyValues());
     }
 
     @Test
@@ -266,6 +274,28 @@ class InfluxSpaceSeriesRepositoryTest {
         assertTrue(flux.contains("raw-bucket"));
         assertTrue(flux.contains(DEVICE_A));
         assertTrue(flux.contains("last()"));
+        assertThat(observationRegistry).hasSingleObservationThat()
+                .hasNameEqualTo("influxdb.query").hasBeenStarted().hasBeenStopped()
+                .doesNotHaveError().hasNoKeyValues();
+    }
+
+    @Test
+    @DisplayName("조회 실패의 관측 종료와 원래 예외 전파")
+    void recordsFailedQuery() {
+        // Given
+        RuntimeException failure = new RuntimeException("influx unavailable");
+        when(client.getQueryApi()).thenReturn(queryApi);
+        when(queryApi.query(anyString(), anyString())).thenThrow(failure);
+
+        // When
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> repository.findLatestReadings(latestQuery(Set.of(DEVICE_A))));
+
+        // Then
+        assertSame(failure, thrown);
+        assertThat(observationRegistry).hasSingleObservationThat()
+                .hasNameEqualTo("influxdb.query").hasBeenStarted().hasBeenStopped()
+                .hasError(failure).hasNoKeyValues();
     }
 
     @Test

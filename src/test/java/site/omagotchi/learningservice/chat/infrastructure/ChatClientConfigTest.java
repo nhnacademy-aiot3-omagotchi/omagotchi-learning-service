@@ -1,6 +1,9 @@
 package site.omagotchi.learningservice.chat.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationHandler;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -28,6 +31,7 @@ import org.springframework.boot.webclient.autoconfigure.WebClientAutoConfigurati
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,6 +56,7 @@ class ChatClientConfigTest {
             // 여기서는 빈 구성만 검증하므로 Redis에 실제로 접근하지는 않는다
             .withBean(StringRedisTemplate.class, () -> mock(StringRedisTemplate.class))
             .withBean(ObjectMapper.class, ObjectMapper::new)
+            .withBean(ObservationRegistry.class, ObservationRegistry::create)
             .withPropertyValues(
                     "gemini.api-keys=dummy-key-1,dummy-key-2,dummy-key-3",
                     "spring.ai.google.genai.chat.model=gemini-3.6-flash",
@@ -189,9 +194,23 @@ class ChatClientConfigTest {
     }
 
     @Test
-    @DisplayName("ChatClient가 모델에 시스템 메시지를 함께 보낸다")
+    @DisplayName("ChatClient의 시스템 메시지 전달과 공통 Registry 계측")
     void sendsSystemMessageToModel() {
+        // Given
         AtomicReference<Prompt> capturedPrompt = new AtomicReference<>();
+        List<String> observations = new CopyOnWriteArrayList<>();
+        ObservationRegistry registry = ObservationRegistry.create();
+        registry.observationConfig().observationHandler(new ObservationHandler<Observation.Context>() {
+            @Override
+            public boolean supportsContext(Observation.Context context) {
+                return true;
+            }
+
+            @Override
+            public void onStop(Observation.Context context) {
+                observations.add(context.getName());
+            }
+        });
 
         // ChatModel은 call(Prompt) 하나만 추상 메서드라 람다로 스텁할 수 있다
         ChatModel stubChatModel = prompt -> {
@@ -203,16 +222,20 @@ class ChatClientConfigTest {
                 .maxMessages(10)
                 .build();
 
-        ChatClient chatClient = new ChatClientConfig().geminiChatClient(stubChatModel, List.of(), chatMemory);
+        ChatClient chatClient = new ChatClientConfig().geminiChatClient(
+                stubChatModel, List.of(), chatMemory, registry);
 
+        // When
         chatClient.prompt()
                 .user("안녕")
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, "test-conversation"))
                 .call()
                 .content();
 
+        // Then
         List<Message> instructions = capturedPrompt.get().getInstructions();
 
         assertThat(instructions).hasAtLeastOneElementOfType(SystemMessage.class);
+        assertThat(observations).contains("spring.ai.chat.client");
     }
 }

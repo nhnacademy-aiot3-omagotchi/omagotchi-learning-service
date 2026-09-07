@@ -1,5 +1,8 @@
 package site.omagotchi.learningservice.global.config;
 
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationHandler;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.interceptor.SimpleAsyncUncaughtExceptionHandler;
@@ -10,10 +13,12 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.scheduling.annotation.AsyncConfigurer;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,6 +37,33 @@ class AsyncConfigTest {
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(TaskExecutionAutoConfiguration.class))
             .withUserConfiguration(AsyncConfig.class);
+
+    @Test
+    @DisplayName("이벤트 실행기에 요청 Observation 전달 후 다음 작업의 Context 정리")
+    void propagatesObservationWithoutLeakingToNextTask() {
+        contextRunner.run(context -> {
+            // Given: 같은 작업 스레드 재사용으로 Context 잔류 확인
+            ThreadPoolTaskExecutor executor = context.getBean(AsyncConfig.EVENT_EXECUTOR, ThreadPoolTaskExecutor.class);
+            executor.setCorePoolSize(1);
+            ObservationRegistry registry = ObservationRegistry.create();
+            registry.observationConfig().observationHandler(new ObservationHandler<Observation.Context>() {
+                @Override
+                public boolean supportsContext(Observation.Context observationContext) {
+                    return true;
+                }
+            });
+            Observation parent = Observation.start("request", registry);
+
+            // When / Then
+            try (Observation.Scope ignored = parent.openScope()) {
+                assertThat(executor.submit(registry::getCurrentObservation).get(5, TimeUnit.SECONDS))
+                        .isSameAs(parent);
+            } finally {
+                parent.stop();
+            }
+            assertThat(executor.submit(registry::getCurrentObservation).get(5, TimeUnit.SECONDS)).isNull();
+        });
+    }
 
     /**
      * 실제 배포 설정을 그대로 검증한다.

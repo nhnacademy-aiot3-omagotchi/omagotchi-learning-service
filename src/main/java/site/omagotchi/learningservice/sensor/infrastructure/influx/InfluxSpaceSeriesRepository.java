@@ -3,6 +3,9 @@ package site.omagotchi.learningservice.sensor.infrastructure.influx;
 import com.influxdb.client.InfluxDBClient;
 import com.influxdb.query.FluxRecord;
 import com.influxdb.query.FluxTable;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
@@ -26,6 +29,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Repository
+@RequiredArgsConstructor
 public class InfluxSpaceSeriesRepository implements SpaceSeriesRepository {
 
     private static final String FLUX_TEMPLATE = """
@@ -65,11 +69,7 @@ public class InfluxSpaceSeriesRepository implements SpaceSeriesRepository {
 
     private final InfluxDBClient client;
     private final SensorInfluxProperties properties;
-
-    public InfluxSpaceSeriesRepository(InfluxDBClient client, SensorInfluxProperties properties) {
-        this.client = client;
-        this.properties = properties;
-    }
+    private final ObservationRegistry observationRegistry;
 
     /** 두 구간을 각각 읽어서 이어붙인다 */
     @Override
@@ -116,7 +116,10 @@ public class InfluxSpaceSeriesRepository implements SpaceSeriesRepository {
 
         List<SensorReadingSnapshot> readings = new ArrayList<>();
 
-        for (FluxTable table : client.getQueryApi().query(flux, properties.org())) {
+        // 실제 조회 구간 측정, Flux 원문·센서 식별자 제외
+        List<FluxTable> tables = Observation.createNotStarted("influxdb.query", observationRegistry)
+                .observe(() -> client.getQueryApi().query(flux, properties.org()));
+        for (FluxTable table : tables) {
             for (FluxRecord record : table.getRecords()) {
                 Instant time = record.getTime();
                 String deviceEui = text(record, "device_eui");
@@ -154,7 +157,8 @@ public class InfluxSpaceSeriesRepository implements SpaceSeriesRepository {
                 query.measurement(), query.location(),
                 query.window().fluxInterval(), createEmpty);
 
-        List<FluxTable> tables = client.getQueryApi().query(flux, properties.org());
+        List<FluxTable> tables = Observation.createNotStarted("influxdb.query", observationRegistry)
+                .observe(() -> client.getQueryApi().query(flux, properties.org()));
 
         // 시각별로 모은다.
         Map<Instant, Bucket> byTime = new TreeMap<>();

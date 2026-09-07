@@ -7,7 +7,9 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -30,12 +32,25 @@ public class CohortAttendancePolicy {
     @Column(nullable = false, length = 50)
     private String timezone;
 
+    /*
+     * 아래 세 시각은 시점이 아니라 "매일 몇 시"라는 벽시계 규칙이고, 해석 기준은 위
+     * timezone 컬럼이다 (AttendanceDecisionPolicy, DailyAttendanceClosingPolicyView 참고).
+     *
+     * @JdbcTypeCode(LOCAL_TIME)이 없으면 java.sql.Time을 거치면서
+     * hibernate.jdbc.time_zone과 JVM 기본 시간대에 따라 값이 통째로 이동한다 — KST 서버에서
+     * 18:00을 저장하면 DB에 09:00이 들어가고 읽을 때 되돌아와, 앱끼리는 맞아 보이지만 DB
+     * 실제 값과 다른 서버 시간대에서는 어긋난다. 기수마다 timezone이 다를 수 있으므로 JVM
+     * 시간대로 환산하는 것 자체가 틀렸다. 여기서는 벽시계 값을 있는 그대로 저장한다.
+     */
+    @JdbcTypeCode(SqlTypes.LOCAL_TIME)
     @Column(name = "scheduled_start_time", nullable = false)
     private LocalTime scheduledStartTime;
 
+    @JdbcTypeCode(SqlTypes.LOCAL_TIME)
     @Column(name = "scheduled_end_time", nullable = false)
     private LocalTime scheduledEndTime;
 
+    @JdbcTypeCode(SqlTypes.LOCAL_TIME)
     @Column(name = "absence_cutoff_time")
     private LocalTime absenceCutoffTime;
 

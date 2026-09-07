@@ -103,8 +103,11 @@ spring:
         jdbc:
           time_zone: UTC
   rabbitmq:
+    template:
+      observation-enabled: true
     listener:
       simple:
+        observation-enabled: true
         missing-queues-fatal: false
         default-requeue-rejected: false
         retry:

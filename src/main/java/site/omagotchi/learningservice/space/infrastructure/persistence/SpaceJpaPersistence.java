@@ -55,6 +55,12 @@ public class SpaceJpaPersistence
     }
 
     @Override
+    public Optional<Space> findById(Long spaceId) {
+        return springDataSpaceRepository.findByIdAndDeletedAtIsNull(spaceId)
+                .map(spacePersistenceMapper::toDomain);
+    }
+
+    @Override
     public List<Space> findActiveLabsByCohortId(Long cohortId) {
         return springDataSpaceRepository.findActiveLabsByCohortId(cohortId)
                 .stream()

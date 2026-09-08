@@ -16,6 +16,8 @@ public interface SpaceRepository {
 
     Optional<Space> findByIdForUpdate(Long spaceId);
 
+    Optional<Space> findById(Long spaceId);
+
     /** 기수에 배정된 삭제되지 않은 활성 LAB을 ID 오름차순으로 조회한다. */
     List<Space> findActiveLabsByCohortId(Long cohortId);
 

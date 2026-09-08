@@ -30,6 +30,12 @@ public class CohortAttendancePolicy {
     @Column(nullable = false, length = 50)
     private String timezone;
 
+    /*
+     * 아래 세 시각은 시점이 아니라 "매일 몇 시"라는 벽시계 규칙이고, 해석 기준은 위
+     * timezone 컬럼이다 (AttendanceDecisionPolicy, DailyAttendanceClosingPolicyView 참고).
+     * JVM 기본 시간대로 환산하지 않고 벽시계 값을 그대로 저장한다 — 그 매핑은
+     * LocalTimeJdbcTypeConfig가 TIME 전체에 등록한다.
+     */
     @Column(name = "scheduled_start_time", nullable = false)
     private LocalTime scheduledStartTime;
 

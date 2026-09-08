@@ -27,7 +27,8 @@ public record SpaceListResponse(
         Long occupancyCohortId,
         Long occupierMembershipId,
         UUID occupierUserId,
-        List<UUID> participantUserIds
+        List<UUID> participantUserIds,
+        long currentPresenceCount
 ) {
 
     /**
@@ -51,7 +52,8 @@ public record SpaceListResponse(
                 item.occupancyCohortId(),
                 item.occupierMembershipId(),
                 item.occupierUserId(),
-                item.participantUserIds()
+                item.participantUserIds(),
+                item.currentPresenceCount()
         );
     }
 }

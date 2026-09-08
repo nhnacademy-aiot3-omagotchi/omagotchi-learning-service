@@ -1,7 +1,5 @@
 package site.omagotchi.learningservice.attendance.application;
 
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +13,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.TimeZone;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,28 +31,6 @@ class DailyMissingCheckOutBatchIT {
     private static final OffsetDateTime DEADLINE =
             OffsetDateTime.parse("2020-09-05T12:00:00Z");
 
-    private static TimeZone originalTimeZone;
-
-    /**
-     * <b>JVM 기본 시간대를 UTC로 고정한다.</b> {@code hibernate.jdbc.time_zone: UTC}
-     * 설정 때문에, 시간대가 없는 {@code TIME} 컬럼인 {@code scheduled_end_time}이
-     * JVM 기본 시간대만큼 밀려 읽힌다 — KST 실행기에서는 18:00이 03:00으로 읽혀
-     * 마감 시각이 체류 시작보다 앞서고 결과가 달라진다. 고정하지 않으면 같은 코드가
-     * 실행기에 따라 다른 값을 만들어 이 검증이 뒤집힌다.
-     *
-     * <p>고정은 이 테스트를 결정적으로 만들 뿐 원인을 없애지 않는다. 운영 컨테이너의
-     * 시간대가 UTC가 아니면 출결 정책 시각(지각·조퇴 판정 포함)이 같은 폭만큼 밀린다.</p>
-     */
-    @BeforeAll
-    static void fixJvmTimeZoneToUtc() {
-        originalTimeZone = TimeZone.getDefault();
-        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
-    }
-
-    @AfterAll
-    static void restoreJvmTimeZone() {
-        TimeZone.setDefault(originalTimeZone);
-    }
 
     @Autowired
     private DailyMissingCheckOutBatch batch;

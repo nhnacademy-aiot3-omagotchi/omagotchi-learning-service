@@ -28,8 +28,35 @@ public record SpaceListResult(
         Long occupancyCohortId,
         Long occupierMembershipId,
         UUID occupierUserId,
-        List<UUID> participantUserIds
+        List<UUID> participantUserIds,
+        long currentPresenceCount
 ) {
+
+    public SpaceListResult(
+            Long spaceId,
+            String name,
+            SpaceType spaceType,
+            Integer capacity,
+            SpaceOperationalStatus operationalStatus,
+            String inactiveReason,
+            Long cohortId,
+            SpaceUsageStatus status,
+            ZonedDateTime occupancyExpiresAt,
+            Long remainingTimeSeconds,
+            boolean occupiedBySameCohort,
+            Long occupancyCohortId,
+            Long occupierMembershipId,
+            UUID occupierUserId,
+            List<UUID> participantUserIds
+    ) {
+        this(
+                spaceId, name, spaceType, capacity,
+                operationalStatus, inactiveReason, cohortId, status,
+                occupancyExpiresAt, remainingTimeSeconds,
+                occupiedBySameCohort, occupancyCohortId, occupierMembershipId,
+                occupierUserId, participantUserIds, 0L
+        );
+    }
 
     public SpaceListResult(
             Long spaceId,
@@ -48,7 +75,7 @@ public record SpaceListResult(
                 operationalStatus, inactiveReason, cohortId, status,
                 occupancyExpiresAt, remainingTimeSeconds,
                 false,
-                null, null, null, null
+                null, null, null, null, 0L
         );
     }
 
@@ -76,7 +103,8 @@ public record SpaceListResult(
                 null,
                 null,
                 null,
-                null
+                null,
+                0L
         );
     }
 }

@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 스키마 변경 없이 {@code presence_intervals}만으로 현재 체류와 직전 실습실 복귀 예약을
@@ -87,6 +88,22 @@ public class SpacePresenceNativeQueryReader implements SpacePresenceQueryPort {
             )
             """;
 
+    private static final String CURRENT_USER_IDS_QUERY = """
+            SELECT DISTINCT membership.user_id
+              FROM learning_service.attendance_records attendance
+              JOIN learning_service.presence_intervals presence
+                ON presence.attendance_id = attendance.id
+              JOIN learning_service.cohort_memberships membership
+                ON membership.id = attendance.cohort_membership_id
+             WHERE presence.space_id = :spaceId
+               AND presence.ended_at IS NULL
+               AND presence.state <> 'AWAY'
+               AND attendance.checked_out_at IS NULL
+               AND attendance.attendance_date = :attendanceDate
+               AND membership.cohort_id = :cohortId
+             ORDER BY membership.user_id
+            """;
+
     private final EntityManager entityManager;
 
     @Override
@@ -94,11 +111,7 @@ public class SpacePresenceNativeQueryReader implements SpacePresenceQueryPort {
             Collection<Long> spaceIds,
             LocalDate attendanceDate
     ) {
-        Map<Long, Long> currentCounts = counts(
-                CURRENT_PRESENCE_QUERY,
-                spaceIds,
-                attendanceDate
-        );
+        Map<Long, Long> currentCounts = findCurrentCounts(spaceIds, attendanceDate);
         Map<Long, Long> returnCounts = counts(
                 RETURN_RESERVATION_QUERY,
                 spaceIds,
@@ -116,6 +129,14 @@ public class SpacePresenceNativeQueryReader implements SpacePresenceQueryPort {
     }
 
     @Override
+    public Map<Long, Long> findCurrentCounts(
+            Collection<Long> spaceIds,
+            LocalDate attendanceDate
+    ) {
+        return Map.copyOf(counts(CURRENT_PRESENCE_QUERY, spaceIds, attendanceDate));
+    }
+
+    @Override
     public boolean isReserved(Long spaceId, Long attendanceId, LocalDate attendanceDate) {
         Object result = entityManager.createNativeQuery(
                         RESERVED_ATTENDANCE_QUERY,
@@ -126,6 +147,26 @@ public class SpacePresenceNativeQueryReader implements SpacePresenceQueryPort {
                 .setParameter("attendanceDate", attendanceDate)
                 .getSingleResult();
         return (Boolean) result;
+    }
+
+    @Override
+    public List<UUID> findCurrentUserIds(
+            Long spaceId,
+            Long cohortId,
+            LocalDate attendanceDate
+    ) {
+        Query query = entityManager.createNativeQuery(CURRENT_USER_IDS_QUERY);
+        query.setParameter("spaceId", spaceId);
+        query.setParameter("cohortId", cohortId);
+        query.setParameter("attendanceDate", attendanceDate);
+
+        @SuppressWarnings("unchecked")
+        List<Object> rows = query.getResultList();
+        return rows.stream()
+                .map(value -> value instanceof UUID uuid
+                        ? uuid
+                        : UUID.fromString(String.valueOf(value)))
+                .toList();
     }
 
     private Map<Long, Long> counts(

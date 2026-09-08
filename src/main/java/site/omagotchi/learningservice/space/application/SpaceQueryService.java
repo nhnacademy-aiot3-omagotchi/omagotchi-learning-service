@@ -4,11 +4,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.cohort.application.CohortAccessService;
+import site.omagotchi.learningservice.gamification.application.CharacterGrowthService;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.occupancy.application.result.SpaceOccupancyView;
 import site.omagotchi.learningservice.space.application.port.SpaceRepository;
 import site.omagotchi.learningservice.space.application.result.SpaceListResult;
 import site.omagotchi.learningservice.space.application.result.SpaceNameResult;
+import site.omagotchi.learningservice.space.application.result.SpacePresenceDetailResult;
+import site.omagotchi.learningservice.space.application.result.SpacePresenceOccupantResult;
 import site.omagotchi.learningservice.space.domain.Space;
 import site.omagotchi.learningservice.space.domain.SpaceUsageStatus;
 
@@ -17,6 +21,7 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -42,7 +47,9 @@ public class SpaceQueryService {
 
     private final SpaceRepository spaceRepository;
     private final OccupancyQueryService occupancyQueryService;
+    private final SpacePresenceQueryService spacePresenceQueryService;
     private final CohortAccessService cohortAccessService;
+    private final CharacterGrowthService characterGrowthService;
     private final Clock clock;
 
     /** 다른 Feature가 삭제되지 않은 공간의 표시용 식별자와 이름을 일괄 조회한다. */
@@ -68,10 +75,12 @@ public class SpaceQueryService {
             return List.of();
         }
 
+        List<Long> spaceIds = spaces.stream().map(Space::getId).toList();
         Map<Long, SpaceOccupancyView> occupancies = occupancyQueryService.findActiveBySpaceIds(
-                spaces.stream().map(Space::getId).toList(),
+                spaceIds,
                 now.toOffsetDateTime()
         );
+        Map<Long, Long> currentPresenceCounts = spacePresenceQueryService.currentCounts(spaceIds);
 
         Set<Long> requesterCohortIds = requesterUserId == null
                 ? Set.of()
@@ -81,10 +90,48 @@ public class SpaceQueryService {
                 .map(space -> toListResult(
                         space,
                         occupancies.get(space.getId()),
+                        currentPresenceCounts.getOrDefault(space.getId(), 0L),
                         requesterCohortIds,
                         now
                 ))
                 .toList();
+    }
+
+    /**
+     * 매니저가 한 공간의 현재 인원을 확인한다.
+     *
+     * <p>공용 공간은 전체 인원수만 모든 기수에 걸쳐 세고, 사용자 식별 정보는 요청자가
+     * 관리하는 선택 기수의 구성원만 공개한다.</p>
+     */
+    public SpacePresenceDetailResult getCurrentPresences(
+            Long cohortId,
+            Long spaceId,
+            UUID managerUserId
+    ) {
+        cohortAccessService.requireManager(cohortId, managerUserId);
+        Space space = spaceRepository.findById(spaceId)
+                .orElseThrow(() -> new BusinessException(SpaceErrorCode.NOT_FOUND));
+        if (space.getCohortId() != null && !Objects.equals(space.getCohortId(), cohortId)) {
+            throw new BusinessException(SpaceErrorCode.ACCESS_DENIED);
+        }
+
+        long totalCount = spacePresenceQueryService.currentCount(spaceId);
+        List<UUID> userIds = spacePresenceQueryService.findCurrentUserIds(spaceId, cohortId);
+        Map<UUID, String> displayNames = characterGrowthService.findRepresentativeNicknames(userIds);
+        List<SpacePresenceOccupantResult> occupants = userIds.stream()
+                .map(userId -> new SpacePresenceOccupantResult(
+                        userId,
+                        displayNames.get(userId)
+                ))
+                .toList();
+        long cohortCount = occupants.size();
+        return new SpacePresenceDetailResult(
+                spaceId,
+                totalCount,
+                cohortCount,
+                Math.max(0L, totalCount - cohortCount),
+                occupants
+        );
     }
 
     /**
@@ -96,6 +143,7 @@ public class SpaceQueryService {
     private SpaceListResult toListResult(
             Space space,
             SpaceOccupancyView occupancy,
+            long currentPresenceCount,
             Set<Long> requesterCohortIds,
             ZonedDateTime now
     ) {
@@ -129,7 +177,8 @@ public class SpaceQueryService {
                 sameCohort ? occupancy.occupierCohortId() : null,
                 sameCohort ? occupancy.occupierMembershipId() : null,
                 sameCohort ? occupancy.occupierUserId() : null,
-                sameCohort ? occupancy.participantUserIds() : null
+                sameCohort ? occupancy.participantUserIds() : null,
+                currentPresenceCount
         );
     }
 

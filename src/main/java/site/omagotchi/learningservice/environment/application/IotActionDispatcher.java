@@ -24,7 +24,7 @@ public class IotActionDispatcher {
     private final EnvironmentProperties properties;
     private final ActionNotifier notifier;
 
-    /** 룰 히트검사 -> 조치 결정 -> 장소 쿨 다운 추가 -> IOT 제어기기 명령 -> 결과 확인*/
+    /** 룰 히트검사 -> 조치 결정 -> 장소 쿨 다운 추가 -> 룰 히트 알림 -> IOT 제어기기 명령 -> 결과 확인*/
     public ActionOutcome dispatch(SensorEvent event){
         SensorDetection detection = event.detection();
 
@@ -47,23 +47,22 @@ public class IotActionDispatcher {
             return ActionOutcome.skipped(action); //2-2. cooldown에 걸린다면 skipped()
         }
 
+        Instant notified = notify(detection);
         IotActionResult result = executor.execute(action, detection);
 
         if(!result.succeeded()){
             log.warn("조치 실패. location={}, action={}, error={}", location, action, result.error());
-            return ActionOutcome.failed(action, failureReason(result), result.simulated()); //2-3 iot 통신 실패 혹은 통신은 성공했되 제어기 동작 실패 failed()
+            return ActionOutcome.failed(action, failureReason(result), result.simulated(), notified); //2-3 iot 통신 실패 혹은 통신은 성공했되 제어기 동작 실패 failed()
         }
-
-        Instant notified = notify(action, detection, result);
 
         return ActionOutcome.confirm(action, result.at(), result.simulated(), notified); //2-4 성공.
     }
 
-    private Instant notify(IotAction action, SensorDetection detection, IotActionResult result){
+    private Instant notify(SensorDetection detection){
         try{
-            return notifier.notifyConfirmed(detection, action, result);
+            return notifier.notifyRuleHit(detection);
         }catch (RuntimeException e){
-            log.warn("조치 알림 처리 실패. location={}, action={}", detection.location(), action, e);
+            log.warn("룰 히트 알림 처리 실패. location={}", detection.location(), e);
             return null;
         }
     }

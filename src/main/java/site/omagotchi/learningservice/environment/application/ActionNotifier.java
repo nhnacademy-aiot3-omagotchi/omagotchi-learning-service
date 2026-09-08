@@ -5,8 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.environment.application.port.ActionNotificationSender;
-import site.omagotchi.learningservice.environment.application.result.IotActionResult;
-import site.omagotchi.learningservice.environment.domain.IotAction;
 import site.omagotchi.learningservice.environment.domain.SensorDetection;
 import site.omagotchi.learningservice.sensor.application.SensorDeviceService;
 import site.omagotchi.learningservice.space.application.SpaceCohortQueryService;
@@ -20,7 +18,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * 자동 조치 결과를 <b>그 공간을 담당하는 기수의 매니저</b>에게 알린다.
+ * 임계 룰 적중 사실을 <b>그 공간을 담당하는 기수의 매니저</b>에게 알린다.
  *
  * <p>매니저는 자기 기수의 일만 본다. 센서 이벤트는 기기까지만 알고 기수는 모르므로
  * {@code deviceEui → 공간 → 기수}로 되짚는다.</p>
@@ -40,10 +38,10 @@ public class ActionNotifier {
     private final Clock clock;
     private final ActionNotificationSender sender;
 
-    public Instant notifyConfirmed(SensorDetection detection, IotAction action, IotActionResult result){
+    public Instant notifyRuleHit(SensorDetection detection){
         Long cohortId = cohortIdOf(detection);
         if(Objects.isNull(cohortId)){
-            log.warn("담당 기수를 찾지 못해 조치 알림을 보내지 않습니다. location={}, deviceEui={}",
+            log.warn("담당 기수를 찾지 못해 룰 히트 알림을 보내지 않습니다. location={}, deviceEui={}",
                     detection.location(), detection.deviceEui());
 
             return null;
@@ -51,8 +49,8 @@ public class ActionNotifier {
 
         List<UUID> managerIds = membershipQueryService.findActiveManagerUserIds(cohortId);
         if(managerIds.isEmpty()){
-            log.info("기수에 활성 관리자가 없습니다. cohortId={}, location={}, action={}",
-                    cohortId, detection.location(), action);
+            log.info("기수에 활성 관리자가 없습니다. cohortId={}, location={}",
+                    cohortId, detection.location());
 
             return null;
         }
@@ -72,7 +70,7 @@ public class ActionNotifier {
 
             try{
                 boolean success = sender.send(
-                        ActionNotificationSender.ActionNotice.of(recipientUserId, detection, action, result),
+                        ActionNotificationSender.ActionNotice.of(recipientUserId, detection),
                         Duration.ofNanos(remainingNanos)
                 );
 
@@ -81,7 +79,7 @@ public class ActionNotifier {
                 }
 
             }catch (Exception e){
-                log.warn("조치 알림 발송에 실패했습니다. location={}, userId={}", detection.location(), recipientUserId, e);
+                log.warn("룰 히트 알림 발송에 실패했습니다. location={}, userId={}", detection.location(), recipientUserId, e);
             }
         }
 

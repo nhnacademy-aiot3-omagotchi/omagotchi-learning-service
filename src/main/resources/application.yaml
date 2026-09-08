@@ -9,7 +9,7 @@ ollama:
   connect-timeout: 2s
   # 자체 호스팅이라 첫 토큰까지 수십 초가 걸린다.
   # 전역 spring.http.clients.read-timeout은 identity 호출에 맞춘 짧은 값이라 여기엔 맞지 않아 OllamaApiConfig가 이 값으로 Ollama 전용 클라이언트를 만든다.
-  # 위 구간의 상한은 프론트 BFF의 AI_CHAT_READ_TIMEOUT(30s)이므로, 이 값은 병목이 되지 않을 정도만 둔다.
+  # Frontend AI 읽기 timeout(기본 50s)과 별도 설정, 늦은 응답의 사용자 대기는 Frontend에서 제한
   read-timeout: ${OLLAMA_READ_TIMEOUT:60s}
 
 spring:
@@ -39,8 +39,8 @@ spring:
     multipart:
       # Spring 기본값은 파일 1MB · 요청 10MB다. 이 값이 community.attachments의 한도보다
       # 작으면 Tomcat이 먼저 413으로 끊어서 INVALID_ATTACHMENT 응답에 닿지도 못한다.
-      max-file-size: ${COMMUNITY_ATTACHMENT_MAX_FILE_SIZE}
-      max-request-size: ${COMMUNITY_ATTACHMENT_MAX_REQUEST_SIZE}
+      max-file-size: ${community.attachments.max-file-size}
+      max-request-size: ${COMMUNITY_ATTACHMENT_MAX_REQUEST_SIZE:30MB}
 
   cloud:
     loadbalancer:
@@ -49,8 +49,8 @@ spring:
 
   http:
     clients:
-      connect-timeout: ${IDENTITY_SERVICE_CONNECT_TIMEOUT}
-      read-timeout: ${IDENTITY_SERVICE_READ_TIMEOUT}
+      connect-timeout: ${IDENTITY_SERVICE_CONNECT_TIMEOUT:1s}
+      read-timeout: ${IDENTITY_SERVICE_READ_TIMEOUT:2s}
     serviceclient:
       identity-service:
         base-url: ${IDENTITY_SERVICE_BASE_URL}
@@ -197,7 +197,7 @@ jdbc:
         "[db.query.text]": ""
 
 timer:
-  max-duration: ${TIMER_MAX_DURATION}
+  max-duration: ${TIMER_MAX_DURATION:PT12H}
 
 prediction:
   client:
@@ -226,7 +226,7 @@ telegram:
   webhook:
     secret: ${TELEGRAM_WEBHOOK_SECRET}
   link-token:
-    ttl: ${TELEGRAM_LINK_TOKEN_TTL}
+    ttl: ${TELEGRAM_LINK_TOKEN_TTL:PT10M}
 
 minio:
   endpoint: ${MINIO_ENDPOINT}
@@ -236,8 +236,8 @@ minio:
 community:
   attachments:
     bucket: ${COMMUNITY_ATTACHMENT_BUCKET}
-    max-file-size: ${COMMUNITY_ATTACHMENT_MAX_FILE_SIZE}
-    max-count: ${COMMUNITY_ATTACHMENT_MAX_COUNT}
+    max-file-size: ${COMMUNITY_ATTACHMENT_MAX_FILE_SIZE:5MB}
+    max-count: ${COMMUNITY_ATTACHMENT_MAX_COUNT:5}
     allowed-extensions:
       - jpg
       - jpeg
@@ -250,7 +250,7 @@ community:
 
 realtime:
   presence:
-    session-ttl: ${REALTIME_PRESENCE_SESSION_TTL}
+    session-ttl: ${REALTIME_PRESENCE_SESSION_TTL:60s}
 
 environment:
   cache:

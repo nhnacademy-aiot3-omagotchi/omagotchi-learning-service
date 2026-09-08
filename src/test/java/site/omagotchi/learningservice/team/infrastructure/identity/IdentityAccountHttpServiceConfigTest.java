@@ -14,6 +14,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.support.RestClientHttpServiceGroupConfigurer;
+import site.omagotchi.learningservice.global.requestid.RequestId;
+import site.omagotchi.learningservice.global.requestid.RequestIdContext;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
@@ -51,10 +53,11 @@ class IdentityAccountHttpServiceConfigTest {
     private MockHttpServiceConfiguration mockHttpServiceConfiguration;
 
     @Test
-    @DisplayName("실제 HTTP Service Group 설정의 Learning Basic 인증")
+    @DisplayName("실제 HTTP Service Group 설정의 Learning Basic 인증과 Request ID 전파")
     void appliesLearningBasicCredential() {
         // Given: 실제 Group 설정에 연결된 Identity Mock 응답
         UUID accountId = UUID.randomUUID();
+        String requestId = "Dev-Request_01.test";
         MockRestServiceServer server = mockHttpServiceConfiguration.server();
         server.expect(once(), requestTo(
                         "http://localhost:8083/api/v1/internal/accounts/" + accountId
@@ -67,11 +70,14 @@ class IdentityAccountHttpServiceConfigTest {
                                 StandardCharsets.UTF_8
                         )
                 ))
+                .andExpect(header(RequestId.HEADER_NAME, requestId))
                 .andRespond(withStatus(HttpStatus.NOT_FOUND));
 
         // When & Then: 실제 Interface 호출 실패와 무관한 요청 Header 검증
-        assertThatThrownBy(() -> httpService.getAccount(accountId))
-                .isInstanceOf(RuntimeException.class);
+        try (RequestIdContext.Scope ignored = RequestIdContext.openScope(new RequestId(requestId))) {
+            assertThatThrownBy(() -> httpService.getAccount(accountId))
+                    .isInstanceOf(RuntimeException.class);
+        }
         server.verify();
     }
 

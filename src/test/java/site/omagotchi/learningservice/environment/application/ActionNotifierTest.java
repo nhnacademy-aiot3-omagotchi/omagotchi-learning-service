@@ -8,8 +8,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipQueryService;
 import site.omagotchi.learningservice.environment.application.port.ActionNotificationSender;
-import site.omagotchi.learningservice.environment.application.result.IotActionResult;
-import site.omagotchi.learningservice.environment.domain.IotAction;
 import site.omagotchi.learningservice.environment.domain.SensorDetection;
 import site.omagotchi.learningservice.environment.domain.SensorEventType;
 import site.omagotchi.learningservice.sensor.application.SensorDeviceService;
@@ -110,7 +108,7 @@ class ActionNotifierTest {
     @Test
     @DisplayName("이벤트에 deviceEui가 없으면 조회조차 하지 않는다.")
     void sendsNothingWithoutDeviceEui() {
-        assertThat(notifier().notifyConfirmed(detection(null), IotAction.VENTILATE, result())).isNull();
+        assertThat(notifier().notifyRuleHit(detection(null))).isNull();
 
         verifyNoInteractions(sensorDeviceService, spaceCohortQueryService, membershipQueryService, sender);
     }
@@ -195,7 +193,7 @@ class ActionNotifierTest {
                 .willReturn(List.of(MANAGER_A, MANAGER_B));
 
         assertThat(notifier(Duration.ofNanos(1))
-                .notifyConfirmed(detection(DEVICE_EUI), IotAction.VENTILATE, result())).isNull();
+                .notifyRuleHit(detection(DEVICE_EUI))).isNull();
         verify(sender, never()).send(any(), any());
     }
 
@@ -207,7 +205,7 @@ class ActionNotifierTest {
     }
 
     private Instant notifyAction() {
-        return notifier().notifyConfirmed(detection(DEVICE_EUI), IotAction.VENTILATE, result());
+        return notifier().notifyRuleHit(detection(DEVICE_EUI));
     }
 
     private ActionNotifier notifier() {
@@ -232,7 +230,4 @@ class ActionNotifierTest {
                 Instant.parse("2026-08-27T09:59:00Z"), Instant.parse("2026-08-27T09:59:01Z"));
     }
 
-    private static IotActionResult result() {
-        return new IotActionResult(true, Instant.parse("2026-08-27T09:59:30Z"), false, null);
-    }
 }

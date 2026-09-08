@@ -61,8 +61,18 @@ public record ActionOutcome (
         return new ActionOutcome(action, ActionStatus.CONFIRMED, confirmedAt, simulated, null, notifiedAt);
     }
 
-    /** 명려이 실패했거나 확인을 못 받았을 때 */
+    /** 명령이 실패했거나 확인을 못 받았을 때 */
     public static ActionOutcome failed(IotAction action, String error, boolean simulated){
-        return new ActionOutcome(action, ActionStatus.FAILED, null, simulated, error, null);
+        return failed(action, error, simulated, null);
+    }
+
+    /** 룰 히트 알림은 발송됐지만 명령이 실패했거나 확인을 못 받았을 때 */
+    public static ActionOutcome failed(
+            IotAction action,
+            String error,
+            boolean simulated,
+            Instant notifiedAt
+    ){
+        return new ActionOutcome(action, ActionStatus.FAILED, null, simulated, error, notifiedAt);
     }
 }

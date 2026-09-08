@@ -1,7 +1,5 @@
 package site.omagotchi.learningservice.environment.application.port;
 
-import site.omagotchi.learningservice.environment.application.result.IotActionResult;
-import site.omagotchi.learningservice.environment.domain.IotAction;
 import site.omagotchi.learningservice.environment.domain.SensorDetection;
 import site.omagotchi.learningservice.sensor.domain.Operator;
 
@@ -28,11 +26,9 @@ public interface ActionNotificationSender {
             Double value,
             Operator operator,
             Double threshold,
-            IotAction action,
-            Instant confirmedAt,
-            boolean simulated
+            Instant detectedAt
     ){
-        public static ActionNotice of(UUID recipientUserId, SensorDetection detection, IotAction action, IotActionResult result){
+        public static ActionNotice of(UUID recipientUserId, SensorDetection detection){
             return new ActionNotice(
                     recipientUserId,
                     detection.location(),
@@ -40,9 +36,7 @@ public interface ActionNotificationSender {
                     detection.value(),
                     detection.operator(),
                     detection.threshold(),
-                    action,
-                    result.at(),
-                    result.simulated()
+                    detection.receivedAt()
             );
         }
     }

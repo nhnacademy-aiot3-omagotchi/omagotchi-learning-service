@@ -36,23 +36,21 @@ public class TelegramActionNotificationSender implements ActionNotificationSende
 
     private static String messageOf(ActionNotice notice) {
         String body = """
-                [자동 조치 완료]
+                [임계 룰 감지]
 
                 위치: %s
                 측정: %s %s%s
-                조치: %s
-                확인: %s"""
+                감지: %s
+
+                확인이 필요합니다."""
                 .formatted(
                         notice.location(),
                         notice.measurement(),
                         notice.value(),
                         criterionOf(notice),
-                        notice.action().label(),
-                        notice.confirmedAt().atZone(DateTimePolicy.ZONE_ID).format(DISPLAY_FORMATTER)
+                        notice.detectedAt().atZone(DateTimePolicy.ZONE_ID).format(DISPLAY_FORMATTER)
                 );
-
-        // 실제 장치가 아닌데 "환기 완료"만 오면 받는 사람이 오해한다(§3 계약③)
-        return notice.simulated() ? body + "\n\n※ 시뮬레이터 응답입니다" : body;
+        return body;
     }
 
     private static String criterionOf(ActionNotice notice){
@@ -67,4 +65,3 @@ public class TelegramActionNotificationSender implements ActionNotificationSende
         return (operator == Operator.GT || operator == Operator.GTE) ? "초과" : "미만";
     }
 }
-

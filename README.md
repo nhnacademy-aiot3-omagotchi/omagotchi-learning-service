@@ -46,6 +46,10 @@ cp .env.local.example .env.local
 - Eureka: 기본 비활성화
 - Health: <http://localhost:8084/actuator/health>
 
+- 타이머·첨부파일 한도·Presence TTL·Telegram 연동 TTL·호출 timeout: `application.yaml` 기본값 사용
+  - 기존 환경 파일의 같은 키가 있으면 해당 값 우선
+  - DB·Broker·API 주소·Credential·첨부파일 Bucket의 필수 주입 유지
+
 ### Testcontainers 기반 E2E 연동 실행
 
 실제 Learning Service를 임시 PostgreSQL과 함께 띄워 Frontend BFF·Gateway 연동을 확인할 때는

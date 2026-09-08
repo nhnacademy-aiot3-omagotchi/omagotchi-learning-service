@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import site.omagotchi.learningservice.global.requestid.RequestId;
+import site.omagotchi.learningservice.global.requestid.RequestIdContext;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -48,20 +50,24 @@ class PredictionRestClientConfigTest {
 
     // 헤더 테스트
     @Test
-    @DisplayName("예측 요청에 관계 전용 Credential의 Basic 인증 헤더 포함")
-    void sendsBasicAuthorizationHeader() {
-        // given: 관계 전용 Credential로 만든 예상 Authorization 헤더
+    @DisplayName("예측 요청에 관계 전용 Credential과 현재 Request ID 전달")
+    void sendsCredentialAndCurrentRequestId() {
+        // Given: 관계 전용 Credential과 현재 요청의 ID
         String expectedHeader = "Basic " + Base64.getEncoder().encodeToString(
                 (USERNAME + ":" + PASSWORD).getBytes(StandardCharsets.UTF_8));
+        String requestId = "Dev-Request_01.test";
 
         server.expect(requestTo(BASE_URL + PREDICTION_PATH))
                 .andExpect(header(HttpHeaders.AUTHORIZATION, expectedHeader))
+                .andExpect(header(RequestId.HEADER_NAME, requestId))
                 .andRespond(withSuccess());
 
-        // when: 예측 요청 전송
-        client.post().uri(PREDICTION_PATH).retrieve().toBodilessEntity();
+        // When: 예측 요청 전송
+        try (RequestIdContext.Scope ignored = RequestIdContext.openScope(new RequestId(requestId))) {
+            client.post().uri(PREDICTION_PATH).retrieve().toBodilessEntity();
+        }
 
-        // then: 기대한 헤더로 요청이 나갔는지 확인
+        // Then: 실제 호출에 포함된 인증·Request ID 헤더 확인
         server.verify();
     }
 }

@@ -2,14 +2,24 @@ package site.omagotchi.learningservice.gamification.infrastructure;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import site.omagotchi.learningservice.TestcontainersConfiguration;
 import site.omagotchi.learningservice.global.config.QueryDslConfig;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -105,6 +115,54 @@ class GamificationReferenceDataBootstrapIT {
         bootstrap.run(null);
 
         assertThat(count("game_characters")).isEqualTo(CHARACTER_COUNT + 1);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"empty", "unchanged", "changed"})
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @DisplayName("독립된 두 기동 Transaction의 기준 데이터 적재 결과 일치")
+    void seedsConcurrently(String initialState) throws Exception {
+        // Given: 테스트 외부 Transaction 없이 실제 Commit이 경합하는 기동 상황
+        if (initialState.equals("empty")) {
+            jdbcTemplate.update("DELETE FROM learning_service.quest_templates");
+            jdbcTemplate.update("DELETE FROM learning_service.game_characters");
+            jdbcTemplate.update("DELETE FROM learning_service.level_policies");
+        } else if (initialState.equals("changed")) {
+            jdbcTemplate.update("UPDATE learning_service.game_characters SET name = '변경값' WHERE code = 'COMMIT'");
+            jdbcTemplate.update("UPDATE learning_service.level_policies SET min_total_xp = 1 WHERE level = 10");
+        }
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<Void> first = executor.submit(() -> {
+                start.await();
+                bootstrap.run(null);
+                return null;
+            });
+            Future<Void> second = executor.submit(() -> {
+                start.await();
+                bootstrap.run(null);
+                return null;
+            });
+
+            // When
+            start.countDown();
+            try {
+                first.get(15, TimeUnit.SECONDS);
+                second.get(15, TimeUnit.SECONDS);
+            } finally {
+                first.cancel(true);
+                second.cancel(true);
+            }
+        }
+
+        // Then: 서로 다른 Transaction이 Commit한 결과 조회
+        assertThat(count("game_characters")).isEqualTo(CHARACTER_COUNT);
+        assertThat(count("quest_templates")).isEqualTo(QUEST_COUNT);
+        assertThat(count("level_policies")).isEqualTo(LEVEL_COUNT);
+        assertThat(minTotalXpOf(10)).isEqualTo(8_100L);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT name FROM learning_service.game_characters WHERE code = 'COMMIT'", String.class))
+                .isEqualTo("커밋이");
     }
 
     private int count(String table) {

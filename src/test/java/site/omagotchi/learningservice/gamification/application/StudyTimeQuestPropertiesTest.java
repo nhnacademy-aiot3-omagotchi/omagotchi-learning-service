@@ -10,39 +10,26 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class StudyTimeQuestPropertiesTest {
 
     @Test
-    @DisplayName("도전 계수가 NaN이면 기동에 실패한다")
-    void rejectsNaNCoefficient() {
-        // NaN은 <= 0 검사를 통과해 버리고, 이후 Math.round(NaN)이 0이 되어
-        // 모든 사용자의 목표가 조용히 하한으로 굳는다.
+    @DisplayName("값이 비어 있으면 기동에 실패한다")
+    void rejectsMissingValue() {
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> new StudyTimeQuestProperties(Double.NaN, 12_600, 41_400)
+                () -> new StudyTimeQuestProperties(null, 41_400)
         );
 
         assertEquals(
-                "gamification.study-time-quest.challenge-coefficient은 유한한 양수여야 합니다.",
+                "gamification.study-time-quest.min-target-seconds은 양수여야 합니다.",
                 exception.getMessage()
         );
     }
 
     @Test
-    @DisplayName("도전 계수가 무한대면 기동에 실패한다")
-    void rejectsInfiniteCoefficient() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new StudyTimeQuestProperties(Double.POSITIVE_INFINITY, 12_600, 41_400)
-        );
-    }
-
-    @Test
-    @DisplayName("값이 비어 있거나 0 이하면 기동에 실패한다")
-    void rejectsMissingOrNonPositiveValues() {
+    @DisplayName("값이 0 이하면 기동에 실패한다")
+    void rejectsNonPositiveValues() {
         assertThrows(IllegalArgumentException.class,
-                () -> new StudyTimeQuestProperties(null, 12_600, 41_400));
+                () -> new StudyTimeQuestProperties(0, 41_400));
         assertThrows(IllegalArgumentException.class,
-                () -> new StudyTimeQuestProperties(1.1, 0, 41_400));
-        assertThrows(IllegalArgumentException.class,
-                () -> new StudyTimeQuestProperties(1.1, 12_600, -1));
+                () -> new StudyTimeQuestProperties(12_600, -1));
     }
 
     @Test
@@ -50,7 +37,7 @@ class StudyTimeQuestPropertiesTest {
     void rejectsInvertedBounds() {
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> new StudyTimeQuestProperties(1.1, 41_400, 12_600)
+                () -> new StudyTimeQuestProperties(41_400, 12_600)
         );
 
         assertEquals(
@@ -62,9 +49,8 @@ class StudyTimeQuestPropertiesTest {
     @Test
     @DisplayName("결정된 정책값은 그대로 통과한다")
     void acceptsDecidedPolicyValues() {
-        StudyTimeQuestProperties properties = new StudyTimeQuestProperties(1.1, 12_600, 41_400);
+        StudyTimeQuestProperties properties = new StudyTimeQuestProperties(12_600, 41_400);
 
-        assertEquals(1.1, properties.challengeCoefficient());
         assertEquals(12_600, properties.minTargetSeconds());
         assertEquals(41_400, properties.maxTargetSeconds());
     }

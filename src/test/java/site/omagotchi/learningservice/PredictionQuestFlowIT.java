@@ -101,29 +101,30 @@ class PredictionQuestFlowIT {
     }
 
     @Test
-    @DisplayName("예측값에 도전 계수를 적용한 목표로 발급된다")
+    @DisplayName("예측값을 계수 없이 그대로 목표로 발급한다")
     void issuesQuestFromPrediction() {
         recordStudyYesterday(18_000L);
-        // 4.0h * 1.1 = 4.4h = 15840초 = 4시간 24분
+        // 4.0h = 14400초. 예측값이 곧 목표다.
         when(predictionClient.predict(any(), any()))
                 .thenReturn(new StudyTimePredictionResult(4.0, "study-time-test"));
 
         DailyQuestResult quest = issueAndFindStudyTimeQuest();
 
-        assertThat(quest.title()).isEqualTo("오늘 4시간 24분 공부하기");
+        assertThat(quest.title()).isEqualTo("오늘 4시간 공부하기");
         assertThat(quest.targetCount()).isEqualTo(1);
         assertThat(quest.progressCount()).isZero();
         assertThat(quest.status()).isEqualTo(QuestStatus.IN_PROGRESS);
-        assertThat(targetSecondsOf()).isEqualTo(15_840);
+        assertThat(targetSecondsOf()).isEqualTo(14_400);
         assertThat(targetSourceOf()).isEqualTo("MODEL");
         assertThat(modelVersionOf()).isEqualTo("study-time-test");
     }
 
     @Test
-    @DisplayName("모델 출력 상한에 계수를 곱해도 퀘스트 상한을 넘지 않는다")
-    void clampsToQuestMaximum() {
+    @DisplayName("모델 출력 상한 11.5h는 퀘스트 상한과 같은 값이라 그대로 발급된다")
+    void issuesModelOutputBoundaryAsIs() {
         recordStudyYesterday(18_000L);
-        // 11.5h * 1.1 = 12.65h. 먼저 자르고 곱하면 상한이 상한 역할을 못 한다.
+        // 11.5h = 41400초 = 퀘스트 상한. 계수를 곱하지 않으므로 MODEL 경로에서는 상한 보정이 일어나지 않는다.
+        // 두 값이 같은 것은 우연이며, 퀘스트 상한을 바꾸면 이 테스트가 깨져 그 가정을 다시 확인하게 된다.
         when(predictionClient.predict(any(), any()))
                 .thenReturn(new StudyTimePredictionResult(11.5, "study-time-test"));
 
@@ -159,9 +160,9 @@ class PredictionQuestFlowIT {
 
         assertThat(quests).hasSize(5);
         DailyQuestResult quest = studyTimeQuestOf(quests);
-        // 최근 등원일 평균(B2) 5h * 1.1 = 5h30m으로 내려간다.
-        assertThat(quest.title()).isEqualTo("오늘 5시간 30분 공부하기");
-        assertThat(targetSecondsOf()).isEqualTo(19_800);
+        // 최근 등원일 평균(B2) 5h를 그대로 목표로 쓴다.
+        assertThat(quest.title()).isEqualTo("오늘 5시간 공부하기");
+        assertThat(targetSecondsOf()).isEqualTo(18_000);
         assertThat(targetSourceOf()).isEqualTo("RULE_B2");
         assertThat(modelVersionOf()).isNull();
     }
@@ -193,7 +194,7 @@ class PredictionQuestFlowIT {
         assertThat(second).hasSize(5);
         assertThat(countQuestRows()).isEqualTo(5);
         // 목표는 발급 시점에 고정된다. 다시 조회한다고 다시 계산하지 않는다.
-        assertThat(studyTimeQuestOf(second).title()).isEqualTo("오늘 4시간 24분 공부하기");
+        assertThat(studyTimeQuestOf(second).title()).isEqualTo("오늘 4시간 공부하기");
     }
 
     @Test
@@ -227,7 +228,7 @@ class PredictionQuestFlowIT {
                 .thenReturn(new StudyTimePredictionResult(4.0, "study-time-test"));
         dailyQuestService.getOrCreateDailyQuests(studentId);
 
-        // 집계일 경계(04:00 KST)를 넘지 않는 짧은 기록. 목표 4시간 24분에는 한참 못 미친다.
+        // 집계일 경계(04:00 KST)를 넘지 않는 짧은 기록. 목표 4시간에는 한참 못 미친다.
         // 수동 기록 정책(ManualStudyRecordPolicy)이 분 단위 정렬을 요구하므로 분으로 잘라낸다.
         Instant end = dateTimeProvider.currentInstant().truncatedTo(ChronoUnit.MINUTES);
         Instant boundary = dateTimeProvider.startOfAggregationDate(dateTimeProvider.currentAggregationDate());

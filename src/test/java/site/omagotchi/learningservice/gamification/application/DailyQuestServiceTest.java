@@ -45,7 +45,7 @@ class DailyQuestServiceTest {
     private static final Instant NOW = Instant.parse("2026-08-05T05:00:00Z");
     private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final Long COHORT_ID = 7L;
-    private static final int TARGET_SECONDS = 15_840; // 4h * 1.1
+    private static final int TARGET_SECONDS = 15_840; // 4h24m. 목표 산정은 mock이라 정책과 무관한 고정값
 
     @Mock
     private UserDailyQuestRepository userDailyQuestRepository;

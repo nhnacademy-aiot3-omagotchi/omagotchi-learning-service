@@ -1,11 +1,11 @@
 package site.omagotchi.learningservice.gamification.domain;
 
 /**
- * 예측값을 퀘스트 목표 시간으로 바꾸는 정책.
- *
- * <p>도전 계수를 곱한 뒤 상·하한으로 클립한다. 순서를 뒤집으면 상한이 상한 역할을 하지 못한다.
- * prediction-service가 이미 출력을 [0, 11.5]h로 보정해 주므로 계수를 곱하면 상한을 넘길 수 있고,
- * 그 경계 처리는 learning-service의 책임이다(ADR prediction/0002).
+ * 예측값을 퀘스트 목표 시간으로 바꾸는 정책
+ * <p>
+ * 예측 공부 시간을 초로 환산한 뒤 상/하한으로 클립한다. 예측값에는 별도 계수를 곱하지 않는다.
+ * 퀘스트의 기준은 도전이 아니라 꾸준함이라, 목표는 모델이 예상한 평소 수준 그대로이다.
+ * 상/하한은 prediction-service의 모델 출력 경계 [0, 11.5]h와 무관한 퀘스트 정책값이다.
  */
 public final class QuestTargetPolicy {
 
@@ -15,16 +15,14 @@ public final class QuestTargetPolicy {
     private static final int SECONDS_PER_HOUR = 3600;
 
     /**
-     * 예측값에 도전 계수를 적용한 중간값과 상·하한 보정 결과를 함께 반환한다.
+     * 예측값을 초로 환산한 중간값과 상·하한 보정 결과를 함께 반환한다.
      */
     public static Calculation calculate(
             double predictedStudyHours,
-            double challengeCoefficient,
             int minTargetSeconds,
             int maxTargetSeconds
     ) {
-        double challenged = predictedStudyHours * challengeCoefficient * SECONDS_PER_HOUR;
-        long calculatedTargetSeconds = Math.round(challenged);
+        long calculatedTargetSeconds = Math.round(predictedStudyHours * SECONDS_PER_HOUR);
         int targetSeconds = clamp(calculatedTargetSeconds, minTargetSeconds, maxTargetSeconds);
 
         Adjustment adjustment = adjustmentOf(

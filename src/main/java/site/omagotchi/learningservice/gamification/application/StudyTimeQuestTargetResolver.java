@@ -75,20 +75,18 @@ public class StudyTimeQuestTargetResolver {
             }
             QuestTargetPolicy.Calculation calculation = QuestTargetPolicy.calculate(
                     result.predictedStudyHours(),
-                    properties.challengeCoefficient(),
                     properties.minTargetSeconds(),
                     properties.maxTargetSeconds()
             );
             log.info(
                     "학습 시간 퀘스트 목표 산정: "
-                            + "예측 {}시간 → 도전계수 {}배 → 계산 {} → {} → 최종 {} "
+                            + "예측 {}시간 → 계산 {} → {} → 최종 {} "
                             + "| 사용자(userIdMasked)={}, 기수(cohortId)={}, "
                             + "계산초(calculatedTargetSeconds)={}, "
                             + "정책범위(minTargetSeconds/maxTargetSeconds)={}/{}, "
                             + "보정(adjustment)={}({}), 최종초(targetSeconds)={}, "
                             + "모델(modelVersion)={}",
                     result.predictedStudyHours(),
-                    properties.challengeCoefficient(),
                     formatDuration(calculation.calculatedTargetSeconds()),
                     adjustmentDescription(calculation.adjustment()),
                     formatDuration(calculation.targetSeconds()),
@@ -150,31 +148,26 @@ public class StudyTimeQuestTargetResolver {
                 );
                 return Optional.empty();
             }
-            long challenged = Math.round(average * properties.challengeCoefficient());
-            int targetSeconds = clamp(challenged);
+            int targetSeconds = clamp(average);
             QuestTargetPolicy.Adjustment adjustment = QuestTargetPolicy.adjustmentOf(
-                    challenged,
+                    average,
                     properties.minTargetSeconds(),
                     properties.maxTargetSeconds()
             );
             log.info(
                     "규칙 기반 학습 시간 퀘스트 목표 산정: "
-                            + "최근 등원일 평균 {} → 도전계수 {}배 → 계산 {} → {} → 최종 {} "
+                            + "최근 등원일 평균 {} → {} → 최종 {} "
                             + "| 사용자(userIdMasked)={}, 기수(cohortId)={}, "
                             + "퀘스트 날짜(questDate)={}, 평균초(attendedAverageSeconds)={}, "
-                            + "계산초(calculatedTargetSeconds)={}, "
                             + "정책범위(minTargetSeconds/maxTargetSeconds)={}/{}, "
                             + "보정(adjustment)={}({}), 최종초(targetSeconds)={}",
                     formatDuration(average),
-                    properties.challengeCoefficient(),
-                    formatDuration(challenged),
                     adjustmentDescription(adjustment),
                     formatDuration(targetSeconds),
                     maskUserId(userId),
                     cohortId,
                     questDate,
                     average,
-                    challenged,
                     properties.minTargetSeconds(),
                     properties.maxTargetSeconds(),
                     adjustmentDescription(adjustment),

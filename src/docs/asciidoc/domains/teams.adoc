@@ -1,0 +1,61 @@
+== 팀
+
+이 문서는 MockMvc를 단독으로 구성한 팀 컨트롤러 계약 테스트에서 생성한 실제 요청과 응답 예시를 안내합니다.
+테스트는 `@AuthenticationPrincipal` 해석기를 등록하고 JWT의 `sub`를 요청자로 사용합니다.
+단독 구성 테스트이므로 Spring Security 필터 체인의 인증·인가 흐름은 검증 범위에 포함하지 않습니다.
+
+=== 팀 생성
+include::{snippets}/teams/create/http-request.adoc[]
+include::{snippets}/teams/create/request-fields.adoc[]
+include::{snippets}/teams/create/http-response.adoc[]
+include::{snippets}/teams/create/response-fields.adoc[]
+
+=== 내 팀 목록
+include::{snippets}/teams/get-my-teams/http-request.adoc[]
+include::{snippets}/teams/get-my-teams/http-response.adoc[]
+include::{snippets}/teams/get-my-teams/response-fields.adoc[]
+
+=== 팀 상세
+include::{snippets}/teams/get-team/http-request.adoc[]
+include::{snippets}/teams/get-team/path-parameters.adoc[]
+include::{snippets}/teams/get-team/http-response.adoc[]
+include::{snippets}/teams/get-team/response-fields.adoc[]
+
+=== 팀원 후보 검색
+`query`는 필수 검색어이며 팀의 `MASTER`만 조회할 수 있습니다.
+include::{snippets}/teams/search-member-candidates/http-request.adoc[]
+include::{snippets}/teams/search-member-candidates/path-parameters.adoc[]
+include::{snippets}/teams/search-member-candidates/query-parameters.adoc[]
+include::{snippets}/teams/search-member-candidates/http-response.adoc[]
+include::{snippets}/teams/search-member-candidates/response-fields.adoc[]
+
+=== 팀원 추가
+include::{snippets}/teams/add-member/http-request.adoc[]
+include::{snippets}/teams/add-member/path-parameters.adoc[]
+include::{snippets}/teams/add-member/request-fields.adoc[]
+include::{snippets}/teams/add-member/http-response.adoc[]
+
+=== 팀원 제외
+include::{snippets}/teams/kick-member/http-request.adoc[]
+include::{snippets}/teams/kick-member/path-parameters.adoc[]
+include::{snippets}/teams/kick-member/http-response.adoc[]
+
+=== 팀 탈퇴
+include::{snippets}/teams/leave/http-request.adoc[]
+include::{snippets}/teams/leave/path-parameters.adoc[]
+include::{snippets}/teams/leave/http-response.adoc[]
+
+=== 마스터 위임
+include::{snippets}/teams/delegate/http-request.adoc[]
+include::{snippets}/teams/delegate/path-parameters.adoc[]
+include::{snippets}/teams/delegate/http-response.adoc[]
+
+=== 팀 해체
+include::{snippets}/teams/disband/http-request.adoc[]
+include::{snippets}/teams/disband/path-parameters.adoc[]
+include::{snippets}/teams/disband/http-response.adoc[]
+
+=== 대표 오류
+
+필수 `targetUserId`가 없거나 팀 이름이 잘못되면 `400 Bad Request`를 반환합니다. 팀 소속이 없으면 상세 조회는 `404 Not Found`,
+`MASTER`가 아닌 사용자가 팀원 변경·위임·해체를 요청하면 서비스 계층의 오류가 `403 Forbidden`으로 변환됩니다.

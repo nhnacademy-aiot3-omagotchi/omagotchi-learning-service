@@ -1,76 +1,79 @@
 package site.omagotchi.learningservice.occupancy.presentation;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.get;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.post;
+import static org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath;
+import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
+import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
+import static org.springframework.restdocs.request.RequestDocumentation.pathParameters;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static site.omagotchi.learningservice.support.RestDocs.document;
+
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.security.test.context.TestSecurityContextHolder;
-import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.HttpHeaders;
+import org.springframework.restdocs.payload.FieldDescriptor;
+import org.springframework.restdocs.payload.JsonFieldType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.ErrorCode;
-import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
 import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
+import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 import site.omagotchi.learningservice.occupancy.application.OccupancyErrorCode;
 import site.omagotchi.learningservice.occupancy.application.OccupancyQueryService;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyLifecycleService;
 import site.omagotchi.learningservice.occupancy.application.RoomOccupancyService;
 import site.omagotchi.learningservice.occupancy.application.result.RoomOccupancyResult;
 import site.omagotchi.learningservice.occupancy.domain.OccupancyStatus;
-
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.util.UUID;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
+import site.omagotchi.learningservice.support.LearningRestDocsTest;
 
 /**
  * 점유 API의 HTTP 계약.
  *
- * <p>오류 응답을 컨트롤러가 만들지 않는다는 것이 요점이다 — 서비스가 던진 코드가
- * {@code GlobalExceptionHandler}를 거쳐 상태로 옮겨진다. 여기서 try-catch나
- * ResponseEntity 분기가 생기면 이 테스트가 아니라 설계가 잘못된 것이다.</p>
+ * <p>오류 응답을 컨트롤러가 만들지 않는다는 것이 요점이다 — 서비스가 던진 코드가 {@code GlobalExceptionHandler}를 거쳐 상태로 옮겨진다. 여기서
+ * try-catch나 ResponseEntity 분기가 생기면 이 테스트가 아니라 설계가 잘못된 것이다.
  */
+@WebMvcTest(controllers = RoomOccupancyController.class)
+@LearningRestDocsTest
 class RoomOccupancyControllerTest {
 
     private static final String PATH = "/api/v1/spaces/1/occupancies";
     private static final UUID USER_ID = UUID.fromString("11111111-2222-3333-4444-555555555555");
-    private static final OffsetDateTime STARTED_AT =
-            OffsetDateTime.of(2026, 7, 24, 10, 0, 0, 0, ZoneOffset.ofHours(9));
+    private static final OffsetDateTime STARTED_AT = OffsetDateTime.of(2026, 7, 24, 10, 0, 0, 0, ZoneOffset.ofHours(9));
 
+    private static final String AUTHORIZATION =
+            "Bearer "
+                    + TestJwtKeyConfig.issue(
+                            TestJwtKeyConfig.ISSUER,
+                            TestJwtKeyConfig.AUDIENCE,
+                            USER_ID.toString(),
+                            "USER");
+
+    @MockitoBean
     private RoomOccupancyService roomOccupancyService;
+
+    @MockitoBean
     private RoomOccupancyLifecycleService roomOccupancyLifecycleService;
+
+    @MockitoBean
     private OccupancyQueryService occupancyQueryService;
+
+    @MockitoBean
+    private HttpErrorEventLogger errorEventLogger;
+
+    @Autowired
     private MockMvc mockMvc;
-
-    @BeforeEach
-    void setUp() {
-        roomOccupancyService = mock(RoomOccupancyService.class);
-        roomOccupancyLifecycleService = mock(RoomOccupancyLifecycleService.class);
-        occupancyQueryService = mock(OccupancyQueryService.class);
-        mockMvc = standaloneSetup(new RoomOccupancyController(
-                        roomOccupancyService, roomOccupancyLifecycleService, occupancyQueryService))
-                .setControllerAdvice(new GlobalExceptionHandler(
-                        mock(HttpErrorEventLogger.class)
-                ))
-                // @AuthenticationPrincipal은 Security의 Resolver가 있어야 풀린다.
-                // standaloneSetup은 Spring Security 필터를 끼우지 않으므로 직접 등록한다.
-                .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
-                .build();
-
-        authenticateAs(USER_ID);
-    }
 
     /**
      * <b>헤더로는 요청자를 바꿀 수 없어야 한다.</b> 게이트웨이가 들어오는 {@code X-User-Id}를
@@ -83,36 +86,12 @@ class RoomOccupancyControllerTest {
         UUID spoofed = UUID.fromString("99999999-9999-9999-9999-999999999999");
         when(roomOccupancyService.start(1L, USER_ID)).thenReturn(result());
 
-        mockMvc.perform(post(PATH).header("X-User-Id", spoofed))
+        mockMvc.perform(post(PATH)
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION)
+                        .header("X-User-Id", spoofed))
                 .andExpect(status().isCreated());
 
         verify(roomOccupancyService).start(1L, USER_ID);
-    }
-
-    /**
-     * 보안 컨텍스트는 스레드에 붙으므로 반드시 비운다. 남기면 다음 테스트가 앞 테스트의
-     * 요청자로 실행되어, 인증을 지워도 통과하는 테스트가 생긴다.
-     */
-    @AfterEach
-    void tearDown() {
-        TestSecurityContextHolder.clearContext();
-    }
-
-    /**
-     * 요청자를 Access JWT로 세운다.
-     *
-     * <p>{@code standaloneSetup}은 Spring Security 필터를 끼우지 않아
-     * {@code SecurityMockMvcRequestPostProcessors.jwt()}가 동작하지 않는다 — 그 후처리기는
-     * 필터 체인이 읽어 가는 자리에 컨텍스트를 넣기 때문이다. 여기서는 컨텍스트를 직접 세우고
-     * {@code AuthenticationPrincipalArgumentResolver}가 그것을 읽게 한다.</p>
-     */
-    private static void authenticateAs(UUID userId) {
-        Jwt token = Jwt.withTokenValue("test-token")
-                .header("alg", "RS256")
-                .subject(userId.toString())
-                .claim("role", "USER")
-                .build();
-        TestSecurityContextHolder.setAuthentication(new JwtAuthenticationToken(token));
     }
 
     @Test
@@ -120,7 +99,12 @@ class RoomOccupancyControllerTest {
     void returns201WithOccupancyInfoOnSuccess() throws Exception {
         when(roomOccupancyService.start(any(), any())).thenReturn(result());
 
-        mockMvc.perform(post(PATH))
+        mockMvc.perform(post("/api/v1/spaces/{space-id}/occupancies", 1L)
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andDo(document(
+                        "occupancy/room-start",
+                        pathParameters(parameterWithName("space-id").description("점유할 공간 ID")),
+                        responseFields(occupancyFields())))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.occupancyId").value(100))
                 .andExpect(jsonPath("$.spaceId").value(1))
@@ -135,7 +119,7 @@ class RoomOccupancyControllerTest {
     void callsServiceWithPathSpaceIdAndHeaderUserId() throws Exception {
         when(roomOccupancyService.start(any(), any())).thenReturn(result());
 
-        mockMvc.perform(post(PATH))
+        mockMvc.perform(post(PATH).header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
                 .andExpect(status().isCreated());
 
         verify(roomOccupancyService).start(1L, USER_ID);
@@ -146,7 +130,7 @@ class RoomOccupancyControllerTest {
     void responseExcludesOccupierAndParticipantInfo() throws Exception {
         when(roomOccupancyService.start(any(), any())).thenReturn(result());
 
-        mockMvc.perform(post(PATH))
+        mockMvc.perform(post(PATH).header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.occupierUserId").doesNotExist())
                 .andExpect(jsonPath("$.occupierMembershipId").doesNotExist())
@@ -187,7 +171,7 @@ class RoomOccupancyControllerTest {
         when(roomOccupancyService.start(any(), any()))
                 .thenThrow(new IllegalStateException("출결 모듈 조회 실패"));
 
-        mockMvc.perform(post(PATH))
+        mockMvc.perform(post(PATH).header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("COMMON_INTERNAL_SERVER_ERROR"));
     }
@@ -203,7 +187,12 @@ class RoomOccupancyControllerTest {
     void returns200WithUpdatedExpiryOnExtendSuccess() throws Exception {
         when(roomOccupancyLifecycleService.extend(any(), any())).thenReturn(extendedResult());
 
-        mockMvc.perform(post(PATH + "/extend"))
+        mockMvc.perform(post("/api/v1/spaces/{space-id}/occupancies/extend", 1L)
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andDo(document(
+                        "occupancy/room-extend",
+                        pathParameters(parameterWithName("space-id").description("연장할 공간 ID")),
+                        responseFields(occupancyFields())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.extensionCount").value(1))
                 .andExpect(jsonPath("$.remainingSeconds").value(1800));
@@ -217,7 +206,7 @@ class RoomOccupancyControllerTest {
         when(roomOccupancyLifecycleService.extend(any(), any()))
                 .thenThrow(new BusinessException(OccupancyErrorCode.EXTENSION_TOO_EARLY));
 
-        mockMvc.perform(post(PATH + "/extend"))
+        mockMvc.perform(post(PATH + "/extend").header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("OCCUPANCY_EXTENSION_TOO_EARLY"));
     }
@@ -228,7 +217,7 @@ class RoomOccupancyControllerTest {
         when(roomOccupancyLifecycleService.extend(any(), any()))
                 .thenThrow(new BusinessException(OccupancyErrorCode.EXTENSION_LIMIT_EXCEEDED));
 
-        mockMvc.perform(post(PATH + "/extend"))
+        mockMvc.perform(post(PATH + "/extend").header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("OCCUPANCY_EXTENSION_LIMIT_EXCEEDED"));
     }
@@ -237,7 +226,11 @@ class RoomOccupancyControllerTest {
     @Test
     @DisplayName("반납에 성공하면 204를 응답한다.")
     void returns204OnReleaseSuccess() throws Exception {
-        mockMvc.perform(post(PATH + "/release"))
+        mockMvc.perform(post("/api/v1/spaces/{space-id}/occupancies/release", 1L)
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andDo(document(
+                        "occupancy/room-release",
+                        pathParameters(parameterWithName("space-id").description("반납할 공간 ID"))))
                 .andExpect(status().isNoContent());
 
         verify(roomOccupancyLifecycleService).release(1L, USER_ID);
@@ -249,7 +242,7 @@ class RoomOccupancyControllerTest {
         doThrow(new BusinessException(OccupancyErrorCode.NOT_OCCUPIER))
                 .when(roomOccupancyLifecycleService).release(any(), any());
 
-        mockMvc.perform(post(PATH + "/release"))
+        mockMvc.perform(post(PATH + "/release").header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("OCCUPANCY_NOT_OCCUPIER"));
     }
@@ -260,9 +253,35 @@ class RoomOccupancyControllerTest {
         doThrow(new BusinessException(OccupancyErrorCode.OCCUPANCY_ENDED))
                 .when(roomOccupancyLifecycleService).release(any(), any());
 
-        mockMvc.perform(post(PATH + "/release"))
+        mockMvc.perform(post(PATH + "/release").header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("OCCUPANCY_ENDED"));
+    }
+
+    @Test
+    @DisplayName("점유 강제 종료")
+    void forceReleasesOccupancy() throws Exception {
+        // Given: 강제 종료 대상과 관리자 인증 준비
+        // When & Then
+        mockMvc.perform(post("/api/v1/spaces/{space-id}/occupancies/force-release", 1L)
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andDo(document(
+                        "occupancy/room-force-release",
+                        pathParameters(parameterWithName("space-id").description("강제 종료할 공간 ID"))))
+                .andExpect(status().isNoContent());
+        verify(roomOccupancyLifecycleService).forceRelease(1L, USER_ID);
+    }
+
+    private FieldDescriptor[] occupancyFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("occupancyId").type(JsonFieldType.NUMBER).description("점유 ID"),
+            fieldWithPath("spaceId").type(JsonFieldType.NUMBER).description("공간 ID"),
+            fieldWithPath("status").type(JsonFieldType.STRING).description("점유 상태"),
+            fieldWithPath("startedAt").type(JsonFieldType.STRING).description("시작 시각"),
+            fieldWithPath("expiresAt").type(JsonFieldType.STRING).description("만료 시각"),
+            fieldWithPath("extensionCount").type(JsonFieldType.NUMBER).description("연장 횟수"),
+            fieldWithPath("remainingSeconds").type(JsonFieldType.NUMBER).description("남은 시간 (초)")
+        };
     }
 
     private RoomOccupancyResult extendedResult() {
@@ -283,7 +302,14 @@ class RoomOccupancyControllerTest {
     void myStatusReturnsFalseWhenNotInMeeting() throws Exception {
         when(occupancyQueryService.isInMeeting(USER_ID)).thenReturn(false);
 
-        mockMvc.perform(get("/api/v1/occupancies/me"))
+        mockMvc.perform(get("/api/v1/occupancies/me")
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andDo(document(
+                        "occupancy/my-status",
+                        responseFields(
+                                fieldWithPath("inMeeting")
+                                        .type(JsonFieldType.BOOLEAN)
+                                        .description("현재 회의실 참여 여부"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.inMeeting").value(false));
     }
@@ -292,7 +318,7 @@ class RoomOccupancyControllerTest {
         when(roomOccupancyService.start(any(), any()))
                 .thenThrow(new BusinessException(errorCode));
 
-        mockMvc.perform(post(PATH))
+        mockMvc.perform(post(PATH).header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
                 .andExpect(status().is(expectedStatus))
                 .andExpect(jsonPath("$.code").value(errorCode.code()))
                 .andExpect(jsonPath("$.message").value(errorCode.message()))

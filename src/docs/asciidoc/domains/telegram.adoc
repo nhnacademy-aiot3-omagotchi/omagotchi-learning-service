@@ -1,0 +1,35 @@
+== Telegram
+
+Telegram 사용자 연동 API에는 Access JWT 인증이 필요합니다. 웹훅은 JWT 대신
+`X-Telegram-Bot-Api-Secret-Token`을 검증하며, 문서 예시는 비밀값 자리표시자만 사용합니다.
+
+=== 연동 토큰 발급
+include::{snippets}/telegram/issue-link-token/http-request.adoc[]
+include::{snippets}/telegram/issue-link-token/http-response.adoc[]
+include::{snippets}/telegram/issue-link-token/response-fields.adoc[]
+
+=== 내 연동 조회
+include::{snippets}/telegram/get-link/http-request.adoc[]
+include::{snippets}/telegram/get-link/http-response.adoc[]
+include::{snippets}/telegram/get-link/response-fields.adoc[]
+
+=== 알림 수신 설정
+include::{snippets}/telegram/update-notification/http-request.adoc[]
+include::{snippets}/telegram/update-notification/request-fields.adoc[]
+include::{snippets}/telegram/update-notification/http-response.adoc[]
+include::{snippets}/telegram/update-notification/response-fields.adoc[]
+
+=== 연동 해제
+include::{snippets}/telegram/disconnect/http-request.adoc[]
+include::{snippets}/telegram/disconnect/http-response.adoc[]
+include::{snippets}/telegram/disconnect/response-fields.adoc[]
+
+=== Telegram 웹훅
+웹훅 비밀값이 없거나 일치하지 않으면 `401 Unauthorized`를 반환합니다. 개인 채팅이 아닌 메시지는 명령의 식별자를 비워 서비스에서 무시합니다.
+include::{snippets}/telegram/webhook/http-request.adoc[]
+include::{snippets}/telegram/webhook/request-headers.adoc[]
+include::{snippets}/telegram/webhook/request-fields.adoc[]
+include::{snippets}/telegram/webhook/http-response.adoc[]
+
+=== 대표 오류
+연동 토큰이 만료되었거나 이미 사용되었거나 연동 대상이 없으면 Telegram 도메인 오류가 `GlobalExceptionHandler`를 통해 `400 Bad Request` 또는 `404 Not Found`로 변환됩니다.

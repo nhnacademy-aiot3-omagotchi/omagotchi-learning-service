@@ -1,0 +1,25 @@
+== 환경 센서 이벤트 및 IoT 시뮬레이터
+
+=== 센서 이벤트 조회
+
+단독으로 구성한 MockMvc에서 JWT 인증 주체를 직접 주입해 컨트롤러의 응답 계약을 확인합니다.
+
+include::{snippets}/environment/get-sensor-events/http-request.adoc[]
+include::{snippets}/environment/get-sensor-events/path-parameters.adoc[]
+include::{snippets}/environment/get-sensor-events/query-parameters.adoc[]
+include::{snippets}/environment/get-sensor-events/http-response.adoc[]
+include::{snippets}/environment/get-sensor-events/response-fields.adoc[]
+
+=== IoT 시뮬레이터 명령 실행
+
+`environment.iot.simulator.enabled=true`일 때만 컨트롤러가 등록됩니다.
+요청에는 `X-iot-TOKEN` 공유 토큰과 명령 본문을 사용하며, `success` 쿼리 파라미터의 기본값은 `true`입니다.
+테스트에서는 토큰 검증과 성공 응답을 확인합니다. 전체 Spring Security 보안 설정은 검증 범위에 포함하지 않습니다.
+
+include::{snippets}/environment/simulate-iot/http-request.adoc[]
+include::{snippets}/environment/simulate-iot/path-parameters.adoc[]
+include::{snippets}/environment/simulate-iot/request-headers.adoc[]
+include::{snippets}/environment/simulate-iot/query-parameters.adoc[]
+include::{snippets}/environment/simulate-iot/request-fields.adoc[]
+include::{snippets}/environment/simulate-iot/http-response.adoc[]
+include::{snippets}/environment/simulate-iot/response-fields.adoc[]

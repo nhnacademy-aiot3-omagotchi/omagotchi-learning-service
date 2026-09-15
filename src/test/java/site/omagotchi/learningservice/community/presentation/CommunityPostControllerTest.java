@@ -1,16 +1,43 @@
 package site.omagotchi.learningservice.community.presentation;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.delete;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.get;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.multipart;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.patch;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.post;
+import static org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath;
+import static org.springframework.restdocs.payload.PayloadDocumentation.requestFields;
+import static org.springframework.restdocs.payload.PayloadDocumentation.requestPartFields;
+import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
+import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
+import static org.springframework.restdocs.request.RequestDocumentation.partWithName;
+import static org.springframework.restdocs.request.RequestDocumentation.pathParameters;
+import static org.springframework.restdocs.request.RequestDocumentation.queryParameters;
+import static org.springframework.restdocs.request.RequestDocumentation.requestParts;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static site.omagotchi.learningservice.support.RestDocs.document;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.restdocs.test.autoconfigure.AutoConfigureRestDocs;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.restdocs.payload.FieldDescriptor;
+import org.springframework.restdocs.request.ParameterDescriptor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.community.application.CommunityPostCommandService;
@@ -20,48 +47,18 @@ import site.omagotchi.learningservice.community.application.attachment.Community
 import site.omagotchi.learningservice.community.application.command.CreateCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.command.PinCommunityPostCommand;
 import site.omagotchi.learningservice.community.application.command.UpdateCommunityPostCommand;
+import site.omagotchi.learningservice.community.application.query.CommunityAttachmentMetadata;
 import site.omagotchi.learningservice.community.application.query.CommunityPostDetail;
 import site.omagotchi.learningservice.community.application.query.CommunityPostListItem;
 import site.omagotchi.learningservice.community.application.query.CommunityPostPage;
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
 import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
-import site.omagotchi.learningservice.global.security.JwtAuthorityConfig;
-import site.omagotchi.learningservice.global.security.JwtConfig;
-import site.omagotchi.learningservice.global.security.JwtProperties;
-import site.omagotchi.learningservice.global.security.SecurityConfig;
-import site.omagotchi.learningservice.global.security.SecurityErrorResponseHandler;
 import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
-import static org.hamcrest.Matchers.containsString;
-import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import site.omagotchi.learningservice.support.LearningRestDocsTest;
 
 @WebMvcTest(controllers = CommunityPostController.class)
-@Import({
-        SecurityConfig.class,
-        JwtConfig.class,
-        JwtAuthorityConfig.class,
-        SecurityErrorResponseHandler.class,
-        TestJwtKeyConfig.class
-})
-@EnableConfigurationProperties(JwtProperties.class)
-@ActiveProfiles("test")
-@AutoConfigureRestDocs(outputDir = "target/generated-snippets")
 @DisplayName("기수 커뮤니티 게시글 API")
+@LearningRestDocsTest
 class CommunityPostControllerTest {
 
     private static final UUID USER_ID = UUID.fromString(TestJwtKeyConfig.USER_ID);
@@ -119,7 +116,9 @@ class CommunityPostControllerTest {
         ), 1, 10, 11, 2));
 
         mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/community/posts", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue())
                         .param("page", "1")
                         .param("size", "10")
                         .param("type", "NOTICE")
@@ -142,7 +141,15 @@ class CommunityPostControllerTest {
                 .andExpect(jsonPath("$.size").doesNotExist())
                 .andExpect(jsonPath("$.totalElements").doesNotExist())
                 .andExpect(jsonPath("$.totalPages").doesNotExist())
-                .andDo(document("community/get-posts"));
+                .andDo(document(
+                        "community/get-posts",
+                        pathParameters(cohortId()),
+                        queryParameters(
+                                parameterWithName("page").description("페이지 번호").optional(),
+                                parameterWithName("size").description("페이지 크기").optional(),
+                                parameterWithName("type").description("게시글 유형").optional(),
+                                parameterWithName("search").description("검색어").optional()),
+                        responseFields(pageFields())));
 
         verify(communityPostQueryService).getPosts(
                 USER_ID,
@@ -160,8 +167,10 @@ class CommunityPostControllerTest {
         given(communityPostQueryService.getPost(USER_ID, COHORT_ID, 1L))
                 .willReturn(detail(1L, CommunityPostType.FREE, "자유글", "내용"));
 
-        mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/community/posts/1", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+        mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/community/posts/{post-id}", COHORT_ID, 1L)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.postId").value(1))
                 .andExpect(jsonPath("$.type").value("FREE"))
@@ -170,7 +179,11 @@ class CommunityPostControllerTest {
                 .andExpect(jsonPath("$.cohortId").value(10))
                 .andExpect(jsonPath("$.authorNickname").value("글쓴이"))
                 .andExpect(jsonPath("$.canManage").value(true))
-                .andExpect(jsonPath("$.authorUserId").value(AUTHOR_ID.toString()));
+                .andExpect(jsonPath("$.authorUserId").value(AUTHOR_ID.toString()))
+                .andDo(document(
+                        "community/get-post",
+                        pathParameters(cohortId(), postId()),
+                        responseFields(detailFields())));
 
         verify(communityPostQueryService).getPost(USER_ID, COHORT_ID, 1L);
     }
@@ -187,14 +200,20 @@ class CommunityPostControllerTest {
                 ));
 
         mockMvc.perform(get(
-                        "/api/v1/cohorts/{cohort-id}/community/posts/{post-id}/attachments/{attachment-id}",
-                        COHORT_ID, 10L, 20L
-                )
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                                "/api/v1/cohorts/{cohort-id}/community/posts/{post-id}/attachments/{attachment-id}",
+                                COHORT_ID,
+                                10L,
+                                20L)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_TYPE, "image/png"))
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
-                .andExpect(content().bytes(new byte[]{1, 2, 3}));
+                .andExpect(content().bytes(new byte[] {1, 2, 3}))
+                .andDo(document(
+                        "community/download-attachment",
+                        pathParameters(cohortId(), postId(), attachmentId())));
 
         verify(communityPostQueryService).downloadAttachment(USER_ID, COHORT_ID, 10L, 20L);
     }
@@ -209,17 +228,24 @@ class CommunityPostControllerTest {
                 ));
 
         mockMvc.perform(get(
-                        "/api/v1/cohorts/{cohort-id}/community/posts/{post-id}/attachments/{attachment-id}/thumbnail",
-                        COHORT_ID, 10L, 20L
-                )
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                                "/api/v1/cohorts/{cohort-id}/community/posts/{post-id}/attachments/{attachment-id}/thumbnail",
+                                COHORT_ID,
+                                10L,
+                                20L)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_TYPE, "image/jpeg"))
-                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, containsString("max-age=300")))
+                .andExpect(
+                        header().string(HttpHeaders.CACHE_CONTROL, containsString("max-age=300")))
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, containsString("private")))
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(header().doesNotExist(HttpHeaders.CONTENT_DISPOSITION))
-                .andExpect(content().bytes(new byte[]{4, 5, 6}));
+                .andExpect(content().bytes(new byte[] {4, 5, 6}))
+                .andDo(document(
+                        "community/preview-attachment",
+                        pathParameters(cohortId(), postId(), attachmentId())));
 
         verify(communityPostQueryService).previewAttachment(USER_ID, COHORT_ID, 10L, 20L);
     }
@@ -228,11 +254,17 @@ class CommunityPostControllerTest {
     @DisplayName("첨부파일 삭제 요청을 서비스에 위임한다")
     void deletesAttachment() throws Exception {
         mockMvc.perform(delete(
-                        "/api/v1/cohorts/{cohort-id}/community/posts/{post-id}/attachments/{attachment-id}",
-                        COHORT_ID, 10L, 20L
-                )
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
-                .andExpect(status().isNoContent());
+                                "/api/v1/cohorts/{cohort-id}/community/posts/{post-id}/attachments/{attachment-id}",
+                                COHORT_ID,
+                                10L,
+                                20L)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isNoContent())
+                .andDo(document(
+                        "community/delete-attachment",
+                        pathParameters(cohortId(), postId(), attachmentId())));
 
         verify(communityPostCommandService).deleteAttachment(USER_ID, COHORT_ID, 10L, 20L);
     }
@@ -247,18 +279,29 @@ class CommunityPostControllerTest {
         )).willReturn(detail(1L, CommunityPostType.FREE, "자유글", "내용"));
 
         mockMvc.perform(post("/api/v1/cohorts/{cohort-id}/community/posts", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "type": "FREE",
-                                  "title": "자유글",
-                                  "content": "내용"
-                                }
-                                """))
+                        .content(
+                                """
+                        {
+                          "type": "FREE",
+                          "title": "자유글",
+                          "content": "내용"
+                        }
+                        """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.postId").value(1))
-                .andExpect(jsonPath("$.type").value("FREE"));
+                .andExpect(jsonPath("$.type").value("FREE"))
+                .andDo(document(
+                        "community/create-post",
+                        pathParameters(cohortId()),
+                        requestFields(
+                                fieldWithPath("type").description("게시글 유형"),
+                                fieldWithPath("title").description("제목"),
+                                fieldWithPath("content").description("내용")),
+                        responseFields(detailFields())));
 
         verify(communityPostCommandService).create(
                 eq(USER_ID),
@@ -277,26 +320,45 @@ class CommunityPostControllerTest {
                 eq(new UpdateCommunityPostCommand("수정", "수정 내용"))
         )).willReturn(detail(1L, CommunityPostType.FREE, "수정", "수정 내용"));
 
-        mockMvc.perform(patch("/api/v1/cohorts/{cohort-id}/community/posts/1", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+        mockMvc.perform(patch(
+                                "/api/v1/cohorts/{cohort-id}/community/posts/{post-id}",
+                                COHORT_ID,
+                                1L)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "title": "수정",
-                                  "content": "수정 내용"
-                                }
-                                """))
+                        .content(
+                                """
+                        {
+                          "title": "수정",
+                          "content": "수정 내용"
+                        }
+                        """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("수정"))
-                .andExpect(jsonPath("$.content").value("수정 내용"));
+                .andExpect(jsonPath("$.content").value("수정 내용"))
+                .andDo(document(
+                        "community/update-post",
+                        pathParameters(cohortId(), postId()),
+                        requestFields(
+                                fieldWithPath("title").description("제목"),
+                                fieldWithPath("content").description("내용")),
+                        responseFields(detailFields())));
     }
 
     @Test
     @DisplayName("게시글 삭제 요청을 서비스에 위임한다")
     void deletesPost() throws Exception {
-        mockMvc.perform(delete("/api/v1/cohorts/{cohort-id}/community/posts/1", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
-                .andExpect(status().isNoContent());
+        mockMvc.perform(delete(
+                                "/api/v1/cohorts/{cohort-id}/community/posts/{post-id}",
+                                COHORT_ID,
+                                1L)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isNoContent())
+                .andDo(document("community/delete-post", pathParameters(cohortId(), postId())));
 
         verify(communityPostCommandService).delete(USER_ID, COHORT_ID, 1L);
     }
@@ -311,12 +373,22 @@ class CommunityPostControllerTest {
                 eq(new PinCommunityPostCommand(true))
         )).willReturn(detail(1L, CommunityPostType.NOTICE, "공지", "내용"));
 
-        mockMvc.perform(patch("/api/v1/cohorts/{cohort-id}/community/posts/1/pin", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+        mockMvc.perform(patch(
+                                "/api/v1/cohorts/{cohort-id}/community/posts/{post-id}/pin",
+                                COHORT_ID,
+                                1L)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"pinned\":true}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.postId").value(1));
+                .andExpect(jsonPath("$.postId").value(1))
+                .andDo(document(
+                        "community/pin-post",
+                        pathParameters(cohortId(), postId()),
+                        requestFields(fieldWithPath("pinned").description("고정 여부")),
+                        responseFields(detailFields())));
 
         verify(communityPostCommandService).pin(
                 eq(USER_ID),
@@ -324,6 +396,166 @@ class CommunityPostControllerTest {
                 eq(1L),
                 eq(new PinCommunityPostCommand(true))
         );
+    }
+
+    @Test
+    @DisplayName("첨부파일 포함 게시글 생성")
+    void createsPostWithAttachment() throws Exception {
+        // Given: 게시글과 첨부파일 및 생성 응답 준비
+        given(
+                        communityPostCommandService.create(
+                                eq(USER_ID), eq(COHORT_ID), any(CreateCommunityPostCommand.class)))
+                .willReturn(detail(1L, CommunityPostType.FREE, "첨부 글", "내용"));
+        MockMultipartFile post =
+                new MockMultipartFile(
+                        "post",
+                        "post.json",
+                        "application/json",
+                        "{\"type\":\"FREE\",\"title\":\"첨부 글\",\"content\":\"내용\"}".getBytes());
+        MockMultipartFile attachment =
+                new MockMultipartFile("attachments", "note.txt", "text/plain", new byte[] {1, 2});
+
+        // When & Then
+        mockMvc.perform(multipart("/api/v1/cohorts/{cohort-id}/community/posts", COHORT_ID)
+                        .file(post)
+                        .file(attachment)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isCreated())
+                .andDo(document(
+                        "community/create-post-multipart",
+                        pathParameters(cohortId()),
+                        requestParts(
+                                partWithName("post").description("게시글 JSON 파트"),
+                                partWithName("attachments")
+                                        .description("첨부 파일 파트")
+                                        .optional()),
+                        requestPartFields(
+                                "post",
+                                fieldWithPath("type").description("게시글 유형"),
+                                fieldWithPath("title").description("제목"),
+                                fieldWithPath("content").description("내용")),
+                        responseFields(detailFields())));
+    }
+
+    @Test
+    @DisplayName("첨부파일 포함 게시글 수정")
+    void updatesPostWithAttachment() throws Exception {
+        // Given: 게시글과 첨부파일 및 수정 응답 준비
+        given(
+                        communityPostCommandService.update(
+                                eq(USER_ID),
+                                eq(COHORT_ID),
+                                eq(1L),
+                                any(UpdateCommunityPostCommand.class)))
+                .willReturn(detail(1L, CommunityPostType.FREE, "수정 첨부", "내용"));
+        MockMultipartFile post =
+                new MockMultipartFile(
+                        "post",
+                        "post.json",
+                        "application/json",
+                        "{\"title\":\"수정 첨부\",\"content\":\"내용\"}".getBytes());
+        MockMultipartFile attachment =
+                new MockMultipartFile("attachments", "note.txt", "text/plain", new byte[] {3, 4});
+
+        // When & Then
+        mockMvc.perform(multipart(
+                                "/api/v1/cohorts/{cohort-id}/community/posts/{post-id}",
+                                COHORT_ID,
+                                1L)
+                        .file(post)
+                        .file(attachment)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue())
+                        .with(
+                                request -> {
+                                    request.setMethod("PATCH");
+                                    return request;
+                                }))
+                .andExpect(status().isOk())
+                .andDo(document(
+                        "community/update-post-multipart",
+                        pathParameters(cohortId(), postId()),
+                        requestParts(
+                                partWithName("post").description("게시글 JSON 파트"),
+                                partWithName("attachments")
+                                        .description("첨부 파일 파트")
+                                        .optional()),
+                        requestPartFields(
+                                "post",
+                                fieldWithPath("title").description("제목"),
+                                fieldWithPath("content").description("내용")),
+                        responseFields(detailFields())));
+    }
+
+    private static ParameterDescriptor cohortId() {
+        return parameterWithName("cohort-id").description("기수 식별자");
+    }
+
+    private static ParameterDescriptor postId() {
+        return parameterWithName("post-id").description("게시글 식별자");
+    }
+
+    private static ParameterDescriptor attachmentId() {
+        return parameterWithName("attachment-id").description("첨부파일 식별자");
+    }
+
+    private static FieldDescriptor[] pageFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("items").description("게시글 목록"),
+            fieldWithPath("items[].postId").description("게시글 식별자"),
+            fieldWithPath("items[].type").description("게시글 유형"),
+            fieldWithPath("items[].title").description("제목"),
+            fieldWithPath("items[].authorUserId").description("작성자 식별자"),
+            fieldWithPath("items[].authorNickname").description("작성자 닉네임"),
+            fieldWithPath("items[].cohortId").description("기수 식별자"),
+            fieldWithPath("items[].pinned").description("고정 여부"),
+            fieldWithPath("items[].createdAt").description("생성 시각"),
+            fieldWithPath("items[].updatedAt").description("수정 시각"),
+            fieldWithPath("items[].attachmentCount").description("첨부파일 수"),
+            fieldWithPath("items[].canManage").description("현재 사용자의 관리 가능 여부"),
+            fieldWithPath("pinned").description("고정 공지 (없으면 null)"),
+            fieldWithPath("pinned.postId").description("고정 게시글 식별자").optional(),
+            fieldWithPath("pinned.type").description("고정 게시글 유형").optional(),
+            fieldWithPath("pinned.title").description("고정 게시글 제목").optional(),
+            fieldWithPath("pinned.authorUserId").description("고정 게시글 작성자").optional(),
+            fieldWithPath("pinned.authorNickname").description("고정 게시글 작성자 닉네임").optional(),
+            fieldWithPath("pinned.cohortId").description("고정 게시글 기수").optional(),
+            fieldWithPath("pinned.pinned").description("고정 여부").optional(),
+            fieldWithPath("pinned.createdAt").description("생성 시각").optional(),
+            fieldWithPath("pinned.updatedAt").description("수정 시각").optional(),
+            fieldWithPath("pinned.attachmentCount").description("첨부파일 수").optional(),
+            fieldWithPath("pinned.canManage").description("관리 가능 여부").optional(),
+            fieldWithPath("page").description("페이지 정보"),
+            fieldWithPath("page.number").description("페이지 번호"),
+            fieldWithPath("page.size").description("페이지 크기"),
+            fieldWithPath("page.totalElements").description("전체 게시글 수"),
+            fieldWithPath("page.totalPages").description("전체 페이지 수")
+        };
+    }
+
+    private static FieldDescriptor[] detailFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("postId").description("게시글 식별자"),
+            fieldWithPath("type").description("게시글 유형"),
+            fieldWithPath("title").description("제목"),
+            fieldWithPath("content").description("내용"),
+            fieldWithPath("authorUserId").description("작성자 식별자"),
+            fieldWithPath("authorNickname").description("작성자 닉네임"),
+            fieldWithPath("cohortId").description("기수 식별자"),
+            fieldWithPath("pinned").description("고정 여부"),
+            fieldWithPath("createdAt").description("생성 시각"),
+            fieldWithPath("updatedAt").description("수정 시각"),
+            fieldWithPath("attachments").description("첨부파일 목록"),
+            fieldWithPath("attachments[].attachmentId").description("첨부파일 식별자"),
+            fieldWithPath("attachments[].originalFileName").description("원본 파일명"),
+            fieldWithPath("attachments[].contentType").description("파일 Content-Type"),
+            fieldWithPath("attachments[].sizeBytes").description("파일 크기(바이트)"),
+            fieldWithPath("attachments[].displayOrder").description("표시 순서"),
+            fieldWithPath("canManage").description("현재 사용자의 관리 가능 여부")
+        };
     }
 
     private CommunityPostDetail detail(
@@ -343,8 +575,9 @@ class CommunityPostControllerTest {
                 false,
                 Instant.parse("2026-08-08T00:00:00Z"),
                 Instant.parse("2026-08-08T00:00:00Z"),
-                List.of(),
-                true
-        );
+                List.of(
+                        new CommunityAttachmentMetadata(
+                                20L, "community/1/20", "note.txt", "text/plain", 2L, 0)),
+                true);
     }
 }

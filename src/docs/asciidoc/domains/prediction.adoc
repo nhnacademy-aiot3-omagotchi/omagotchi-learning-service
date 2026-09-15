@@ -1,0 +1,10 @@
+== 학습 시간 예측
+
+기수의 누적 학습 데이터를 바탕으로 다음 학습 시간을 예측합니다. 요청 본문은 없으며,
+경로의 기수 ID와 Access JWT의 인증 주체를 사용합니다.
+
+=== 공부 시간 예측
+include::{snippets}/prediction/study-time/http-request.adoc[]
+include::{snippets}/prediction/study-time/path-parameters.adoc[]
+include::{snippets}/prediction/study-time/http-response.adoc[]
+include::{snippets}/prediction/study-time/response-fields.adoc[]

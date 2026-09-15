@@ -1,0 +1,48 @@
+== 타이머
+
+이 문서는 MockMvc를 단독으로 구성한 타이머 컨트롤러 계약 테스트에서 생성한 요청과 응답 예시를 안내합니다.
+테스트에서는 인증 주체를 직접 주입해 컨트롤러의 응답 계약을 검증합니다.
+JWT 인증·인가 보안 흐름 자체를 검증한 결과는 포함하지 않습니다.
+
+=== 타이머 시작
+
+기수에 새 타이머를 시작합니다. 성공하면 생성된 타이머 실행 ID와 시작 시각을 반환합니다.
+
+include::{snippets}/timer/start-timer/http-request.adoc[]
+include::{snippets}/timer/start-timer/path-parameters.adoc[]
+include::{snippets}/timer/start-timer/http-response.adoc[]
+include::{snippets}/timer/start-timer/response-fields.adoc[]
+
+=== 현재 타이머 상태 조회
+
+기수의 현재 타이머 상태를 조회합니다. 실행 중인 경우 `timerRunId`, `startedAt`,
+`elapsedSeconds`를 반환합니다.
+
+include::{snippets}/timer/get-running-timer/http-request.adoc[]
+include::{snippets}/timer/get-running-timer/path-parameters.adoc[]
+include::{snippets}/timer/get-running-timer/http-response.adoc[]
+include::{snippets}/timer/get-running-timer/response-fields.adoc[]
+
+실행 중인 타이머가 없으면 상태는 `STOPPED`이며 `timerRunId`와 `startedAt`은 `null`,
+`elapsedSeconds`는 0입니다.
+
+include::{snippets}/timer/get-stopped-timer/http-request.adoc[]
+include::{snippets}/timer/get-stopped-timer/path-parameters.adoc[]
+include::{snippets}/timer/get-stopped-timer/http-response.adoc[]
+include::{snippets}/timer/get-stopped-timer/response-fields.adoc[]
+
+=== 타이머 폐기
+
+타이머 실행을 폐기합니다. 성공 시 본문 없이 `204 No Content`를 반환합니다.
+
+include::{snippets}/timer/discard-timer/http-request.adoc[]
+include::{snippets}/timer/discard-timer/path-parameters.adoc[]
+include::{snippets}/timer/discard-timer/http-response.adoc[]
+
+=== 타이머 종료
+
+타이머 실행을 종료합니다. 성공 시 본문 없이 `204 No Content`를 반환합니다.
+
+include::{snippets}/timer/stop-timer/http-request.adoc[]
+include::{snippets}/timer/stop-timer/path-parameters.adoc[]
+include::{snippets}/timer/stop-timer/http-response.adoc[]

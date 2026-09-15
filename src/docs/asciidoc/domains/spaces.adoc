@@ -1,0 +1,66 @@
+== 공간 관리
+
+이 문서는 MockMvc를 단독으로 구성한 공간 관리 컨트롤러 계약 테스트와 보안이 적용된 조회 테스트에서 생성한 성공 예시를 안내합니다.
+문서에 포함된 역할과 상태는 실제 응답과 테스트 데이터에 정의된 값만 설명합니다.
+
+=== 공간 생성
+include::{snippets}/spaces/create/http-request.adoc[]
+include::{snippets}/spaces/create/request-fields.adoc[]
+include::{snippets}/spaces/create/http-response.adoc[]
+include::{snippets}/spaces/create/response-fields.adoc[]
+
+=== 공간 수정
+include::{snippets}/spaces/update/http-request.adoc[]
+include::{snippets}/spaces/update/path-parameters.adoc[]
+include::{snippets}/spaces/update/request-fields.adoc[]
+include::{snippets}/spaces/update/http-response.adoc[]
+include::{snippets}/spaces/update/response-fields.adoc[]
+
+=== 공간 활성화
+include::{snippets}/spaces/activate/http-request.adoc[]
+include::{snippets}/spaces/activate/path-parameters.adoc[]
+include::{snippets}/spaces/activate/http-response.adoc[]
+include::{snippets}/spaces/activate/response-fields.adoc[]
+
+=== 공간 비활성화
+include::{snippets}/spaces/deactivate/http-request.adoc[]
+include::{snippets}/spaces/deactivate/path-parameters.adoc[]
+include::{snippets}/spaces/deactivate/request-fields.adoc[]
+include::{snippets}/spaces/deactivate/http-response.adoc[]
+include::{snippets}/spaces/deactivate/response-fields.adoc[]
+
+=== 공간 삭제
+include::{snippets}/spaces/delete/http-request.adoc[]
+include::{snippets}/spaces/delete/path-parameters.adoc[]
+include::{snippets}/spaces/delete/http-response.adoc[]
+
+=== 공간의 기수 배정
+include::{snippets}/spaces/assign-cohort/http-request.adoc[]
+include::{snippets}/spaces/assign-cohort/path-parameters.adoc[]
+include::{snippets}/spaces/assign-cohort/request-fields.adoc[]
+include::{snippets}/spaces/assign-cohort/http-response.adoc[]
+include::{snippets}/spaces/assign-cohort/response-fields.adoc[]
+
+=== 공간의 기수 배정 해제
+include::{snippets}/spaces/unassign-cohort/http-request.adoc[]
+include::{snippets}/spaces/unassign-cohort/path-parameters.adoc[]
+include::{snippets}/spaces/unassign-cohort/http-response.adoc[]
+
+=== 공간 목록 조회
+보안이 적용된 조회 테스트의 실제 응답 데이터를 기반으로 합니다.
+
+include::{snippets}/spaces/list/http-request.adoc[]
+include::{snippets}/spaces/list/http-response.adoc[]
+include::{snippets}/spaces/list/response-fields.adoc[]
+
+=== 선택 가능한 실습실 조회
+include::{snippets}/spaces/list-selectable-labs/http-request.adoc[]
+include::{snippets}/spaces/list-selectable-labs/path-parameters.adoc[]
+include::{snippets}/spaces/list-selectable-labs/http-response.adoc[]
+include::{snippets}/spaces/list-selectable-labs/response-fields.adoc[]
+
+=== 공간 재실 상태 조회
+include::{snippets}/spaces/get-presences/http-request.adoc[]
+include::{snippets}/spaces/get-presences/path-parameters.adoc[]
+include::{snippets}/spaces/get-presences/http-response.adoc[]
+include::{snippets}/spaces/get-presences/response-fields.adoc[]

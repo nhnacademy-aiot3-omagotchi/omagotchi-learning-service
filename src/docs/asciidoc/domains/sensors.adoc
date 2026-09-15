@@ -1,0 +1,74 @@
+== 센서
+
+센서 API를 단독으로 구성한 MockMvc 계약 문서입니다. 테스트에서는 인증 주체를 직접 주입하므로
+JWT 필터 자체의 인증·인가 동작은 검증하지 않습니다.
+
+=== 센서 장치
+include::{snippets}/sensors/device-list/http-request.adoc[]
+include::{snippets}/sensors/device-list/path-parameters.adoc[]
+include::{snippets}/sensors/device-list/http-response.adoc[]
+include::{snippets}/sensors/device-list/response-fields.adoc[]
+include::{snippets}/sensors/device-create/http-request.adoc[]
+include::{snippets}/sensors/device-create/path-parameters.adoc[]
+include::{snippets}/sensors/device-create/http-response.adoc[]
+include::{snippets}/sensors/device-create/request-fields.adoc[]
+include::{snippets}/sensors/device-create/response-fields.adoc[]
+include::{snippets}/sensors/device-update/http-request.adoc[]
+include::{snippets}/sensors/device-update/path-parameters.adoc[]
+include::{snippets}/sensors/device-update/http-response.adoc[]
+include::{snippets}/sensors/device-update/request-fields.adoc[]
+include::{snippets}/sensors/device-update/response-fields.adoc[]
+include::{snippets}/sensors/device-active/http-request.adoc[]
+include::{snippets}/sensors/device-active/path-parameters.adoc[]
+include::{snippets}/sensors/device-active/http-response.adoc[]
+include::{snippets}/sensors/device-active/request-fields.adoc[]
+include::{snippets}/sensors/device-active/response-fields.adoc[]
+include::{snippets}/sensors/device-claim/http-request.adoc[]
+include::{snippets}/sensors/device-claim/path-parameters.adoc[]
+include::{snippets}/sensors/device-claim/http-response.adoc[]
+include::{snippets}/sensors/device-claim/request-fields.adoc[]
+include::{snippets}/sensors/device-claim/response-fields.adoc[]
+
+=== 시계열과 현재 환경
+`space-series`는 `day`, `week`, `month` 조회 범위를 지원하며 진행 중인 마지막 데이터에만
+`partial`을 포함할 수 있습니다.
+include::{snippets}/sensors/series/http-request.adoc[]
+include::{snippets}/sensors/series/path-parameters.adoc[]
+include::{snippets}/sensors/series/query-parameters.adoc[]
+include::{snippets}/sensors/series/http-response.adoc[]
+include::{snippets}/sensors/series/response-fields.adoc[]
+include::{snippets}/sensors/environment/http-request.adoc[]
+include::{snippets}/sensors/environment/path-parameters.adoc[]
+include::{snippets}/sensors/environment/http-response.adoc[]
+include::{snippets}/sensors/environment/response-fields.adoc[]
+
+=== 임계치 룰
+외부 기수 규칙 API는 JWT 인증 주체를 사용하는 외부 API입니다.
+내부 규칙 엔진에 데이터를 전달하는 `internal-threshold-rules`는 별도의 내부 Basic 인증을 사용하며,
+이 단독 구성 테스트에서는 컨트롤러의 요청·응답 본문만 확인합니다.
+include::{snippets}/sensors/internal-threshold-rules/http-request.adoc[]
+include::{snippets}/sensors/internal-threshold-rules/http-response.adoc[]
+include::{snippets}/sensors/internal-threshold-rules/response-fields.adoc[]
+include::{snippets}/sensors/threshold-rule-create/http-request.adoc[]
+include::{snippets}/sensors/threshold-rule-create/path-parameters.adoc[]
+include::{snippets}/sensors/threshold-rule-create/http-response.adoc[]
+include::{snippets}/sensors/threshold-rule-create/request-fields.adoc[]
+include::{snippets}/sensors/threshold-rule-create/response-fields.adoc[]
+include::{snippets}/sensors/threshold-rule-update/http-request.adoc[]
+include::{snippets}/sensors/threshold-rule-update/path-parameters.adoc[]
+include::{snippets}/sensors/threshold-rule-update/http-response.adoc[]
+include::{snippets}/sensors/threshold-rule-update/request-fields.adoc[]
+include::{snippets}/sensors/threshold-rule-update/response-fields.adoc[]
+include::{snippets}/sensors/threshold-rule-list/http-request.adoc[]
+include::{snippets}/sensors/threshold-rule-list/path-parameters.adoc[]
+include::{snippets}/sensors/threshold-rule-list/http-response.adoc[]
+include::{snippets}/sensors/threshold-rule-list/response-fields.adoc[]
+include::{snippets}/sensors/space-threshold-list/http-request.adoc[]
+include::{snippets}/sensors/space-threshold-list/path-parameters.adoc[]
+include::{snippets}/sensors/space-threshold-list/http-response.adoc[]
+include::{snippets}/sensors/space-threshold-list/response-fields.adoc[]
+include::{snippets}/sensors/space-threshold-apply/http-request.adoc[]
+include::{snippets}/sensors/space-threshold-apply/path-parameters.adoc[]
+include::{snippets}/sensors/space-threshold-apply/http-response.adoc[]
+include::{snippets}/sensors/space-threshold-apply/request-fields.adoc[]
+include::{snippets}/sensors/space-threshold-apply/response-fields.adoc[]

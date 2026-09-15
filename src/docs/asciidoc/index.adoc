@@ -1,74 +1,67 @@
-= Learning Service 핵심 API 계약
+= Learning Service 전체 REST API 계약
 :toc: left
 :toclevels: 2
 :source-highlighter: highlight.js
+:snippets: {projectdir}/target/generated-snippets
 
-이 문서는 Controller 계약 테스트가 생성한 실제 요청과 응답을 조합한다.
-`mvn test` 후 `mvn prepare-package -DskipTests`를 실행하면
-`target/generated-docs/index.html`이 생성된다.
+이 문서는 컨트롤러 계약 테스트에서 생성한 실제 HTTP 요청·응답 문서 조각을 도메인별로 구성합니다.
+WebSocket, AMQP, Actuator는 REST API와 구분해 별도의 통신 경계로 설명합니다.
+`./mvnw clean verify`를 실행하면 `target/generated-docs/index.html`에서 완성된 문서를 확인할 수 있습니다.
 
-== 사용자 프로필
+include::domains/user-profile.adoc[]
 
-=== 내 프로필 조회
+include::domains/cohort-core.adoc[]
 
-include::{snippets}/user-profile/get-my-profile/http-request.adoc[]
-include::{snippets}/user-profile/get-my-profile/http-response.adoc[]
+include::domains/cohort-joining.adoc[]
 
-== 기수
+include::domains/cohort-management.adoc[]
 
-=== 출결 정책 조회
+include::domains/attendance.adoc[]
 
-include::{snippets}/cohort/get-attendance-policy/http-request.adoc[]
-include::{snippets}/cohort/get-attendance-policy/http-response.adoc[]
+include::domains/study-records.adoc[]
 
-== 출결
+include::domains/timer.adoc[]
 
-=== 내 출결 목록 조회
+include::domains/study-statistics.adoc[]
 
-include::{snippets}/attendance/get-my-records/http-request.adoc[]
-include::{snippets}/attendance/get-my-records/http-response.adoc[]
+include::domains/spaces.adoc[]
 
-== 커뮤니티
+include::domains/vacancy-alerts.adoc[]
 
-=== 게시글 목록 조회
+include::domains/occupancy.adoc[]
 
-include::{snippets}/community/get-posts/http-request.adoc[]
-include::{snippets}/community/get-posts/http-response.adoc[]
+include::domains/teams.adoc[]
 
-== 게이미피케이션
+include::domains/community.adoc[]
 
-=== 캐릭터 마스터 조회
+include::domains/gamification.adoc[]
 
-include::{snippets}/gamification/get-characters/http-request.adoc[]
-include::{snippets}/gamification/get-characters/http-response.adoc[]
+include::domains/ranking.adoc[]
 
-=== 대표 캐릭터 생성
+include::domains/presence.adoc[]
 
-include::{snippets}/gamification/create-representative-character/http-request.adoc[]
-include::{snippets}/gamification/create-representative-character/http-response.adoc[]
+include::domains/sensors.adoc[]
 
-== Presence
+include::domains/environment.adoc[]
 
-=== 내 기수 Presence snapshot 조회
+include::domains/prediction.adoc[]
 
-현재 확정된 사용자 항목은 `userId`, `status`뿐이다. 닉네임 및 캐릭터 표시는
-별도의 계약 결정 전까지 응답에 포함되지 않는다.
+include::domains/telegram.adoc[]
 
-include::{snippets}/presence/get-my-cohort-snapshot/http-request.adoc[]
-include::{snippets}/presence/get-my-cohort-snapshot/http-response.adoc[]
+include::domains/security.adoc[]
 
-=== Presence heartbeat
+include::domains/chat.adoc[]
 
-주기적으로 호출한다. 최초 호출은 세션 등록, 이후 호출은 TTL 연장으로 동작하며
-응답에 현재 snapshot을 함께 반환한다.
-`X-Presence-Session`은 View(BFF)가 생성해 전달하는 세션 식별자이며 Browser에 노출하지 않는다.
+== REST 외 통신 경계
 
-include::{snippets}/presence/heartbeat/http-request.adoc[]
-include::{snippets}/presence/heartbeat/http-response.adoc[]
+=== WebSocket
 
-=== Presence 이탈 통지
+재실 상태의 실시간 전송은 `/ws/**` 핸드셰이크와 STOMP 구독으로 동작하며 REST API 문서에는 포함하지 않습니다.
 
-TTL 만료를 기다리지 않고 즉시 제거한다. 호출이 실패해도 heartbeat가 멈추면 TTL로 정리된다.
+=== AMQP
 
-include::{snippets}/presence/leave/http-request.adoc[]
-include::{snippets}/presence/leave/http-response.adoc[]
+RabbitMQ를 통해 Rule 품질 데이터를 소비하고 복구 큐를 처리하는 방식은 HTTP 엔드포인트와 구분되는 메시지 계약입니다.
+
+=== Actuator
+
+운영 관측 엔드포인트는 REST 업무 API와 구분합니다. `/actuator/health`와 `/actuator/prometheus`의 접근 범위는 운영 설정을 따릅니다.

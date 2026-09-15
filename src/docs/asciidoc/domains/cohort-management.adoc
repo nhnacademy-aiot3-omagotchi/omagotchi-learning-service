@@ -1,0 +1,82 @@
+== 기수 멤버·관리자·출결 정책 API
+
+=== 기수 멤버 조회
+
+`GET /api/v1/cohorts/{cohort-id}/members`
+
+include::{snippets}/cohort-management/get-members/http-request.adoc[]
+include::{snippets}/cohort-management/get-members/path-parameters.adoc[]
+include::{snippets}/cohort-management/get-members/http-response.adoc[]
+include::{snippets}/cohort-management/get-members/response-fields.adoc[]
+
+=== 사용자별 관리자 기수 조회
+
+`POST /api/v1/cohorts/managers/search`
+
+최대 100명의 사용자 식별자를 받아 각 사용자가 관리하는 기수를 반환합니다.
+
+include::{snippets}/cohort-management/search-managers/http-request.adoc[]
+include::{snippets}/cohort-management/search-managers/request-fields.adoc[]
+include::{snippets}/cohort-management/search-managers/http-response.adoc[]
+include::{snippets}/cohort-management/search-managers/response-fields.adoc[]
+
+=== 기수 관리자 지정
+
+`POST /api/v1/cohorts/{cohort-id}/managers`
+
+`SYSTEM_ADMIN`이 지정한 사용자를 기수 관리자로 등록합니다.
+
+include::{snippets}/cohort-management/assign-manager/http-request.adoc[]
+include::{snippets}/cohort-management/assign-manager/path-parameters.adoc[]
+include::{snippets}/cohort-management/assign-manager/request-fields.adoc[]
+include::{snippets}/cohort-management/assign-manager/http-response.adoc[]
+include::{snippets}/cohort-management/assign-manager/response-fields.adoc[]
+
+=== 기수 멤버 역할 변경
+
+`PATCH /api/v1/cohorts/{cohort-id}/members/{member-user-id}/role`
+
+`SYSTEM_ADMIN`이 활성 구성원의 기수 역할을 변경합니다.
+
+include::{snippets}/cohort-management/change-member-role/http-request.adoc[]
+include::{snippets}/cohort-management/change-member-role/path-parameters.adoc[]
+include::{snippets}/cohort-management/change-member-role/request-fields.adoc[]
+include::{snippets}/cohort-management/change-member-role/http-response.adoc[]
+include::{snippets}/cohort-management/change-member-role/response-fields.adoc[]
+
+=== 출결 정책 조회
+
+`GET /api/v1/cohorts/{cohort-id}/attendance-policy`
+
+include::{snippets}/cohort/get-attendance-policy/http-request.adoc[]
+include::{snippets}/cohort/get-attendance-policy/path-parameters.adoc[]
+include::{snippets}/cohort/get-attendance-policy/http-response.adoc[]
+include::{snippets}/cohort/get-attendance-policy/response-fields.adoc[]
+
+=== 출결 정책 저장
+
+`PUT /api/v1/cohorts/{cohort-id}/attendance-policy`
+
+출결 시간대, 운영 시간, 결석 판정 시각과 허용 자리비움 시간을 저장합니다.
+
+include::{snippets}/cohort-management/save-attendance-policy/http-request.adoc[]
+include::{snippets}/cohort-management/save-attendance-policy/path-parameters.adoc[]
+include::{snippets}/cohort-management/save-attendance-policy/request-fields.adoc[]
+include::{snippets}/cohort-management/save-attendance-policy/http-response.adoc[]
+include::{snippets}/cohort-management/save-attendance-policy/response-fields.adoc[]
+
+=== 대표 검증 오류
+
+일반 사용자가 관리자 검색을 요청하면 `403 Forbidden`을 반환합니다.
+
+include::{snippets}/cohort-management/search-managers-forbidden/http-request.adoc[]
+include::{snippets}/cohort-management/search-managers-forbidden/request-fields.adoc[]
+include::{snippets}/cohort-management/search-managers-forbidden/http-response.adoc[]
+include::{snippets}/cohort-management/search-managers-forbidden/response-fields.adoc[]
+
+관리자 검색의 `userIds`가 비어 있으면 `400 Bad Request`를 반환합니다.
+
+include::{snippets}/cohort-management/search-managers-invalid/http-request.adoc[]
+include::{snippets}/cohort-management/search-managers-invalid/request-fields.adoc[]
+include::{snippets}/cohort-management/search-managers-invalid/http-response.adoc[]
+include::{snippets}/cohort-management/search-managers-invalid/response-fields.adoc[]

@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.delete;
 import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.get;
@@ -40,6 +41,8 @@ import org.springframework.restdocs.payload.FieldDescriptor;
 import org.springframework.restdocs.request.ParameterDescriptor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
+import site.omagotchi.learningservice.community.application.CommunityErrorCode;
 import site.omagotchi.learningservice.community.application.CommunityPostCommandService;
 import site.omagotchi.learningservice.community.application.CommunityPostQueryService;
 import site.omagotchi.learningservice.community.application.attachment.CommunityAttachmentDownload;
@@ -52,6 +55,7 @@ import site.omagotchi.learningservice.community.application.query.CommunityPostD
 import site.omagotchi.learningservice.community.application.query.CommunityPostListItem;
 import site.omagotchi.learningservice.community.application.query.CommunityPostPage;
 import site.omagotchi.learningservice.community.domain.CommunityPostType;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
 import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 import site.omagotchi.learningservice.support.LearningRestDocsTest;
@@ -579,5 +583,62 @@ class CommunityPostControllerTest {
                         new CommunityAttachmentMetadata(
                                 20L, "community/1/20", "note.txt", "text/plain", 2L, 0)),
                 true);
+    }
+
+    @Test
+    @DisplayName("인증 없는 게시글 조회 거절")
+    void rejectsMissingAuthentication() throws Exception {
+        // Given: 인증 없는 게시글 조회 거절
+
+        // When & Then
+        mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/community/posts/{post-id}", COHORT_ID, 1L))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"))
+                .andDo(document("community/missing-authentication", responseFields(errorFields())));
+    }
+
+    @Test
+    @DisplayName("소속 없는 사용자의 게시글 조회 거절")
+    void rejectsMissingMembership() throws Exception {
+        // Given: 소속 없는 사용자의 게시글 조회 거절
+        given(communityPostQueryService.getPost(USER_ID, COHORT_ID, 1L))
+                .willThrow(new BusinessException(CohortErrorCode.COHORT_NOT_FOUND));
+        // When & Then
+        mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/community/posts/{post-id}", COHORT_ID, 1L)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("COHORT_NOT_FOUND"))
+                .andDo(document("community/missing-membership", responseFields(errorFields())));
+    }
+
+    @Test
+    @DisplayName("관리 권한 없는 게시글 삭제 거절")
+    void rejectsDeniedCommand() throws Exception {
+        // Given: 관리 권한 없는 게시글 삭제 거절
+        willThrow(new BusinessException(CommunityErrorCode.POST_ACCESS_DENIED))
+                .given(communityPostCommandService)
+                .delete(USER_ID, COHORT_ID, 1L);
+        // When & Then
+        mockMvc.perform(delete(
+                                "/api/v1/cohorts/{cohort-id}/community/posts/{post-id}",
+                                COHORT_ID,
+                                1L)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("COMMUNITY_POST_ACCESS_DENIED"))
+                .andDo(document("community/access-denied", responseFields(errorFields())));
+    }
+
+    private static FieldDescriptor[] errorFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("code").description("오류 코드"),
+            fieldWithPath("message").description("오류 메시지"),
+            fieldWithPath("path").description("요청 경로"),
+            fieldWithPath("requestId").optional().description("요청 추적 ID")
+        };
     }
 }

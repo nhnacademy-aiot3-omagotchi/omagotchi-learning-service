@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.restdocs.headers.HeaderDocumentation.headerWithName;
@@ -40,10 +41,12 @@ import org.springframework.restdocs.payload.FieldDescriptor;
 import org.springframework.restdocs.request.ParameterDescriptor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.exception.CommonErrorCode;
 import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
 import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 import site.omagotchi.learningservice.study.application.StudyRecordCommandService;
+import site.omagotchi.learningservice.study.application.StudyRecordErrorCode;
 import site.omagotchi.learningservice.study.application.StudyRecordQueryService;
 import site.omagotchi.learningservice.study.application.command.CreateStudyRecordCommand;
 import site.omagotchi.learningservice.study.application.command.UpdateStudyRecordCommand;
@@ -506,5 +509,41 @@ class StudyRecordControllerTest {
 
     private static ParameterDescriptor studyRecordId() {
         return parameterWithName("study-record-id").description("학습 기록 식별자");
+    }
+
+    @Test
+    @DisplayName("없는 학습 기록 조회")
+    void rejectsMissingRecord() throws Exception {
+        // Given: 없는 학습 기록 조회
+        given(studyRecordQueryService.getRecord(USER_ID, COHORT_ID, STUDY_RECORD_ID))
+                .willThrow(new BusinessException(StudyRecordErrorCode.NOT_FOUND));
+        // When & Then
+        mockMvc.perform(get(
+                                "/api/v1/cohorts/{cohort-id}/study-records/{study-record-id}",
+                                COHORT_ID,
+                                STUDY_RECORD_ID)
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("STUDY_RECORD_NOT_FOUND"))
+                .andDo(document("study-records/not-found", responseFields(errorFields())));
+    }
+
+    @Test
+    @DisplayName("오래된 버전의 학습 기록 삭제 거절")
+    void rejectsStaleVersion() throws Exception {
+        // Given: 오래된 버전의 학습 기록 삭제 거절
+        willThrow(new BusinessException(StudyRecordErrorCode.VERSION_CONFLICT))
+                .given(studyRecordCommandService)
+                .delete(USER_ID, COHORT_ID, STUDY_RECORD_ID, EXPECTED_VERSION);
+        // When & Then
+        mockMvc.perform(delete(
+                                "/api/v1/cohorts/{cohort-id}/study-records/{study-record-id}",
+                                COHORT_ID,
+                                STUDY_RECORD_ID)
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .header("X-RESOURCE-VERSION", EXPECTED_VERSION))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("STUDY_RECORD_VERSION_CONFLICT"))
+                .andDo(document("study-records/version-conflict", responseFields(errorFields())));
     }
 }

@@ -82,5 +82,22 @@ include::{snippets}/community/pin-post/response-fields.adoc[]
 
 === 대표 오류
 필수 항목인 제목, 내용, 유형, 고정 여부가 없거나 길이 제한을 넘으면 `400 Bad Request`와 `COMMON_INVALID_REQUEST`를 반환합니다.
-인증이 없으면 `401`, 인증은 되었지만 해당 기수 소속 또는 관리 권한이 없으면
-서비스 정책에 따라 `404 Not Found` 또는 `403 Forbidden`으로 변환합니다.
+인증이 없으면 `401`과 `AUTH_AUTHENTICATION_REQUIRED`를 반환합니다. 활성 소속이 없는 사용자의 조회·첨부 요청은 `404`와 `COHORT_NOT_FOUND`, 게시글 변경 권한이 없는 사용자의 명령 요청은 `403`과 `COMMUNITY_POST_ACCESS_DENIED`를 반환합니다.
+
+인증 없이 게시글을 조회하면 `AUTH_AUTHENTICATION_REQUIRED`를 반환합니다.
+
+include::{snippets}/community/missing-authentication/http-request.adoc[]
+include::{snippets}/community/missing-authentication/http-response.adoc[]
+include::{snippets}/community/missing-authentication/response-fields.adoc[]
+
+활성 기수 소속 없이 게시글을 조회하면 `COHORT_NOT_FOUND`를 반환합니다.
+
+include::{snippets}/community/missing-membership/http-request.adoc[]
+include::{snippets}/community/missing-membership/http-response.adoc[]
+include::{snippets}/community/missing-membership/response-fields.adoc[]
+
+관리 권한 없이 게시글을 삭제하면 `COMMUNITY_POST_ACCESS_DENIED`를 반환합니다.
+
+include::{snippets}/community/access-denied/http-request.adoc[]
+include::{snippets}/community/access-denied/http-response.adoc[]
+include::{snippets}/community/access-denied/response-fields.adoc[]

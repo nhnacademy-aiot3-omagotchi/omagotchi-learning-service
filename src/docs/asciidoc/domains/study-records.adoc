@@ -1,9 +1,5 @@
 == 학습 기록
 
-이 문서는 MockMvc를 단독으로 구성한 학습 기록 컨트롤러 계약 테스트에서 생성한 요청과 응답 예시를 안내합니다.
-테스트에서는 인증 주체를 직접 주입해 컨트롤러의 응답 계약을 검증합니다.
-JWT 인증·인가 보안 흐름 자체를 검증한 결과는 포함하지 않습니다.
-
 === 공통 계약
 
 * 모든 경로는 `/api/v1` 접두사를 사용합니다.
@@ -109,3 +105,15 @@ include::{snippets}/study-records/create-invalid-time/response-fields.adoc[]
 include::{snippets}/study-records/update-invalid-time/http-request.adoc[]
 include::{snippets}/study-records/update-invalid-time/http-response.adoc[]
 include::{snippets}/study-records/update-invalid-time/response-fields.adoc[]
+
+학습 기록이 없으면 `404`와 `STUDY_RECORD_NOT_FOUND`를 반환합니다.
+
+include::{snippets}/study-records/not-found/http-request.adoc[]
+include::{snippets}/study-records/not-found/http-response.adoc[]
+include::{snippets}/study-records/not-found/response-fields.adoc[]
+
+삭제 요청의 버전이 오래되었으면 `409`와 `STUDY_RECORD_VERSION_CONFLICT`를 반환합니다.
+
+include::{snippets}/study-records/version-conflict/http-request.adoc[]
+include::{snippets}/study-records/version-conflict/http-response.adoc[]
+include::{snippets}/study-records/version-conflict/response-fields.adoc[]

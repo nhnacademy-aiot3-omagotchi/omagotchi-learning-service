@@ -87,4 +87,34 @@ include::{snippets}/cohort-joining/reject-membership/response-fields.adoc[]
 === 핵심 오류
 
 빈 `expiresAt`, 빈 거절 사유 등 검증 실패는 `400 Bad Request`와 `COMMON_INVALID_REQUEST`를 반환합니다.
-존재하지 않는 가입 코드·소속은 `404` 계열 도메인 오류로, 이미 처리된 신청이나 권한 충돌은 `409` 계열 도메인 오류로 변환됩니다.
+존재하지 않는 가입 코드·소속은 `404`, 중복 가입 신청은 `409`를 반환합니다. 이미 처리된 신청을 다시 처리하면 `400`과 `MEMBERSHIP_INVALID_STATUS_TRANSITION`을 반환합니다.
+
+가입 코드가 존재하지 않으면 `JOIN_CODE_NOT_FOUND`를 반환합니다.
+
+include::{snippets}/cohort-joining/join-code-not-found/http-request.adoc[]
+include::{snippets}/cohort-joining/join-code-not-found/http-response.adoc[]
+include::{snippets}/cohort-joining/join-code-not-found/response-fields.adoc[]
+
+이미 대기 중이거나 활성 상태인 소속에 가입을 신청하면 `MEMBERSHIP_DUPLICATED`를 반환합니다.
+
+include::{snippets}/cohort-joining/duplicate-membership/http-request.adoc[]
+include::{snippets}/cohort-joining/duplicate-membership/http-response.adoc[]
+include::{snippets}/cohort-joining/duplicate-membership/response-fields.adoc[]
+
+거절할 가입 신청이 존재하지 않으면 `MEMBERSHIP_NOT_FOUND`를 반환합니다.
+
+include::{snippets}/cohort-joining/membership-not-found/http-request.adoc[]
+include::{snippets}/cohort-joining/membership-not-found/http-response.adoc[]
+include::{snippets}/cohort-joining/membership-not-found/response-fields.adoc[]
+
+이미 처리된 가입 신청을 다시 거절하면 `MEMBERSHIP_INVALID_STATUS_TRANSITION`을 반환합니다.
+
+include::{snippets}/cohort-joining/processed-membership/http-request.adoc[]
+include::{snippets}/cohort-joining/processed-membership/http-response.adoc[]
+include::{snippets}/cohort-joining/processed-membership/response-fields.adoc[]
+
+거절 사유가 비어 있으면 `COMMON_INVALID_REQUEST`를 반환합니다.
+
+include::{snippets}/cohort-joining/blank-reason/http-request.adoc[]
+include::{snippets}/cohort-joining/blank-reason/http-response.adoc[]
+include::{snippets}/cohort-joining/blank-reason/response-fields.adoc[]

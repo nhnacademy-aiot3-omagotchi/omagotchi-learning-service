@@ -29,6 +29,7 @@ import org.springframework.restdocs.request.ParameterDescriptor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.cohort.application.CohortAttendancePolicyService;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.application.CohortManagerLookupService;
 import site.omagotchi.learningservice.cohort.application.CohortManagerService;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
@@ -46,6 +47,7 @@ import site.omagotchi.learningservice.cohort.domain.CohortJoinCodeStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
+import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
 import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 import site.omagotchi.learningservice.support.LearningRestDocsTest;
@@ -366,6 +368,104 @@ class CohortJoiningDocumentationTest {
             fieldWithPath("[].rejectionReason").description("거절 사유"),
             fieldWithPath("[].endedAt").description("소속 종료 시각"),
             fieldWithPath("[].nickname").description("사용자 닉네임")
+        };
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 가입 코드 거절")
+    void rejectsMissingJoinCode() throws Exception {
+        // Given: 존재하지 않는 가입 코드 거절
+        given(membershipService.join(any(), eq(USER_ID)))
+                .willThrow(new BusinessException(CohortErrorCode.JOIN_CODE_NOT_FOUND));
+        // When & Then
+        mockMvc.perform(post("/api/v1/cohorts/join-requests")
+                        .content("{\"joinCode\":\"ABCD2345\"}")
+                        .header(HttpHeaders.AUTHORIZATION, bearer())
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("JOIN_CODE_NOT_FOUND"))
+                .andDo(document(
+                        "cohort-joining/join-code-not-found",
+                        responseFields(errorFields())));
+    }
+
+    @Test
+    @DisplayName("중복 가입 신청 거절")
+    void rejectsDuplicateMembership() throws Exception {
+        // Given: 중복 가입 신청 거절
+        given(membershipService.join(any(), eq(USER_ID)))
+                .willThrow(new BusinessException(CohortErrorCode.COHORT_MEMBERSHIP_DUPLICATED));
+        // When & Then
+        mockMvc.perform(post("/api/v1/cohorts/join-requests")
+                        .content("{\"joinCode\":\"ABCD2345\"}")
+                        .header(HttpHeaders.AUTHORIZATION, bearer())
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MEMBERSHIP_DUPLICATED"))
+                .andDo(document(
+                        "cohort-joining/duplicate-membership",
+                        responseFields(errorFields())));
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 가입 신청 거절")
+    void rejectsMissingMembership() throws Exception {
+        // Given: 존재하지 않는 가입 신청 거절
+        given(membershipService.reject(eq(MEMBERSHIP_ID), any(), eq(USER_ID)))
+                .willThrow(new BusinessException(CohortErrorCode.COHORT_MEMBERSHIP_NOT_FOUND));
+        // When & Then
+        mockMvc.perform(patch("/api/v1/cohort-memberships/{membership-id}/reject", MEMBERSHIP_ID)
+                        .content("{\"reason\":\"기간 종료\"}")
+                        .header(HttpHeaders.AUTHORIZATION, bearer())
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("MEMBERSHIP_NOT_FOUND"))
+                .andDo(document(
+                        "cohort-joining/membership-not-found",
+                        responseFields(errorFields())));
+    }
+
+    @Test
+    @DisplayName("이미 처리된 가입 신청 거절")
+    void rejectsProcessedMembership() throws Exception {
+        // Given: 이미 처리된 가입 신청 거절
+        given(membershipService.reject(eq(MEMBERSHIP_ID), any(), eq(USER_ID)))
+                .willThrow(
+                        new BusinessException(
+                                CohortErrorCode.INVALID_MEMBERSHIP_STATUS_TRANSITION));
+        // When & Then
+        mockMvc.perform(patch("/api/v1/cohort-memberships/{membership-id}/reject", MEMBERSHIP_ID)
+                        .content("{\"reason\":\"기간 종료\"}")
+                        .header(HttpHeaders.AUTHORIZATION, bearer())
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MEMBERSHIP_INVALID_STATUS_TRANSITION"))
+                .andDo(document(
+                        "cohort-joining/processed-membership",
+                        responseFields(errorFields())));
+    }
+
+    @Test
+    @DisplayName("가입 거절 사유 누락 시 400 응답")
+    void rejectsBlankReason() throws Exception {
+        // Given: 가입 거절 사유 누락 시 400 응답
+
+        // When & Then
+        mockMvc.perform(patch("/api/v1/cohort-memberships/{membership-id}/reject", MEMBERSHIP_ID)
+                        .content("{\"reason\":\"\"}")
+                        .header(HttpHeaders.AUTHORIZATION, bearer())
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON_INVALID_REQUEST"))
+                .andDo(document("cohort-joining/blank-reason", responseFields(errorFields())));
+    }
+
+    private static FieldDescriptor[] errorFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("code").description("오류 코드"),
+            fieldWithPath("message").description("오류 메시지"),
+            fieldWithPath("path").description("요청 경로"),
+            fieldWithPath("requestId").optional().description("요청 추적 ID")
         };
     }
 }

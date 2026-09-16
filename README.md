@@ -28,8 +28,37 @@
 - 로컬 PostgreSQL·Redis: 불필요
 
 ```bash
-./mvnw verify
+./mvnw clean verify
 ```
+
+`clean verify`는 테스트를 생략하지 않고 Controller 계약 테스트로
+`target/generated-snippets/`를 만든 뒤, Spring REST Docs 조각을 조합해
+`target/generated-docs/index.html`을 생성한다.
+
+`clean`이 `target/` 전체를 삭제하므로, 문서 조각과 HTML은 같은 명령의
+테스트·문서화 단계가 다시 실행된 뒤에 생긴다. IntelliJ IDEA에서 확인할 때도 소스 문서
+`src/docs/asciidoc/index.adoc`가 참조하는 조각은 `target/generated-snippets/`,
+최종 HTML은 `target/generated-docs/index.html`에서 찾는다. IntelliJ IDEA에서
+개별 요청을 확인하려면 테스트 실행 후 `target/generated-snippets/<domain>/<id>/`
+아래의 `http-request.adoc`, `http-response.adoc`, `request-fields.adoc`,
+`response-fields.adoc`, `path-parameters.adoc`, `query-parameters.adoc`를 연다.
+REST Docs의 `document()` 식별자와 Asciidoctor의 `snippets` attribute가 같은 경로를
+사용한다. 테스트가 request/response snippet을 자동 생성하고, 개발자가 각 테스트의
+`document()` 식별자·필드 설명과 `src/docs/asciidoc/index.adoc`의 domain include를 관리한다.
+
+Controller HTTP 계약과 REST Docs는 `@WebMvcTest`와 `@AutoConfigureRestDocs`로 검증한다.
+대상 Controller와 실제 Security/JWT 설정을 로드하고 서비스·오류 로깅 경계는
+`@MockitoBean`으로 격리한다. 주입받은 `MockMvc`를 그대로 사용하며,
+인증이 필요한 요청에는 `TestJwtKeyConfig`로 발급한 JWT를 Authorization 헤더에 명시한다.
+JWT의 주체·역할은 해당 테스트의 서비스 입력 검증과 일치시킨다.
+내부 Basic 인증과 simulator는 각 경로의 실제 설정·프로필을 사용한다.
+
+검증 순서는 HTTP 상태·응답 assertion 이후 `document()`이며, 기존 문서 ID를 유지한다.
+새 API에는 정상 응답뿐 아니라 의미 있는 validation·인증 실패 조건도 검증한다.
+MVC slice와 별도로 서비스 단위 테스트, 하류 HTTP 계약 테스트, 전체 통합 테스트를 유지한다.
+
+새 테스트의 어노테이션·줄바꿈·메서드 DisplayName·Given/When/Then 형식은
+[컨트롤러 테스트 작성 기준](docs/testing/controller-test-style.md)을 따른다.
 
 ## 로컬 실행
 
@@ -155,7 +184,8 @@ echo "누락된 키:"; comm -23 /tmp/req.txt /tmp/have.txt
 - `/api/v1/telegram/**`: 사용자 Telegram 연동
 - `/api/v1/threshold-rules/**`: 센서 임계치 기준
 
-- 최신 세부 계약: Spring REST Docs 기반 산출물로 관리 예정
+- 최신 세부 계약: [REST Docs source index](src/docs/asciidoc/index.adoc)와 테스트가 생성한
+  [HTML 산출물](target/generated-docs/index.html)
 - Frontend 연동 구현 요청서: [`docs/api/Frontend-Learning-Integration-Task-Brief.md`](docs/api/Front-LearningService/Frontend-Learning-Integration-Task-Brief.md)
 - Frontend 상세 API 계약: [`docs/api/Frontend-Learning-API-Integration-Handoff.md`](docs/api/Front-LearningService/Frontend-Learning-API-Integration-Handoff.md)
 - 위 인수인계 문서를 제외한 기존 `docs/api/` 문서는 과거 작업 참고 자료이며 최신 계약 근거로 사용하지 않음

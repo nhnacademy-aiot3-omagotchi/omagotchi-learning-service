@@ -1,0 +1,42 @@
+== 관리자 학습 통계
+
+=== 오늘 통계 조회
+
+include::{snippets}/study-statistics/get-today/http-request.adoc[]
+include::{snippets}/study-statistics/get-today/path-parameters.adoc[]
+include::{snippets}/study-statistics/get-today/http-response.adoc[]
+include::{snippets}/study-statistics/get-today/response-fields.adoc[]
+
+=== 기간 추이 조회
+
+include::{snippets}/study-statistics/get-trend/http-request.adoc[]
+include::{snippets}/study-statistics/get-trend/path-parameters.adoc[]
+include::{snippets}/study-statistics/get-trend/query-parameters.adoc[]
+include::{snippets}/study-statistics/get-trend/http-response.adoc[]
+include::{snippets}/study-statistics/get-trend/response-fields.adoc[]
+
+=== 수강생 통계 목록 조회
+
+`window`로 조회 기간을 지정하고 `page`, `size`, `sort`로 목록을 조정합니다.
+
+include::{snippets}/study-statistics/get-members/http-request.adoc[]
+include::{snippets}/study-statistics/get-members/path-parameters.adoc[]
+include::{snippets}/study-statistics/get-members/query-parameters.adoc[]
+include::{snippets}/study-statistics/get-members/http-response.adoc[]
+include::{snippets}/study-statistics/get-members/response-fields.adoc[]
+
+=== 수강생 상세 통계 조회
+
+include::{snippets}/study-statistics/get-member-overview/http-request.adoc[]
+include::{snippets}/study-statistics/get-member-overview/path-parameters.adoc[]
+include::{snippets}/study-statistics/get-member-overview/query-parameters.adoc[]
+include::{snippets}/study-statistics/get-member-overview/http-response.adoc[]
+include::{snippets}/study-statistics/get-member-overview/response-fields.adoc[]
+
+=== 수강생 일별 학습 기록 조회
+
+include::{snippets}/study-statistics/get-member-daily-records/http-request.adoc[]
+include::{snippets}/study-statistics/get-member-daily-records/path-parameters.adoc[]
+include::{snippets}/study-statistics/get-member-daily-records/query-parameters.adoc[]
+include::{snippets}/study-statistics/get-member-daily-records/http-response.adoc[]
+include::{snippets}/study-statistics/get-member-daily-records/response-fields.adoc[]

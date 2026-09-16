@@ -1,0 +1,24 @@
+== 공실 알림 및 관리자 점유 조회
+
+서비스 계층에서 수행하는 공간 접근 권한 판정은 모의 응답을 사용하므로 검증하지 않습니다.
+
+=== 공실 알림 신청
+include::{snippets}/spaces/request-vacancy-alert/http-request.adoc[]
+include::{snippets}/spaces/request-vacancy-alert/path-parameters.adoc[]
+include::{snippets}/spaces/request-vacancy-alert/request-fields.adoc[]
+include::{snippets}/spaces/request-vacancy-alert/http-response.adoc[]
+
+=== 내 공실 알림 목록 조회
+include::{snippets}/spaces/list-my-vacancy-alerts/http-request.adoc[]
+include::{snippets}/spaces/list-my-vacancy-alerts/http-response.adoc[]
+include::{snippets}/spaces/list-my-vacancy-alerts/response-fields.adoc[]
+
+=== 공실 알림 취소
+include::{snippets}/spaces/cancel-vacancy-alert/http-request.adoc[]
+include::{snippets}/spaces/cancel-vacancy-alert/path-parameters.adoc[]
+include::{snippets}/spaces/cancel-vacancy-alert/http-response.adoc[]
+
+=== 관리자 활성 점유 목록 조회
+include::{snippets}/spaces/list-active-occupancies/http-request.adoc[]
+include::{snippets}/spaces/list-active-occupancies/http-response.adoc[]
+include::{snippets}/spaces/list-active-occupancies/response-fields.adoc[]

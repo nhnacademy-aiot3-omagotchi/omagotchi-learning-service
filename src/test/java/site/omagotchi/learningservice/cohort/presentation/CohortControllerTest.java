@@ -1,75 +1,67 @@
 package site.omagotchi.learningservice.cohort.presentation;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.patch;
+import static org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath;
+import static org.springframework.restdocs.payload.PayloadDocumentation.requestFields;
+import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
+import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
+import static org.springframework.restdocs.request.RequestDocumentation.pathParameters;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static site.omagotchi.learningservice.support.RestDocs.document;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.restdocs.test.autoconfigure.AutoConfigureRestDocs;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.restdocs.payload.FieldDescriptor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.cohort.application.CohortAttendancePolicyService;
+import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
 import site.omagotchi.learningservice.cohort.application.CohortManagerLookupService;
 import site.omagotchi.learningservice.cohort.application.CohortManagerService;
 import site.omagotchi.learningservice.cohort.application.CohortMembershipService;
 import site.omagotchi.learningservice.cohort.application.CohortService;
 import site.omagotchi.learningservice.cohort.application.JoinCodeService;
 import site.omagotchi.learningservice.cohort.application.UserAccessContextService;
-import site.omagotchi.learningservice.cohort.application.command.SaveAttendancePolicyCommand;
 import site.omagotchi.learningservice.cohort.application.command.AssignCohortManagerCommand;
-import site.omagotchi.learningservice.cohort.application.result.CohortAttendancePolicyResponse;
+import site.omagotchi.learningservice.cohort.application.command.ChangeCohortMemberRoleCommand;
+import site.omagotchi.learningservice.cohort.application.command.SaveAttendancePolicyCommand;
 import site.omagotchi.learningservice.cohort.application.result.CohortAccessSummary;
+import site.omagotchi.learningservice.cohort.application.result.CohortAttendancePolicyResponse;
+import site.omagotchi.learningservice.cohort.application.result.CohortMembershipResponse;
+import site.omagotchi.learningservice.cohort.application.result.ManagedCohortResult;
 import site.omagotchi.learningservice.cohort.application.result.UserAccessContextResult;
 import site.omagotchi.learningservice.cohort.application.result.UserAccessType;
 import site.omagotchi.learningservice.cohort.application.result.UserManagedCohortsResult;
-import site.omagotchi.learningservice.cohort.application.result.ManagedCohortResult;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
-import site.omagotchi.learningservice.cohort.application.CohortErrorCode;
+import site.omagotchi.learningservice.cohort.domain.CohortMembershipStatus;
 import site.omagotchi.learningservice.cohort.domain.CohortStatus;
 import site.omagotchi.learningservice.global.auth.GlobalRole;
 import site.omagotchi.learningservice.global.exception.BusinessException;
 import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
-import site.omagotchi.learningservice.global.security.JwtAuthorityConfig;
-import site.omagotchi.learningservice.global.security.JwtConfig;
-import site.omagotchi.learningservice.global.security.JwtProperties;
-import site.omagotchi.learningservice.global.security.SecurityConfig;
-import site.omagotchi.learningservice.global.security.SecurityErrorResponseHandler;
 import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
-
-import java.time.LocalTime;
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.UUID;
-
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import site.omagotchi.learningservice.support.LearningRestDocsTest;
 
 @WebMvcTest(controllers = CohortController.class)
-@Import({
-        SecurityConfig.class,
-        JwtConfig.class,
-        JwtAuthorityConfig.class,
-        SecurityErrorResponseHandler.class,
-        TestJwtKeyConfig.class
-})
-@EnableConfigurationProperties(JwtProperties.class)
-@ActiveProfiles("test")
-@AutoConfigureRestDocs(outputDir = "target/generated-snippets")
 @DisplayName("기수 API")
+@LearningRestDocsTest
 class CohortControllerTest {
 
     private static final Long COHORT_ID = 1L;
@@ -127,8 +119,7 @@ class CohortControllerTest {
                 .andExpect(jsonPath("$.accessType").value("COHORT_MANAGER"))
                 .andExpect(jsonPath("$.managedCohorts[0].cohortId").value(COHORT_ID))
                 .andExpect(jsonPath("$.managedCohorts[0].status").value("PREPARING"))
-                .andExpect(jsonPath("$.studentCohorts").isEmpty())
-                .andDo(document("cohort/get-my-access-context"));
+                .andExpect(jsonPath("$.studentCohorts").isEmpty());
 
         verify(userAccessContextService).getContext(USER_ID, GlobalRole.USER);
     }
@@ -136,7 +127,7 @@ class CohortControllerTest {
     @Test
     @DisplayName("SYSTEM_ADMIN은 전체 기수 요약을 조회한다")
     void getsSystemAdminCohortSummaries() throws Exception {
-        given(cohortService.getAdminSummaries(any())).willReturn(java.util.List.of());
+        given(cohortService.getAdminSummaries(any())).willReturn(List.of());
 
         mockMvc.perform(get("/api/v1/cohorts/admin-summary")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue("SYSTEM_ADMIN")))
@@ -183,7 +174,9 @@ class CohortControllerTest {
                 .willReturn(policyResponse());
 
         mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/attendance-policy", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cohortId").value(COHORT_ID))
                 .andExpect(jsonPath("$.timezone").value("Asia/Seoul"))
@@ -191,7 +184,10 @@ class CohortControllerTest {
                 .andExpect(jsonPath("$.scheduledEndTime").value("18:00:00"))
                 .andExpect(jsonPath("$.absenceCutoffTime").value("10:00:00"))
                 .andExpect(jsonPath("$.allowedAwayMinutes").value(30))
-                .andDo(document("cohort/get-attendance-policy"));
+                .andDo(document(
+                        "cohort/get-attendance-policy",
+                        pathParameters(parameterWithName("cohort-id").description("기수 식별자")),
+                        responseFields(policyResponseFields())));
 
         verify(attendancePolicyService).getPolicy(COHORT_ID, USER_ID, GlobalRole.USER);
     }
@@ -213,20 +209,28 @@ class CohortControllerTest {
         )).willReturn(policyResponse());
 
         mockMvc.perform(put("/api/v1/cohorts/{cohort-id}/attendance-policy", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "timezone": "Asia/Seoul",
-                                  "scheduledStartTime": "09:00:00",
-                                  "scheduledEndTime": "18:00:00",
-                                  "absenceCutoffTime": "10:00:00",
-                                  "allowedAwayMinutes": 30
-                                }
-                                """))
+                        .content(
+                                """
+                        {
+                          "timezone": "Asia/Seoul",
+                          "scheduledStartTime": "09:00:00",
+                          "scheduledEndTime": "18:00:00",
+                          "absenceCutoffTime": "10:00:00",
+                          "allowedAwayMinutes": 30
+                        }
+                        """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cohortId").value(COHORT_ID))
-                .andExpect(jsonPath("$.allowedAwayMinutes").value(30));
+                .andExpect(jsonPath("$.allowedAwayMinutes").value(30))
+                .andDo(document(
+                        "cohort-management/save-attendance-policy",
+                        pathParameters(parameterWithName("cohort-id").description("기수 식별자")),
+                        requestFields(policyRequestFields()),
+                        responseFields(policyResponseFields())));
 
         verify(attendancePolicyService).savePolicy(
                 COHORT_ID,
@@ -282,24 +286,252 @@ class CohortControllerTest {
     @DisplayName("일반 사용자의 기수 운영 권한 조회는 403이다")
     void rejectsManagedCohortSearchForNonAdmin() throws Exception {
         mockMvc.perform(post("/api/v1/cohorts/managers/search")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"userIds": ["%s"]}
-                                """.formatted(USER_ID)))
-                .andExpect(status().isForbidden());
+                        .content(
+                                """
+                        {"userIds": ["%s"]}
+                        """
+                                        .formatted(USER_ID)))
+                .andExpect(status().isForbidden())
+                .andDo(document(
+                        "cohort-management/search-managers-forbidden",
+                        requestFields(
+                                fieldWithPath("userIds").description("조회할 사용자 식별자 목록"),
+                                fieldWithPath("userIds[]").description("사용자 식별자")),
+                        responseFields(errorFields())));
     }
 
     @Test
     @DisplayName("빈 userIds 요청은 400이다")
     void rejectsEmptyUserIds() throws Exception {
         mockMvc.perform(post("/api/v1/cohorts/managers/search")
-                        .header(HttpHeaders.AUTHORIZATION,
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
                                 "Bearer " + TestJwtKeyConfig.issue("SYSTEM_ADMIN"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"userIds": []}
-                                """))
-                .andExpect(status().isBadRequest());
+                        .content(
+                                """
+                        {"userIds": []}
+                        """))
+                .andExpect(status().isBadRequest())
+                .andDo(document(
+                        "cohort-management/search-managers-invalid",
+                        requestFields(fieldWithPath("userIds").description("비어 있는 사용자 식별자 목록")),
+                        responseFields(errorFields())));
+    }
+
+    @Test
+    @DisplayName("활성 기수원 목록 조회")
+    void getsMembers() throws Exception {
+        // Given: 기수원 목록 응답 준비
+        given(membershipService.getMembers(COHORT_ID, USER_ID))
+                .willReturn(List.of(memberResponse()));
+
+        // When & Then
+        mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/members", COHORT_ID)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].nickname").value("테스트사용자"))
+                .andDo(document(
+                        "cohort-management/get-members",
+                        pathParameters(parameterWithName("cohort-id").description("기수 식별자")),
+                        responseFields(memberListFields())));
+    }
+
+    @Test
+    @DisplayName("사용자별 관리 기수 조회")
+    void searchesManagedCohortsWithDocumentation() throws Exception {
+        // Given: 관리 기수 조회 응답 준비
+        given(managerLookupService.findManagedCohorts(any(), eq(GlobalRole.SYSTEM_ADMIN)))
+                .willReturn(
+                        List.of(
+                                new UserManagedCohortsResult(
+                                        USER_ID,
+                                        List.of(
+                                                new ManagedCohortResult(
+                                                        COHORT_ID,
+                                                        "테스트 기수",
+                                                        CohortMembershipRole.MANAGER)))));
+
+        // When & Then
+        mockMvc.perform(post("/api/v1/cohorts/managers/search")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue("SYSTEM_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userIds\":[\"" + USER_ID + "\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].cohorts[0].role").value("MANAGER"))
+                .andDo(document(
+                        "cohort-management/search-managers",
+                        requestFields(
+                                fieldWithPath("userIds").description("조회할 사용자 식별자 목록"),
+                                fieldWithPath("userIds[]").description("사용자 식별자")),
+                        responseFields(managedCohortListFields())));
+    }
+
+    @Test
+    @DisplayName("기수 관리자 지정")
+    void assignsManager() throws Exception {
+        // Given: 관리자 지정 요청과 응답 준비
+        UUID managerId = UUID.fromString("019d2a48-80c0-4d6a-9a15-0b16d2dd74f2");
+        given(
+                        managerService.assignManager(
+                                eq(COHORT_ID),
+                                eq(new AssignCohortManagerCommand(managerId)),
+                                eq(USER_ID),
+                                eq(GlobalRole.SYSTEM_ADMIN)))
+                .willReturn(memberResponse(managerId, CohortMembershipRole.MANAGER));
+
+        // When & Then
+        mockMvc.perform(post("/api/v1/cohorts/{cohort-id}/managers", COHORT_ID)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue("SYSTEM_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":\"" + managerId + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(managerId.toString()))
+                .andExpect(jsonPath("$.role").value("MANAGER"))
+                .andDo(document(
+                        "cohort-management/assign-manager",
+                        pathParameters(parameterWithName("cohort-id").description("기수 식별자")),
+                        requestFields(fieldWithPath("userId").description("관리자로 지정할 사용자 식별자")),
+                        responseFields(memberFields())));
+    }
+
+    @Test
+    @DisplayName("기수원 역할 변경")
+    void changesMemberRole() throws Exception {
+        // Given: 역할 변경 요청과 응답 준비
+        UUID memberId = UUID.fromString("019d2a48-80c0-4d6a-9a15-0b16d2dd74f2");
+        given(
+                        managerService.changeMemberRole(
+                                eq(COHORT_ID),
+                                eq(memberId),
+                                eq(new ChangeCohortMemberRoleCommand(CohortMembershipRole.MENTOR)),
+                                eq(USER_ID),
+                                eq(GlobalRole.SYSTEM_ADMIN)))
+                .willReturn(memberResponse(memberId, CohortMembershipRole.MENTOR));
+
+        // When & Then
+        mockMvc.perform(patch(
+                                "/api/v1/cohorts/{cohort-id}/members/{member-user-id}/role",
+                                COHORT_ID,
+                                memberId)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue("SYSTEM_ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"MENTOR\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(memberId.toString()))
+                .andExpect(jsonPath("$.role").value("MENTOR"))
+                .andDo(document(
+                        "cohort-management/change-member-role",
+                        pathParameters(
+                                parameterWithName("cohort-id").description("기수 식별자"),
+                                parameterWithName("member-user-id")
+                                        .description("역할을 변경할 사용자 식별자")),
+                        requestFields(fieldWithPath("role").description("변경할 기수 역할")),
+                        responseFields(memberFields())));
+    }
+
+    private CohortMembershipResponse memberResponse() {
+        return memberResponse(USER_ID, CohortMembershipRole.STUDENT);
+    }
+
+    private CohortMembershipResponse memberResponse(UUID userId, CohortMembershipRole role) {
+        return new CohortMembershipResponse(
+                10L,
+                COHORT_ID,
+                userId,
+                role,
+                CohortMembershipStatus.ACTIVE,
+                OffsetDateTime.parse("2026-01-01T09:00:00+09:00"),
+                OffsetDateTime.parse("2026-01-01T09:05:00+09:00"),
+                USER_ID,
+                null,
+                null,
+                "테스트사용자");
+    }
+
+    private static FieldDescriptor[] memberFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("id").description("소속 식별자"),
+                    fieldWithPath("cohortId").description("기수 식별자"),
+                    fieldWithPath("userId").description("사용자 식별자"),
+            fieldWithPath("role").description("기수 역할"),
+                    fieldWithPath("status").description("소속 상태"),
+                    fieldWithPath("requestedAt").description("가입 요청 시각"),
+            fieldWithPath("processedAt").description("처리 시각"),
+                    fieldWithPath("processedByUserId").description("처리한 사용자 식별자"),
+                    fieldWithPath("rejectionReason").description("거절 사유 (nullable)"),
+            fieldWithPath("endedAt").description("소속 종료 시각 (nullable)"),
+                    fieldWithPath("nickname").description("사용자 닉네임 (nullable)")
+        };
+    }
+
+    private static FieldDescriptor[] memberListFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("[].id").description("소속 식별자"),
+                    fieldWithPath("[].cohortId").description("기수 식별자"),
+                    fieldWithPath("[].userId").description("사용자 식별자"),
+            fieldWithPath("[].role").description("기수 역할"),
+                    fieldWithPath("[].status").description("소속 상태"),
+                    fieldWithPath("[].requestedAt").description("가입 요청 시각"),
+            fieldWithPath("[].processedAt").description("처리 시각"),
+                    fieldWithPath("[].processedByUserId").description("처리한 사용자 식별자"),
+                    fieldWithPath("[].rejectionReason").description("거절 사유"),
+            fieldWithPath("[].endedAt").description("소속 종료 시각"),
+                    fieldWithPath("[].nickname").description("사용자 닉네임")
+        };
+    }
+
+    private static FieldDescriptor[] managedCohortListFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("[].userId").description("사용자 식별자"),
+            fieldWithPath("[].cohorts").description("사용자가 관리하는 기수 목록"),
+            fieldWithPath("[].cohorts[].cohortId").description("기수 식별자"),
+            fieldWithPath("[].cohorts[].cohortName").description("기수 이름"),
+            fieldWithPath("[].cohorts[].role").description("관리 역할")
+        };
+    }
+
+    private static FieldDescriptor[] policyRequestFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("timezone").description("출결 기준 시간대"),
+            fieldWithPath("scheduledStartTime").description("정규 시작 시각"),
+            fieldWithPath("scheduledEndTime").description("정규 종료 시각"),
+            fieldWithPath("absenceCutoffTime").description("결석 판정 시각 (nullable)"),
+            fieldWithPath("allowedAwayMinutes").description("허용 자리비움 시간(분)")
+        };
+    }
+
+    private static FieldDescriptor[] policyResponseFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("cohortId").description("기수 식별자"),
+                    fieldWithPath("timezone").description("출결 기준 시간대"),
+                    fieldWithPath("scheduledStartTime").description("정규 시작 시각"),
+            fieldWithPath("scheduledEndTime").description("정규 종료 시각"),
+                    fieldWithPath("absenceCutoffTime").description("결석 판정 시각"),
+                    fieldWithPath("allowedAwayMinutes").description("허용 자리비움 시간(분)"),
+            fieldWithPath("updatedByUserId").description("수정한 사용자 식별자"),
+                    fieldWithPath("updatedAt").description("수정 시각")
+        };
+    }
+
+    private static FieldDescriptor[] errorFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("code").description("오류 코드"),
+                    fieldWithPath("message").description("오류 메시지"),
+            fieldWithPath("path").description("오류 요청 경로"),
+                    fieldWithPath("requestId").description("요청 추적 식별자 (없으면 null)")
+        };
     }
 }

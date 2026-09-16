@@ -1,0 +1,103 @@
+== 커뮤니티 게시글
+
+이 문서는 실제 보안 설정을 적용한 커뮤니티 컨트롤러의 `@WebMvcTest` 계약 테스트에서 생성한 예시를 안내합니다.
+모든 요청에는 JWT 인증이 필요합니다. 활성 상태인 기수 소속 여부와 게시글별 관리 권한은 서비스 계층에서 확인합니다.
+이 문서의 테스트는 실제 `SecurityConfig`의 인증·인가 진입점과 컨트롤러 위임을 확인하지만,
+서비스 계층의 소속 및 권한 판정 자체는 검증하지 않습니다.
+
+=== 게시글 목록
+include::{snippets}/community/get-posts/http-request.adoc[]
+include::{snippets}/community/get-posts/path-parameters.adoc[]
+include::{snippets}/community/get-posts/query-parameters.adoc[]
+include::{snippets}/community/get-posts/http-response.adoc[]
+include::{snippets}/community/get-posts/response-fields.adoc[]
+
+=== 게시글 단건
+include::{snippets}/community/get-post/http-request.adoc[]
+include::{snippets}/community/get-post/path-parameters.adoc[]
+include::{snippets}/community/get-post/http-response.adoc[]
+include::{snippets}/community/get-post/response-fields.adoc[]
+
+=== 첨부파일 다운로드
+바이너리 응답은 원본 `Content-Type`, UTF-8로 인코딩한 `Content-Disposition` 파일명, `nosniff` 값을 반환합니다.
+include::{snippets}/community/download-attachment/http-request.adoc[]
+include::{snippets}/community/download-attachment/path-parameters.adoc[]
+include::{snippets}/community/download-attachment/http-response.adoc[]
+
+=== 첨부파일 썸네일
+썸네일은 5분 동안 `private` 캐시를 사용하며 `Content-Disposition` 헤더는 반환하지 않습니다.
+include::{snippets}/community/preview-attachment/http-request.adoc[]
+include::{snippets}/community/preview-attachment/path-parameters.adoc[]
+include::{snippets}/community/preview-attachment/http-response.adoc[]
+
+=== 첨부파일 삭제
+include::{snippets}/community/delete-attachment/http-request.adoc[]
+include::{snippets}/community/delete-attachment/path-parameters.adoc[]
+include::{snippets}/community/delete-attachment/http-response.adoc[]
+
+=== 게시글 작성 JSON
+include::{snippets}/community/create-post/http-request.adoc[]
+include::{snippets}/community/create-post/path-parameters.adoc[]
+include::{snippets}/community/create-post/request-fields.adoc[]
+include::{snippets}/community/create-post/http-response.adoc[]
+include::{snippets}/community/create-post/response-fields.adoc[]
+
+=== 게시글 작성 multipart
+`post` JSON 파트와 선택 사항인 `attachments` 파일 파트를 `multipart/form-data`로 전송합니다.
+include::{snippets}/community/create-post-multipart/http-request.adoc[]
+include::{snippets}/community/create-post-multipart/path-parameters.adoc[]
+include::{snippets}/community/create-post-multipart/request-parts.adoc[]
+include::{snippets}/community/create-post-multipart/request-part-post-fields.adoc[]
+include::{snippets}/community/create-post-multipart/http-response.adoc[]
+include::{snippets}/community/create-post-multipart/response-fields.adoc[]
+
+=== 게시글 수정 JSON
+include::{snippets}/community/update-post/http-request.adoc[]
+include::{snippets}/community/update-post/path-parameters.adoc[]
+include::{snippets}/community/update-post/request-fields.adoc[]
+include::{snippets}/community/update-post/http-response.adoc[]
+include::{snippets}/community/update-post/response-fields.adoc[]
+
+=== 게시글 수정 multipart
+`post` JSON 파트와 선택 사항인 `attachments` 파일 파트로 본문과 첨부 파일을 함께 수정합니다.
+include::{snippets}/community/update-post-multipart/http-request.adoc[]
+include::{snippets}/community/update-post-multipart/path-parameters.adoc[]
+include::{snippets}/community/update-post-multipart/request-parts.adoc[]
+include::{snippets}/community/update-post-multipart/request-part-post-fields.adoc[]
+include::{snippets}/community/update-post-multipart/http-response.adoc[]
+include::{snippets}/community/update-post-multipart/response-fields.adoc[]
+
+=== 게시글 삭제
+include::{snippets}/community/delete-post/http-request.adoc[]
+include::{snippets}/community/delete-post/path-parameters.adoc[]
+include::{snippets}/community/delete-post/http-response.adoc[]
+
+=== 게시글 고정
+`pinned=true`는 공지를 고정하고, `false`는 고정을 해제합니다.
+include::{snippets}/community/pin-post/http-request.adoc[]
+include::{snippets}/community/pin-post/path-parameters.adoc[]
+include::{snippets}/community/pin-post/request-fields.adoc[]
+include::{snippets}/community/pin-post/http-response.adoc[]
+include::{snippets}/community/pin-post/response-fields.adoc[]
+
+=== 대표 오류
+필수 항목인 제목, 내용, 유형, 고정 여부가 없거나 길이 제한을 넘으면 `400 Bad Request`와 `COMMON_INVALID_REQUEST`를 반환합니다.
+인증이 없으면 `401`과 `AUTH_AUTHENTICATION_REQUIRED`를 반환합니다. 활성 소속이 없는 사용자의 조회·첨부 요청은 `404`와 `COHORT_NOT_FOUND`, 게시글 변경 권한이 없는 사용자의 명령 요청은 `403`과 `COMMUNITY_POST_ACCESS_DENIED`를 반환합니다.
+
+인증 없이 게시글을 조회하면 `AUTH_AUTHENTICATION_REQUIRED`를 반환합니다.
+
+include::{snippets}/community/missing-authentication/http-request.adoc[]
+include::{snippets}/community/missing-authentication/http-response.adoc[]
+include::{snippets}/community/missing-authentication/response-fields.adoc[]
+
+활성 기수 소속 없이 게시글을 조회하면 `COHORT_NOT_FOUND`를 반환합니다.
+
+include::{snippets}/community/missing-membership/http-request.adoc[]
+include::{snippets}/community/missing-membership/http-response.adoc[]
+include::{snippets}/community/missing-membership/response-fields.adoc[]
+
+관리 권한 없이 게시글을 삭제하면 `COMMUNITY_POST_ACCESS_DENIED`를 반환합니다.
+
+include::{snippets}/community/access-denied/http-request.adoc[]
+include::{snippets}/community/access-denied/http-response.adoc[]
+include::{snippets}/community/access-denied/response-fields.adoc[]

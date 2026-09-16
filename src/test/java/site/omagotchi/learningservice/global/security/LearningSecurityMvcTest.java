@@ -1,69 +1,65 @@
 package site.omagotchi.learningservice.global.security;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.startsWith;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.restdocs.headers.HeaderDocumentation.headerWithName;
+import static org.springframework.restdocs.headers.HeaderDocumentation.responseHeaders;
+import static org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath;
+import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static site.omagotchi.learningservice.support.RestDocs.document;
+
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.restdocs.payload.FieldDescriptor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
 import site.omagotchi.learningservice.global.requestid.RequestId;
+import site.omagotchi.learningservice.sensor.application.ThresholdRuleService;
+import site.omagotchi.learningservice.sensor.application.result.UpdateThresholdRuleResult;
+import site.omagotchi.learningservice.sensor.presentation.ThresholdRuleController;
 import site.omagotchi.learningservice.space.application.SpaceCommandService;
 import site.omagotchi.learningservice.space.application.SpaceQueryService;
 import site.omagotchi.learningservice.space.presentation.SpaceAdminController;
 import site.omagotchi.learningservice.space.presentation.SpaceQueryController;
-import site.omagotchi.learningservice.sensor.application.ThresholdRuleService;
-import site.omagotchi.learningservice.sensor.application.result.UpdateThresholdRuleResult;
-import site.omagotchi.learningservice.sensor.presentation.ThresholdRuleController;
+import site.omagotchi.learningservice.support.LearningRestDocsTest;
 import site.omagotchi.learningservice.telegram.application.TelegramUserLinkService;
 import site.omagotchi.learningservice.telegram.application.TelegramWebhookService;
-import site.omagotchi.learningservice.telegram.presentation.TelegramWebhookAuthenticator;
 import site.omagotchi.learningservice.telegram.application.result.TelegramUserLinkResult;
 import site.omagotchi.learningservice.telegram.presentation.TelegramController;
+import site.omagotchi.learningservice.telegram.presentation.TelegramWebhookAuthenticator;
 import site.omagotchi.learningservice.telegram.presentation.TelegramWebhookController;
 
-import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.UUID;
-
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.startsWith;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-@WebMvcTest(controllers = {
-        ThresholdRuleController.class,
-        TelegramController.class,
-        TelegramWebhookController.class,
-        SpaceAdminController.class,
-        SpaceQueryController.class
-})
-@Import({
-        SecurityConfig.class,
-        JwtConfig.class,
-        JwtAuthorityConfig.class,
-        SecurityErrorResponseHandler.class,
-        TestJwtKeyConfig.class
-})
-@EnableConfigurationProperties(JwtProperties.class)
-@ActiveProfiles("test")
+@WebMvcTest(
+        controllers = {
+            ThresholdRuleController.class,
+            TelegramController.class,
+            TelegramWebhookController.class,
+            SpaceAdminController.class,
+            SpaceQueryController.class
+        })
+@LearningRestDocsTest
 class LearningSecurityMvcTest {
 
     private static final UUID USER_ID = UUID.fromString(TestJwtKeyConfig.USER_ID);
@@ -141,14 +137,14 @@ class LearningSecurityMvcTest {
         ResultActions result = mockMvc.perform(get("/api/v1/telegram/link"));
 
         // Then
-        result
-                .andExpect(status().isUnauthorized())
-                .andExpect(header().string(
-                        HttpHeaders.WWW_AUTHENTICATE,
-                        startsWith("Bearer")
-                ))
+        result.andExpect(status().isUnauthorized())
+                .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, startsWith("Bearer")))
                 .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"))
-                .andExpect(jsonPath("$.path").value("/api/v1/telegram/link"));
+                .andExpect(jsonPath("$.path").value("/api/v1/telegram/link"))
+                .andDo(document(
+                        "security/protected-no-jwt",
+                        responseHeaders(headerWithName(HttpHeaders.WWW_AUTHENTICATE).description("Bearer 인증 요구 정보")),
+                        responseFields(errorFields())));
         verifyNoInteractions(telegramUserLinkService);
     }
 
@@ -197,13 +193,16 @@ class LearningSecurityMvcTest {
                 .content("{}"));
 
         // Then
-        result
-                .andExpect(status().isForbidden())
-                .andExpect(header().string(
-                        HttpHeaders.WWW_AUTHENTICATE,
-                        containsString("error=\"insufficient_scope\"")
-                ))
-                .andExpect(jsonPath("$.code").value("AUTH_ACCESS_DENIED"));
+        result.andExpect(status().isForbidden())
+                .andExpect(
+                        header().string(
+                                        HttpHeaders.WWW_AUTHENTICATE,
+                                        containsString("error=\"insufficient_scope\"")))
+                .andExpect(jsonPath("$.code").value("AUTH_ACCESS_DENIED"))
+                .andDo(document(
+                        "security/system-admin-forbidden",
+                        responseHeaders(headerWithName(HttpHeaders.WWW_AUTHENTICATE).description("권한 부족 정보")),
+                        responseFields(errorFields())));
     }
 
     @Test
@@ -217,9 +216,7 @@ class LearningSecurityMvcTest {
                         .header("X-Global-Role", "SYSTEM_ADMIN"))
                 .andExpect(status().isNoContent());
 
-        verify(spaceCommandService).delete(
-                1L,
-                USER_ID);
+        verify(spaceCommandService).delete(1L, USER_ID);
     }
 
     @Test
@@ -315,5 +312,14 @@ class LearningSecurityMvcTest {
                 OffsetDateTime.parse("2026-07-29T00:00:00Z"),
                 null
         );
+    }
+
+    private static FieldDescriptor[] errorFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("code").description("오류 코드"),
+            fieldWithPath("message").description("오류 메시지"),
+            fieldWithPath("path").description("오류 요청 경로"),
+            fieldWithPath("requestId").description("요청 추적 식별자")
+        };
     }
 }

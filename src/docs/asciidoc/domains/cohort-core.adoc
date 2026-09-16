@@ -1,0 +1,90 @@
+== 기수 핵심 API
+
+=== 기수 생성
+
+`POST /api/v1/cohorts`
+
+include::{snippets}/cohort-core/create/http-request.adoc[]
+include::{snippets}/cohort-core/create/request-fields.adoc[]
+include::{snippets}/cohort-core/create/http-response.adoc[]
+include::{snippets}/cohort-core/create/response-fields.adoc[]
+
+=== 전체 기수 조회
+
+`GET /api/v1/cohorts`
+
+include::{snippets}/cohort-core/get-all/http-request.adoc[]
+include::{snippets}/cohort-core/get-all/http-response.adoc[]
+include::{snippets}/cohort-core/get-all/response-fields.adoc[]
+
+=== 관리자용 기수 요약 조회
+
+`GET /api/v1/cohorts/admin-summary`
+
+`SYSTEM_ADMIN` 권한으로 전체 기수와 활성 구성원 수, 관리자 식별자를 조회합니다.
+
+include::{snippets}/cohort-core/get-admin-summary/http-request.adoc[]
+include::{snippets}/cohort-core/get-admin-summary/http-response.adoc[]
+include::{snippets}/cohort-core/get-admin-summary/response-fields.adoc[]
+
+=== 내 접근 컨텍스트 조회
+
+`GET /api/v1/cohorts/me/access-context`
+
+전역 역할과 기수 소속을 조합해 첫 화면과 접근 가능한 기수 목록을 결정합니다.
+
+include::{snippets}/cohort-core/get-my-access-context/http-request.adoc[]
+include::{snippets}/cohort-core/get-my-access-context/http-response.adoc[]
+include::{snippets}/cohort-core/get-my-access-context/response-fields.adoc[]
+
+=== 기수 단건 조회
+
+`GET /api/v1/cohorts/{cohort-id}`
+
+include::{snippets}/cohort-core/get/http-request.adoc[]
+include::{snippets}/cohort-core/get/path-parameters.adoc[]
+include::{snippets}/cohort-core/get/http-response.adoc[]
+include::{snippets}/cohort-core/get/response-fields.adoc[]
+
+=== 기수 기본 정보 수정
+
+`PATCH /api/v1/cohorts/{cohort-id}`
+
+기수 관리자가 이름·설명·운영 기간을 수정합니다.
+
+include::{snippets}/cohort-core/update/http-request.adoc[]
+include::{snippets}/cohort-core/update/path-parameters.adoc[]
+include::{snippets}/cohort-core/update/request-fields.adoc[]
+include::{snippets}/cohort-core/update/http-response.adoc[]
+include::{snippets}/cohort-core/update/response-fields.adoc[]
+
+=== 기수 상태 변경
+
+`PATCH /api/v1/cohorts/{cohort-id}/status`
+
+`SYSTEM_ADMIN` 권한으로 `PREPARING`에서 `ACTIVE`, `ACTIVE`에서 `CLOSED`로 상태를 변경합니다.
+
+include::{snippets}/cohort-core/change-status/http-request.adoc[]
+include::{snippets}/cohort-core/change-status/path-parameters.adoc[]
+include::{snippets}/cohort-core/change-status/request-fields.adoc[]
+include::{snippets}/cohort-core/change-status/http-response.adoc[]
+include::{snippets}/cohort-core/change-status/response-fields.adoc[]
+
+=== 기수 삭제
+
+`DELETE /api/v1/cohorts/{cohort-id}`
+
+`PREPARING` 상태의 기수만 삭제할 수 있으며 성공 시 `204 No Content`를 반환합니다.
+
+include::{snippets}/cohort-core/delete/http-request.adoc[]
+include::{snippets}/cohort-core/delete/path-parameters.adoc[]
+include::{snippets}/cohort-core/delete/http-response.adoc[]
+
+=== 대표 검증 오류
+
+필수 생성 필드가 비어 있으면 `400 Bad Request`와 공통 오류 본문을 반환합니다.
+
+include::{snippets}/cohort-core/create-invalid/http-request.adoc[]
+include::{snippets}/cohort-core/create-invalid/request-fields.adoc[]
+include::{snippets}/cohort-core/create-invalid/http-response.adoc[]
+include::{snippets}/cohort-core/create-invalid/response-fields.adoc[]

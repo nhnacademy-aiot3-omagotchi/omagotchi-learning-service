@@ -365,10 +365,16 @@
                             <backend>html</backend>
                             <doctype>book</doctype>
                             <sourceDirectory>${project.basedir}/src/docs/asciidoc</sourceDirectory>
+                            <sourceDocumentName>index.adoc</sourceDocumentName>
                             <outputDirectory>${project.build.directory}/generated-docs</outputDirectory>
                             <attributes>
                                 <snippets>${project.build.directory}/generated-snippets</snippets>
                             </attributes>
+                            <logHandler>
+                                <failIf>
+                                    <severity>WARN</severity>
+                                </failIf>
+                            </logHandler>
                         </configuration>
                     </execution>
                 </executions>

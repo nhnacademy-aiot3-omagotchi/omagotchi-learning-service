@@ -1,0 +1,22 @@
+== 환경 센서 이벤트 및 IoT 시뮬레이터
+
+=== 센서 이벤트 조회
+
+include::{snippets}/environment/get-sensor-events/http-request.adoc[]
+include::{snippets}/environment/get-sensor-events/path-parameters.adoc[]
+include::{snippets}/environment/get-sensor-events/query-parameters.adoc[]
+include::{snippets}/environment/get-sensor-events/http-response.adoc[]
+include::{snippets}/environment/get-sensor-events/response-fields.adoc[]
+
+=== IoT 시뮬레이터 명령 실행
+
+`environment.iot.simulator.enabled=true`일 때만 컨트롤러가 등록됩니다.
+요청에는 `X-iot-TOKEN` 공유 토큰과 명령 본문을 사용하며, `success` 쿼리 파라미터의 기본값은 `true`입니다.
+
+include::{snippets}/environment/simulate-iot/http-request.adoc[]
+include::{snippets}/environment/simulate-iot/path-parameters.adoc[]
+include::{snippets}/environment/simulate-iot/request-headers.adoc[]
+include::{snippets}/environment/simulate-iot/query-parameters.adoc[]
+include::{snippets}/environment/simulate-iot/request-fields.adoc[]
+include::{snippets}/environment/simulate-iot/http-response.adoc[]
+include::{snippets}/environment/simulate-iot/response-fields.adoc[]

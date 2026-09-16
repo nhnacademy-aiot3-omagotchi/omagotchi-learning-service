@@ -31,6 +31,9 @@
 ./mvnw clean verify
 ```
 
+배포용 Docker 빌드는 테스트와 문서 생성을 생략하고 애플리케이션 JAR만 패키징합니다.
+REST Docs 생성과 누락 검증은 PR CI의 `verify`에서 수행합니다.
+
 `clean verify`는 테스트를 생략하지 않고 Controller 계약 테스트로
 `target/generated-snippets/`를 만든 뒤, Spring REST Docs 조각을 조합해
 `target/generated-docs/index.html`을 생성한다.

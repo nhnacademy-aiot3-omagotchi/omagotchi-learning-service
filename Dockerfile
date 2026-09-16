@@ -7,7 +7,7 @@ RUN apk add --no-cache bash curl
 COPY . .
 
 RUN chmod +x mvnw \
-    && ./mvnw -B -DskipTests package
+    && ./mvnw -B -DskipTests -Dasciidoctor.skip=true package
 
 
 FROM eclipse-temurin:21-jre-alpine

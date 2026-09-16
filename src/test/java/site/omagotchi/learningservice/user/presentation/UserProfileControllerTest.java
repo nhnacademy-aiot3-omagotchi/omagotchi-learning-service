@@ -19,6 +19,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.restdocs.payload.FieldDescriptor;
+import org.springframework.restdocs.payload.JsonFieldType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.cohort.domain.CohortMembershipRole;
@@ -90,48 +92,7 @@ class UserProfileControllerTest {
                 .andExpect(jsonPath("$.currentCharacter.type").value("night"))
                 .andExpect(jsonPath("$.currentCharacter.colorId").value("pistachio"))
                 .andExpect(jsonPath("$.currentCharacter.assetKey").value("night/pistachio"))
-                .andDo(document(
-                        "user-profile/get-my-profile",
-                        responseFields(
-                                fieldWithPath("nickname").description("현재 사용자의 닉네임"),
-                                fieldWithPath("totalStudySeconds")
-                                        .description("누적 학습 시간(초)"),
-                                fieldWithPath("completedSessionCount")
-                                        .description("완료한 학습 세션 수"),
-                                fieldWithPath("attendanceStreakDays")
-                                        .description("현재 출석 연속 일수"),
-                                fieldWithPath("approvedCohort").description("현재 승인된 기수 정보"),
-                                fieldWithPath("approvedCohort.cohortId")
-                                        .description("기수 식별자"),
-                                fieldWithPath("approvedCohort.name").description("기수 이름"),
-                                fieldWithPath("approvedCohort.startDate")
-                                        .description("기수 시작일 (`yyyy-MM-dd`)"),
-                                fieldWithPath("approvedCohort.endDate")
-                                        .description("기수 종료일 (`yyyy-MM-dd`)"),
-                                fieldWithPath("approvedCohort.cohortStatus")
-                                        .description("기수 상태"),
-                                fieldWithPath("approvedCohort.role")
-                                        .description("기수 내 사용자 역할"),
-                                fieldWithPath("approvedCohort.membershipStatus")
-                                        .description("기수 소속 상태"),
-                                fieldWithPath("currentCharacter")
-                                        .description("현재 대표 캐릭터 정보"),
-                                fieldWithPath("currentCharacter.nickname")
-                                        .description("대표 캐릭터에 저장된 닉네임"),
-                                fieldWithPath("currentCharacter.level")
-                                        .description("현재 레벨"),
-                                fieldWithPath("currentCharacter.currentExp")
-                                        .description("현재 레벨에서 획득한 경험치"),
-                                fieldWithPath("currentCharacter.requiredExp")
-                                        .description("다음 레벨에 필요한 경험치"),
-                                fieldWithPath("currentCharacter.name")
-                                        .description("캐릭터 이름"),
-                                fieldWithPath("currentCharacter.type")
-                                        .description("캐릭터 타입"),
-                                fieldWithPath("currentCharacter.colorId")
-                                        .description("캐릭터 색상 식별자"),
-                                fieldWithPath("currentCharacter.assetKey")
-                                        .description("캐릭터 에셋 키"))));
+                .andDo(document("user-profile/get-my-profile", responseFields(profileFields())));
 
         verify(userProfileService).getMyProfile(USER_ID);
     }
@@ -187,5 +148,77 @@ class UserProfileControllerTest {
                                         .description("요청 추적 식별자 (없으면 null)"))));
 
         verify(userProfileService).updateNickname(USER_ID, "잘못된 닉네임!");
+    }
+
+    private static FieldDescriptor[] profileFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("nickname").description("현재 사용자의 닉네임"),
+            fieldWithPath("totalStudySeconds").description("누적 학습 시간(초)"),
+            fieldWithPath("completedSessionCount").description("완료한 학습 세션 수"),
+            fieldWithPath("attendanceStreakDays").description("현재 출석 연속 일수"),
+            fieldWithPath("approvedCohort")
+                    .type(JsonFieldType.OBJECT)
+                    .optional()
+                    .description("현재 승인된 기수 정보"),
+            fieldWithPath("approvedCohort.cohortId")
+                    .type(JsonFieldType.NUMBER)
+                    .optional()
+                    .description("기수 식별자"),
+            fieldWithPath("approvedCohort.name")
+                    .type(JsonFieldType.STRING)
+                    .optional()
+                    .description("기수 이름"),
+            fieldWithPath("approvedCohort.startDate")
+                    .type(JsonFieldType.STRING)
+                    .optional()
+                    .description("기수 시작일 (`yyyy-MM-dd`)"),
+            fieldWithPath("approvedCohort.endDate")
+                    .type(JsonFieldType.STRING)
+                    .optional()
+                    .description("기수 종료일 (`yyyy-MM-dd`)"),
+            fieldWithPath("approvedCohort.cohortStatus")
+                    .type(JsonFieldType.STRING)
+                    .optional()
+                    .description("기수 상태"),
+            fieldWithPath("approvedCohort.role")
+                    .type(JsonFieldType.STRING)
+                    .optional()
+                    .description("기수 내 사용자 역할"),
+            fieldWithPath("approvedCohort.membershipStatus")
+                    .type(JsonFieldType.STRING)
+                    .optional()
+                    .description("기수 소속 상태"),
+            fieldWithPath("currentCharacter").description("현재 대표 캐릭터 정보"),
+            fieldWithPath("currentCharacter.nickname").description("대표 캐릭터에 저장된 닉네임"),
+            fieldWithPath("currentCharacter.level").description("현재 레벨"),
+            fieldWithPath("currentCharacter.currentExp").description("현재 레벨에서 획득한 경험치"),
+            fieldWithPath("currentCharacter.requiredExp").description("다음 레벨에 필요한 경험치"),
+            fieldWithPath("currentCharacter.name").description("캐릭터 이름"),
+            fieldWithPath("currentCharacter.type").description("캐릭터 타입"),
+            fieldWithPath("currentCharacter.colorId").description("캐릭터 색상 식별자"),
+            fieldWithPath("currentCharacter.assetKey").description("캐릭터 에셋 키")
+        };
+    }
+
+    @Test
+    @DisplayName("승인된 기수 없는 프로필 조회")
+    void getsProfileWithoutCohort() throws Exception {
+        // Given: 승인된 기수가 없는 사용자
+        given(userProfileService.getMyProfile(USER_ID)).willReturn(new UserProfileResult(
+                "테스트사용자", 0L, 0L, 0, null,
+                new CurrentCharacterResult(
+                        "테스트사용자", 1, 0L, 100L,
+                        "테스트 캐릭터", "night", "pistachio", "night/pistachio")));
+
+        // When & Then
+        mockMvc.perform(get("/api/v1/user-profiles/me/profile")
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approvedCohort").isEmpty())
+                .andDo(document(
+                        "user-profile/get-my-profile-without-cohort",
+                        responseFields(profileFields())));
     }
 }

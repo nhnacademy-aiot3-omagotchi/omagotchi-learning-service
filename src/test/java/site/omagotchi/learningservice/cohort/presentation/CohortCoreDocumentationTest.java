@@ -162,11 +162,11 @@ class CohortCoreDocumentationTest {
     @DisplayName("내 접근 권한 조회")
     void getsAccessContext() throws Exception {
         // Given: 내 접근 권한 조회에 필요한 요청과 서비스 응답을 준비한다.
-        given(userAccessContextService.getContext(USER_ID, GlobalRole.SYSTEM_ADMIN))
+        given(userAccessContextService.getContext(USER_ID, GlobalRole.USER))
                 .willReturn(
                         new UserAccessContextResult(
-                                GlobalRole.SYSTEM_ADMIN,
-                                UserAccessType.SYSTEM_ADMIN,
+                                GlobalRole.USER,
+                                UserAccessType.COHORT_MANAGER,
                                 List.of(
                                         new CohortAccessSummary(
                                                 COHORT_ID,
@@ -178,9 +178,10 @@ class CohortCoreDocumentationTest {
 
         // When & Then
         mockMvc.perform(get("/api/v1/cohorts/me/access-context")
-                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                        .header(HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.globalRole").value("SYSTEM_ADMIN"))
+                .andExpect(jsonPath("$.globalRole").value("USER"))
                 .andDo(document(
                         "cohort-core/get-my-access-context",
                         responseFields(accessContextFields())));

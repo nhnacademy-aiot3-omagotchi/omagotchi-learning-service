@@ -81,7 +81,7 @@ class RuleInternalSecurityMvcTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"))
                 .andDo(document(
-                        "security/rule-access-jwt-rejected",
+                        "security/rule-invalid-credential",
                         responseHeaders(
                                 headerWithName(HttpHeaders.WWW_AUTHENTICATE)
                                         .description("Rule Basic 인증 요구 정보")),
@@ -104,10 +104,10 @@ class RuleInternalSecurityMvcTest {
                                         startsWith("Basic realm=\"omagotchi-learning-rule\"")))
                 .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"))
                 .andDo(document(
-                        "security/rule-credential-public-rejected",
+                        "security/rule-access-jwt-rejected",
                         responseHeaders(
                                 headerWithName(HttpHeaders.WWW_AUTHENTICATE)
-                                        .description("Access JWT 인증 요구 정보")),
+                                        .description("Rule Basic 인증 요구 정보")),
                         responseFields(errorFields())));
 
         verifyNoInteractions(thresholdRuleService);
@@ -119,7 +119,13 @@ class RuleInternalSecurityMvcTest {
         mockMvc.perform(get(PUBLIC_PATH).with(httpBasic(USERNAME, PASSWORD)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, startsWith("Bearer")))
-                .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"));
+                .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"))
+                .andDo(document(
+                        "security/rule-credential-public-rejected",
+                        responseHeaders(
+                                headerWithName(HttpHeaders.WWW_AUTHENTICATE)
+                                        .description("Access JWT 인증 요구 정보")),
+                        responseFields(errorFields())));
 
         verifyNoInteractions(thresholdRuleService);
     }

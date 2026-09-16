@@ -1,8 +1,5 @@
 == 회의실 점유
 
-단독으로 구성한 MockMvc 계약 테스트에서 생성한 점유 API 예시입니다. JWT 인증 주체를 직접 주입하므로
-JWT 필터 자체의 인증·인가 흐름은 이 문서에서 검증하지 않습니다.
-
 === 공간 점유
 include::{snippets}/occupancy/room-start/http-request.adoc[]
 include::{snippets}/occupancy/room-start/path-parameters.adoc[]

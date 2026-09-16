@@ -237,6 +237,7 @@ class GamificationControllerTest {
                         .header(
                                 HttpHeaders.AUTHORIZATION,
                                 "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
                 .andDo(document(
                         "gamification/get-home",
                         responseFields(
@@ -316,6 +317,7 @@ class GamificationControllerTest {
                         .header(
                                 HttpHeaders.AUTHORIZATION,
                                 "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
                 .andDo(document(
                         "gamification/get-daily-quests",
                         responseFields(
@@ -345,8 +347,7 @@ class GamificationControllerTest {
                                         .description("보상 경험치"),
                                 fieldWithPath("[].status")
                                         .type(JsonFieldType.STRING)
-                                        .description("퀘스트 상태"))))
-                .andExpect(status().isOk());
+                                        .description("퀘스트 상태"))));
     }
 
     @Test
@@ -369,6 +370,7 @@ class GamificationControllerTest {
                         .header(
                                 HttpHeaders.AUTHORIZATION,
                                 "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
                 .andDo(document(
                         "gamification/get-progression",
                         queryParameters(
@@ -397,8 +399,7 @@ class GamificationControllerTest {
                                         .description("요일 연속 학습 일수"),
                                 fieldWithPath("streakQualified")
                                         .type(JsonFieldType.BOOLEAN)
-                                        .description("연속 학습 달성 여부"))))
-                .andExpect(status().isOk());
+                                        .description("연속 학습 달성 여부"))));
     }
 
     @Test
@@ -423,6 +424,7 @@ class GamificationControllerTest {
                         .header(
                                 HttpHeaders.AUTHORIZATION,
                                 "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
                 .andDo(document(
                         "gamification/claim-daily-quest",
                         pathParameters(parameterWithName("user-daily-quest-id").description("보상 수령할 일일 퀘스트 ID")),
@@ -453,8 +455,7 @@ class GamificationControllerTest {
                                         .description("보상 경험치"),
                                 fieldWithPath("status")
                                         .type(JsonFieldType.STRING)
-                                        .description("퀘스트 상태"))))
-                .andExpect(status().isOk());
+                                        .description("퀘스트 상태"))));
     }
 
     @Test

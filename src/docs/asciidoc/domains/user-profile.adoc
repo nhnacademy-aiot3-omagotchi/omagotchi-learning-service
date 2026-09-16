@@ -35,3 +35,9 @@ include::{snippets}/user-profile/update-nickname-invalid/http-request.adoc[]
 include::{snippets}/user-profile/update-nickname-invalid/request-fields.adoc[]
 include::{snippets}/user-profile/update-nickname-invalid/http-response.adoc[]
 include::{snippets}/user-profile/update-nickname-invalid/response-fields.adoc[]
+
+승인된 기수가 없으면 `approvedCohort`는 `null`입니다.
+
+include::{snippets}/user-profile/get-my-profile-without-cohort/http-request.adoc[]
+include::{snippets}/user-profile/get-my-profile-without-cohort/http-response.adoc[]
+include::{snippets}/user-profile/get-my-profile-without-cohort/response-fields.adoc[]

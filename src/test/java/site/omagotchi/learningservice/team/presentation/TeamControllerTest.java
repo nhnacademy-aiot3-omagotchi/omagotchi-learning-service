@@ -146,7 +146,8 @@ class TeamControllerTest {
                 .andDo(document(
                         "teams/create",
                         requestFields(
-                                fieldWithPath("cohortId").description("기수 식별자 (생략 가능)"),
+                                fieldWithPath("cohortId")
+                                                .optional().description("기수 식별자 (생략 가능)"),
                                 fieldWithPath("name").description("팀 이름")),
                         responseFields(teamFields())));
 
@@ -326,5 +327,31 @@ class TeamControllerTest {
             fieldWithPath("members[].role").description("역할"),
             fieldWithPath("members[].joinedAt").description("가입 시각")
         };
+    }
+
+    @Test
+    @DisplayName("기수 생략 시 팀 생성")
+    void createsTeamWithoutCohortId() throws Exception {
+        // Given: 서비스가 사용자의 활성 기수를 선택한 응답
+        when(teamService.create(null, "테스트 팀", USER_ID))
+                .thenReturn(
+                        new TeamResult(
+                                1L,
+                                3L,
+                                "테스트 팀",
+                                OffsetDateTime.parse("2026-07-24T10:00:00+09:00")));
+
+        // When & Then
+        mockMvc.perform(post("/api/v1/teams")
+                        .header(HttpHeaders.AUTHORIZATION, bearerToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"테스트 팀\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.cohortId").value(3))
+                .andDo(document(
+                        "teams/create-without-cohort",
+                        requestFields(fieldWithPath("name").description("팀 이름")),
+                        responseFields(teamFields())));
+        verify(teamService).create(null, "테스트 팀", USER_ID);
     }
 }

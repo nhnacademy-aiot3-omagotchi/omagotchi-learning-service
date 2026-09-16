@@ -1,8 +1,6 @@
 == 팀
 
-이 문서는 MockMvc를 단독으로 구성한 팀 컨트롤러 계약 테스트에서 생성한 실제 요청과 응답 예시를 안내합니다.
 테스트는 `@AuthenticationPrincipal` 해석기를 등록하고 JWT의 `sub`를 요청자로 사용합니다.
-단독 구성 테스트이므로 Spring Security 필터 체인의 인증·인가 흐름은 검증 범위에 포함하지 않습니다.
 
 === 팀 생성
 include::{snippets}/teams/create/http-request.adoc[]
@@ -59,3 +57,12 @@ include::{snippets}/teams/disband/http-response.adoc[]
 
 필수 `targetUserId`가 없거나 팀 이름이 잘못되면 `400 Bad Request`를 반환합니다. 팀 소속이 없으면 상세 조회는 `404 Not Found`,
 `MASTER`가 아닌 사용자가 팀원 변경·위임·해체를 요청하면 서비스 계층의 오류가 `403 Forbidden`으로 변환됩니다.
+
+=== 기수 생략 시 팀 생성
+
+활성 기수가 하나일 때 `cohortId`를 생략할 수 있습니다. 기수 선택은 서비스에서 수행합니다.
+
+include::{snippets}/teams/create-without-cohort/http-request.adoc[]
+include::{snippets}/teams/create-without-cohort/request-fields.adoc[]
+include::{snippets}/teams/create-without-cohort/http-response.adoc[]
+include::{snippets}/teams/create-without-cohort/response-fields.adoc[]

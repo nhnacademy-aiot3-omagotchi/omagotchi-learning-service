@@ -101,11 +101,11 @@ class RoomOccupancyControllerTest {
 
         mockMvc.perform(post("/api/v1/spaces/{space-id}/occupancies", 1L)
                         .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andExpect(status().isCreated())
                 .andDo(document(
                         "occupancy/room-start",
                         pathParameters(parameterWithName("space-id").description("점유할 공간 ID")),
                         responseFields(occupancyFields())))
-                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.occupancyId").value(100))
                 .andExpect(jsonPath("$.spaceId").value(1))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
@@ -189,11 +189,11 @@ class RoomOccupancyControllerTest {
 
         mockMvc.perform(post("/api/v1/spaces/{space-id}/occupancies/extend", 1L)
                         .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andExpect(status().isOk())
                 .andDo(document(
                         "occupancy/room-extend",
                         pathParameters(parameterWithName("space-id").description("연장할 공간 ID")),
                         responseFields(occupancyFields())))
-                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.extensionCount").value(1))
                 .andExpect(jsonPath("$.remainingSeconds").value(1800));
 
@@ -228,10 +228,11 @@ class RoomOccupancyControllerTest {
     void returns204OnReleaseSuccess() throws Exception {
         mockMvc.perform(post("/api/v1/spaces/{space-id}/occupancies/release", 1L)
                         .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andExpect(status().isNoContent())
                 .andDo(document(
                         "occupancy/room-release",
-                        pathParameters(parameterWithName("space-id").description("반납할 공간 ID"))))
-                .andExpect(status().isNoContent());
+                        pathParameters(
+                                parameterWithName("space-id").description("반납할 공간 ID"))));
 
         verify(roomOccupancyLifecycleService).release(1L, USER_ID);
     }
@@ -265,10 +266,12 @@ class RoomOccupancyControllerTest {
         // When & Then
         mockMvc.perform(post("/api/v1/spaces/{space-id}/occupancies/force-release", 1L)
                         .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andExpect(status().isNoContent())
                 .andDo(document(
                         "occupancy/room-force-release",
-                        pathParameters(parameterWithName("space-id").description("강제 종료할 공간 ID"))))
-                .andExpect(status().isNoContent());
+                        pathParameters(
+                                parameterWithName("space-id")
+                                        .description("강제 종료할 공간 ID"))));
         verify(roomOccupancyLifecycleService).forceRelease(1L, USER_ID);
     }
 
@@ -304,13 +307,13 @@ class RoomOccupancyControllerTest {
 
         mockMvc.perform(get("/api/v1/occupancies/me")
                         .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andExpect(status().isOk())
                 .andDo(document(
                         "occupancy/my-status",
                         responseFields(
                                 fieldWithPath("inMeeting")
                                         .type(JsonFieldType.BOOLEAN)
                                         .description("현재 회의실 참여 여부"))))
-                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.inMeeting").value(false));
     }
 

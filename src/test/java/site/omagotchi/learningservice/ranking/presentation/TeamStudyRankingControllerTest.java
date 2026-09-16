@@ -89,7 +89,9 @@ class TeamStudyRankingControllerTest {
                 new MemberStudyRankingViewResult(
                         new StudyRankingBoardResult(
                                 1L, List.of(new StudyRankingEntryResult(1L, "첫째", 7200L))),
-                        new MyStudyRankingResult(1L, Optional.empty()));
+                        new MyStudyRankingResult(1L, Optional.of(
+                                        new StudyRankingEntryResult(
+                                                1L, "첫째", 7200L, true, "night", "pistachio", 3))));
         given(
                         studyRankingQueryService.getHistoricalTeamMemberView(
                                 USER_ID,
@@ -249,7 +251,15 @@ class TeamStudyRankingControllerTest {
                                     true
                             ))
                     ),
-                    new MyStudyRankingResult(1L, Optional.empty())
+                    new MyStudyRankingResult(1L, Optional.of(
+                                            new StudyRankingEntryResult(
+                                                    1L,
+                                                    "첫째",
+                                                    7200L,
+                                                    true,
+                                                    "night",
+                                                    "pistachio",
+                                                    3)))
             );
             given(studyRankingQueryService.getTodayTeamMemberView(
                     USER_ID,
@@ -279,7 +289,7 @@ class TeamStudyRankingControllerTest {
                     .andExpect(jsonPath("$.aggregationDate").value("2000-01-13"))
                     .andExpect(jsonPath("$.rankedMemberCount").value(1))
                     .andExpect(jsonPath("$.entries[0].timerRunning").value(true))
-                    .andExpect(jsonPath("$.myRanking.ranked").value(false));
+                    .andExpect(jsonPath("$.myRanking.ranked").value(true));
         }
 
         @Test
@@ -472,7 +482,35 @@ class TeamStudyRankingControllerTest {
             fieldWithPath("myRanking.ranking")
                     .type(JsonFieldType.OBJECT)
                     .optional()
-                    .description("내 순위")
+                    .description("내 순위"),
+            fieldWithPath("myRanking.ranking.rank")
+                    .type(JsonFieldType.NUMBER)
+                    .optional()
+                    .description("순위"),
+            fieldWithPath("myRanking.ranking.displayName")
+                    .type(JsonFieldType.STRING)
+                    .optional()
+                    .description("표시 이름"),
+            fieldWithPath("myRanking.ranking.studySeconds")
+                    .type(JsonFieldType.NUMBER)
+                    .optional()
+                    .description("학습 시간(초)"),
+            fieldWithPath("myRanking.ranking.characterType")
+                    .type(JsonFieldType.STRING)
+                    .optional()
+                    .description("캐릭터 유형"),
+            fieldWithPath("myRanking.ranking.colorId")
+                    .type(JsonFieldType.STRING)
+                    .optional()
+                    .description("캐릭터 색상"),
+            fieldWithPath("myRanking.ranking.attendanceStreakDays")
+                    .type(JsonFieldType.NUMBER)
+                    .optional()
+                    .description("연속 출석일"),
+            fieldWithPath("myRanking.ranking.timerRunning")
+                    .type(JsonFieldType.BOOLEAN)
+                    .optional()
+                    .description("타이머 실행 여부")
         };
     }
 
@@ -506,7 +544,31 @@ class TeamStudyRankingControllerTest {
             fieldWithPath("myRanking.ranking")
                     .type(JsonFieldType.OBJECT)
                     .optional()
-                    .description("내 순위")
+                    .description("내 순위"),
+            fieldWithPath("myRanking.ranking.rank")
+                    .type(JsonFieldType.NUMBER)
+                    .optional()
+                    .description("순위"),
+            fieldWithPath("myRanking.ranking.displayName")
+                    .type(JsonFieldType.STRING)
+                    .optional()
+                    .description("표시 이름"),
+            fieldWithPath("myRanking.ranking.studySeconds")
+                    .type(JsonFieldType.NUMBER)
+                    .optional()
+                    .description("학습 시간(초)"),
+            fieldWithPath("myRanking.ranking.characterType")
+                    .type(JsonFieldType.STRING)
+                    .optional()
+                    .description("캐릭터 유형"),
+            fieldWithPath("myRanking.ranking.colorId")
+                    .type(JsonFieldType.STRING)
+                    .optional()
+                    .description("캐릭터 색상"),
+            fieldWithPath("myRanking.ranking.attendanceStreakDays")
+                    .type(JsonFieldType.NUMBER)
+                    .optional()
+                    .description("연속 출석일")
         };
     }
 

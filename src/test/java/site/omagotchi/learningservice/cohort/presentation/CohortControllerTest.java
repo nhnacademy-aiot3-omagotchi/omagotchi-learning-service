@@ -386,7 +386,7 @@ class CohortControllerTest {
                                 eq(new AssignCohortManagerCommand(managerId)),
                                 eq(USER_ID),
                                 eq(GlobalRole.SYSTEM_ADMIN)))
-                .willReturn(memberResponse());
+                .willReturn(memberResponse(managerId, CohortMembershipRole.MANAGER));
 
         // When & Then
         mockMvc.perform(post("/api/v1/cohorts/{cohort-id}/managers", COHORT_ID)
@@ -396,6 +396,8 @@ class CohortControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\":\"" + managerId + "\"}"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(managerId.toString()))
+                .andExpect(jsonPath("$.role").value("MANAGER"))
                 .andDo(document(
                         "cohort-management/assign-manager",
                         pathParameters(parameterWithName("cohort-id").description("기수 식별자")),
@@ -415,7 +417,7 @@ class CohortControllerTest {
                                 eq(new ChangeCohortMemberRoleCommand(CohortMembershipRole.MENTOR)),
                                 eq(USER_ID),
                                 eq(GlobalRole.SYSTEM_ADMIN)))
-                .willReturn(memberResponse());
+                .willReturn(memberResponse(memberId, CohortMembershipRole.MENTOR));
 
         // When & Then
         mockMvc.perform(patch(
@@ -428,6 +430,8 @@ class CohortControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"role\":\"MENTOR\"}"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(memberId.toString()))
+                .andExpect(jsonPath("$.role").value("MENTOR"))
                 .andDo(document(
                         "cohort-management/change-member-role",
                         pathParameters(
@@ -439,11 +443,15 @@ class CohortControllerTest {
     }
 
     private CohortMembershipResponse memberResponse() {
+        return memberResponse(USER_ID, CohortMembershipRole.STUDENT);
+    }
+
+    private CohortMembershipResponse memberResponse(UUID userId, CohortMembershipRole role) {
         return new CohortMembershipResponse(
                 10L,
                 COHORT_ID,
-                USER_ID,
-                CohortMembershipRole.STUDENT,
+                userId,
+                role,
                 CohortMembershipStatus.ACTIVE,
                 OffsetDateTime.parse("2026-01-01T09:00:00+09:00"),
                 OffsetDateTime.parse("2026-01-01T09:05:00+09:00"),

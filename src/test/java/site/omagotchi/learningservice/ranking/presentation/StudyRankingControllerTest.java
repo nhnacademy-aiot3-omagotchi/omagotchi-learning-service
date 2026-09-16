@@ -95,12 +95,12 @@ class StudyRankingControllerTest {
             mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/study-rankings/today", COHORT_ID)
                             .queryParam("maxRank", "2")
                             .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                    .andExpect(status().isOk())
                     .andDo(document(
                             "ranking/member-today",
                             pathParameters(parameterWithName("cohort-id").description("조회할 기수 ID")),
                             queryParameters(parameterWithName("maxRank").optional().description("반환할 최대 순위 (생략 시 전체)")),
                             responseFields(memberTodayFields())))
-                    .andExpect(status().isOk())
                     .andExpect(jsonPath("$.aggregationDate").value("2000-01-13"))
                     .andExpect(jsonPath("$.calculatedAt").value(CALCULATED_AT.toString()))
                     .andExpect(jsonPath("$.rankedMemberCount").value(3))
@@ -136,6 +136,7 @@ class StudyRankingControllerTest {
                                     COHORT_ID,
                                     date)
                             .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                    .andExpect(status().isOk())
                     .andDo(document(
                             "ranking/member-daily",
                             pathParameters(
@@ -144,7 +145,6 @@ class StudyRankingControllerTest {
                                             .description("조회할 날짜 (yyyy-MM-dd)")),
                             queryParameters(parameterWithName("maxRank").optional().description("반환할 최대 순위")),
                             responseFields(memberHistoricalFields())))
-                    .andExpect(status().isOk())
                     .andExpect(jsonPath("$.startDate").value("2000-01-12"))
                     .andExpect(jsonPath("$.includedThroughDate").value("2000-01-12"))
                     .andExpect(jsonPath("$.entries[0].timerRunning").doesNotExist())
@@ -176,6 +176,7 @@ class StudyRankingControllerTest {
                                     COHORT_ID,
                                     monday)
                             .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                    .andExpect(status().isOk())
                     .andDo(document(
                             "ranking/member-weekly-empty",
                             pathParameters(
@@ -183,7 +184,6 @@ class StudyRankingControllerTest {
                                     parameterWithName("week-start-date")
                                             .description("주간 시작일 (월요일, yyyy-MM-dd)")),
                             responseFields(memberHistoricalEmptyFields())))
-                    .andExpect(status().isOk())
                     .andExpect(jsonPath("$.includedThroughDate").value(nullValue()))
                     .andExpect(jsonPath("$.entries").isEmpty())
                     .andExpect(jsonPath("$.myRanking.ranked").value(false));
@@ -230,6 +230,7 @@ class StudyRankingControllerTest {
                                 month)
                         .queryParam("maxRank", "2")
                         .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andExpect(status().isOk())
                 .andDo(document(
                         "ranking/member-monthly",
                         pathParameters(
@@ -237,7 +238,6 @@ class StudyRankingControllerTest {
                                 parameterWithName("month").description("조회할 월 (yyyy-MM)")),
                         queryParameters(parameterWithName("maxRank").optional().description("반환할 최대 순위")),
                         responseFields(memberHistoricalFields())))
-                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.startDate").value("2000-01-01"));
     }
 
@@ -267,14 +267,14 @@ class StudyRankingControllerTest {
                                 monday)
                         .queryParam("maxRank", "2")
                         .header(HttpHeaders.AUTHORIZATION, bearerToken()))
+                .andExpect(status().isOk())
                 .andDo(document(
                         "ranking/member-weekly",
                         pathParameters(
                                 parameterWithName("cohort-id").description("기수 ID"),
                                 parameterWithName("week-start-date").description("주간 시작일")),
                         queryParameters(parameterWithName("maxRank").optional().description("최대 순위")),
-                        responseFields(memberHistoricalFields())))
-                .andExpect(status().isOk());
+                        responseFields(memberHistoricalFields())));
     }
 
     private FieldDescriptor[] memberTodayFields() {

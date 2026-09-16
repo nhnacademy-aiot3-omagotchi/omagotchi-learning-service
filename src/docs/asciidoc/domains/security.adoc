@@ -52,3 +52,9 @@ include::{snippets}/security/rule-subpath-forbidden/response-fields.adoc[]
 include::{snippets}/presence/heartbeat-invalid-session/request-headers.adoc[]
 include::{snippets}/presence/heartbeat-invalid-session/http-response.adoc[]
 include::{snippets}/presence/heartbeat-invalid-session/response-fields.adoc[]
+
+=== 잘못된 Rule 인증 정보
+
+include::{snippets}/security/rule-invalid-credential/http-request.adoc[]
+include::{snippets}/security/rule-invalid-credential/http-response.adoc[]
+include::{snippets}/security/rule-invalid-credential/response-fields.adoc[]

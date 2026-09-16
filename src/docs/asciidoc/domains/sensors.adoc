@@ -1,8 +1,5 @@
 == 센서
 
-센서 API를 단독으로 구성한 MockMvc 계약 문서입니다. 테스트에서는 인증 주체를 직접 주입하므로
-JWT 필터 자체의 인증·인가 동작은 검증하지 않습니다.
-
 === 센서 장치
 include::{snippets}/sensors/device-list/http-request.adoc[]
 include::{snippets}/sensors/device-list/path-parameters.adoc[]
@@ -44,8 +41,8 @@ include::{snippets}/sensors/environment/response-fields.adoc[]
 
 === 임계치 룰
 외부 기수 규칙 API는 JWT 인증 주체를 사용하는 외부 API입니다.
-내부 규칙 엔진에 데이터를 전달하는 `internal-threshold-rules`는 별도의 내부 Basic 인증을 사용하며,
-이 단독 구성 테스트에서는 컨트롤러의 요청·응답 본문만 확인합니다.
+내부 규칙 엔진에 데이터를 전달하는 `internal-threshold-rules`는 별도의 내부 Basic 인증을 사용합니다.
+
 include::{snippets}/sensors/internal-threshold-rules/http-request.adoc[]
 include::{snippets}/sensors/internal-threshold-rules/http-response.adoc[]
 include::{snippets}/sensors/internal-threshold-rules/response-fields.adoc[]

@@ -1,8 +1,5 @@
 == 관리자 학습 통계
 
-이 문서는 MockMvc를 단독으로 구성한 관리자 학습 통계 컨트롤러 계약 테스트에서 생성한 성공 요청과 응답 예시를 안내합니다.
-테스트에서는 인증 주체를 직접 주입해 컨트롤러 계약을 확인하며, JWT 보안 흐름 자체는 검증하지 않습니다.
-
 === 오늘 통계 조회
 
 include::{snippets}/study-statistics/get-today/http-request.adoc[]

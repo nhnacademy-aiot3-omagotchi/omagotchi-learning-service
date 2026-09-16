@@ -81,14 +81,14 @@ class OccupancyParticipantControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"targetUserId\":\"" + TARGET_ID + "\"}"))
+                .andExpect(status().isCreated())
                 .andDo(document(
                         "occupancy/participant-add",
                         pathParameters(parameterWithName("space-id").description("공간 ID")),
                         requestFields(
                                 fieldWithPath("targetUserId")
                                         .type(JsonFieldType.STRING)
-                                        .description("추가할 사용자 ID"))))
-                .andExpect(status().isCreated());
+                                        .description("추가할 사용자 ID"))));
 
         verify(occupancyParticipantService).add(1L, TARGET_ID, REQUESTER_ID);
     }
@@ -107,12 +107,12 @@ class OccupancyParticipantControllerTest {
         mockMvc.perform(get("/api/v1/spaces/{space-id}/occupancies/participants/candidates", 1L)
                         .queryParam("query", "사용자")
                         .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andExpect(status().isOk())
                 .andDo(document(
                         "occupancy/participant-candidates",
                         pathParameters(parameterWithName("space-id").description("공간 ID")),
                         queryParameters(parameterWithName("query").description("검색어")),
                         responseFields(candidateFields())))
-                .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].userId").value(TARGET_ID.toString()))
                 .andExpect(jsonPath("$[0].displayName").value("대상 사용자"))
                 .andExpect(jsonPath("$[0].email").value("target@example.com"))
@@ -127,11 +127,11 @@ class OccupancyParticipantControllerTest {
 
         mockMvc.perform(get("/api/v1/spaces/{space-id}/occupancies/participants", 1L)
                         .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andExpect(status().isOk())
                 .andDo(document(
                         "occupancy/participant-list",
                         pathParameters(parameterWithName("space-id").description("공간 ID")),
                         responseFields(participantFields())))
-                .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].userId").value(REQUESTER_ID.toString()))
                 .andExpect(jsonPath("$[0].displayName").value("점유자"))
                 .andExpect(jsonPath("$[0].occupier").value(true));
@@ -190,13 +190,13 @@ class OccupancyParticipantControllerTest {
                                 1L,
                                 TARGET_ID)
                         .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andExpect(status().isNoContent())
                 .andDo(document(
                         "occupancy/participant-remove",
                         pathParameters(
                                 parameterWithName("space-id").description("공간 ID"),
                                 parameterWithName("target-user-id")
-                                        .description("대상 사용자 ID"))))
-                .andExpect(status().isNoContent());
+                                        .description("대상 사용자 ID"))));
 
         verify(occupancyParticipantService).remove(1L, TARGET_ID, REQUESTER_ID);
     }

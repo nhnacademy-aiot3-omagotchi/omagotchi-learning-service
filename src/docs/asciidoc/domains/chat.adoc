@@ -1,0 +1,42 @@
+== AI 채팅
+
+=== SSE 채팅 스트림
+
+Access JWT 인증이 필요합니다. `question`은 필수이며 공백을 제외한 1~1000자이고,
+`model`은 `GEMINI` 또는 `OLLAMA`이며 생략하면 `GEMINI`를 사용합니다.
+
+응답은 `text/event-stream`으로 전송되는 문자열 `Flux`입니다. 각 데이터 조각의 내용과 개수는
+선택한 모델과 생성 결과에 따라 달라지므로 문서 테스트에서는 `ChatClient` 모의 객체가 반환한 문자열 조각과
+SSE의 `Content-Type`만 검증합니다. 스트림이 정상적으로 끝나면 연결이 닫히고, 모델 오류는 스트림 오류로
+전파되어 컨트롤러가 오류 로그를 남깁니다.
+
+include::{snippets}/chat/stream/http-request.adoc[]
+include::{snippets}/chat/stream/query-parameters.adoc[]
+include::{snippets}/chat/stream/http-response.adoc[]
+include::{snippets}/chat/stream/response-headers.adoc[]
+include::{snippets}/chat/stream/response-body.adoc[]
+
+=== 대표 오류와 보안 경계
+
+JWT가 없으면 `401 Unauthorized`를 반환합니다. `question`이 누락되거나 공백이거나 길이를 초과한 경우, 또는 알 수 없는 `model`을 지정한 경우에는 `400 Bad Request`를 반환합니다.
+요청자 대화 ID와 도구 컨텍스트의 사용자 식별자는 JWT `sub`에서 결정되며 쿼리 파라미터로
+덮어쓸 수 없습니다. 문서 테스트에는 실제 `SecurityConfig`를 적용하지만 모델 스트리밍 제공자는
+모의 객체로 대체하므로 외부 AI 서비스와의 통신이나 응답 품질은 검증하지 않습니다.
+
+인증 없이 채팅을 요청하면 `AUTH_AUTHENTICATION_REQUIRED`를 반환합니다.
+
+include::{snippets}/chat/missing-jwt/http-request.adoc[]
+include::{snippets}/chat/missing-jwt/http-response.adoc[]
+include::{snippets}/chat/missing-jwt/response-fields.adoc[]
+
+질문이 비어 있으면 `COMMON_INVALID_REQUEST`를 반환합니다.
+
+include::{snippets}/chat/blank-question/http-request.adoc[]
+include::{snippets}/chat/blank-question/http-response.adoc[]
+include::{snippets}/chat/blank-question/response-fields.adoc[]
+
+지원하지 않는 모델을 요청하면 `COMMON_INVALID_REQUEST`를 반환합니다.
+
+include::{snippets}/chat/unknown-model/http-request.adoc[]
+include::{snippets}/chat/unknown-model/http-response.adoc[]
+include::{snippets}/chat/unknown-model/response-fields.adoc[]

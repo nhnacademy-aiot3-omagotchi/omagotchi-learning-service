@@ -1,59 +1,50 @@
 package site.omagotchi.learningservice.attendance.presentation;
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.restdocs.test.autoconfigure.AutoConfigureRestDocs;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpHeaders;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import site.omagotchi.learningservice.attendance.application.AttendanceService;
-import site.omagotchi.learningservice.attendance.application.CurrentPresenceQueryService;
-import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordResult;
-import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordPageResult;
-import site.omagotchi.learningservice.attendance.application.result.CurrentPresenceResult;
-import site.omagotchi.learningservice.attendance.application.query.AttendancePageQuery;
-import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
-import site.omagotchi.learningservice.attendance.domain.PresenceState;
-import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
-import site.omagotchi.learningservice.global.security.JwtAuthorityConfig;
-import site.omagotchi.learningservice.global.security.JwtConfig;
-import site.omagotchi.learningservice.global.security.JwtProperties;
-import site.omagotchi.learningservice.global.security.SecurityConfig;
-import site.omagotchi.learningservice.global.security.SecurityErrorResponseHandler;
-import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.get;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.patch;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.post;
+import static org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath;
+import static org.springframework.restdocs.payload.PayloadDocumentation.requestFields;
+import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
+import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
+import static org.springframework.restdocs.request.RequestDocumentation.pathParameters;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static site.omagotchi.learningservice.support.RestDocs.document;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.HttpHeaders;
+import org.springframework.restdocs.payload.FieldDescriptor;
+import org.springframework.restdocs.request.ParameterDescriptor;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import site.omagotchi.learningservice.attendance.application.AttendanceService;
+import site.omagotchi.learningservice.attendance.application.CurrentPresenceQueryService;
+import site.omagotchi.learningservice.attendance.application.command.ChangeAttendanceStatusCommand;
+import site.omagotchi.learningservice.attendance.application.query.AttendancePageQuery;
+import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordPageResult;
+import site.omagotchi.learningservice.attendance.application.result.AttendanceRecordResult;
+import site.omagotchi.learningservice.attendance.application.result.CurrentPresenceResult;
+import site.omagotchi.learningservice.attendance.domain.AttendanceStatus;
+import site.omagotchi.learningservice.attendance.domain.PresenceState;
+import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
+import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
+import site.omagotchi.learningservice.support.LearningRestDocsTest;
 
 @WebMvcTest(controllers = AttendanceController.class)
-@Import({
-        SecurityConfig.class,
-        JwtConfig.class,
-        JwtAuthorityConfig.class,
-        SecurityErrorResponseHandler.class,
-        TestJwtKeyConfig.class
-})
-@EnableConfigurationProperties(JwtProperties.class)
-@ActiveProfiles("test")
-@AutoConfigureRestDocs(outputDir = "target/generated-snippets")
 @DisplayName("나의 출결 API 계약")
+@LearningRestDocsTest
 class AttendanceControllerTest {
 
     private static final long COHORT_ID = 1L;
@@ -77,10 +68,16 @@ class AttendanceControllerTest {
         given(attendanceService.checkIn(COHORT_ID, USER_ID)).willReturn(record());
 
         mockMvc.perform(post("/api/v1/cohorts/{cohort-id}/attendance-records/check-in", COHORT_ID)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(10))
-                .andExpect(jsonPath("$.spaceId").doesNotExist());
+                .andExpect(jsonPath("$.spaceId").doesNotExist())
+                .andDo(document(
+                        "attendance/check-in",
+                        pathParameters(cohortId()),
+                        responseFields(recordFields())));
 
         verify(attendanceService).checkIn(COHORT_ID, USER_ID);
     }
@@ -91,12 +88,19 @@ class AttendanceControllerTest {
         given(attendanceService.moveLab(COHORT_ID, USER_ID, 102L)).willReturn(record());
 
         mockMvc.perform(post("/api/v1/cohorts/{cohort-id}/attendance-records/move-lab", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue())
                         .contentType("application/json")
-                .content("{\"spaceId\":102}"))
+                        .content("{\"spaceId\":102}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(10))
-                .andExpect(jsonPath("$.spaceId").value(102));
+                .andExpect(jsonPath("$.spaceId").value(102))
+                .andDo(document(
+                        "attendance/move-lab",
+                        pathParameters(cohortId()),
+                        requestFields(spaceRequestFields()),
+                        responseFields(spaceMoveFields())));
 
         verify(attendanceService).moveLab(COHORT_ID, USER_ID, 102L);
     }
@@ -107,14 +111,42 @@ class AttendanceControllerTest {
         given(attendanceService.moveStudySpace(COHORT_ID, USER_ID, 301L)).willReturn(record());
 
         mockMvc.perform(post("/api/v1/cohorts/{cohort-id}/attendance-records/move-study", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue())
                         .contentType("application/json")
                         .content("{\"spaceId\":301}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(10))
-                .andExpect(jsonPath("$.spaceId").value(301));
+                .andExpect(jsonPath("$.spaceId").value(301))
+                .andDo(document(
+                        "attendance/move-study",
+                        pathParameters(cohortId()),
+                        requestFields(spaceRequestFields()),
+                        responseFields(spaceMoveFields())));
 
         verify(attendanceService).moveStudySpace(COHORT_ID, USER_ID, 301L);
+    }
+
+    @Test
+    @DisplayName("출결 체크아웃")
+    void checksOut() throws Exception {
+        // Given: 체크아웃 응답 준비
+        given(attendanceService.checkOut(COHORT_ID, USER_ID)).willReturn(record());
+
+        // When & Then
+        mockMvc.perform(post("/api/v1/cohorts/{cohort-id}/attendance-records/check-out", COHORT_ID)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(10))
+                .andDo(document(
+                        "attendance/check-out",
+                        pathParameters(cohortId()),
+                        responseFields(recordFields())));
+
+        verify(attendanceService).checkOut(COHORT_ID, USER_ID);
     }
 
     @Test
@@ -127,12 +159,20 @@ class AttendanceControllerTest {
                         Instant.parse("2026-09-02T01:00:00Z")
                 )));
 
-        mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/attendance-records/current-presence", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
+        mockMvc.perform(get(
+                                "/api/v1/cohorts/{cohort-id}/attendance-records/current-presence",
+                                COHORT_ID)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.spaceId").value(301))
                 .andExpect(jsonPath("$.state").value("PRESENT"))
-                .andExpect(jsonPath("$.startedAt").value("2026-09-02T01:00:00Z"));
+                .andExpect(jsonPath("$.startedAt").value("2026-09-02T01:00:00Z"))
+                .andDo(document(
+                        "attendance/current-presence",
+                        pathParameters(cohortId()),
+                        responseFields(currentPresenceFields())));
 
         verify(currentPresenceQueryService).findCurrentPresence(COHORT_ID, USER_ID);
     }
@@ -161,7 +201,9 @@ class AttendanceControllerTest {
                 .willReturn(new AttendanceRecordPageResult(List.of(record()), 0, 10, 1, 1));
 
         mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/attendance-records/me", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue())
                         .param("from", "2026-08-01")
                         .param("to", "2026-08-31")
                         .param("page", "0")
@@ -181,7 +223,10 @@ class AttendanceControllerTest {
                 .andExpect(jsonPath("$.page.size").value(10))
                 .andExpect(jsonPath("$.page.totalElements").value(1))
                 .andExpect(jsonPath("$.page.totalPages").value(1))
-                .andDo(document("attendance/get-my-records"));
+                .andDo(document(
+                        "attendance/get-my-records",
+                        pathParameters(cohortId()),
+                        responseFields(myPageFields())));
 
         verify(attendanceService).getMyRecords(COHORT_ID, USER_ID, query);
     }
@@ -200,7 +245,9 @@ class AttendanceControllerTest {
                 .willReturn(new AttendanceRecordPageResult(List.of(record()), 0, 10, 12, 2));
 
         mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/attendance-records", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue())
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue())
                         .param("date", "2026-08-20")
                         .param("page", "0")
                         .param("size", "10"))
@@ -211,13 +258,17 @@ class AttendanceControllerTest {
                 // 관리자 목록은 남의 기록을 여럿 그린다. 이 셋이 빠지면 화면은 행과
                 // 구성원을 잇지 못하고 기록 번호밖에 표시하지 못한다.
                 .andExpect(jsonPath("$.items[0].cohortMembershipId").value(20))
-                .andExpect(jsonPath("$.items[0].userId").value("00000000-0000-0000-0000-0000000000aa"))
+                .andExpect(
+                        jsonPath("$.items[0].userId").value("00000000-0000-0000-0000-0000000000aa"))
                 .andExpect(jsonPath("$.items[0].nickname").value("테스트닉"))
                 .andExpect(jsonPath("$.page.number").value(0))
                 .andExpect(jsonPath("$.page.size").value(10))
                 .andExpect(jsonPath("$.page.totalElements").value(12))
                 .andExpect(jsonPath("$.page.totalPages").value(2))
-                .andDo(document("attendance/get-daily-records"));
+                .andDo(document(
+                        "attendance/get-daily-records",
+                        pathParameters(cohortId()),
+                        responseFields(adminPageFields())));
 
         verify(attendanceService).getDailyRecords(COHORT_ID, USER_ID, date, query);
     }
@@ -247,10 +298,49 @@ class AttendanceControllerTest {
     @DisplayName("일자별 출결 목록은 date가 없으면 400을 반환한다")
     void rejectsDailyAttendanceRecordsWithoutDate() throws Exception {
         mockMvc.perform(get("/api/v1/cohorts/{cohort-id}/attendance-records", COHORT_ID)
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestJwtKeyConfig.issue()))
-                .andExpect(status().isBadRequest());
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue()))
+                .andExpect(status().isBadRequest())
+                .andDo(document(
+                        "attendance/get-daily-records-invalid",
+                        pathParameters(cohortId()),
+                        responseFields(errorFields())));
 
         verifyNoInteractions(attendanceService);
+    }
+
+    @Test
+    @DisplayName("출결 최종 상태 변경")
+    void changesFinalStatus() throws Exception {
+        // Given: 상태 변경 요청과 응답 준비
+        ChangeAttendanceStatusCommand command =
+                new ChangeAttendanceStatusCommand(
+                        AttendanceStatus.ABSENT, "수동 확인", "attendance-request-1");
+        given(attendanceService.changeFinalStatus(COHORT_ID, 10L, USER_ID, command))
+                .willReturn(record());
+
+        // When & Then
+        mockMvc.perform(patch(
+                                "/api/v1/cohorts/{cohort-id}/attendance-records/{attendance-id}/status",
+                                COHORT_ID,
+                                10L)
+                        .header(
+                                HttpHeaders.AUTHORIZATION,
+                                "Bearer " + TestJwtKeyConfig.issue())
+                        .contentType("application/json")
+                        .content(
+                                "{\"nextStatus\":\"ABSENT\",\"reason\":\"수동 확인\",\"requestId\":\"attendance-request-1\"}"))
+                .andExpect(status().isNoContent())
+                .andDo(document(
+                        "attendance/change-final-status",
+                        pathParameters(
+                                cohortId(),
+                                parameterWithName("attendance-id")
+                                        .description("출결 기록 식별자")),
+                        requestFields(statusRequestFields())));
+
+        verify(attendanceService).changeFinalStatus(COHORT_ID, 10L, USER_ID, command);
     }
 
     private AttendanceRecordResult record() {
@@ -270,5 +360,116 @@ class AttendanceControllerTest {
                 Instant.parse("2026-08-20T00:00:00Z"),
                 Instant.parse("2026-08-20T09:00:00Z")
         );
+    }
+
+    private static ParameterDescriptor cohortId() {
+        return parameterWithName("cohort-id").description("기수 식별자");
+    }
+
+    private static FieldDescriptor[] spaceRequestFields() {
+        return new FieldDescriptor[] {fieldWithPath("spaceId").description("이동할 공간 식별자")};
+    }
+
+    private static FieldDescriptor[] statusRequestFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("nextStatus").description("변경할 최종 출결 상태"),
+            fieldWithPath("reason").description("상태 변경 사유"),
+            fieldWithPath("requestId").description("상태 변경 요청 식별자")
+        };
+    }
+
+    private static FieldDescriptor[] recordFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("id").description("출결 기록 식별자"),
+            fieldWithPath("attendanceDate").description("출결 날짜"),
+            fieldWithPath("autoStatus").description("자동 판정 상태"),
+            fieldWithPath("finalStatus").description("최종 출결 상태"),
+            fieldWithPath("checkedInAt").description("입실 시각"),
+            fieldWithPath("checkedOutAt").description("퇴실 시각"),
+            fieldWithPath("lateMinutes").description("지각 시간(분)"),
+            fieldWithPath("earlyLeaveMinutes").description("조퇴 시간(분)"),
+            fieldWithPath("version").description("낙관적 동시성 버전"),
+            fieldWithPath("createdAt").description("생성 시각"),
+            fieldWithPath("updatedAt").description("수정 시각")
+        };
+    }
+
+    private static FieldDescriptor[] spaceMoveFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("id").description("출결 기록 식별자"),
+            fieldWithPath("attendanceDate").description("출결 날짜"),
+            fieldWithPath("autoStatus").description("자동 판정 상태"),
+            fieldWithPath("finalStatus").description("최종 출결 상태"),
+            fieldWithPath("checkedInAt").description("입실 시각"),
+            fieldWithPath("checkedOutAt").description("퇴실 시각"),
+            fieldWithPath("lateMinutes").description("지각 시간(분)"),
+            fieldWithPath("earlyLeaveMinutes").description("조퇴 시간(분)"),
+            fieldWithPath("version").description("낙관적 동시성 버전"),
+            fieldWithPath("createdAt").description("생성 시각"),
+            fieldWithPath("updatedAt").description("수정 시각"),
+            fieldWithPath("spaceId").description("이동한 공간 식별자")
+        };
+    }
+
+    private static FieldDescriptor[] currentPresenceFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("spaceId").description("현재 공간 식별자"),
+            fieldWithPath("state").description("현재 재실 상태"),
+            fieldWithPath("startedAt").description("현재 체류 시작 시각")
+        };
+    }
+
+    private static FieldDescriptor[] myPageFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("items").description("내 출결 기록 목록"),
+            fieldWithPath("items[].id").description("출결 기록 식별자"),
+            fieldWithPath("items[].attendanceDate").description("출결 날짜"),
+            fieldWithPath("items[].autoStatus").description("자동 판정 상태"),
+            fieldWithPath("items[].finalStatus").description("최종 출결 상태"),
+            fieldWithPath("items[].checkedInAt").description("입실 시각"),
+            fieldWithPath("items[].checkedOutAt").description("퇴실 시각"),
+            fieldWithPath("items[].lateMinutes").description("지각 시간"),
+            fieldWithPath("items[].earlyLeaveMinutes").description("조퇴 시간"),
+            fieldWithPath("items[].version").description("버전"),
+            fieldWithPath("items[].createdAt").description("생성 시각"),
+            fieldWithPath("items[].updatedAt").description("수정 시각"),
+            fieldWithPath("page.number").description("현재 페이지 번호"),
+            fieldWithPath("page.size").description("페이지 크기"),
+            fieldWithPath("page.totalElements").description("전체 항목 수"),
+            fieldWithPath("page.totalPages").description("전체 페이지 수")
+        };
+    }
+
+    private static FieldDescriptor[] adminPageFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("items").description("기수 구성원의 출결 기록 목록"),
+            fieldWithPath("items[].id").description("출결 기록 식별자"),
+            fieldWithPath("items[].cohortMembershipId").description("기수 소속 식별자"),
+            fieldWithPath("items[].userId").description("사용자 식별자"),
+            fieldWithPath("items[].nickname").description("사용자 닉네임"),
+            fieldWithPath("items[].attendanceDate").description("출결 날짜"),
+            fieldWithPath("items[].autoStatus").description("자동 판정 상태"),
+            fieldWithPath("items[].finalStatus").description("최종 출결 상태"),
+            fieldWithPath("items[].checkedInAt").description("입실 시각"),
+            fieldWithPath("items[].checkedOutAt").description("퇴실 시각"),
+            fieldWithPath("items[].lateMinutes").description("지각 시간"),
+            fieldWithPath("items[].earlyLeaveMinutes").description("조퇴 시간"),
+            fieldWithPath("items[].version").description("버전"),
+            fieldWithPath("items[].createdAt").description("생성 시각"),
+            fieldWithPath("items[].updatedAt").description("수정 시각"),
+            fieldWithPath("page.number").description("현재 페이지 번호"),
+            fieldWithPath("page.size").description("페이지 크기"),
+            fieldWithPath("page.totalElements").description("전체 항목 수"),
+            fieldWithPath("page.totalPages").description("전체 페이지 수")
+        };
+    }
+
+    private static FieldDescriptor[] errorFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("code").description("오류 코드"),
+                    fieldWithPath("message").description("오류 메시지"),
+            fieldWithPath("path").description("오류 요청 경로"),
+                    fieldWithPath("requestId").description("요청 추적 식별자 (없으면 null)")
+        };
     }
 }

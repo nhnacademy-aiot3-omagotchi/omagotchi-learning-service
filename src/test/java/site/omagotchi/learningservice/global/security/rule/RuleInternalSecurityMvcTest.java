@@ -1,5 +1,22 @@
 package site.omagotchi.learningservice.global.security.rule;
 
+import static org.hamcrest.Matchers.startsWith;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.restdocs.headers.HeaderDocumentation.headerWithName;
+import static org.springframework.restdocs.headers.HeaderDocumentation.responseHeaders;
+import static org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath;
+import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static site.omagotchi.learningservice.support.RestDocs.document;
+
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -7,51 +24,26 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.restdocs.payload.FieldDescriptor;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import site.omagotchi.learningservice.global.config.PasswordEncoderConfig;
 import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
-import site.omagotchi.learningservice.global.security.JwtAuthorityConfig;
-import site.omagotchi.learningservice.global.security.JwtConfig;
-import site.omagotchi.learningservice.global.security.JwtProperties;
-import site.omagotchi.learningservice.global.security.SecurityErrorResponseHandler;
-import site.omagotchi.learningservice.global.security.SecurityConfig;
 import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
 import site.omagotchi.learningservice.global.security.basic.ServiceCredentialAuthenticationProviderFactory;
 import site.omagotchi.learningservice.sensor.application.ThresholdRuleService;
 import site.omagotchi.learningservice.sensor.presentation.InternalThresholdRuleController;
 import site.omagotchi.learningservice.sensor.presentation.ThresholdRuleController;
+import site.omagotchi.learningservice.support.LearningRestDocsTest;
 
-import java.util.List;
-
-import static org.hamcrest.Matchers.startsWith;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-@WebMvcTest(controllers = {
-        InternalThresholdRuleController.class,
-        ThresholdRuleController.class
-})
+@WebMvcTest(controllers = {InternalThresholdRuleController.class, ThresholdRuleController.class})
 @Import({
-        RuleSecurityConfig.class,
-        SecurityConfig.class,
-        SecurityErrorResponseHandler.class,
-        JwtConfig.class,
-        JwtAuthorityConfig.class,
-        TestJwtKeyConfig.class,
-        PasswordEncoderConfig.class,
-        ServiceCredentialAuthenticationProviderFactory.class
+    RuleSecurityConfig.class,
+    PasswordEncoderConfig.class,
+    ServiceCredentialAuthenticationProviderFactory.class
 })
-@EnableConfigurationProperties({RuleCredentialProperties.class, JwtProperties.class})
-@ActiveProfiles("test")
+@EnableConfigurationProperties(RuleCredentialProperties.class)
+@LearningRestDocsTest
 class RuleInternalSecurityMvcTest {
 
     private static final String USERNAME = "rule-service";
@@ -73,15 +65,27 @@ class RuleInternalSecurityMvcTest {
     void requiresRuleCredential() throws Exception {
         mockMvc.perform(get(PATH))
                 .andExpect(status().isUnauthorized())
-                .andExpect(header().string(
-                        HttpHeaders.WWW_AUTHENTICATE,
-                        startsWith("Basic realm=\"omagotchi-learning-rule\"")
-                ))
-                .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"));
+                .andExpect(
+                        header().string(
+                                        HttpHeaders.WWW_AUTHENTICATE,
+                                        startsWith("Basic realm=\"omagotchi-learning-rule\"")))
+                .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"))
+                .andDo(document(
+                        "security/rule-missing-credential",
+                        responseHeaders(
+                                headerWithName(HttpHeaders.WWW_AUTHENTICATE)
+                                        .description("Rule Basic 인증 요구 정보")),
+                        responseFields(errorFields())));
 
         mockMvc.perform(get(PATH).with(httpBasic(USERNAME, "wrong-password")))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"));
+                .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"))
+                .andDo(document(
+                        "security/rule-invalid-credential",
+                        responseHeaders(
+                                headerWithName(HttpHeaders.WWW_AUTHENTICATE)
+                                        .description("Rule Basic 인증 요구 정보")),
+                        responseFields(errorFields())));
 
         verifyNoInteractions(thresholdRuleService);
     }
@@ -92,14 +96,19 @@ class RuleInternalSecurityMvcTest {
         mockMvc.perform(get(PATH)
                         .header(
                                 HttpHeaders.AUTHORIZATION,
-                                "Bearer " + TestJwtKeyConfig.issue()
-                        ))
+                                "Bearer " + TestJwtKeyConfig.issue()))
                 .andExpect(status().isUnauthorized())
-                .andExpect(header().string(
-                        HttpHeaders.WWW_AUTHENTICATE,
-                        startsWith("Basic realm=\"omagotchi-learning-rule\"")
-                ))
-                .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"));
+                .andExpect(
+                        header().string(
+                                        HttpHeaders.WWW_AUTHENTICATE,
+                                        startsWith("Basic realm=\"omagotchi-learning-rule\"")))
+                .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"))
+                .andDo(document(
+                        "security/rule-access-jwt-rejected",
+                        responseHeaders(
+                                headerWithName(HttpHeaders.WWW_AUTHENTICATE)
+                                        .description("Rule Basic 인증 요구 정보")),
+                        responseFields(errorFields())));
 
         verifyNoInteractions(thresholdRuleService);
     }
@@ -109,11 +118,14 @@ class RuleInternalSecurityMvcTest {
     void rejectsRuleCredentialFromPublicBoundary() throws Exception {
         mockMvc.perform(get(PUBLIC_PATH).with(httpBasic(USERNAME, PASSWORD)))
                 .andExpect(status().isUnauthorized())
-                .andExpect(header().string(
-                        HttpHeaders.WWW_AUTHENTICATE,
-                        startsWith("Bearer")
-                ))
-                .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"));
+                .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, startsWith("Bearer")))
+                .andExpect(jsonPath("$.code").value("AUTH_AUTHENTICATION_REQUIRED"))
+                .andDo(document(
+                        "security/rule-credential-public-rejected",
+                        responseHeaders(
+                                headerWithName(HttpHeaders.WWW_AUTHENTICATE)
+                                        .description("Access JWT 인증 요구 정보")),
+                        responseFields(errorFields())));
 
         verifyNoInteractions(thresholdRuleService);
     }
@@ -125,7 +137,8 @@ class RuleInternalSecurityMvcTest {
 
         mockMvc.perform(get(PATH).with(httpBasic(USERNAME, PASSWORD)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$").isArray())
+                .andDo(document("security/rule-credential-allowed"));
 
         verify(thresholdRuleService).readAllForRuleEngine();
     }
@@ -135,7 +148,8 @@ class RuleInternalSecurityMvcTest {
     void deniesRuleWriteRequest() throws Exception {
         mockMvc.perform(post(PATH).with(httpBasic(USERNAME, PASSWORD)))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("AUTH_ACCESS_DENIED"));
+                .andExpect(jsonPath("$.code").value("AUTH_ACCESS_DENIED"))
+                .andDo(document("security/rule-write-forbidden", responseFields(errorFields())));
 
         verifyNoInteractions(thresholdRuleService);
     }
@@ -143,11 +157,20 @@ class RuleInternalSecurityMvcTest {
     @Test
     @DisplayName("미등록 Rule 내부 하위 경로 거절")
     void deniesUnregisteredRuleSubpath() throws Exception {
-        mockMvc.perform(get(PATH + "/unsupported")
-                        .with(httpBasic(USERNAME, PASSWORD)))
+        mockMvc.perform(get(PATH + "/unsupported").with(httpBasic(USERNAME, PASSWORD)))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("AUTH_ACCESS_DENIED"));
+                .andExpect(jsonPath("$.code").value("AUTH_ACCESS_DENIED"))
+                .andDo(document("security/rule-subpath-forbidden", responseFields(errorFields())));
 
         verifyNoInteractions(thresholdRuleService);
+    }
+
+    private static FieldDescriptor[] errorFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("code").description("오류 코드"),
+            fieldWithPath("message").description("오류 메시지"),
+            fieldWithPath("path").description("오류 요청 경로"),
+            fieldWithPath("requestId").description("요청 추적 식별자")
+        };
     }
 }

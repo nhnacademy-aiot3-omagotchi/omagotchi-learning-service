@@ -1,0 +1,92 @@
+== 출결 API
+
+=== 입실
+
+`POST /api/v1/cohorts/{cohort-id}/attendance-records/check-in`
+
+include::{snippets}/attendance/check-in/http-request.adoc[]
+include::{snippets}/attendance/check-in/path-parameters.adoc[]
+include::{snippets}/attendance/check-in/http-response.adoc[]
+include::{snippets}/attendance/check-in/response-fields.adoc[]
+
+=== 실습실 이동
+
+`POST /api/v1/cohorts/{cohort-id}/attendance-records/move-lab`
+
+include::{snippets}/attendance/move-lab/http-request.adoc[]
+include::{snippets}/attendance/move-lab/path-parameters.adoc[]
+include::{snippets}/attendance/move-lab/request-fields.adoc[]
+include::{snippets}/attendance/move-lab/http-response.adoc[]
+include::{snippets}/attendance/move-lab/response-fields.adoc[]
+
+=== 공용 학습 공간 이동
+
+`POST /api/v1/cohorts/{cohort-id}/attendance-records/move-study`
+
+include::{snippets}/attendance/move-study/http-request.adoc[]
+include::{snippets}/attendance/move-study/path-parameters.adoc[]
+include::{snippets}/attendance/move-study/request-fields.adoc[]
+include::{snippets}/attendance/move-study/http-response.adoc[]
+include::{snippets}/attendance/move-study/response-fields.adoc[]
+
+=== 현재 체류 공간 조회
+
+`GET /api/v1/cohorts/{cohort-id}/attendance-records/current-presence`
+
+열린 체류 구간이 없으면 본문 없이 `204 No Content`를 반환합니다.
+
+include::{snippets}/attendance/current-presence/http-request.adoc[]
+include::{snippets}/attendance/current-presence/path-parameters.adoc[]
+include::{snippets}/attendance/current-presence/http-response.adoc[]
+include::{snippets}/attendance/current-presence/response-fields.adoc[]
+
+=== 퇴실
+
+`POST /api/v1/cohorts/{cohort-id}/attendance-records/check-out`
+
+include::{snippets}/attendance/check-out/http-request.adoc[]
+include::{snippets}/attendance/check-out/path-parameters.adoc[]
+include::{snippets}/attendance/check-out/http-response.adoc[]
+include::{snippets}/attendance/check-out/response-fields.adoc[]
+
+=== 내 출결 목록 조회
+
+`GET /api/v1/cohorts/{cohort-id}/attendance-records/me`
+
+`from`, `to`, `page`, `size`는 선택 사항인 쿼리 파라미터입니다.
+
+include::{snippets}/attendance/get-my-records/http-request.adoc[]
+include::{snippets}/attendance/get-my-records/path-parameters.adoc[]
+include::{snippets}/attendance/get-my-records/http-response.adoc[]
+include::{snippets}/attendance/get-my-records/response-fields.adoc[]
+
+=== 일자별 출결 목록 조회
+
+`GET /api/v1/cohorts/{cohort-id}/attendance-records`
+
+`date`는 필수 날짜 쿼리 파라미터이며 `page`, `size`는 선택 사항입니다.
+
+include::{snippets}/attendance/get-daily-records/http-request.adoc[]
+include::{snippets}/attendance/get-daily-records/path-parameters.adoc[]
+include::{snippets}/attendance/get-daily-records/http-response.adoc[]
+include::{snippets}/attendance/get-daily-records/response-fields.adoc[]
+
+=== 최종 출결 상태 변경
+
+`PATCH /api/v1/cohorts/{cohort-id}/attendance-records/{attendance-id}/status`
+
+기수 관리자 권한으로 최종 상태와 변경 사유를 기록합니다.
+
+include::{snippets}/attendance/change-final-status/http-request.adoc[]
+include::{snippets}/attendance/change-final-status/path-parameters.adoc[]
+include::{snippets}/attendance/change-final-status/request-fields.adoc[]
+include::{snippets}/attendance/change-final-status/http-response.adoc[]
+
+=== 대표 입력 오류
+
+일자별 출결 조회에서 필수 `date`가 없으면 `400 Bad Request`를 반환합니다.
+
+include::{snippets}/attendance/get-daily-records-invalid/http-request.adoc[]
+include::{snippets}/attendance/get-daily-records-invalid/path-parameters.adoc[]
+include::{snippets}/attendance/get-daily-records-invalid/http-response.adoc[]
+include::{snippets}/attendance/get-daily-records-invalid/response-fields.adoc[]

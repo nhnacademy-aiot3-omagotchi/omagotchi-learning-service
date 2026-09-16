@@ -1,0 +1,43 @@
+== 사용자 프로필
+
+모든 사용자 식별자는 요청 본문이나 헤더가 아니라 Access JWT의 `sub`에서 읽습니다.
+계약 테스트는 고정된 테스트 사용자 JWT로 성공·오류 응답을 검증합니다.
+
+=== 내 프로필 조회
+
+`GET /api/v1/user-profiles/me/profile`
+
+현재 사용자의 닉네임, 학습·출석 요약, 승인된 기수, 대표 캐릭터 정보를 반환합니다.
+승인된 기수나 대표 캐릭터가 없으면 해당 객체는 `null`입니다.
+
+include::{snippets}/user-profile/get-my-profile/http-request.adoc[]
+include::{snippets}/user-profile/get-my-profile/http-response.adoc[]
+include::{snippets}/user-profile/get-my-profile/response-fields.adoc[]
+
+=== 내 닉네임 변경
+
+`PATCH /api/v1/user-profiles/me/nickname`
+
+요청 본문의 `nickname`으로 대표 캐릭터의 닉네임을 변경합니다.
+닉네임은 2~12자의 한글·영문·숫자만 사용할 수 있으며 금칙어를 포함할 수 없습니다.
+
+include::{snippets}/user-profile/update-nickname/http-request.adoc[]
+include::{snippets}/user-profile/update-nickname/request-fields.adoc[]
+include::{snippets}/user-profile/update-nickname/http-response.adoc[]
+include::{snippets}/user-profile/update-nickname/response-fields.adoc[]
+
+==== 닉네임 검증 실패
+
+유효하지 않은 닉네임이면 `400 Bad Request`와
+`INVALID_CHARACTER_NICKNAME` 오류를 반환합니다.
+
+include::{snippets}/user-profile/update-nickname-invalid/http-request.adoc[]
+include::{snippets}/user-profile/update-nickname-invalid/request-fields.adoc[]
+include::{snippets}/user-profile/update-nickname-invalid/http-response.adoc[]
+include::{snippets}/user-profile/update-nickname-invalid/response-fields.adoc[]
+
+승인된 기수가 없으면 `approvedCohort`는 `null`입니다.
+
+include::{snippets}/user-profile/get-my-profile-without-cohort/http-request.adoc[]
+include::{snippets}/user-profile/get-my-profile-without-cohort/http-response.adoc[]
+include::{snippets}/user-profile/get-my-profile-without-cohort/response-fields.adoc[]

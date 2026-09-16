@@ -1,0 +1,60 @@
+== 공통 인증·내부 API 경계
+
+=== Access JWT 보호 API
+
+보호 API는 Access JWT의 `sub`와 역할을 인증 정보로 사용합니다. JWT가 없으면 `401 Unauthorized`와
+`Bearer` 인증이 필요하다는 응답을 반환합니다. `USER`가 `SYSTEM_ADMIN` 경로에 접근하면 `403 Forbidden`과
+권한 부족 응답을 반환합니다. 아래 계약은 실제 MVC 보안 필터 테스트를 위한 경로를 사용합니다.
+
+include::{snippets}/security/protected-no-jwt/http-request.adoc[]
+include::{snippets}/security/protected-no-jwt/http-response.adoc[]
+include::{snippets}/security/protected-no-jwt/response-headers.adoc[]
+include::{snippets}/security/protected-no-jwt/response-fields.adoc[]
+include::{snippets}/security/system-admin-forbidden/http-request.adoc[]
+include::{snippets}/security/system-admin-forbidden/http-response.adoc[]
+include::{snippets}/security/system-admin-forbidden/response-headers.adoc[]
+include::{snippets}/security/system-admin-forbidden/response-fields.adoc[]
+
+=== Rule 서비스 내부 API
+
+`GET /api/v1/internal/threshold-rules`는 Rule 서비스 전용 HTTP Basic 인증 정보를 요구합니다.
+테스트용 사용자 이름과 비밀번호로 인증 성공을 확인하며 실제 인증 정보는 문서에 기록하지 않습니다.
+Access JWT 또는 Rule 서비스 인증 정보를 공개 사용자 API에 보내면 거절되며, 조회 이외의 내부 하위 경로도
+허용하지 않습니다.
+
+include::{snippets}/security/rule-missing-credential/http-request.adoc[]
+include::{snippets}/security/rule-missing-credential/http-response.adoc[]
+include::{snippets}/security/rule-missing-credential/response-headers.adoc[]
+include::{snippets}/security/rule-missing-credential/response-fields.adoc[]
+include::{snippets}/security/rule-access-jwt-rejected/http-request.adoc[]
+include::{snippets}/security/rule-access-jwt-rejected/http-response.adoc[]
+include::{snippets}/security/rule-access-jwt-rejected/response-headers.adoc[]
+include::{snippets}/security/rule-access-jwt-rejected/response-fields.adoc[]
+include::{snippets}/security/rule-credential-public-rejected/http-request.adoc[]
+include::{snippets}/security/rule-credential-public-rejected/http-response.adoc[]
+include::{snippets}/security/rule-credential-public-rejected/response-headers.adoc[]
+include::{snippets}/security/rule-credential-public-rejected/response-fields.adoc[]
+include::{snippets}/security/rule-credential-allowed/http-request.adoc[]
+include::{snippets}/security/rule-credential-allowed/http-response.adoc[]
+include::{snippets}/security/rule-write-forbidden/http-request.adoc[]
+include::{snippets}/security/rule-write-forbidden/http-response.adoc[]
+include::{snippets}/security/rule-write-forbidden/response-fields.adoc[]
+include::{snippets}/security/rule-subpath-forbidden/http-request.adoc[]
+include::{snippets}/security/rule-subpath-forbidden/http-response.adoc[]
+include::{snippets}/security/rule-subpath-forbidden/response-fields.adoc[]
+
+=== 재실 상태 전송
+
+재실 상태 REST 하트비트의 빈 세션 값 오류는 재실 상태 문서에 연결합니다.
+실시간 알림은 별도의 WebSocket/STOMP 경계를 사용합니다. 이 인증 문서의 MVC 테스트가 WebSocket/SSE 전체를
+검증하는 것은 아닙니다. SSE 엔드포인트는 현재 서비스에 없습니다.
+
+include::{snippets}/presence/heartbeat-invalid-session/request-headers.adoc[]
+include::{snippets}/presence/heartbeat-invalid-session/http-response.adoc[]
+include::{snippets}/presence/heartbeat-invalid-session/response-fields.adoc[]
+
+=== 잘못된 Rule 인증 정보
+
+include::{snippets}/security/rule-invalid-credential/http-request.adoc[]
+include::{snippets}/security/rule-invalid-credential/http-response.adoc[]
+include::{snippets}/security/rule-invalid-credential/response-fields.adoc[]

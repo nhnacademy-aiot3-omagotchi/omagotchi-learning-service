@@ -1,108 +1,94 @@
 package site.omagotchi.learningservice.occupancy.presentation;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.http.MediaType;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.security.test.context.TestSecurityContextHolder;
-import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
-import org.springframework.test.web.servlet.MockMvc;
-import site.omagotchi.learningservice.global.exception.BusinessException;
-import site.omagotchi.learningservice.global.exception.ErrorCode;
-import site.omagotchi.learningservice.global.exception.GlobalExceptionHandler;
-import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
-import site.omagotchi.learningservice.occupancy.application.OccupancyErrorCode;
-import site.omagotchi.learningservice.occupancy.application.OccupancyParticipantService;
-import site.omagotchi.learningservice.occupancy.application.OccupancyParticipantQueryService;
-import site.omagotchi.learningservice.occupancy.application.result.OccupancyParticipantResult;
-import site.omagotchi.learningservice.occupancy.application.result.ParticipantCandidateResult;
-import site.omagotchi.learningservice.occupancy.application.result.ParticipantCandidateStatus;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.delete;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.get;
+import static org.springframework.restdocs.mockmvc.RestDocumentationRequestBuilders.post;
+import static org.springframework.restdocs.payload.PayloadDocumentation.fieldWithPath;
+import static org.springframework.restdocs.payload.PayloadDocumentation.requestFields;
+import static org.springframework.restdocs.payload.PayloadDocumentation.responseFields;
+import static org.springframework.restdocs.request.RequestDocumentation.parameterWithName;
+import static org.springframework.restdocs.request.RequestDocumentation.pathParameters;
+import static org.springframework.restdocs.request.RequestDocumentation.queryParameters;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static site.omagotchi.learningservice.support.RestDocs.document;
 
 import java.util.List;
 import java.util.UUID;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.BDDMockito.given;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.restdocs.payload.FieldDescriptor;
+import org.springframework.restdocs.payload.JsonFieldType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import site.omagotchi.learningservice.global.exception.BusinessException;
+import site.omagotchi.learningservice.global.exception.ErrorCode;
+import site.omagotchi.learningservice.global.logging.HttpErrorEventLogger;
+import site.omagotchi.learningservice.global.security.TestJwtKeyConfig;
+import site.omagotchi.learningservice.occupancy.application.OccupancyErrorCode;
+import site.omagotchi.learningservice.occupancy.application.OccupancyParticipantQueryService;
+import site.omagotchi.learningservice.occupancy.application.OccupancyParticipantService;
+import site.omagotchi.learningservice.occupancy.application.result.OccupancyParticipantResult;
+import site.omagotchi.learningservice.occupancy.application.result.ParticipantCandidateResult;
+import site.omagotchi.learningservice.occupancy.application.result.ParticipantCandidateStatus;
+import site.omagotchi.learningservice.support.LearningRestDocsTest;
 
 /**
  * 참여자 API의 HTTP 계약.
  *
- * <p>이탈과 제외가 같은 엔드포인트인 것을 여기서 고정한다. 경로를 나누면 클라이언트가
- * "내가 점유자인가"를 먼저 판단해 호출을 골라야 한다.</p>
+ * <p>이탈과 제외가 같은 엔드포인트인 것을 여기서 고정한다. 경로를 나누면 클라이언트가 "내가 점유자인가"를 먼저 판단해 호출을 골라야 한다.
  */
+@WebMvcTest(controllers = OccupancyParticipantController.class)
+@LearningRestDocsTest
 class OccupancyParticipantControllerTest {
 
     private static final String PATH = "/api/v1/spaces/1/occupancies/participants";
     private static final UUID REQUESTER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID TARGET_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
+    private static final String AUTHORIZATION =
+            "Bearer "
+                    + TestJwtKeyConfig.issue(
+                            TestJwtKeyConfig.ISSUER,
+                            TestJwtKeyConfig.AUDIENCE,
+                            REQUESTER_ID.toString(),
+                            "USER");
+
+    @MockitoBean
     private OccupancyParticipantService occupancyParticipantService;
+
+    @MockitoBean
     private OccupancyParticipantQueryService occupancyParticipantQueryService;
+
+    @MockitoBean
+    private HttpErrorEventLogger errorEventLogger;
+
+    @Autowired
     private MockMvc mockMvc;
-
-    @BeforeEach
-    void setUp() {
-        occupancyParticipantService = mock(OccupancyParticipantService.class);
-        occupancyParticipantQueryService = mock(OccupancyParticipantQueryService.class);
-        mockMvc = standaloneSetup(new OccupancyParticipantController(
-                        occupancyParticipantService,
-                        occupancyParticipantQueryService))
-                .setControllerAdvice(new GlobalExceptionHandler(
-                        mock(HttpErrorEventLogger.class)
-                ))
-                // @AuthenticationPrincipal은 Security의 Resolver가 있어야 풀린다.
-                // standaloneSetup은 Spring Security 필터를 끼우지 않으므로 직접 등록한다.
-                .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
-                .build();
-
-        authenticateAs(REQUESTER_ID);
-    }
-
-    /**
-     * 보안 컨텍스트는 스레드에 붙으므로 반드시 비운다. 남기면 다음 테스트가 앞 테스트의
-     * 요청자로 실행되어, 인증을 지워도 통과하는 테스트가 생긴다.
-     */
-    @AfterEach
-    void tearDown() {
-        TestSecurityContextHolder.clearContext();
-    }
-
-    /**
-     * 요청자를 Access JWT로 세운다.
-     *
-     * <p>{@code standaloneSetup}은 Spring Security 필터를 끼우지 않아
-     * {@code SecurityMockMvcRequestPostProcessors.jwt()}가 동작하지 않는다 — 그 후처리기는
-     * 필터 체인이 읽어 가는 자리에 컨텍스트를 넣기 때문이다. 여기서는 컨텍스트를 직접 세우고
-     * {@code AuthenticationPrincipalArgumentResolver}가 그것을 읽게 한다.</p>
-     */
-    private static void authenticateAs(UUID userId) {
-        Jwt token = Jwt.withTokenValue("test-token")
-                .header("alg", "RS256")
-                .subject(userId.toString())
-                .claim("role", "USER")
-                .build();
-        TestSecurityContextHolder.setAuthentication(new JwtAuthenticationToken(token));
-    }
 
     @Test
     @DisplayName("참여자를 추가하면 201을 응답한다.")
     void returns201OnAddParticipant() throws Exception {
-        mockMvc.perform(post(PATH)
+        mockMvc.perform(post("/api/v1/spaces/{space-id}/occupancies/participants", 1L)
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"targetUserId\":\"" + TARGET_ID + "\"}"))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andDo(document(
+                        "occupancy/participant-add",
+                        pathParameters(parameterWithName("space-id").description("공간 ID")),
+                        requestFields(
+                                fieldWithPath("targetUserId")
+                                        .type(JsonFieldType.STRING)
+                                        .description("추가할 사용자 ID"))));
 
         verify(occupancyParticipantService).add(1L, TARGET_ID, REQUESTER_ID);
     }
@@ -118,8 +104,15 @@ class OccupancyParticipantControllerTest {
                         ParticipantCandidateStatus.AVAILABLE
                 )));
 
-        mockMvc.perform(get(PATH + "/candidates").queryParam("query", "사용자"))
+        mockMvc.perform(get("/api/v1/spaces/{space-id}/occupancies/participants/candidates", 1L)
+                        .queryParam("query", "사용자")
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
                 .andExpect(status().isOk())
+                .andDo(document(
+                        "occupancy/participant-candidates",
+                        pathParameters(parameterWithName("space-id").description("공간 ID")),
+                        queryParameters(parameterWithName("query").description("검색어")),
+                        responseFields(candidateFields())))
                 .andExpect(jsonPath("$[0].userId").value(TARGET_ID.toString()))
                 .andExpect(jsonPath("$[0].displayName").value("대상 사용자"))
                 .andExpect(jsonPath("$[0].email").value("target@example.com"))
@@ -130,11 +123,15 @@ class OccupancyParticipantControllerTest {
     @DisplayName("현재 참여자 상세 목록을 응답한다.")
     void returnsCurrentParticipants() throws Exception {
         given(occupancyParticipantQueryService.getParticipants(1L, REQUESTER_ID))
-                .willReturn(List.of(new OccupancyParticipantResult(
-                        REQUESTER_ID, "점유자", true)));
+                .willReturn(List.of(new OccupancyParticipantResult(REQUESTER_ID, "점유자", true)));
 
-        mockMvc.perform(get(PATH))
+        mockMvc.perform(get("/api/v1/spaces/{space-id}/occupancies/participants", 1L)
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
                 .andExpect(status().isOk())
+                .andDo(document(
+                        "occupancy/participant-list",
+                        pathParameters(parameterWithName("space-id").description("공간 ID")),
+                        responseFields(participantFields())))
                 .andExpect(jsonPath("$[0].userId").value(REQUESTER_ID.toString()))
                 .andExpect(jsonPath("$[0].displayName").value("점유자"))
                 .andExpect(jsonPath("$[0].occupier").value(true));
@@ -144,6 +141,7 @@ class OccupancyParticipantControllerTest {
     @DisplayName("대상 없이 추가를 요청하면 400을 응답한다.")
     void returns400WhenTargetMissing() throws Exception {
         mockMvc.perform(post(PATH)
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest());
@@ -177,7 +175,8 @@ class OccupancyParticipantControllerTest {
     @Test
     @DisplayName("본인을 지정해 이탈하면 204를 응답한다.")
     void returns204OnSelfLeave() throws Exception {
-        mockMvc.perform(delete(PATH + "/" + REQUESTER_ID))
+        mockMvc.perform(delete(PATH + "/" + REQUESTER_ID)
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
                 .andExpect(status().isNoContent());
 
         verify(occupancyParticipantService).remove(1L, REQUESTER_ID, REQUESTER_ID);
@@ -186,8 +185,18 @@ class OccupancyParticipantControllerTest {
     @Test
     @DisplayName("다른 사람을 지정해 제외하면 204를 응답한다.")
     void returns204OnKickingOther() throws Exception {
-        mockMvc.perform(delete(PATH + "/" + TARGET_ID))
-                .andExpect(status().isNoContent());
+        mockMvc.perform(delete(
+                                "/api/v1/spaces/{space-id}/occupancies/participants/{target-user-id}",
+                                1L,
+                                TARGET_ID)
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
+                .andExpect(status().isNoContent())
+                .andDo(document(
+                        "occupancy/participant-remove",
+                        pathParameters(
+                                parameterWithName("space-id").description("공간 ID"),
+                                parameterWithName("target-user-id")
+                                        .description("대상 사용자 ID"))));
 
         verify(occupancyParticipantService).remove(1L, TARGET_ID, REQUESTER_ID);
     }
@@ -198,7 +207,8 @@ class OccupancyParticipantControllerTest {
         doThrow(new BusinessException(OccupancyErrorCode.OCCUPIER_CANNOT_LEAVE))
                 .when(occupancyParticipantService).remove(any(), any(), any());
 
-        mockMvc.perform(delete(PATH + "/" + REQUESTER_ID))
+        mockMvc.perform(delete(PATH + "/" + REQUESTER_ID)
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("OCCUPANCY_OCCUPIER_CANNOT_LEAVE"));
     }
@@ -209,8 +219,26 @@ class OccupancyParticipantControllerTest {
         doThrow(new BusinessException(OccupancyErrorCode.PARTICIPANT_NOT_FOUND))
                 .when(occupancyParticipantService).remove(any(), any(), any());
 
-        mockMvc.perform(delete(PATH + "/" + TARGET_ID))
+        mockMvc.perform(delete(PATH + "/" + TARGET_ID)
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION))
                 .andExpect(status().isNotFound());
+    }
+
+    private FieldDescriptor[] participantFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("[].userId").type(JsonFieldType.STRING).description("사용자 ID"),
+            fieldWithPath("[].displayName").type(JsonFieldType.STRING).description("표시 이름"),
+            fieldWithPath("[].occupier").type(JsonFieldType.BOOLEAN).description("점유자 여부")
+        };
+    }
+
+    private FieldDescriptor[] candidateFields() {
+        return new FieldDescriptor[] {
+            fieldWithPath("[].userId").type(JsonFieldType.STRING).description("사용자 ID"),
+            fieldWithPath("[].displayName").type(JsonFieldType.STRING).description("표시 이름"),
+            fieldWithPath("[].email").type(JsonFieldType.STRING).description("이메일"),
+            fieldWithPath("[].status").type(JsonFieldType.STRING).description("참여 가능 상태")
+        };
     }
 
     private void assertAddError(ErrorCode errorCode, int expectedStatus) throws Exception {
@@ -218,6 +246,7 @@ class OccupancyParticipantControllerTest {
                 .when(occupancyParticipantService).add(any(), any(), any());
 
         mockMvc.perform(post(PATH)
+                        .header(HttpHeaders.AUTHORIZATION, AUTHORIZATION)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"targetUserId\":\"" + TARGET_ID + "\"}"))
                 .andExpect(status().is(expectedStatus))
